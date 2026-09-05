@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -30,7 +31,7 @@ import java.util.UUID;
  * runtime conversion must both consult this registry.
  */
 public final class PortConversionRegistry {
-    private static final Map<PortType, Map<PortType, Converter>> RULES = createRules();
+    private static final Map<PortType, Map<PortType, ConversionRule>> RULES = createRules();
     private static final EnumSet<PortType> LIST_LIFT_TARGETS = EnumSet.of(PortType.ENTITY);
 
     private PortConversionRegistry() {
@@ -91,9 +92,9 @@ public final class PortConversionRegistry {
                 converted = listVector(value, context);
             } else {
                 PortType actual = PortType.getTypeOf(value);
-                Converter canonicalizer = RULES.getOrDefault(actual, Map.of()).get(target);
+                ConversionRule canonicalizer = RULES.getOrDefault(actual, Map.of()).get(target);
                 converted = actual != source
-                        ? (canonicalizer != null ? canonicalizer.convert(value, context) : null)
+                        ? (canonicalizer != null ? canonicalizer.converter().convert(value, context) : null)
                         : value;
             }
             return dynamic != null && converted != null
@@ -101,8 +102,12 @@ public final class PortConversionRegistry {
                     : converted;
         }
 
-        Converter converter = RULES.getOrDefault(source, Map.of()).get(target);
-        return converter != null ? converter.convert(value, context) : null;
+        ConversionRule rule = RULES.getOrDefault(source, Map.of()).get(target);
+        if (rule == null) return null;
+        Object converted = rule.converter().convert(value, context);
+        return dynamic != null && converted != null
+                ? rule.expressionPropagation().wrap(converted, dynamic.expression())
+                : converted;
     }
 
     /**
@@ -126,8 +131,8 @@ public final class PortConversionRegistry {
         return GraphEntityReferenceResolver.resolve(entityId, context);
     }
 
-    private static Map<PortType, Map<PortType, Converter>> createRules() {
-        EnumMap<PortType, Map<PortType, Converter>> rules = new EnumMap<>(PortType.class);
+    private static Map<PortType, Map<PortType, ConversionRule>> createRules() {
+        EnumMap<PortType, Map<PortType, ConversionRule>> rules = new EnumMap<>(PortType.class);
 
         registerNumericRules(rules);
         register(rules, PortType.INTEGER, PortType.COLOR,
@@ -139,9 +144,11 @@ public final class PortConversionRegistry {
         register(rules, PortType.COLOR, PortType.INTEGER,
                 (value, context) -> ((ColorValue) value).toArgb());
 
-        register(rules, PortType.INTEGER, PortType.XYZ, PortConversionRegistry::scalarVector);
+        register(rules, PortType.INTEGER, PortType.XYZ, PortConversionRegistry::scalarVector,
+                ExpressionPropagation.SCALAR_TO_VECTOR);
         register(rules, PortType.LONG, PortType.XYZ, PortConversionRegistry::scalarVector);
-        register(rules, PortType.FLOAT, PortType.XYZ, PortConversionRegistry::scalarVector);
+        register(rules, PortType.FLOAT, PortType.XYZ, PortConversionRegistry::scalarVector,
+                ExpressionPropagation.SCALAR_TO_VECTOR);
         register(rules, PortType.LIST, PortType.XYZ, PortConversionRegistry::listVector);
 
         register(rules, PortType.STRING, PortType.PATH, (value, context) -> value);
@@ -170,18 +177,21 @@ public final class PortConversionRegistry {
             }
         }
 
-        EnumMap<PortType, Map<PortType, Converter>> frozen = new EnumMap<>(PortType.class);
+        EnumMap<PortType, Map<PortType, ConversionRule>> frozen = new EnumMap<>(PortType.class);
         rules.forEach((source, targets) -> frozen.put(source, Map.copyOf(targets)));
         return Map.copyOf(frozen);
     }
 
-    private static void registerNumericRules(EnumMap<PortType, Map<PortType, Converter>> rules) {
+    private static void registerNumericRules(EnumMap<PortType, Map<PortType, ConversionRule>> rules) {
         PortType[] numeric = {PortType.INTEGER, PortType.LONG, PortType.FLOAT, PortType.BOOLEAN};
         for (PortType source : numeric) {
             for (PortType target : numeric) {
                 if (source != target) {
+                    ExpressionPropagation propagation = isLiveScalar(source) && isLiveScalar(target)
+                            ? ExpressionPropagation.PRESERVE_SCALAR
+                            : ExpressionPropagation.NONE;
                     register(rules, source, target,
-                            (value, context) -> convertNumeric(value, target));
+                            (value, context) -> convertNumeric(value, target), propagation);
                 }
             }
         }
@@ -195,11 +205,22 @@ public final class PortConversionRegistry {
                 (value, context) -> parseBoolean((String) value));
     }
 
-    private static void register(EnumMap<PortType, Map<PortType, Converter>> rules,
+    private static boolean isLiveScalar(PortType type) {
+        return type == PortType.INTEGER || type == PortType.FLOAT;
+    }
+
+    private static void register(EnumMap<PortType, Map<PortType, ConversionRule>> rules,
                                  PortType source, PortType target, Converter converter) {
-        Map<PortType, Converter> targets = rules.computeIfAbsent(
+        register(rules, source, target, converter, ExpressionPropagation.NONE);
+    }
+
+    private static void register(EnumMap<PortType, Map<PortType, ConversionRule>> rules,
+                                 PortType source, PortType target, Converter converter,
+                                 ExpressionPropagation expressionPropagation) {
+        Map<PortType, ConversionRule> targets = rules.computeIfAbsent(
                 source, ignored -> new EnumMap<>(PortType.class));
-        Converter previous = targets.putIfAbsent(target, converter);
+        ConversionRule previous = targets.putIfAbsent(target,
+                new ConversionRule(converter, expressionPropagation));
         if (previous != null) {
             throw new IllegalStateException("Duplicate port conversion rule: " + source + " -> " + target);
         }
@@ -312,5 +333,36 @@ public final class PortConversionRegistry {
     @FunctionalInterface
     private interface Converter {
         @Nullable Object convert(Object value, @Nullable GraphDataContext context);
+    }
+
+    private record ConversionRule(Converter converter, ExpressionPropagation expressionPropagation) {
+    }
+
+    private enum ExpressionPropagation {
+        NONE {
+            @Override
+            Object wrap(Object value, @Nullable ExpressionData expression) {
+                return value;
+            }
+        },
+        PRESERVE_SCALAR {
+            @Override
+            Object wrap(Object value, @Nullable ExpressionData expression) {
+                if (expression == null) return value;
+                return new DynamicData(value, ExpressionData.scalar(
+                        expression.component(0), expression.bindings()));
+            }
+        },
+        SCALAR_TO_VECTOR {
+            @Override
+            Object wrap(Object value, @Nullable ExpressionData expression) {
+                if (expression == null) return value;
+                String formula = expression.component(0);
+                return new DynamicData(value, ExpressionData.vector(
+                        formula, formula, formula, expression.bindings()));
+            }
+        };
+
+        abstract Object wrap(Object value, @Nullable ExpressionData expression);
     }
 }
