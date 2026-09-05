@@ -35,6 +35,7 @@ import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTran
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.nio.file.Files;
@@ -118,14 +119,18 @@ public final class ServerAssetTransferService implements AutoCloseable {
                     packet.requestId(), packet.kind(), false, "permission_denied", List.of(), List.of()));
             return;
         }
-        io.submit(() -> switch (packet.kind()) {
-            case UPLOAD_CONFLICTS -> new PacketAssetTransferPlanResponse(
-                    packet.requestId(), packet.kind(), true, "", List.of(),
-                    RemoteAssetFileService.findUploadConflicts(player.level().getServer(), packet.paths()));
-            case DOWNLOAD_MANIFEST -> new PacketAssetTransferPlanResponse(
-                    packet.requestId(), packet.kind(), true, "",
-                    RemoteAssetFileService.flattenSelection(player.level().getServer(), packet.paths()), List.of());
-        }).whenComplete((response, throwable) -> player.level().getServer().execute(() ->
+        MinecraftServer server = player.level().getServer();
+        java.util.concurrent.CompletableFuture<PacketAssetTransferPlanResponse> plan = switch (packet.kind()) {
+            case UPLOAD_CONFLICTS -> RemoteAssetRepositoryService.INSTANCE
+                    .findUploadConflicts(server, packet.paths())
+                    .thenApply(conflicts -> new PacketAssetTransferPlanResponse(
+                            packet.requestId(), packet.kind(), true, "", List.of(), conflicts));
+            case DOWNLOAD_MANIFEST -> RemoteAssetRepositoryService.INSTANCE
+                    .flattenSelection(server, packet.paths())
+                    .thenApply(files -> new PacketAssetTransferPlanResponse(
+                            packet.requestId(), packet.kind(), true, "", files, List.of()));
+        };
+        plan.whenComplete((response, throwable) -> server.execute(() ->
                 NetworkHandler.sendToPlayer(player, throwable == null ? response : new PacketAssetTransferPlanResponse(
                         packet.requestId(), packet.kind(), false, rootMessage(throwable), List.of(), List.of()))));
     }
@@ -174,50 +179,37 @@ public final class ServerAssetTransferService implements AutoCloseable {
         SessionLookup lookup = findTransferring(player, packet.transferId(), AssetTransferDirection.UPLOAD);
         if (lookup == null) return;
         ServerSession session = lookup.session;
+        MinecraftServer server = player.level().getServer();
         synchronized (session) {
             if (session.state != AssetTransferState.TRANSFERRING) return;
             session.state = AssetTransferState.VERIFYING;
         }
         session.touch();
-        io.submit(() -> {
-            session.incoming.verifyAndClose();
-            var temporary = session.incoming.retainVerifiedFile();
-            try {
-                synchronized (session) {
-                    if (lookup.owner.sessions.get(session.transferId) != session
-                            || session.state != AssetTransferState.VERIFYING) {
-                        Files.deleteIfExists(temporary);
-                        return CommitOutcome.ABORTED;
-                    }
-                    session.state = AssetTransferState.COMMITTING;
-                }
-                BasicFileAttributes committedRevision = Files.readAttributes(temporary, BasicFileAttributes.class);
-                if (session.open.purpose() == AssetTransferPurpose.ASSET_REPOSITORY) {
-                    RemoteAssetFileService.UploadCommitResult result = RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
-                            player.level().getServer(), session.remotePath, temporary,
-                            session.open.conflictPolicy()).join();
-                    if (result.commit() != VerifiedAssetCommitter.CommitResult.COMMITTED) return CommitOutcome.SKIPPED;
-                    String refreshWarning = result.refreshFailure() == null
-                            ? "" : rootMessage(result.refreshFailure());
-                    return new CommitOutcome(true, committedRevision.size(),
-                            committedRevision.lastModifiedTime().toMillis(), refreshWarning);
-                } else {
-                    commitDataLibraryUpload(session, temporary);
-                    Files.deleteIfExists(temporary);
-                }
-                return new CommitOutcome(true, committedRevision.size(),
-                        committedRevision.lastModifiedTime().toMillis(), "");
-            } catch (Throwable throwable) {
-                Files.deleteIfExists(temporary);
-                throw throwable;
+        io.submit(() -> prepareCommit(lookup.owner, session)).thenCompose(prepared -> {
+            if (prepared.immediate != null) {
+                return java.util.concurrent.CompletableFuture.completedFuture(prepared.immediate);
             }
-        }).whenComplete((outcome, throwable) -> player.level().getServer().execute(() -> {
+            return RemoteAssetRepositoryService.INSTANCE.commitVerifiedUpload(
+                            server, session.remotePath, prepared.temporary,
+                            session.open.conflictPolicy())
+                    .thenApply(result -> {
+                        if (result.commit() != VerifiedAssetCommitter.CommitResult.COMMITTED) {
+                            return CommitOutcome.SKIPPED;
+                        }
+                        String refreshWarning = result.refreshFailure() == null
+                                ? "" : rootMessage(result.refreshFailure());
+                        return new CommitOutcome(true, prepared.sourceSize,
+                                prepared.sourceLastModified, refreshWarning);
+                    }).whenComplete((ignored, throwable) -> {
+                        if (throwable != null) deleteQuietly(prepared.temporary);
+                    });
+        }).whenComplete((outcome, throwable) -> server.execute(() -> {
             if (lookup.owner.sessions.get(session.transferId) != session) return;
             if (throwable != null) {
                 String detail = rootMessage(throwable);
                 if (session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY) {
                     GeometryNode.LOGGER.warn("Data Library transfer {} commit failed for player {}: {}",
-                            session.open.purpose(), player.getGameProfile().name(), detail, throwable);
+                            session.open.purpose(), session.player.getGameProfile().name(), detail, throwable);
                 }
                 boolean staleObject = session.open.purpose() != AssetTransferPurpose.ASSET_REPOSITORY
                         && detail.startsWith("STALE_OBJECT:");
@@ -228,6 +220,38 @@ public final class ServerAssetTransferService implements AutoCloseable {
                 completeAndClose(lookup.owner, session, outcome);
             }
         }));
+    }
+
+    private CommitPreparation prepareCommit(PlayerContext owner, ServerSession session) throws Exception {
+        java.nio.file.Path temporary = null;
+        try {
+            session.incoming.verifyAndClose();
+            temporary = session.incoming.retainVerifiedFile();
+            synchronized (session) {
+                if (owner.sessions.get(session.transferId) != session
+                        || session.state != AssetTransferState.VERIFYING) {
+                    Files.deleteIfExists(temporary);
+                    return CommitPreparation.immediate(CommitOutcome.ABORTED);
+                }
+                session.state = AssetTransferState.COMMITTING;
+            }
+            BasicFileAttributes revision = Files.readAttributes(temporary, BasicFileAttributes.class);
+            if (session.open.purpose() == AssetTransferPurpose.ASSET_REPOSITORY) {
+                return new CommitPreparation(temporary, revision.size(),
+                        revision.lastModifiedTime().toMillis(), null);
+            }
+            commitDataLibraryUpload(session, temporary);
+            Files.deleteIfExists(temporary);
+            return CommitPreparation.immediate(new CommitOutcome(
+                    true, revision.size(), revision.lastModifiedTime().toMillis(), ""));
+        } catch (Throwable throwable) {
+            if (temporary != null) {
+                Files.deleteIfExists(temporary);
+            }
+            if (throwable instanceof Exception exception) throw exception;
+            if (throwable instanceof Error error) throw error;
+            throw new RuntimeException(throwable);
+        }
     }
 
     public void handleResult(ServerPlayer player, PacketAssetTransferResult packet) {
@@ -506,6 +530,11 @@ public final class ServerAssetTransferService implements AutoCloseable {
         try { value.close(); } catch (Exception ignored) { }
     }
 
+    private static void deleteQuietly(java.nio.file.Path path) {
+        if (path == null) return;
+        try { Files.deleteIfExists(path); } catch (Exception ignored) { }
+    }
+
     private void startPromoted(List<ServerAssetTransferScheduler.TransferKey> promoted) {
         java.util.ArrayDeque<ServerAssetTransferScheduler.TransferKey> pending = new java.util.ArrayDeque<>(promoted);
         while (!pending.isEmpty()) {
@@ -593,5 +622,12 @@ public final class ServerAssetTransferService implements AutoCloseable {
                                  String refreshWarning) {
         private static final CommitOutcome ABORTED = new CommitOutcome(false, 0L, 0L, "");
         private static final CommitOutcome SKIPPED = new CommitOutcome(false, 0L, 0L, "");
+    }
+
+    private record CommitPreparation(java.nio.file.Path temporary, long sourceSize,
+                                     long sourceLastModified, CommitOutcome immediate) {
+        private static CommitPreparation immediate(CommitOutcome outcome) {
+            return new CommitPreparation(null, 0L, 0L, outcome);
+        }
     }
 }

@@ -45,6 +45,18 @@ public final class RemoteAssetRepositoryService {
         });
     }
 
+    public CompletableFuture<List<RemoteAssetConflict>> findUploadConflicts(
+            MinecraftServer server, List<String> targetPaths) {
+        return reads.submit(() -> read(
+                () -> RemoteAssetFileService.findUploadConflicts(server, targetPaths)));
+    }
+
+    public CompletableFuture<List<AssetDescriptor>> flattenSelection(
+            MinecraftServer server, List<String> selectedPaths) {
+        return reads.submit(() -> read(
+                () -> RemoteAssetFileService.flattenSelection(server, selectedPaths)));
+    }
+
     public CompletableFuture<RemoteAssetOperationResult> delete(
             MinecraftServer server,
             List<String> paths
@@ -113,9 +125,23 @@ public final class RemoteAssetRepositoryService {
         }
     }
 
+    private <T> T read(ReadOperation<T> operation) throws Exception {
+        repositoryLock.readLock().lock();
+        try {
+            return operation.run();
+        } finally {
+            repositoryLock.readLock().unlock();
+        }
+    }
+
     @FunctionalInterface
     private interface Mutation {
         RemoteAssetOperationResult run() throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface ReadOperation<T> {
+        T run() throws Exception;
     }
 
     public record ListResult(String directory, List<AssetDescriptor> entries) {

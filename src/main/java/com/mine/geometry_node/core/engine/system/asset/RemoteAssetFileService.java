@@ -33,13 +33,14 @@ public final class RemoteAssetFileService {
 
         List<AssetDescriptor> entries = new ArrayList<>();
         try (var stream = Files.list(directory)) {
-            stream.filter(path -> !Files.isSymbolicLink(path) && !isTransactionArtifact(path))
-                    .filter(path -> Files.isDirectory(path)
-                            || AssetTypeCatalog.isRecognizedAsset(path))
-                    .sorted(Comparator.comparing((Path p) -> !Files.isDirectory(p))
-                            .thenComparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
-                    .forEach(path -> entries.add(toEntry(root, path)));
+            for (Path path : stream.toList()) {
+                if (Files.isSymbolicLink(path) || isTransactionArtifact(path)) continue;
+                AssetDescriptor entry = toEntry(server, root, path);
+                if (entry.directory() || entry.metadata().isKnown()) entries.add(entry);
+            }
         }
+        entries.sort(Comparator.comparing(AssetDescriptor::directory).reversed()
+                .thenComparing(AssetDescriptor::name, String.CASE_INSENSITIVE_ORDER));
         return entries;
     }
 
@@ -62,7 +63,7 @@ public final class RemoteAssetFileService {
         if (!Files.isRegularFile(file) || Files.isSymbolicLink(file)) {
             throw new IOException("Remote asset file does not exist: " + assetPath);
         }
-        if (!AssetTypeCatalog.isRecognizedAsset(file, assetPath)) {
+        if (!ServerAssetMetadataCache.INSTANCE.inspect(server, file, assetPath).isKnown()) {
             throw new IOException("Remote file is not a recognized asset: " + assetPath);
         }
         return file;
@@ -94,6 +95,7 @@ public final class RemoteAssetFileService {
         if (commit != VerifiedAssetCommitter.CommitResult.COMMITTED) {
             return CompletableFuture.completedFuture(new UploadCommitResult(commit, null));
         }
+        ServerAssetMetadataCache.INSTANCE.invalidate(server, target);
 
         Set<String> affectedTypeIds = new HashSet<>();
         if (oldMetadata.isKnown()) affectedTypeIds.add(oldMetadata.typeId());
@@ -118,17 +120,18 @@ public final class RemoteAssetFileService {
             if (Files.isDirectory(path)) {
                 try (var walk = Files.walk(path)) {
                     walk.filter(p -> Files.isRegularFile(p) && !Files.isSymbolicLink(p)
-                                    && !isInsideTransactionArtifact(p)
-                                    && AssetTypeCatalog.isRecognizedAsset(p))
+                                    && !isInsideTransactionArtifact(p))
                             .map(p -> p.toAbsolutePath().normalize())
                             .filter(seen::add)
-                            .forEach(p -> files.add(toEntry(root, p)));
+                            .map(file -> toEntry(server, root, file))
+                            .filter(entry -> entry.metadata().isKnown())
+                            .forEach(files::add);
                 }
-            } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)
-                    && AssetTypeCatalog.isRecognizedAsset(path)) {
+            } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)) {
                 Path normalized = path.toAbsolutePath().normalize();
                 if (seen.add(normalized)) {
-                    files.add(toEntry(root, normalized));
+                    AssetDescriptor entry = toEntry(server, root, normalized);
+                    if (entry.metadata().isKnown()) files.add(entry);
                 }
             }
         }
@@ -660,24 +663,26 @@ public final class RemoteAssetFileService {
         }
     }
 
-    private static AssetDescriptor toEntry(Path root, Path path) {
+    private static AssetDescriptor toEntry(MinecraftServer server, Path root, Path path) {
         boolean directory = Files.isDirectory(path);
         long size = 0L;
         long lastModified = 0L;
-        if (!directory) {
+        if (directory) {
             try {
-                size = Files.size(path);
+                lastModified = Files.getLastModifiedTime(path).toMillis();
             } catch (IOException ignored) {
-                size = 0L;
+                lastModified = 0L;
             }
         }
-        try {
-            lastModified = Files.getLastModifiedTime(path).toMillis();
-        } catch (IOException ignored) {
-            lastModified = 0L;
-        }
         String assetPath = ServerAssetPaths.pathToId(root, path);
-        AssetMetadata metadata = directory ? AssetMetadata.UNKNOWN : AssetTypeCatalog.inspect(path, assetPath);
+        AssetMetadata metadata = AssetMetadata.UNKNOWN;
+        if (!directory) {
+            ServerAssetMetadataCache.Inspection inspection =
+                    ServerAssetMetadataCache.INSTANCE.describe(server, path, assetPath);
+            metadata = inspection.metadata();
+            size = inspection.size();
+            lastModified = inspection.lastModifiedMillis();
+        }
         return new AssetDescriptor(
                 assetPath,
                 path.getFileName().toString(),

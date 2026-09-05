@@ -30,6 +30,7 @@ import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetSe
 import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.ServerAssetMetadataCache;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -182,6 +183,7 @@ public class GeometryNode {
         ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphAssetLifecycleIndex.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(ServerAssetMetadataCache.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
