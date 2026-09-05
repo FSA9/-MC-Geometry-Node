@@ -40,7 +40,7 @@ public final class SetQuestStatus extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
-                getInput(context, StandardPorts.ENTITY.getId(), Entity.class));
+                getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class));
         String questPath = getInput(context, StandardPorts.PATH.getId(), String.class);
         String statusId = getInput(context, STATUS_PORT, String.class);
         String reason = getInput(context, REASON_PORT, String.class);

@@ -77,7 +77,7 @@ public class AddEntityTag extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         List<String> tagsToAdd = new ArrayList<>();
         int portCount = DEFAULT_TAG_COUNT;
@@ -95,6 +95,7 @@ public class AddEntityTag extends BaseNode {
 
         if (!entities.isEmpty() && !tagsToAdd.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 for (String tag : tagsToAdd) {
                     entity.addTag(tag);
                 }

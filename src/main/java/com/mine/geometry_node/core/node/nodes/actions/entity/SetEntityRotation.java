@@ -30,11 +30,12 @@ public class SetEntityRotation extends EntityPassthroughActionNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Vec3 rotation = getInput(context, StandardPorts.ROTATION.getId(), Vec3.class);
 
         if (rotation != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 if (entity instanceof Display display) {
                     DisplayTransformController.setWorldRotation(display, rotation);
                 } else if (entity instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {

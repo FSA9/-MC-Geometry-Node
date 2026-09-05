@@ -54,7 +54,7 @@ public class SetDisplayStyle extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
         String billboard = getInput(context, StandardPorts.STRING.getId(), String.class);
@@ -70,6 +70,7 @@ public class SetDisplayStyle extends BaseNode {
         Integer glowColor = getInput(context, StandardPorts.GLOW_COLOR.getId(), Integer.class);
 
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (entity instanceof Display displayEntity) {
                 CompoundTag nbt = EntityNbtCompat.saveWithoutId(displayEntity);
 

@@ -38,7 +38,7 @@ public final class GetQuestStatus extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
-                getInput(context, StandardPorts.ENTITY.getId(), Entity.class));
+                getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class));
         String questPath = getInput(context, StandardPorts.PATH.getId(), String.class);
         if (owner == null || questPath == null || questPath.isBlank()) {
             if (EXISTS_PORT.equals(portName)) return false;

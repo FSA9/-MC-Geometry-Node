@@ -29,11 +29,12 @@ public class TeleportEntityToPos extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Vec3 targetPos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
 
         if (targetPos != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 entity.teleportTo(targetPos.x, targetPos.y, targetPos.z);
             }
         }

@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.node.definition.port.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
-import java.util.List;
 
 public class GetEntityTags extends BaseNode {
 
@@ -26,10 +25,10 @@ public class GetEntityTags extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!"tags".equals(portName)) return null;
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        if (entities.isEmpty()) return null;
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
+        if (entity == null) return null;
 
         // 原版的 getTags() 返回的是 Set<String>，我们转成 ArrayList 方便底层 LIST 类型处理
-        return new java.util.ArrayList<>(entities.getFirst().entityTags());
+        return new java.util.ArrayList<>(entity.entityTags());
     }
 }

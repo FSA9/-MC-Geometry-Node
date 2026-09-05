@@ -29,11 +29,12 @@ public class SetEntityVelocity extends EntityPassthroughActionNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Vec3 velocity = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
 
         if (velocity != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 // 覆盖速度（区别于 AddForce 的 add）
                 entity.setDeltaMovement(velocity);
 

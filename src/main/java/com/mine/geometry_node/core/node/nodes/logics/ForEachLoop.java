@@ -60,7 +60,7 @@ public class ForEachLoop extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<?> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);
+        List<?> list = getInputs(context, StandardPorts.LIST.getId(), Object.class);
         Integer limitInt = getInput(context, StandardPorts.LIMIT.getId(), Integer.class);
         Integer tickInterval = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 

@@ -39,7 +39,7 @@ public class DamageEntity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Float damage = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
         String damageTypeId = getInput(context, StandardPorts.DAMAGE_TYPE.getId(), String.class);
 
@@ -65,6 +65,7 @@ public class DamageEntity extends BaseNode {
             }
 
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 if (finalSource != null) {
                     entity.hurt(finalSource, damage);
                 } else {

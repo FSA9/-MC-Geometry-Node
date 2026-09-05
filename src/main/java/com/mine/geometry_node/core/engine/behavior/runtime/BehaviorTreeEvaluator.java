@@ -244,6 +244,14 @@ public final class BehaviorTreeEvaluator {
     }
 
     @Nullable
+    <T> T resolveInputFromList(BehaviorTreeProcess instance, int targetNodeIndex,
+                               String portName, int index, Class<T> type) {
+        return TypeConverter.convertFromList(
+                resolveInput(instance, targetNodeIndex, portName), index, type,
+                new BehaviorDataContext(instance, targetNodeIndex));
+    }
+
+    @Nullable
     <T> T convertInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        Object value, Class<T> type) {
         return TypeConverter.convert(value, type,

@@ -32,13 +32,14 @@ public class AddExperience extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Integer amount = getInput(context, StandardPorts.INT.getId(), Integer.class);
         Boolean isLevels = getInput(context, StandardPorts.BOOL.getId(), Boolean.class);
 
         if (amount != null && amount != 0 && !entities.isEmpty()) {
             boolean addLevels = Boolean.TRUE.equals(isLevels);
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 // 仅对服务端玩家生效
                 if (entity instanceof ServerPlayer player) {
                     if (addLevels) {

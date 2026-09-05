@@ -39,11 +39,12 @@ public final class SetDisplayPivot extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         Vec3 pivot = getInput(context, StandardPorts.PIVOT.getId(), Vec3.class);
         if (pivot == null) pivot = Vec3.ZERO;
 
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (entity instanceof Display display) DisplayTransformController.setPivot(display, pivot);
         }
         return next(StandardPorts.FLOW_OUT.getId());
@@ -52,7 +53,7 @@ public final class SetDisplayPivot extends BaseNode {
     @Override
     public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.DISPLAY_ENTITY.getId().equals(portName)) {
-            return getRawInput(context, StandardPorts.DISPLAY_ENTITY.getId());
+            return getInput(context, StandardPorts.DISPLAY_ENTITY.getId(), Object.class);
         }
         return null;
     }

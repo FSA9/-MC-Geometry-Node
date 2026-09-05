@@ -42,10 +42,11 @@ public class ClearSlots extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         String scope = getInput(context, StandardPorts.SCOPE.getId(), String.class);
         int removed = 0;
         for (Entity entity : entities) {
+            if (entity == null) continue;
             removed += SlotAccessUtils.clearSlots(entity, scope);
         }
         context.setNodeResult(StandardPorts.REMOVED_COUNT.getId(), removed);

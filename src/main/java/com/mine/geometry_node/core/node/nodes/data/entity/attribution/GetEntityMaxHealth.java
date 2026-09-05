@@ -11,7 +11,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
-import java.util.List;
 
 public class GetEntityMaxHealth extends BaseNode {
 
@@ -31,13 +30,13 @@ public class GetEntityMaxHealth extends BaseNode {
             return null;
         }
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
 
-        if (entities.isEmpty()) {
+        if (entity == null) {
             return null;
         }
 
-        Entity firstEntity = entities.getFirst();
+        Entity firstEntity = entity;
 
         if (firstEntity instanceof LivingEntity living) {
             return living.getMaxHealth();

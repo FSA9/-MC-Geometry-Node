@@ -54,12 +54,12 @@ public final class SetDataLibraryEntry extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        PortType type = DataLibraryTypes.resolve(getRawInput(context, ENTRY_TYPE));
+        PortType type = DataLibraryTypes.resolve(getInput(context, ENTRY_TYPE, Object.class));
         if (type == null) type = DEFAULT_TYPE;
         String path = getInput(context, StandardPorts.PATH.getId(), String.class);
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
         Object value = TypeConverter.convertForPort(
-                getRawInput(context, StandardPorts.ANY_VALUE.getId()), type, context);
+                getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class), type, context);
         return ExecutionResult.externalWait(DataLibraryWriteRuntime.ID,
                 new DataLibraryWriteRequest(path, type, key, value));
     }

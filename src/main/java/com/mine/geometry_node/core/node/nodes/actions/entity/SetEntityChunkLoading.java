@@ -89,8 +89,9 @@ public final class SetEntityChunkLoading extends BaseNode {
                 EntityChunkLoadingConfig.MIN_RADIUS, EntityChunkLoadingConfig.MAX_RADIUS);
 
         boolean success = false;
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         for (Entity entity : entities) {
+            if (entity == null) continue;
             success |= enable
                     ? EntityChunkLoadingService.INSTANCE.configure(entity, radius)
                     : EntityChunkLoadingService.INSTANCE.disable(entity);

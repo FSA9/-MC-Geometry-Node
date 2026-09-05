@@ -84,7 +84,7 @@ public class StringExpression extends BaseNode {
         int portCount = resolveRuntimePortCount(context);
         String[] values = new String[MAX_PORT_COUNT + 1];
         for (int i = 1; i <= portCount; i++) {
-            values[i] = stringify(getRawInput(context, PORT_IDS[i]), context);
+            values[i] = stringify(getInput(context, PORT_IDS[i], Object.class), context);
         }
 
         return evaluate(expression, values, portCount);

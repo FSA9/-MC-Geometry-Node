@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
@@ -32,7 +33,8 @@ public class AdjustShopTradeUses extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Map<String, Object> shopData = getInputDict(context, StandardPorts.SHOP_DATA.getId());
+        Map<String, Object> shopData = TypeConverter.convertStringMap(
+                getInput(context, StandardPorts.SHOP_DATA.getId(), Object.class), context);
         String shopId = getInput(context, StandardPorts.SHOP_ID.getId(), String.class);
         if (shopId == null || shopId.isBlank()) {
             shopId = ShopTradeUseStore.shopId(shopData, "");

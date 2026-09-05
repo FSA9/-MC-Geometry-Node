@@ -32,7 +32,7 @@ public class IsKeyPressed extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) return false;
 
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
         String keyId = getInput(context, StandardPorts.NAME.getId(), String.class);
         if (entity == null || keyId == null) return false;
 

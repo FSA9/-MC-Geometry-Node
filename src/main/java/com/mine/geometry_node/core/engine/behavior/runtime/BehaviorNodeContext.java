@@ -111,6 +111,13 @@ public final class BehaviorNodeContext {
         return evaluator.resolveInput(instance, nodeIndex, portName, type);
     }
 
+    /** Reads one exact list slot; scalar input is treated as slot zero. */
+    @Nullable
+    public <T> T inputFromList(String portName, int index, Class<T> type) {
+        ensureValid();
+        return evaluator.resolveInputFromList(instance, nodeIndex, portName, index, type);
+    }
+
     /** Converts one already-read graph value through the canonical port conversion registry. */
     @Nullable
     public <T> T convertValue(Object value, Class<T> type) {

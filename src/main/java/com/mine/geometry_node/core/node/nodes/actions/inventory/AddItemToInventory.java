@@ -45,13 +45,14 @@ public class AddItemToInventory extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         int requested = stack != null ? stack.getCount() : 0;
         int inserted = 0;
         ItemStack leftover = stack != null ? stack : ItemStack.EMPTY;
 
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (leftover.isEmpty()) {
                 break;
             }

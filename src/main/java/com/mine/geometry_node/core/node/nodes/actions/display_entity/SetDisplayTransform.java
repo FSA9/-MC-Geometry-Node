@@ -50,7 +50,7 @@ public class SetDisplayTransform extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         if (entities.isEmpty()) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 worldRotation = getInput(context, StandardPorts.WORLD_ROTATION.getId(), Vec3.class);
@@ -66,6 +66,7 @@ public class SetDisplayTransform extends BaseNode {
         if (scaleVec == null) scaleVec = new Vec3(1, 1, 1);
 
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (entity instanceof Display displayEntity) {
                 DisplayTransformController.applyTransform(
                         displayEntity,

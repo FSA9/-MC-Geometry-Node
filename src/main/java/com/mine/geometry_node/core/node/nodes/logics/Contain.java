@@ -44,8 +44,8 @@ public class Contain extends BaseNode {
             return null;
         }
 
-        Object container = getRawInput(context, CONTAINER);
-        Object target = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object container = getInput(context, CONTAINER, Object.class);
+        Object target = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         return contains(container, target, context);
     }
 

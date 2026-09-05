@@ -21,6 +21,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -92,7 +93,8 @@ public class OpenShop extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
-        Map<String, Object> shopData = ShopPagePayloadFactory.normalize(getInputDict(context, SHOP_DATA));
+        Map<String, Object> shopData = ShopPagePayloadFactory.normalize(
+                TypeConverter.convertStringMap(getInput(context, SHOP_DATA, Object.class), context));
         String title = getInput(context, TITLE, String.class);
         String safeTitle = title == null ? "" : title;
         String configuredShopId = getInput(context, SHOP_ID, String.class);
@@ -175,9 +177,9 @@ public class OpenShop extends BaseNode {
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
-        Entity target = getInput(context, BUYER, Entity.class);
+        Entity target = getInputFromList(context, BUYER, 0, Entity.class);
         if (target == null) {
-            target = getInput(context, PLAYER, Entity.class);
+            target = getInputFromList(context, PLAYER, 0, Entity.class);
         }
         if (target instanceof ServerPlayer player) {
             return player;

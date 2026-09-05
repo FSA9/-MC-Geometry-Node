@@ -67,7 +67,7 @@ public class MakeList extends BaseNode {
 
         List<Object> resultList = new ArrayList<>();
 
-        List<Object> baseList = getInputList(context, StandardPorts.LIST.getId(), Object.class);
+        List<Object> baseList = getInputs(context, StandardPorts.LIST.getId(), Object.class);
         if (baseList != null && !baseList.isEmpty()) {
             resultList.addAll(baseList);
         }
@@ -80,7 +80,7 @@ public class MakeList extends BaseNode {
         }
 
         for (int i = 1; i <= portCount; i++) {
-            Object value = getRawInput(context, "list_item_" + i);
+            Object value = getInput(context, "list_item_" + i, Object.class);
             if (value != null) {
                 resultList.add(value);
             }

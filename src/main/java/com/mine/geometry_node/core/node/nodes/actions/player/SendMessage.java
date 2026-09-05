@@ -29,7 +29,7 @@ public class SendMessage extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> targets = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> targets = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         String message = getInput(context, StandardPorts.MESSAGE.getId(), String.class);
         if (message == null) message = "";
@@ -43,6 +43,7 @@ public class SendMessage extends BaseNode {
         }
         else {
             for (Entity target : targets) {
+                if (target == null) continue;
                 if (target instanceof Player player) {
                     player.sendSystemMessage(Component.literal(message));
                 }

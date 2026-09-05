@@ -37,7 +37,7 @@ public final class AcceptQuest extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
-                getInput(context, StandardPorts.ENTITY.getId(), Entity.class));
+                getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class));
         String questPath = getInput(context, StandardPorts.PATH.getId(), String.class);
         QuestOperationResult result = QuestService.INSTANCE.accept(owner, questPath);
         context.setNodeResult(SUCCESS_PORT, result.successful());

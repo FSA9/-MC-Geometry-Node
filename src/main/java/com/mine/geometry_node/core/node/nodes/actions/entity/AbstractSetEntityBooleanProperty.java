@@ -40,11 +40,12 @@ abstract class AbstractSetEntityBooleanProperty extends EntityPassthroughActionN
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Boolean value = getInput(context, StandardPorts.BOOL.getId(), Boolean.class);
 
         if (value != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 setter.set(entity, value);
             }
         }

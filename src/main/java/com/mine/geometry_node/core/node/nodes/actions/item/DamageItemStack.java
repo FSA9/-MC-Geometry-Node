@@ -38,7 +38,8 @@ public class DamageItemStack extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer amount = getInput(context, StandardPorts.INT.getId(), Integer.class);
-        LivingEntity owner = getInput(context, StandardPorts.ENTITY.getId(), LivingEntity.class);
+        LivingEntity owner = getInputFromList(
+                context, StandardPorts.ENTITY.getId(), 0, LivingEntity.class);
 
         // 只有可损耗耐久的物品才能被伤害
         if (stack != null && !stack.isEmpty() && amount != null && amount > 0 && stack.isDamageableItem()) {

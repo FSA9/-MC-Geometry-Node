@@ -30,11 +30,12 @@ public class SetWalkSpeed extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Float speed = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
 
         if (speed != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 if (entity instanceof ServerPlayer player) {
                     // 设置 abilities 中的行走速度
                     player.getAbilities().setWalkingSpeed(speed);

@@ -29,8 +29,8 @@ public class ListHasValue extends BaseNode {
     @Override
     public Object compute(GraphDataContext context, String portName) {
         // 1. 获取基础列表和要寻找的纯正（Raw）Java对象
-        List<Object> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);
-        Object targetValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        List<Object> list = getInputs(context, StandardPorts.LIST.getId(), Object.class);
+        Object targetValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
 
         int index = -1;
         if (list != null && targetValue != null) {

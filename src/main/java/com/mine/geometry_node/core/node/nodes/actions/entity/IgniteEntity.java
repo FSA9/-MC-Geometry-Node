@@ -30,11 +30,12 @@ public class IgniteEntity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Integer ticks = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
         if (ticks != null && ticks > 0 && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 entity.igniteForTicks(ticks);
             }
         }

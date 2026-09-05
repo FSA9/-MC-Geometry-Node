@@ -32,7 +32,7 @@ public class GrantDamageTypeImmunity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         String damageType = getInput(context, StandardPorts.DAMAGE_TYPE.getId(), String.class);
 
@@ -42,6 +42,7 @@ public class GrantDamageTypeImmunity extends BaseNode {
 
         if (damageType != null && !damageType.isEmpty() && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 EntityImmunityAttachment.grantImmunity(entity, damageType);
             }
         }

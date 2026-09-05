@@ -38,7 +38,7 @@ public class AddEffect extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         String effectId = getInput(context, StandardPorts.STRING.getId(), String.class);
 
@@ -56,6 +56,7 @@ public class AddEffect extends BaseNode {
                     int amp = amplifier != null ? amplifier : 0;
 
                     for (Entity entity : entities) {
+                        if (entity == null) continue;
                         if (entity instanceof LivingEntity living) {
                             living.addEffect(new MobEffectInstance(effectHolder.get(), dur, amp));
                         }

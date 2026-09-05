@@ -31,10 +31,11 @@ public class ClearEntityTags extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         if (!entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 Set<String> currentTags = entity.entityTags();
                 if (!currentTags.isEmpty()) {
                     // 【关键防御】: 必须将其拷贝到一个新的列表中再进行遍历删除！

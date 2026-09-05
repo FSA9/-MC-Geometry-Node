@@ -30,7 +30,7 @@ public class GetListValue extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.ANY_VALUE.getId().equals(portName)) return null;
 
-        List<Object> list = getInputList(context, StandardPorts.LIST.getId(), Object.class);
+        List<Object> list = getInputs(context, StandardPorts.LIST.getId(), Object.class);
         Integer index = getInput(context, StandardPorts.INT.getId(), Integer.class);
 
         if (list != null && !list.isEmpty() && index != null) {

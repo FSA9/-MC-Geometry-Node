@@ -28,11 +28,13 @@ public class MountEntity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> passengers = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Entity vehicle = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        List<Entity> passengers = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity vehicle = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
 
         if (vehicle != null && !passengers.isEmpty()) {
             for (Entity passenger : passengers) {
+                if (passenger == null) continue;
                 // 防止自己骑自己导致游戏死循环崩溃
                 if (passenger != vehicle) {
                     // true 表示强制骑乘（忽略某些原版的骑乘限制）

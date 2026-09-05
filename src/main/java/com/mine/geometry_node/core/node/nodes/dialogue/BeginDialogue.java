@@ -59,7 +59,7 @@ public class BeginDialogue extends BaseNode {
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
-        Entity playerInput = getInput(context, PLAYER, Entity.class);
+        Entity playerInput = getInputFromList(context, PLAYER, 0, Entity.class);
         if (playerInput instanceof ServerPlayer serverPlayer) {
             return serverPlayer;
         }
@@ -79,7 +79,8 @@ public class BeginDialogue extends BaseNode {
     }
 
     private Entity resolveDialogueEntity(ExecutionContext context) {
-        Entity explicitDialogueEntity = getInput(context, DIALOGUE_ENTITY, Entity.class);
+        Entity explicitDialogueEntity = getInputFromList(
+                context, DIALOGUE_ENTITY, 0, Entity.class);
         if (explicitDialogueEntity != null) {
             return explicitDialogueEntity;
         }

@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.node.definition.port.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
-import java.util.List;
 
 public class GetEntityUUID extends BaseNode {
 
@@ -26,9 +25,9 @@ public class GetEntityUUID extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!"uuid".equals(portName)) return null;
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        if (entities.isEmpty()) return null;
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
+        if (entity == null) return null;
 
-        return entities.getFirst().getStringUUID(); // 返回 String
+        return entity.getStringUUID(); // 返回 String
     }
 }

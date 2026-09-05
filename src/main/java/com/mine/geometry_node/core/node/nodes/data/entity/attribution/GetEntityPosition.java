@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
-import java.util.List;
 
 public class GetEntityPosition extends BaseNode {
 
@@ -28,10 +27,10 @@ public class GetEntityPosition extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.XYZ.getId().equals(portName)) return null;
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        if (entities.isEmpty()) return null;
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
+        if (entity == null) return null;
 
-        Entity target = entities.getFirst();
+        Entity target = entity;
 
         return bindDynamicVector(target.position(), target, "pos");
     }

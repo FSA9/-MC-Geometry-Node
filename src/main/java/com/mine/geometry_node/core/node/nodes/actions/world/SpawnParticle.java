@@ -45,8 +45,8 @@ public class SpawnParticle extends BaseNode {
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
         String particleId = getInput(context, StandardPorts.PARTICLE.getId(), String.class);
-        // 核心：直接使用 getInputList，无论上游连的是单个 Vec3 还是 List<Vec3>，统统转为 List
-        List<Vec3> positions = getInputList(context, StandardPorts.XYZ.getId(), Vec3.class);
+        // A single position and a list of positions share the same action path.
+        List<Vec3> positions = getInputs(context, StandardPorts.XYZ.getId(), Vec3.class);
 
         Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
         Vec3 spread = getInput(context, StandardPorts.SPREAD.getId(), Vec3.class);
@@ -63,6 +63,7 @@ public class SpawnParticle extends BaseNode {
 
         // 统一遍历分发
         for (Vec3 pos : positions) {
+            if (pos == null) continue;
             level.sendParticles(
                     particleOptions,
                     pos.x, pos.y, pos.z,

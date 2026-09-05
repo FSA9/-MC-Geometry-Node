@@ -77,7 +77,7 @@ public class RemoveEntityTag extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         List<String> tagsToRemove = new ArrayList<>();
         int portCount = DEFAULT_TAG_COUNT;
@@ -95,6 +95,7 @@ public class RemoveEntityTag extends BaseNode {
 
         if (!entities.isEmpty() && !tagsToRemove.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 for (String tag : tagsToRemove) {
                     entity.removeTag(tag);
                 }

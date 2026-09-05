@@ -27,11 +27,12 @@ public class SetCustomName extends EntityPassthroughActionNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         String name = getInput(context, StandardPorts.NAME.getId(), String.class);
 
         if (name != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 entity.setCustomName(Component.literal(name));
                 entity.setCustomNameVisible(true);
             }

@@ -41,7 +41,7 @@ public final class SubmitQuest extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Entity owner = QuestNodeContext.resolveOwner(
                 context,
-                getInput(context, StandardPorts.ENTITY.getId(), Entity.class));
+                getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class));
         String questPath = getInput(context, StandardPorts.PATH.getId(), String.class);
         QuestOperationResult result = QuestService.INSTANCE.submit(
                 owner, questPath, "", QuestService.REQUEST_SOURCE_BLUEPRINT);

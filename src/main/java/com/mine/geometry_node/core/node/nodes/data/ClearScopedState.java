@@ -53,7 +53,7 @@ public final class ClearScopedState extends BaseNode {
                 getInput(context, StandardPorts.NAME.getId(), String.class));
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
-                ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
+                ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
 
         if (target != null) {

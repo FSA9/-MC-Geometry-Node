@@ -33,7 +33,7 @@ public class GetLength extends BaseNode {
             return null;
         }
 
-        Object rawValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object rawValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
 
         if (rawValue == null) return 0;
 

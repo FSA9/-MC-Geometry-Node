@@ -13,6 +13,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 public class GiveItemStackToPlayer extends BaseNode {
 
     public static final String TYPE_ID = "give_item_stack_to_player";
@@ -33,17 +35,16 @@ public class GiveItemStackToPlayer extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Entity target = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> targets = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
 
-        // 核心逻辑：只有目标是玩家且物品不为空时才执行
-        if (target instanceof Player player && stack != null && !stack.isEmpty()) {
-            // copy() 是为了防止多个地方共用同一个对象引用导致逻辑错误
-            ItemStack copy = stack.copy();
-
-            // 将物品尝试放入背包，如果背包满了，物品会自动掉落在玩家脚下
-            if (!player.getInventory().add(copy)) {
-                player.drop(copy, false);
+        if (stack != null && !stack.isEmpty()) {
+            for (Entity target : targets) {
+                if (!(target instanceof Player player)) continue;
+                ItemStack copy = stack.copy();
+                if (!player.getInventory().add(copy)) {
+                    player.drop(copy, false);
+                }
             }
         }
 

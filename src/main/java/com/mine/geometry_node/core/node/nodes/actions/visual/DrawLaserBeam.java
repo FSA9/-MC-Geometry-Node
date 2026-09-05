@@ -59,8 +59,10 @@ public class DrawLaserBeam extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         // 读取实体端口
-        Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
-        Entity targetEntity = getInput(context, StandardPorts.TARGET_ENTITY.getId(), Entity.class);
+        Entity sourceEntity = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
+        Entity targetEntity = getInputFromList(
+                context, StandardPorts.TARGET_ENTITY.getId(), 0, Entity.class);
 
         int sourceId = sourceEntity != null ? sourceEntity.getId() : -1;
         int targetId = targetEntity != null ? targetEntity.getId() : -1;

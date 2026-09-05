@@ -50,13 +50,14 @@ public class RemoveItemsFromInventory extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         ItemStack template = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
         String matchMode = getInput(context, StandardPorts.MATCH_MODE.getId(), String.class);
         int removed = 0;
         for (Entity entity : entities) {
+            if (entity == null) continue;
             removed += SlotAccessUtils.removeMatching(entity, template, tag, count != null ? count : 1, matchMode, context);
         }
         context.setNodeResult(StandardPorts.REMOVED_COUNT.getId(), removed);

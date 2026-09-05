@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 public class DropSlotItem extends BaseNode {
     public static final String TYPE_ID = "drop_slot_item";
 
@@ -42,12 +44,23 @@ public class DropSlotItem extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
         Integer count = getInput(context, StandardPorts.COUNT.getId(), Integer.class);
-        ItemStack dropped = SlotAccessUtils.extractItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT, count != null ? count : 1);
-        if (!dropped.isEmpty()) {
-            SlotAccessUtils.dropItem(entity, dropped);
+        ItemStack dropped = ItemStack.EMPTY;
+        boolean resultSelected = false;
+        for (Entity entity : entities) {
+            if (entity == null) continue;
+            ItemStack current = SlotAccessUtils.extractItem(
+                    entity, slotRef != null ? slotRef : SlotRef.DEFAULT,
+                    count != null ? count : 1);
+            if (!current.isEmpty()) {
+                SlotAccessUtils.dropItem(entity, current);
+            }
+            if (!resultSelected) {
+                dropped = current;
+                resultSelected = true;
+            }
         }
         context.setNodeResult(StandardPorts.ITEM_STACK.getId(), dropped);
         return next(StandardPorts.FLOW_OUT.getId());

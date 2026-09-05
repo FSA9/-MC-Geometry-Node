@@ -31,7 +31,7 @@ public class SetGameMode extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Integer modeId = getInput(context, StandardPorts.INT.getId(), Integer.class);
 
         if (modeId != null && !entities.isEmpty()) {
@@ -39,6 +39,7 @@ public class SetGameMode extends BaseNode {
             GameType gameType = GameType.byId(modeId);
 
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 if (entity instanceof ServerPlayer player) {
                     player.setGameMode(gameType);
                 }

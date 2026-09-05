@@ -36,7 +36,7 @@ public class HasTag extends BaseNode {
             return null;
         }
 
-        Object value = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object value = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
         return ValueTagUtils.hasTag(value, tag, context);
     }

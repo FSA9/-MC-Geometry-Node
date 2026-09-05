@@ -44,11 +44,12 @@ abstract class AbstractSetEntityIntegerProperty extends EntityPassthroughActionN
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Integer value = getInput(context, StandardPorts.TICK.getId(), Integer.class);
 
         if (value != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 setter.set(entity, value);
             }
         }

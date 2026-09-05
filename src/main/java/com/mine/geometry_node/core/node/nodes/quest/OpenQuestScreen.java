@@ -36,7 +36,7 @@ public final class OpenQuestScreen extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         Entity target = QuestNodeContext.resolveOwner(
                 context,
-                getInput(context, StandardPorts.ENTITY.getId(), Entity.class));
+                getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class));
         boolean success = target instanceof ServerPlayer;
         if (target instanceof ServerPlayer player) {
             QuestScreenService.INSTANCE.open(player);

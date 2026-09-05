@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
@@ -70,7 +71,8 @@ public class MakeDict extends BaseNode {
 
         Map<String, Object> resultDict = new HashMap<>();
 
-        Map<String, Object> baseDict = getInputDict(context, StandardPorts.DICT.getId());
+        Map<String, Object> baseDict = TypeConverter.convertStringMap(
+                getInput(context, StandardPorts.DICT.getId(), Object.class), context);
         if (baseDict != null) {
             resultDict.putAll(baseDict);
         }
@@ -81,7 +83,7 @@ public class MakeDict extends BaseNode {
 
         for (int i = 1; i <= portCount; i++) {
             String key = getInput(context, "dict_key_" + i, String.class);
-            Object value = getRawInput(context, "dict_value_" + i);
+            Object value = getInput(context, "dict_value_" + i, Object.class);
 
             if (key != null && !key.trim().isEmpty() && value != null) {
                 resultDict.put(key.trim(), value);

@@ -28,9 +28,10 @@ public class KillEntity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (entity.level() instanceof ServerLevel level) {
                 entity.kill(level);
             }

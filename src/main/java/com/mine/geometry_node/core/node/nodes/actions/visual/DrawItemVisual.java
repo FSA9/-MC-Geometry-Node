@@ -77,7 +77,8 @@ public class DrawItemVisual extends BaseNode {
         Level level = context.getLevel();
         if (level == null) return next(StandardPorts.FLOW_OUT.getId());
 
-        Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        Entity sourceEntity = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
         int sourceId = sourceEntity != null ? sourceEntity.getId() : -1;
 
         ItemStack itemStack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);

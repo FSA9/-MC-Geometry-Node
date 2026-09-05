@@ -36,7 +36,7 @@ public class ClearEffect extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         String effectId = getInput(context, StandardPorts.STRING.getId(), String.class);
 
         if (!entities.isEmpty() && effectId != null) {
@@ -47,6 +47,7 @@ public class ClearEffect extends BaseNode {
                         .map(BuiltInRegistries.MOB_EFFECT::wrapAsHolder);
                 if (effectHolder.isPresent()) {
                     for (Entity entity : entities) {
+                        if (entity == null) continue;
                         if (entity instanceof LivingEntity living) {
                             living.removeEffect(effectHolder.get());
                         }

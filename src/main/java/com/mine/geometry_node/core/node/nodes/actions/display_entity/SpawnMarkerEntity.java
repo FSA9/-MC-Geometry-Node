@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
@@ -49,7 +50,8 @@ public class SpawnMarkerEntity extends BaseNode {
         if (pos == null) pos = Vec3.ZERO;
 
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
-        Map<String, Object> dataDict = getInputDict(context, StandardPorts.DATA.getId());
+        Map<String, Object> dataDict = TypeConverter.convertStringMap(
+                getInput(context, StandardPorts.DATA.getId(), Object.class), context);
 
         Marker marker = EntityType.MARKER.create(level, EntitySpawnReason.COMMAND);
         if (marker != null) {

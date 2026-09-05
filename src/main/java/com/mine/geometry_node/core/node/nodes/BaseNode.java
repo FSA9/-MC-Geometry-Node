@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.node.nodes;
 
-import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
@@ -10,13 +9,10 @@ import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
-import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,28 +61,28 @@ public abstract class BaseNode {
     // ==========================================
 
     @Nullable
-    protected Object getRawInput(GraphDataContext ctx, String portName) {
-        Object value = getTransportInput(ctx, portName);
+    private Object resolveInputValue(GraphDataContext ctx, String portName) {
+        Object value = resolveInputTransport(ctx, portName);
         return value instanceof DynamicData dynamic ? dynamic.value() : value;
     }
 
     /**
      * Reads the internal graph transport value, including expression metadata.
-     * Ordinary nodes must use {@link #getRawInput(GraphDataContext, String)}.
+     * Ordinary nodes must use one of the typed input methods.
      */
     @Nullable
-    protected final Object getTransportInput(GraphDataContext ctx, String portName) {
+    private Object resolveInputTransport(GraphDataContext ctx, String portName) {
         return ctx.resolveInput(portName).value();
     }
 
     @Nullable
     protected <T> T getInput(GraphDataContext ctx, String portName, Class<T> type) {
-        return TypeConverter.convert(getRawInput(ctx, portName), type, ctx);
+        return TypeConverter.convert(resolveInputValue(ctx, portName), type, ctx);
     }
 
     @Nullable
     protected ExpressionData getInputExpression(GraphDataContext ctx, String portName) {
-        Object raw = getTransportInput(ctx, portName);
+        Object raw = resolveInputTransport(ctx, portName);
         return raw instanceof DynamicData dynamic ? dynamic.expression() : null;
     }
 
@@ -97,77 +93,21 @@ public abstract class BaseNode {
     }
 
     /**
-     * Converts a list input. Input isolation is owned by the graph data context;
-     * null and rejected slots retain their indexes.
+     * Reads one typed element from a list input without compacting invalid slots.
+     * A scalar input is treated as a single-element list at index {@code 0}.
      */
-    protected <T> List<T> getInputList(GraphDataContext ctx, String portName, Class<T> elementType) {
-        Object raw = getRawInput(ctx, portName);
-        if (raw == null) return new ArrayList<>();
-
-        if (raw instanceof List<?> list) {
-            List<T> result = new ArrayList<>(list.size());
-            int rejectedCount = 0;
-            for (Object element : list) {
-                // Preserve null positions: list indexes are observable by loop and lookup nodes.
-                if (element == null) {
-                    result.add(null);
-                    continue;
-                }
-
-                T converted = TypeConverter.convert(element, elementType, ctx);
-                if (converted != null) {
-                    result.add(converted);
-                } else {
-                    result.add(null);
-                    rejectedCount++;
-                }
-            }
-            if (rejectedCount > 0) {
-                String logKey = "base_node:list_elements:" + portName + ":" + elementType.getName();
-                if (RateLimitedLog.acquire(ctx, logKey)) {
-                    GeometryNode.LOGGER.warn("[BaseNode] {} replaced {} unconvertible value(s) with null for {}",
-                            portName, rejectedCount, elementType.getSimpleName());
-                }
-            }
-            return result;
-        }
-
-        T converted = TypeConverter.convert(raw, elementType, ctx);
-        if (converted != null) {
-            List<T> result = new ArrayList<>(1);
-            result.add(converted);
-            return result;
-        }
-
-        String logKey = "base_node:list_input:" + portName + ":" + elementType.getName();
-        if (RateLimitedLog.acquire(ctx, logKey)) {
-            GeometryNode.LOGGER.warn("[BaseNode] {} expected List<{}>, but received {}",
-                    portName, elementType.getSimpleName(), raw.getClass().getSimpleName());
-        }
-        return new ArrayList<>();
+    @Nullable
+    protected <T> T getInputFromList(GraphDataContext ctx, String portName, int index,
+                                     Class<T> elementType) {
+        return TypeConverter.convertFromList(resolveInputValue(ctx, portName), index, elementType, ctx);
     }
 
-    /** Returns an insertion-ordered snapshot containing only string-keyed entries. */
-    protected Map<String, Object> getInputDict(GraphDataContext ctx, String portName) {
-        Object raw = getRawInput(ctx, portName);
-        if (raw == null) return new LinkedHashMap<>();
-
-        if (raw instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (entry.getKey() instanceof String key) {
-                    result.put(key, entry.getValue());
-                }
-            }
-            return result;
-        }
-
-        String logKey = "base_node:dict_input:" + portName;
-        if (RateLimitedLog.acquire(ctx, logKey)) {
-            GeometryNode.LOGGER.warn("[BaseNode] {} expected DICT (Map), but received {}",
-                    portName, raw.getClass().getSimpleName());
-        }
-        return new LinkedHashMap<>();
+    /**
+     * Converts every element of a list input. Input isolation is owned by the
+     * graph data context; null and rejected slots retain their indexes.
+     */
+    protected <T> List<T> getInputs(GraphDataContext ctx, String portName, Class<T> elementType) {
+        return TypeConverter.convertList(resolveInputValue(ctx, portName), elementType, ctx);
     }
 
     /**

@@ -70,12 +70,14 @@ public class ShootProjectile extends BaseNode {
         Level level = context.getLevel();
         if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
 
-        Projectile projectile = getInput(context, StandardPorts.PROJECTILE.getId(), Projectile.class);
+        Projectile projectile = getInputFromList(
+                context, StandardPorts.PROJECTILE.getId(), 0, Projectile.class);
         if (projectile == null || projectile.isRemoved() || projectile.level() != level) {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
-        Entity owner = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        Entity owner = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
         Vec3 pos = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);
         Vec3 direction = getInput(context, StandardPorts.VECTOR.getId(), Vec3.class);
         Float speed = getInput(context, StandardPorts.SPEED.getId(), Float.class);

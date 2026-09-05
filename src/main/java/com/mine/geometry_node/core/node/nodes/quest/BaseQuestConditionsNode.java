@@ -84,7 +84,7 @@ public abstract class BaseQuestConditionsNode extends BaseNode {
         int conditionCount = resolveConditionCount(
                 context.getStaticInput(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()));
         for (int i = 1; i <= conditionCount; i++) {
-            Object raw = getRawInput(context, conditionPort(i));
+            Object raw = getInput(context, conditionPort(i), Object.class);
             if (raw == null) continue;
             if (!(raw instanceof QuestConditionValue condition)) {
                 return QuestConditionResult.denied(List.of());

@@ -38,7 +38,7 @@ public class GetSlotItem extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
         ItemStack stack = SlotAccessUtils.getItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
 

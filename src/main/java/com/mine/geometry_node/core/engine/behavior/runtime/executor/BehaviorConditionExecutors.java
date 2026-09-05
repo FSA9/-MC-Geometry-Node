@@ -16,7 +16,7 @@ public final class BehaviorConditionExecutors {
                     "Condition input is missing")
                     ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
     private static final BehaviorNodeExecutor HAS_VALID_TARGET = context -> {
-        Entity entity = context.input(StandardPorts.ENTITY.getId(), Entity.class);
+        Entity entity = context.inputFromList(StandardPorts.ENTITY.getId(), 0, Entity.class);
         return entity != null && entity.isAlive() && !entity.isRemoved()
                 ? BehaviorResult.SUCCESS : BehaviorResult.FAILURE;
     };

@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
@@ -30,7 +31,8 @@ public class GetDictValue extends BaseNode {
         if (!StandardPorts.ANY_VALUE.getId().equals(portName)) return null;
 
         // 1. 获取连入的字典
-        Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getId());
+        Map<String, Object> dict = TypeConverter.convertStringMap(
+                getInput(context, StandardPorts.DICT.getId(), Object.class), context);
 
         // 2. 获取目标 Key (可能来自手打输入框，也可能来自上游字符串节点的连线)
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);

@@ -31,7 +31,7 @@ public class GetInputDataType extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.TYPE.getId().equals(portName)) return null;
 
-        Object rawValue = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object rawValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
 
         PortType type = PortType.getTypeOf(rawValue);
 

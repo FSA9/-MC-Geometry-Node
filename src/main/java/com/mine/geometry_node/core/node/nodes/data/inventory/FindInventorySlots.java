@@ -76,7 +76,7 @@ public class FindInventorySlots extends BaseNode {
     }
 
     private List<SlotRef> findSlots(GraphDataContext context) {
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
         ItemStack template = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
         String scope = getInput(context, StandardPorts.SCOPE.getId(), String.class);

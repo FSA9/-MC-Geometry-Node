@@ -35,13 +35,15 @@ public class SetCameraTarget extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         // 获取受影响的玩家列表
-        List<Entity> players = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> players = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
 
         // 获取摄像机目标实体 (只取第一个)
-        Entity cameraTarget = getInput(context, StandardPorts.ENTITY.getIdWithIndex(1), Entity.class);
+        Entity cameraTarget = getInputFromList(
+                context, StandardPorts.ENTITY.getIdWithIndex(1), 0, Entity.class);
 
         if (!players.isEmpty()) {
             for (Entity entity : players) {
+                if (entity == null) continue;
                 if (entity instanceof ServerPlayer player) {
                     // 如果传入了目标实体，则绑定视角
                     if (cameraTarget != null) {

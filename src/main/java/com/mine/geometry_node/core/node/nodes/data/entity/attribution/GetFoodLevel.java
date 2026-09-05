@@ -11,7 +11,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.List;
 
 public class GetFoodLevel extends BaseNode {
 
@@ -29,10 +28,10 @@ public class GetFoodLevel extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.INT_VALUE.getId().equals(portName)) return null;
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        if (entities.isEmpty()) return null;
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
+        if (entity == null) return null;
 
-        if (entities.getFirst() instanceof Player player) {
+        if (entity instanceof Player player) {
             return player.getFoodData().getFoodLevel();
         }
 

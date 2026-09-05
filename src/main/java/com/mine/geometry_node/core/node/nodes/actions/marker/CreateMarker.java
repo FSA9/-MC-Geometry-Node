@@ -104,7 +104,7 @@ public final class CreateMarker extends BaseNode {
 
     private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
         if (!onlySelf) return MarkerAddress.all(key);
-        Entity viewer = getInput(context, StandardPorts.PLAYER.getId(), Entity.class);
+        Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
         if (viewer == null) viewer = context.getGraphOwnerEntity();
         if (viewer == null) viewer = context.getEntity();
         return viewer instanceof ServerPlayer player ? MarkerAddress.self(player.getUUID(), key) : null;
@@ -113,7 +113,8 @@ public final class CreateMarker extends BaseNode {
     private MarkerAnchor resolveAnchor(ExecutionContext context, ServerLevel fallbackLevel) {
         String anchorType = valueOr(getInput(context, StandardPorts.ANCHOR_TYPE.getId(), String.class), ANCHOR_COORDINATE);
         if (ANCHOR_ENTITY.equals(anchorType)) {
-            Entity target = getInput(context, StandardPorts.TARGET_ENTITY.getId(), Entity.class);
+            Entity target = getInputFromList(
+                    context, StandardPorts.TARGET_ENTITY.getId(), 0, Entity.class);
             if (target == null || target.isRemoved() || !target.isAlive() || !(target.level() instanceof ServerLevel targetLevel)) {
                 return null;
             }

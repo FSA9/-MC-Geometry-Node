@@ -10,7 +10,6 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 
-import java.util.List;
 
 public class GetEntityFallDistance extends BaseNode {
 
@@ -28,9 +27,9 @@ public class GetEntityFallDistance extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.FLOAT_VALUE.getId().equals(portName)) return null;
 
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        if (entities.isEmpty()) return null;
+        Entity entity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
+        if (entity == null) return null;
 
-        return entities.getFirst().fallDistance; // 返回 float
+        return entity.fallDistance; // 返回 float
     }
 }

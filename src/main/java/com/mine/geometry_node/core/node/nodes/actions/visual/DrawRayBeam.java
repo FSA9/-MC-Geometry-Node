@@ -69,7 +69,8 @@ public class DrawRayBeam extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Entity sourceEntity = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        Entity sourceEntity = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
         if (sourceEntity == null) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 posOffset = getInput(context, StandardPorts.START_POS.getId(), Vec3.class);

@@ -43,7 +43,7 @@ public final class SetDisplayPosition extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.DISPLAY_ENTITY.getId(), Entity.class);
         Vec3 worldPosition = getInput(context, StandardPorts.WORLD_POSITION.getId(), Vec3.class);
         if (entities.isEmpty() || worldPosition == null) {
             return next(StandardPorts.FLOW_OUT.getId());
@@ -52,6 +52,7 @@ public final class SetDisplayPosition extends BaseNode {
         Integer teleportTick = getInput(context, StandardPorts.TICK.getId(), Integer.class);
         int duration = teleportTick != null ? Math.max(0, teleportTick) : 0;
         for (Entity entity : entities) {
+            if (entity == null) continue;
             if (!(entity instanceof Display display)) continue;
             CompoundTag nbt = EntityNbtCompat.saveWithoutId(display);
             nbt.putInt("teleport_duration", duration);

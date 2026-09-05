@@ -27,6 +27,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -483,9 +484,14 @@ public final class BehaviorEntityExecutors {
         Object raw = context.input(port);
         if (raw == null) return new EntityTarget(currentTarget(owner), false);
         if (raw instanceof Entity entity) return new EntityTarget(entity, true);
-        Entity converted = context.input(port, Entity.class);
+        Entity converted = context.inputFromList(port, 0, Entity.class);
         if (converted != null) return new EntityTarget(converted, true);
-        if (raw instanceof UUID || raw instanceof String text && validUuid(text)) {
+        Object candidate = raw;
+        if (raw instanceof List<?> values) {
+            candidate = values.isEmpty() ? null : values.get(0);
+        }
+        if (candidate == null || candidate instanceof UUID
+                || candidate instanceof String text && validUuid(text)) {
             return new EntityTarget(null, true);
         }
         throw new BehaviorContractViolation(port + " does not match Entity");

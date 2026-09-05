@@ -64,11 +64,12 @@ abstract class AbstractSetEntityFloatProperty extends EntityPassthroughActionNod
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Float value = getInput(context, StandardPorts.FLOAT_VALUE.getId(), Float.class);
 
         if (value != null && !entities.isEmpty()) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 setter.set(entity, value);
             }
         }

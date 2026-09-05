@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
@@ -28,7 +29,8 @@ public class DictHasKey extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) return null;
 
-        Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getId());
+        Map<String, Object> dict = TypeConverter.convertStringMap(
+                getInput(context, StandardPorts.DICT.getId(), Object.class), context);
         String key = getInput(context, StandardPorts.STRING.getId(), String.class);
 
         if (dict != null && key != null && !key.trim().isEmpty()) {

@@ -91,7 +91,7 @@ public class FormatDialogueText extends BaseNode {
             }
 
             String variableName = name.trim();
-            Object rawValue = getRawInput(context, variableValuePort(i));
+            Object rawValue = getInput(context, variableValuePort(i), Object.class);
             if (rawValue == null) {
                 continue;
             }

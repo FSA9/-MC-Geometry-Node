@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 public class SetSlotItem extends BaseNode {
     public static final String TYPE_ID = "set_slot_item";
 
@@ -42,10 +44,18 @@ public class SetSlotItem extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
         ItemStack stack = getInput(context, StandardPorts.ITEM_STACK.getId(), ItemStack.class);
-        boolean success = SlotAccessUtils.setItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT, stack);
+        boolean success = true;
+        boolean foundTarget = false;
+        for (Entity entity : entities) {
+            if (entity == null) continue;
+            foundTarget = true;
+            success &= SlotAccessUtils.setItem(
+                    entity, slotRef != null ? slotRef : SlotRef.DEFAULT, stack);
+        }
+        success = foundTarget && success;
         context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }

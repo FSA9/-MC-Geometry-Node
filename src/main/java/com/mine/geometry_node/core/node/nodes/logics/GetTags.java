@@ -37,7 +37,7 @@ public class GetTags extends BaseNode {
             return null;
         }
 
-        Object value = getRawInput(context, StandardPorts.ANY_VALUE.getId());
+        Object value = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         return ValueTagUtils.tags(value, context);
     }
 }

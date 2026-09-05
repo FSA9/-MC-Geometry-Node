@@ -46,8 +46,8 @@ public class Equal extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.BOOL.getId().equals(portName)) return null;
 
-        Object a = getRawInput(context, PORT_A);
-        Object b = getRawInput(context, PORT_B);
+        Object a = getInput(context, PORT_A, Object.class);
+        Object b = getInput(context, PORT_B, Object.class);
         String mode = getInput(context, StandardPorts.TYPE.getId(), String.class);
         String countMode = getInput(context, COUNT_MODE, String.class);
 

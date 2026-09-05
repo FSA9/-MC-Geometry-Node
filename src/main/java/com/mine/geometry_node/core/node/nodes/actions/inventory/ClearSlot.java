@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
 public class ClearSlot extends BaseNode {
 
     public static final String TYPE_ID = "clear_slot";
@@ -41,9 +43,19 @@ public class ClearSlot extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        Entity entity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         SlotRef slotRef = getInput(context, StandardPorts.SLOT.getId(), SlotRef.class);
-        ItemStack removed = SlotAccessUtils.clearItem(entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
+        ItemStack removed = ItemStack.EMPTY;
+        boolean resultSelected = false;
+        for (Entity entity : entities) {
+            if (entity == null) continue;
+            ItemStack current = SlotAccessUtils.clearItem(
+                    entity, slotRef != null ? slotRef : SlotRef.DEFAULT);
+            if (!resultSelected) {
+                removed = current;
+                resultSelected = true;
+            }
+        }
         context.setNodeResult(StandardPorts.ITEM_STACK.getId(), removed);
 
         return next(StandardPorts.FLOW_OUT.getId());

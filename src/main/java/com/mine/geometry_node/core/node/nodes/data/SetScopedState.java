@@ -59,7 +59,7 @@ public final class SetScopedState extends BaseNode {
         Object attrValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
-                ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
+                ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
         if (target != null) {
             context.setScopedState(target, key, attrValue);
@@ -74,7 +74,7 @@ public final class SetScopedState extends BaseNode {
 
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
-                ? getInput(context, StandardPorts.ENTITY.getId(), Entity.class) : null;
+                ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
         ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
         if (target == null) return null;
         String key = ScopedStateNodeSupport.requireKey(

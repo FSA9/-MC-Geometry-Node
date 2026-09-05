@@ -39,6 +39,6 @@ public final class PickEntityTemplate extends BaseNode {
     @Override
     public Object compute(GraphDataContext context, String portName) {
         if (!StandardPorts.ENTITY_TEMPLATE.getId().equals(portName)) return null;
-        return EntityTemplateValue.from(getRawInput(context, TEMPLATE_DATA));
+        return EntityTemplateValue.from(getInput(context, TEMPLATE_DATA, Object.class));
     }
 }

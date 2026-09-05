@@ -37,7 +37,7 @@ public class CloseDialogue extends BaseNode {
     }
 
     private ServerPlayer resolvePlayer(ExecutionContext context) {
-        Entity target = getInput(context, PLAYER, Entity.class);
+        Entity target = getInputFromList(context, PLAYER, 0, Entity.class);
         if (target instanceof ServerPlayer player) {
             return player;
         }

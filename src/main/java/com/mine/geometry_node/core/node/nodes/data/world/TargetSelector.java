@@ -183,13 +183,14 @@ public class TargetSelector extends BaseNode {
                     }
                 }
                 case "tag", "name", "team" -> {
-                    List<String> list = getInputList(context, StandardPorts.LIST.getIdWithIndex(i), String.class);
+                    List<String> list = getInputs(context, StandardPorts.LIST.getIdWithIndex(i), String.class);
                     for (String val : list) {
                         if (val != null && !val.isEmpty()) arguments.add(filterType + "=" + val);
                     }
                 }
                 case "nbt" -> {
-                    Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
+                    Map<String, Object> dict = TypeConverter.convertStringMap(
+                            getInput(context, StandardPorts.DICT.getIdWithIndex(i), Object.class), context);
                     if (!dict.isEmpty() && context.getLevel() != null) {
                         try {
                             CompoundTag nbt = GraphValueNbtConverter.toCompound(
@@ -205,7 +206,8 @@ public class TargetSelector extends BaseNode {
                     }
                 }
                 case "scores", "advancements" -> {
-                    Map<String, Object> dict = getInputDict(context, StandardPorts.DICT.getIdWithIndex(i));
+                    Map<String, Object> dict = TypeConverter.convertStringMap(
+                            getInput(context, StandardPorts.DICT.getIdWithIndex(i), Object.class), context);
                     if (!dict.isEmpty()) {
                         List<String> entries = new ArrayList<>();
                         for (Map.Entry<String, Object> entry : dict.entrySet()) {
@@ -226,7 +228,7 @@ public class TargetSelector extends BaseNode {
         String finalSelector = base + (!arguments.isEmpty() ? "[" + String.join(",", arguments) + "]" : "");
 
         try {
-            Entity explicitEntity = getInput(context, StandardPorts.ENTITY.getId(), Entity.class);
+            Entity explicitEntity = getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class);
             CommandSourceStack source;
             ServerLevel serverLevel = context.getLevel();
 

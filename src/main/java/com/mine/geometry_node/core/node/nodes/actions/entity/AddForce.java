@@ -30,11 +30,12 @@ public class AddForce extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         Vec3 force = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
 
         if (force != null && !entities.isEmpty() && !force.equals(Vec3.ZERO)) {
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 Vec3 currentVelocity = entity.getDeltaMovement();
                 entity.setDeltaMovement(currentVelocity.add(force));
 

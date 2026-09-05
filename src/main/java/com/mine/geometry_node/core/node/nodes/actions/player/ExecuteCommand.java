@@ -30,7 +30,7 @@ public class ExecuteCommand extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> entities = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
+        List<Entity> entities = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
         String command = getInput(context, StandardPorts.EXPRESSION.getId(), String.class);
 
         if (command != null && !command.isBlank() && !entities.isEmpty()) {
@@ -40,6 +40,7 @@ public class ExecuteCommand extends BaseNode {
             }
 
             for (Entity entity : entities) {
+                if (entity == null) continue;
                 if (entity instanceof ServerPlayer player) {
                     // 以玩家身份在服务端执行指令
                     player.level().getServer().getCommands().performPrefixedCommand(player.createCommandSourceStack(), command);

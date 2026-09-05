@@ -67,7 +67,7 @@ public final class RemoveMarker extends BaseNode {
 
     private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
         if (!onlySelf) return MarkerAddress.all(key);
-        Entity viewer = getInput(context, StandardPorts.PLAYER.getId(), Entity.class);
+        Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
         if (viewer == null) viewer = context.getGraphOwnerEntity();
         if (viewer == null) viewer = context.getEntity();
         return viewer instanceof ServerPlayer player ? MarkerAddress.self(player.getUUID(), key) : null;

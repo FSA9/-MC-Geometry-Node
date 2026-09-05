@@ -29,11 +29,13 @@ public class LeashEntity extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        List<Entity> mobsToLeash = getInputList(context, StandardPorts.ENTITY.getId(), Entity.class);
-        Entity leashHolder = getInput(context, StandardPorts.SOURCE_ENTITY.getId(), Entity.class);
+        List<Entity> mobsToLeash = getInputs(context, StandardPorts.ENTITY.getId(), Entity.class);
+        Entity leashHolder = getInputFromList(
+                context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
 
         if (leashHolder != null && !mobsToLeash.isEmpty()) {
             for (Entity entity : mobsToLeash) {
+                if (entity == null) continue;
                 // 原版机制：只有 Mob 才能被拴绳牵着
                 if (entity instanceof Mob mob) {
                     // true 表示强制发送数据包同步给客户端

@@ -9,7 +9,7 @@ abstract class EntityPassthroughActionNode extends BaseNode {
     @Override
     public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.ENTITY.getId().equals(portName)) {
-            return getRawInput(context, StandardPorts.ENTITY.getId());
+            return getInput(context, StandardPorts.ENTITY.getId(), Object.class);
         }
         return null;
     }

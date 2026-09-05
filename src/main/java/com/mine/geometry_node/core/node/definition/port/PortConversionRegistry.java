@@ -19,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -30,6 +31,7 @@ import java.util.UUID;
  */
 public final class PortConversionRegistry {
     private static final Map<PortType, Map<PortType, Converter>> RULES = createRules();
+    private static final EnumSet<PortType> LIST_LIFT_TARGETS = EnumSet.of(PortType.ENTITY);
 
     private PortConversionRegistry() {
     }
@@ -38,6 +40,7 @@ public final class PortConversionRegistry {
         if (source == null || target == null) return false;
         if (source.isFlow() || target.isFlow()) return source == target;
         if (source == PortType.ANY || target == PortType.ANY || source == target) return true;
+        if (isListLift(source, target)) return true;
         return RULES.getOrDefault(source, Map.of()).containsKey(target);
     }
 
@@ -66,6 +69,9 @@ public final class PortConversionRegistry {
             if (value == null) return null;
         }
         if (source == null || source == PortType.ANY) source = PortType.getTypeOf(value);
+        if (isLiftedListValue(value, source, target)) {
+            return value;
+        }
         if (source == target) {
             Object converted;
             if (target == PortType.ENTITY && value instanceof UUID entityId) {
@@ -97,6 +103,22 @@ public final class PortConversionRegistry {
 
         Converter converter = RULES.getOrDefault(source, Map.of()).get(target);
         return converter != null ? converter.convert(value, context) : null;
+    }
+
+    /**
+     * Collection lifting is a connection-shape rule, not a scalar conversion.
+     * ENTITY inputs intentionally accept either one entity reference or a list;
+     * the consuming node decides whether to read one indexed value or all values.
+     */
+    private static boolean isListLift(PortType source, PortType target) {
+        return source == PortType.LIST && LIST_LIFT_TARGETS.contains(target);
+    }
+
+    private static boolean isLiftedListValue(Object value, PortType source, PortType target) {
+        if (!(value instanceof List<?>) || !LIST_LIFT_TARGETS.contains(target)) return false;
+        // After a passthrough port, the declared source is ENTITY while the
+        // lifted runtime value intentionally retains its collection shape.
+        return source == PortType.LIST || source == target;
     }
 
     @Nullable
