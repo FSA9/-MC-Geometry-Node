@@ -38,6 +38,21 @@ public final class GraphSubscriptionIndex {
         return Set.copyOf(result);
     }
 
+    public Map<String, Set<Entity>> registeredEntitiesForGraphs(Set<String> graphIds) {
+        Map<String, Set<Entity>> result = new LinkedHashMap<>();
+        for (String graphId : graphIds) {
+            result.put(graphId, new HashSet<>());
+        }
+        registeredEntityGraphs.forEach((entity, graphs) -> {
+            for (String graphId : graphs.keySet()) {
+                Set<Entity> entities = result.get(graphId);
+                if (entities != null) entities.add(entity);
+            }
+        });
+        result.replaceAll((graphId, entities) -> Set.copyOf(entities));
+        return Map.copyOf(result);
+    }
+
     public void registerGlobalGraph(String graphId, BlueprintPlan plan) {
         BlueprintPlan previous = registeredGlobalGraphs.get(graphId);
         if (previous == plan) return;

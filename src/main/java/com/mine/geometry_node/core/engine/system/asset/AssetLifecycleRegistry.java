@@ -5,6 +5,8 @@ import net.minecraft.server.MinecraftServer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /** Dispatches committed file changes only to managers that own the affected asset types. */
 public final class AssetLifecycleRegistry {
@@ -24,28 +26,51 @@ public final class AssetLifecycleRegistry {
         }
     }
 
-    public void refresh(MinecraftServer server, Set<String> affectedTypeIds) {
-        if (server == null || affectedTypeIds == null || affectedTypeIds.isEmpty()) return;
+    public CompletableFuture<Void> refresh(MinecraftServer server, Set<String> affectedTypeIds,
+                                           Set<String> affectedPaths, boolean directoryScope) {
+        if (server == null || affectedTypeIds == null || affectedTypeIds.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
         Map<String, Handler> snapshot;
         synchronized (this) {
             snapshot = Map.copyOf(handlers);
         }
+        java.util.LinkedHashSet<Handler> affectedHandlers = new java.util.LinkedHashSet<>();
         for (String typeId : affectedTypeIds) {
             Handler handler = snapshot.get(typeId);
-            if (handler != null) handler.refresh(server);
+            if (handler != null) affectedHandlers.add(handler);
         }
+        CompletableFuture<?>[] refreshes = affectedHandlers.stream()
+                .map(handler -> invoke(handler, server, affectedPaths, directoryScope))
+                .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(refreshes);
     }
 
-    public void refreshAll(MinecraftServer server) {
+    public CompletableFuture<Void> refreshAll(MinecraftServer server) {
         Map<String, Handler> snapshot;
         synchronized (this) {
             snapshot = Map.copyOf(handlers);
         }
-        for (Handler handler : snapshot.values()) handler.refresh(server);
+        CompletableFuture<?>[] refreshes = new java.util.LinkedHashSet<>(snapshot.values()).stream()
+                .map(handler -> invoke(handler, server, Set.of(), true))
+                .toArray(CompletableFuture[]::new);
+        return CompletableFuture.allOf(refreshes);
+    }
+
+    private static CompletableFuture<Void> invoke(Handler handler, MinecraftServer server,
+                                                   Set<String> affectedPaths, boolean directoryScope) {
+        try {
+            CompletionStage<Void> stage = handler.refresh(
+                    server, affectedPaths == null ? Set.of() : Set.copyOf(affectedPaths), directoryScope);
+            return stage == null ? CompletableFuture.completedFuture(null) : stage.toCompletableFuture();
+        } catch (Throwable error) {
+            return CompletableFuture.failedFuture(error);
+        }
     }
 
     @FunctionalInterface
     public interface Handler {
-        void refresh(MinecraftServer server);
+        CompletionStage<Void> refresh(MinecraftServer server, Set<String> affectedPaths,
+                                      boolean directoryScope);
     }
 }

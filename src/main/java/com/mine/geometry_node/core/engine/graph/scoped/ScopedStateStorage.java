@@ -1,9 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -77,8 +75,14 @@ public final class ScopedStateStorage extends SavedData {
             }
             if (scope != ScopedStateScope.SHARED && scope != ScopedStateScope.GROUP
                     && scope != ScopedStateScope.WORLD) continue;
-            ScopedStateNamespace namespace = ScopedStateNamespace.fromSerializedName(
-                    tag.getStringOr("Namespace", "public"));
+            ScopedStateNamespace namespace;
+            if (!tag.contains("Namespace")) {
+                namespace = ScopedStateNamespace.PUBLIC;
+            } else {
+                namespace = ScopedStateNamespace.fromSerializedName(
+                        tag.getStringOr("Namespace", "")).orElse(null);
+                if (namespace == null) continue;
+            }
             String identity;
             try {
                 identity = scope == ScopedStateScope.SHARED ? "server"
@@ -100,7 +104,7 @@ public final class ScopedStateStorage extends SavedData {
                 String name = entryTag.getStringOr("Name", "");
                 Tag value = entryTag.get("Value");
                 if (value != null) {
-                    bucket.entries.put(name, new StoredEntry(value.copy()));
+                    bucket.entries.put(name, PersistentScopedStateEntry.loaded(value));
                 }
             }
             if (bucket.entries.isEmpty()) storage.buckets.remove(scopeKey);
@@ -117,10 +121,11 @@ public final class ScopedStateStorage extends SavedData {
             tag.putString("Scope", bucketEntry.getKey().scope().name());
             tag.putString("Identity", bucketEntry.getKey().identity());
             ListTag entries = new ListTag();
-            for (Map.Entry<String, StoredEntry> stored : bucketEntry.getValue().entries.entrySet()) {
+            for (Map.Entry<String, PersistentScopedStateEntry> stored
+                    : bucketEntry.getValue().entries.entrySet()) {
                 CompoundTag entryTag = new CompoundTag();
                 entryTag.putString("Name", stored.getKey());
-                entryTag.put("Value", stored.getValue().value().copy());
+                entryTag.put("Value", stored.getValue().encodedCopy());
                 entries.add(entryTag);
             }
             tag.put("Entries", entries);
@@ -166,25 +171,20 @@ public final class ScopedStateStorage extends SavedData {
         @Override
         public @Nullable ScopedStateEntry get(String name) {
             Bucket bucket = buckets.get(storageKey);
-            StoredEntry stored = bucket != null ? bucket.entries.get(name) : null;
+            PersistentScopedStateEntry stored = bucket != null ? bucket.entries.get(name) : null;
             if (stored == null) return null;
-            Object value = GraphValueCodecRegistry.fromTag(stored.value(), registries);
-            if (value == null) {
-                throw new ScopedStateAccessException(
-                        "Persistent blackboard value cannot be decoded: " + scope + "/" + name);
-            }
-            Object frozen = GraphValueSnapshot.snapshot(value);
-            return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
+            return stored.read(registries,
+                    namespace.serializedName() + "/" + scope + "/" + name);
         }
 
         @Override
         public ScopedStateEntry put(String name, Object value) {
             Objects.requireNonNull(value, "value");
-            Object frozen = GraphValueSnapshot.snapshot(value);
+            GraphValueSnapshot.FrozenValue frozen = GraphValueSnapshot.freeze(value);
             Tag encoded = ScopedStateValueCodec.encode(
-                    frozen, registries, scope + "/" + name);
+                    frozen.value(), registries, scope + "/" + name);
             Bucket bucket = bucketForMutation(storageKey);
-            StoredEntry previous = bucket.entries.get(name);
+            PersistentScopedStateEntry previous = bucket.entries.get(name);
             int currentSize = ScopedStateStorage.size(bucket);
             if (previous == null
                     && currentSize >= maxEntries) {
@@ -194,13 +194,16 @@ public final class ScopedStateStorage extends SavedData {
                         "Scoped-state namespace entry limit exceeded: " + maxEntries);
             }
             bucket.revision++;
-            bucket.entries.put(name, new StoredEntry(encoded.copy()));
+            PersistentScopedStateEntry stored =
+                    PersistentScopedStateEntry.written(encoded, frozen);
+            bucket.entries.put(name, stored);
             setDirty();
             if (previous == null && currentSize + 1 == maxEntries) {
                 ScopedStateLimitNotifier.notifyLimit(level, namespace, scope,
                         storageKey.identity(), maxEntries);
             }
-            return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
+            return stored.read(registries,
+                    namespace.serializedName() + "/" + scope + "/" + name);
         }
 
         @Override
@@ -267,10 +270,7 @@ public final class ScopedStateStorage extends SavedData {
     }
 
     private static final class Bucket {
-        private final Map<String, StoredEntry> entries = new LinkedHashMap<>();
+        private final Map<String, PersistentScopedStateEntry> entries = new LinkedHashMap<>();
         private long revision;
-    }
-
-    private record StoredEntry(Tag value) {
     }
 }

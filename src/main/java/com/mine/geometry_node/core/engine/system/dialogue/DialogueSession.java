@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
 
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
@@ -34,7 +34,7 @@ public final class DialogueSession {
     @Nullable
     private DialogueContext dialogueContext;
     @Nullable
-    private GraphExecutionHandle executionHandle;
+    private BlueprintExecutionHandle executionHandle;
     @Nullable
     private String presenterId;
 
@@ -84,7 +84,7 @@ public final class DialogueSession {
     }
 
     @Nullable
-    GraphExecutionHandle executionHandle() {
+    BlueprintExecutionHandle executionHandle() {
         return executionHandle;
     }
 
@@ -136,7 +136,7 @@ public final class DialogueSession {
         this.dialogueContext = dialogueContext;
     }
 
-    void setExecutionHandle(@Nullable GraphExecutionHandle executionHandle) {
+    void setExecutionHandle(@Nullable BlueprintExecutionHandle executionHandle) {
         this.executionHandle = executionHandle;
     }
 

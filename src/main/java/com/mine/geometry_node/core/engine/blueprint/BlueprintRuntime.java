@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintEngine;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
@@ -27,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -102,19 +103,19 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     public void unbindGraph(Entity entity, String graphId) {
-        unbindGraph(entity, graphId, GraphCloseMode.IMMEDIATE);
+        unbindGraph(entity, graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
+    public void unbindGraph(Entity entity, String graphId, BlueprintCloseMode closeMode) {
         engine.unbindGraph(entity, graphId, closeMode);
         syncPlayerInputInterception(entity);
     }
 
     public void unbindGlobalGraph(ServerLevel level, String graphId) {
-        unbindGlobalGraph(level, graphId, GraphCloseMode.IMMEDIATE);
+        unbindGlobalGraph(level, graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
+    public void unbindGlobalGraph(ServerLevel level, String graphId, BlueprintCloseMode closeMode) {
         engine.unbindGlobalGraph(level, graphId, closeMode);
         syncAllPlayerInputInterceptions(level.getServer());
     }
@@ -156,6 +157,11 @@ public final class BlueprintRuntime implements GraphRuntime {
     public void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
                                           @Nullable BlueprintPlan newIndex) {
         engine.refreshGraphSubscriptions(server, graphId, newIndex);
+    }
+
+    public void refreshGraphSubscriptions(@Nullable MinecraftServer server,
+                                          Map<String, @Nullable BlueprintPlan> newIndexes) {
+        engine.refreshGraphSubscriptions(server, newIndexes);
     }
 
     public String resolveGraphId(@Nullable String graphId) {
@@ -267,12 +273,14 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
+        Map<String, BlueprintPlan> newIndexes = new LinkedHashMap<>();
         for (String graphId : change.assetIds()) {
             BlueprintPlan index = GraphAssetLifecycleIndex.INSTANCE
                     .getArtifact(graphId, GraphKind.BLUEPRINT) instanceof BlueprintPlan value
                     ? value : null;
-            refreshGraphSubscriptions(change.server(), graphId, index);
+            newIndexes.put(graphId, index);
         }
+        refreshGraphSubscriptions(change.server(), newIndexes);
         syncAllPlayerInputInterceptions(change.server());
     }
 

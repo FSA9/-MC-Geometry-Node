@@ -101,10 +101,13 @@ public final class ScopedStateProviderResolver {
 
     private static final class CurrentGroupProvider implements ScopedStateProvider {
         private final WeakReference<Entity> owner;
+        private final String ownerId;
         private final ScopedStateNamespace namespace;
 
         private CurrentGroupProvider(Entity owner, ScopedStateNamespace namespace) {
-            this.owner = new WeakReference<>(Objects.requireNonNull(owner, "owner"));
+            Entity value = Objects.requireNonNull(owner, "owner");
+            this.owner = new WeakReference<>(value);
+            this.ownerId = value.getUUID().toString();
             this.namespace = Objects.requireNonNull(namespace, "namespace");
         }
 
@@ -115,7 +118,7 @@ public final class ScopedStateProviderResolver {
         }
         @Override public boolean available() {
             Entity entity = owner.get();
-            return entity != null && entity.level() instanceof ServerLevel && entity.getTeam() != null;
+            return isAvailable(entity) && entity.getTeam() != null;
         }
         @Override public ScopedStateEntry get(String name) { return delegate().get(name); }
         @Override public ScopedStateEntry put(String name, Object value) { return delegate().put(name, value); }
@@ -128,16 +131,26 @@ public final class ScopedStateProviderResolver {
         @Override public int size() { return delegate().size(); }
 
         private ScopedStateProvider delegate() {
-            Entity entity = owner.get();
-            if (entity == null) {
-                throw new ScopedStateAccessException("GROUP blackboard owner is unavailable");
-            }
+            Entity entity = requireOwner();
             return group(entity, namespace);
         }
 
         private Team team() {
             Entity entity = owner.get();
-            return entity != null ? entity.getTeam() : null;
+            return isAvailable(entity) ? entity.getTeam() : null;
+        }
+
+        private Entity requireOwner() {
+            Entity entity = owner.get();
+            if (!isAvailable(entity)) {
+                throw new ScopedStateAccessException(
+                        "GROUP blackboard owner is unavailable: " + ownerId);
+            }
+            return entity;
+        }
+
+        private static boolean isAvailable(Entity entity) {
+            return entity != null && !entity.isRemoved() && entity.level() instanceof ServerLevel;
         }
     }
 }

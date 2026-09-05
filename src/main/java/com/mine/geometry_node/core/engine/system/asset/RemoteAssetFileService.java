@@ -100,16 +100,10 @@ public final class RemoteAssetFileService {
         if (newMetadata.isKnown()) affectedTypeIds.add(newMetadata.typeId());
         if (affectedTypeIds.isEmpty()) return CompletableFuture.completedFuture(commit);
 
-        CompletableFuture<VerifiedAssetCommitter.CommitResult> result = new CompletableFuture<>();
-        server.execute(() -> {
-            try {
-                AssetLifecycleRegistry.INSTANCE.refresh(server, affectedTypeIds);
-                result.complete(commit);
-            } catch (Exception exception) {
-                result.completeExceptionally(exception);
-            }
-        });
-        return result;
+        String committedPath = ServerAssetPaths.pathToId(root(server), target);
+        return AssetLifecycleRegistry.INSTANCE.refresh(
+                        server, affectedTypeIds, Set.of(committedPath), false)
+                .thenApply(ignored -> commit);
     }
 
     public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -142,9 +136,14 @@ public final class RemoteAssetFileService {
 
     public static RemoteAssetOperationResult deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
         Set<String> affectedTypes = new HashSet<>();
+        Set<String> affectedPaths = new HashSet<>();
+        boolean directoryScope = false;
         List<PendingFileMutation> pending = new ArrayList<>();
         try {
             for (Path path : resolveSelectionRoots(server, selectedPaths)) {
+                boolean directory = Files.isDirectory(path);
+                directoryScope |= directory;
+                if (!directory) affectedPaths.add(ServerAssetPaths.pathToId(root(server), path));
                 collectAssetTypes(path, affectedTypes);
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.DELETE, path, null);
@@ -175,7 +174,7 @@ public final class RemoteAssetFileService {
                 }
             }
         }
-        return new RemoteAssetOperationResult(deleted, affectedTypes);
+        return new RemoteAssetOperationResult(deleted, affectedTypes, affectedPaths, directoryScope);
     }
 
     public static RemoteAssetOperationResult copySelection(MinecraftServer server, List<String> sourcePaths,
@@ -187,15 +186,20 @@ public final class RemoteAssetFileService {
         }
 
         Set<String> affectedTypes = new HashSet<>();
+        Set<String> affectedPaths = new HashSet<>();
+        boolean directoryScope = false;
         List<PendingFileMutation> pending = new ArrayList<>();
         try {
             for (Path source : resolveSelectionRoots(server, sourcePaths)) {
                 Path target = resolveAvailableDestination(
                         targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
-                if (Files.isDirectory(source)
+                boolean directory = Files.isDirectory(source);
+                directoryScope |= directory;
+                if (directory
                         && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
                     continue;
                 }
+                if (!directory) affectedPaths.add(ServerAssetPaths.pathToId(root(server), target));
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.COPY, source, target);
                 int index = pending.size();
@@ -214,7 +218,7 @@ public final class RemoteAssetFileService {
             item.participant().commit();
             copied += item.affectedEntries();
         }
-        return new RemoteAssetOperationResult(copied, affectedTypes);
+        return new RemoteAssetOperationResult(copied, affectedTypes, affectedPaths, directoryScope);
     }
 
     public static RemoteAssetOperationResult moveSelection(MinecraftServer server, List<String> sourcePaths,
@@ -227,6 +231,8 @@ public final class RemoteAssetFileService {
 
         Path normalizedTargetDirectory = targetDirectory.toAbsolutePath().normalize();
         Set<String> affectedTypes = new HashSet<>();
+        Set<String> affectedPaths = new HashSet<>();
+        boolean directoryScope = false;
         List<PendingFileMutation> pending = new ArrayList<>();
         try {
             for (Path source : resolveSelectionRoots(server, sourcePaths)) {
@@ -238,8 +244,14 @@ public final class RemoteAssetFileService {
 
                 Path target = resolveAvailableDestination(
                         targetDirectory, source.getFileName().toString(), Files.isDirectory(source));
-                if (Files.isDirectory(source) && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
+                boolean directory = Files.isDirectory(source);
+                directoryScope |= directory;
+                if (directory && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
                     continue;
+                }
+                if (!directory) {
+                    affectedPaths.add(ServerAssetPaths.pathToId(root(server), source));
+                    affectedPaths.add(ServerAssetPaths.pathToId(root(server), target));
                 }
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.MOVE, source, target);
@@ -259,7 +271,7 @@ public final class RemoteAssetFileService {
             item.participant().commit();
             moved += item.affectedEntries();
         }
-        return new RemoteAssetOperationResult(moved, affectedTypes);
+        return new RemoteAssetOperationResult(moved, affectedTypes, affectedPaths, directoryScope);
     }
 
     public static RemoteAssetOperationResult createDirectory(MinecraftServer server, String directoryPath)
@@ -271,7 +283,7 @@ public final class RemoteAssetFileService {
             throw new IOException("Remote parent directory does not exist: " + normalized);
         }
         Files.createDirectory(directory);
-        return new RemoteAssetOperationResult(1, Set.of());
+        return new RemoteAssetOperationResult(1, Set.of(), Set.of(), true);
     }
 
     public static RemoteAssetOperationResult rename(
@@ -302,6 +314,8 @@ public final class RemoteAssetFileService {
         }
 
         Set<String> affectedTypes = new HashSet<>();
+        boolean directoryScope = Files.isDirectory(source);
+        Set<String> affectedPaths = directoryScope ? Set.of() : Set.of(normalizedSource, normalizedDestination);
         collectAssetTypes(source, affectedTypes);
         RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                 server, RemoteAssetMutationRegistry.Operation.RENAME, source, destination);
@@ -309,7 +323,7 @@ public final class RemoteAssetFileService {
             int affected = moveAtomically(source, destination);
             mutation.commit();
             collectAssetTypes(destination, affectedTypes);
-            return new RemoteAssetOperationResult(affected, affectedTypes);
+            return new RemoteAssetOperationResult(affected, affectedTypes, affectedPaths, directoryScope);
         } catch (IOException | RuntimeException exception) {
             if (Files.exists(destination) && !Files.exists(source)) {
                 try {

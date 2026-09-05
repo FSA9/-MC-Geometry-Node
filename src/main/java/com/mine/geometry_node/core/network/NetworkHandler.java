@@ -427,15 +427,14 @@ public class NetworkHandler {
                             server, payload.paths().getFirst(), payload.destinationPath());
                 }
             };
-            operation.whenComplete((result, error) -> server.execute(() -> {
+            operation.whenComplete((result, error) -> {
                 if (error != null) {
-                    try {
-                        AssetLifecycleRegistry.INSTANCE.refreshAll(server);
-                    } catch (RuntimeException reloadException) {
-                        error.addSuppressed(reloadException);
-                    }
-                    sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
-                            payload.requestId(), false, "操作失败: " + failureMessage(error)));
+                    AssetLifecycleRegistry.INSTANCE.refreshAll(server)
+                            .whenComplete((ignored, reloadError) -> server.execute(() -> {
+                                if (reloadError != null) error.addSuppressed(reloadError);
+                                sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                                        payload.requestId(), false, "操作失败: " + failureMessage(error)));
+                            }));
                     return;
                 }
                 String action = switch (payload.operation()) {
@@ -445,16 +444,16 @@ public class NetworkHandler {
                     case CREATE_DIRECTORY -> "新建文件夹";
                     case RENAME -> "重命名";
                 };
-                String refreshWarning = "";
-                try {
-                    AssetLifecycleRegistry.INSTANCE.refresh(server, result.affectedTypeIds());
-                } catch (RuntimeException refreshException) {
-                    refreshWarning = "（资源刷新失败: " + failureMessage(refreshException) + "）";
-                }
-                sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
-                        payload.requestId(), true,
-                        action + "完成: " + result.affectedEntries() + refreshWarning));
-            }));
+                AssetLifecycleRegistry.INSTANCE.refresh(
+                                server, result.affectedTypeIds(), result.affectedPaths(), result.directoryScope())
+                        .whenComplete((ignored, refreshError) -> server.execute(() -> {
+                            String refreshWarning = refreshError == null ? ""
+                                    : "（资源刷新失败: " + failureMessage(refreshError) + "）";
+                            sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
+                                    payload.requestId(), true,
+                                    action + "完成: " + result.affectedEntries() + refreshWarning));
+                        }));
+            });
         } catch (RuntimeException exception) {
             sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
                     payload.requestId(), false, "操作失败: " + failureMessage(exception)));

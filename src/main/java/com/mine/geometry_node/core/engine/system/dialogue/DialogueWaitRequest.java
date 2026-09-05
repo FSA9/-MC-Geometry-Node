@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
 
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayload;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,7 +13,7 @@ import java.util.Objects;
 public record DialogueWaitRequest(
         DialogueContext context,
         List<DialoguePagePayload> pages
-) implements ExternalWaitRequest {
+) implements BlueprintExternalWaitRequest {
     public DialogueWaitRequest {
         Objects.requireNonNull(context, "context");
         pages = List.copyOf(Objects.requireNonNull(pages, "pages"));

@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
@@ -44,7 +44,7 @@ public final class BlueprintEntityProcessHost {
         container.removeProcess(graphId);
     }
 
-    public void removeProcess(String graphId, GraphCloseMode closeMode) {
+    public void removeProcess(String graphId, BlueprintCloseMode closeMode) {
         container.removeProcess(graphId, closeMode);
     }
 

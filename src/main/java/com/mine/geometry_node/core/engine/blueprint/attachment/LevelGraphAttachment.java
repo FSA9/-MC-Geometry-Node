@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.attachment;
 import com.mine.geometry_node.GeometryNode;
 import com.mojang.serialization.Codec;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
@@ -53,7 +53,7 @@ public class LevelGraphAttachment extends SavedData {
 
     public void addProcess(BlueprintProcess process) { container.addProcess(process); }
     public void removeProcess(String graphId) { container.removeProcess(graphId); }
-    public void removeProcess(String graphId, GraphCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
+    public void removeProcess(String graphId, BlueprintCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
     public Collection<BlueprintProcess> getProcesses() { return container.getProcesses(); }
     public BlueprintProcess getProcess(String graphId) { return container.getProcess(graphId); }
     // --- 序列化层 ---

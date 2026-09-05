@@ -13,7 +13,7 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -86,12 +86,15 @@ public final class BlueprintEngine {
         }
     }
 
-    private void removeSubscribersForGraph(ServerState state, String graphId) {
-        String normalizedId = normalizeSubscriptionGraphId(graphId);
+    private void removeSubscribersForGraphs(ServerState state, Set<String> graphIds) {
+        Set<String> normalizedIds = new HashSet<>(graphIds.size());
+        for (String graphId : graphIds) {
+            normalizedIds.add(normalizeSubscriptionGraphId(graphId));
+        }
         state.eventSubscribers.entrySet().removeIf(frequencyEntry -> {
             Map<Entity, Set<String>> entities = frequencyEntry.getValue();
             entities.entrySet().removeIf(entityEntry -> {
-                entityEntry.getValue().remove(normalizedId);
+                entityEntry.getValue().removeAll(normalizedIds);
                 return entityEntry.getValue().isEmpty();
             });
             return entities.isEmpty();
@@ -452,10 +455,10 @@ public final class BlueprintEngine {
     }
 
     public void unbindGraph(Entity entity, String graphId) {
-        unbindGraph(entity, graphId, GraphCloseMode.IMMEDIATE);
+        unbindGraph(entity, graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void unbindGraph(Entity entity, String graphId, GraphCloseMode closeMode) {
+    public void unbindGraph(Entity entity, String graphId, BlueprintCloseMode closeMode) {
         graphId = GraphAssetId.require(graphId);
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
@@ -469,10 +472,10 @@ public final class BlueprintEngine {
     }
 
     public void unbindGlobalGraph(ServerLevel level, String graphId) {
-        unbindGlobalGraph(level, graphId, GraphCloseMode.IMMEDIATE);
+        unbindGlobalGraph(level, graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void unbindGlobalGraph(ServerLevel level, String graphId, GraphCloseMode closeMode) {
+    public void unbindGlobalGraph(ServerLevel level, String graphId, BlueprintCloseMode closeMode) {
         graphId = GraphAssetId.require(graphId);
         state(level).graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
@@ -569,13 +572,25 @@ public final class BlueprintEngine {
 
     public void refreshGraphSubscriptions(@Nullable MinecraftServer server, String graphId,
                                                  @Nullable BlueprintPlan newIndex) {
-        graphId = GraphAssetId.require(graphId);
+        Map<String, BlueprintPlan> newIndexes = new LinkedHashMap<>(1);
+        newIndexes.put(GraphAssetId.require(graphId), newIndex);
+        refreshGraphSubscriptions(server, newIndexes);
+    }
+
+    public void refreshGraphSubscriptions(@Nullable MinecraftServer server,
+                                          Map<String, @Nullable BlueprintPlan> newIndexes) {
+        Objects.requireNonNull(newIndexes, "newIndexes");
+        if (newIndexes.isEmpty()) return;
+
+        Map<String, BlueprintPlan> normalizedIndexes = new LinkedHashMap<>(newIndexes.size());
+        newIndexes.forEach((graphId, newIndex) ->
+                normalizedIndexes.put(GraphAssetId.require(graphId), newIndex));
         if (server != null) {
-            refreshGraphSubscriptions(state(server), server, graphId, newIndex);
+            refreshGraphSubscriptions(state(server), server, normalizedIndexes);
             return;
         }
         for (Map.Entry<MinecraftServer, ServerState> entry : new ArrayList<>(servers.entrySet())) {
-            refreshGraphSubscriptions(entry.getValue(), entry.getKey(), graphId, newIndex);
+            refreshGraphSubscriptions(entry.getValue(), entry.getKey(), normalizedIndexes);
         }
     }
 
@@ -605,39 +620,70 @@ public final class BlueprintEngine {
         return false;
     }
 
-    private void refreshGraphSubscriptions(ServerState state, MinecraftServer server, String graphId,
-                                           @Nullable BlueprintPlan newIndex) {
+    private void refreshGraphSubscriptions(ServerState state, MinecraftServer server,
+                                           Map<String, BlueprintPlan> newIndexes) {
         GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;
-        boolean registeredGlobal = graphSubscriptions.isGlobalGraphRegistered(graphId);
-        Set<Entity> registeredEntities = new HashSet<>(
-                graphSubscriptions.registeredEntitiesForGraph(graphId));
-        graphSubscriptions.unregisterGlobalGraph(graphId, null);
-        for (Entity entity : registeredEntities) {
-            graphSubscriptions.unregisterEntityGraph(entity, graphId, null);
-            EntityGraphAttachment attachment = getAttachment(entity);
-            if (attachment != null) attachment.removeProcess(graphId);
+        Set<String> registeredGlobals = new HashSet<>();
+        Map<String, Set<Entity>> registeredEntitiesByGraph = new LinkedHashMap<>(newIndexes.size());
+        Set<Entity> affectedEntities = new HashSet<>();
+        Map<String, Set<Entity>> indexedEntitiesByGraph =
+                graphSubscriptions.registeredEntitiesForGraphs(newIndexes.keySet());
+
+        for (String graphId : newIndexes.keySet()) {
+            if (graphSubscriptions.isGlobalGraphRegistered(graphId)) {
+                registeredGlobals.add(graphId);
+            }
+            Set<Entity> registeredEntities = new HashSet<>(
+                    indexedEntitiesByGraph.getOrDefault(graphId, Collections.emptySet()));
+            registeredEntitiesByGraph.put(graphId, registeredEntities);
+            affectedEntities.addAll(registeredEntities);
+
+            graphSubscriptions.unregisterGlobalGraph(graphId, null);
+            for (Entity entity : registeredEntities) {
+                graphSubscriptions.unregisterEntityGraph(entity, graphId, null);
+                EntityGraphAttachment attachment = getAttachment(entity);
+                if (attachment != null) attachment.removeProcess(graphId);
+            }
         }
-        removeSubscribersForGraph(state, graphId);
+        removeSubscribersForGraphs(state, newIndexes.keySet());
 
         boolean worldReady = server.overworld() != null;
         if (worldReady) {
             GlobalGraphStorage storage = GlobalGraphStorage.get(server.overworld());
-            registeredGlobal = storage.getGraphs().contains(graphId);
+            for (String graphId : newIndexes.keySet()) {
+                if (storage.getGraphs().contains(graphId)) {
+                    registeredGlobals.add(graphId);
+                } else {
+                    registeredGlobals.remove(graphId);
+                }
+            }
             for (ServerLevel level : server.getAllLevels()) {
-                LevelGraphAttachment.get(level).removeProcess(graphId);
+                LevelGraphAttachment levelAttachment = LevelGraphAttachment.get(level);
+                for (String graphId : newIndexes.keySet()) {
+                    levelAttachment.removeProcess(graphId);
+                }
                 for (Entity entity : level.getAllEntities()) {
                     EntityGraphAttachment attachment = getAttachment(entity);
-                    if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
-                    registeredEntities.add(entity);
-                    attachment.removeProcess(graphId);
+                    if (attachment == null) continue;
+                    for (String graphId : attachment.getBoundGraphs()) {
+                        Set<Entity> registeredEntities = registeredEntitiesByGraph.get(graphId);
+                        if (registeredEntities == null) continue;
+                        registeredEntities.add(entity);
+                        affectedEntities.add(entity);
+                        attachment.removeProcess(graphId);
+                    }
                 }
             }
         }
 
-        if (newIndex != null && registeredGlobal) {
-            graphSubscriptions.registerGlobalGraph(graphId, newIndex);
-        }
-        if (newIndex != null) {
+        for (Map.Entry<String, BlueprintPlan> entry : newIndexes.entrySet()) {
+            String graphId = entry.getKey();
+            BlueprintPlan newIndex = entry.getValue();
+            if (newIndex != null && registeredGlobals.contains(graphId)) {
+                graphSubscriptions.registerGlobalGraph(graphId, newIndex);
+            }
+            if (newIndex == null) continue;
+            Set<Entity> registeredEntities = registeredEntitiesByGraph.get(graphId);
             for (Entity entity : registeredEntities) {
                 EntityGraphAttachment attachment = getAttachment(entity);
                 if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
@@ -647,7 +693,7 @@ public final class BlueprintEngine {
                 }
             }
         }
-        for (Entity entity : registeredEntities) {
+        for (Entity entity : affectedEntities) {
             if (graphSubscriptions.hasEntitySubscriptions(entity, OnEntityGainItem.TYPE_ID)) {
                 inventoryGainTracker.beginTracking(entity);
             } else {

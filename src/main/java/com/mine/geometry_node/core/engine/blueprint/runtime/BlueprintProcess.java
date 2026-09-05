@@ -7,9 +7,9 @@ import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
@@ -413,7 +413,7 @@ public class BlueprintProcess {
      * 代表一次独立的蓝图指令流。
      * 拥有私有的栈、私有的寄存器、私有的运算缓存，彻底杜绝重入污染。
      */
-    public class ExecutionThread implements ExecutionContext, GraphExecutionHandle {
+    public class ExecutionThread implements ExecutionContext, BlueprintExecutionHandle {
 
         public enum State { RUNNING, WAITING, EXTERNAL_WAITING, FINISHED, ERROR }
 
@@ -423,7 +423,7 @@ public class BlueprintProcess {
         private int activeNodeId = -1;
         private int externalWaitNodeId = -1;
         @Nullable
-        private ExternalWaitHandler externalWaitHandler;
+        private BlueprintExternalWaitHandler externalWaitHandler;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
         private ServerLevel threadLevel;
@@ -471,7 +471,7 @@ public class BlueprintProcess {
             this.parentJoinId = null;
             this.eventSourceNodeId = -1;
             this.executionStack.clear();
-            this.dataEvaluation.reset();
+            this.dataEvaluation.beginEpoch();
             this.tempData.clear();
             Arrays.fill(this.eventRegisters, null);
             if (this.dynamicEventData != null) this.dynamicEventData.clear();
@@ -683,7 +683,7 @@ public class BlueprintProcess {
                     BlueprintProcess.this.notifyTickScheduleChanged();
                 }
                 case ExecutionResult.ExternalWait externalWait -> {
-                    ExternalWaitHandler handler = ExternalWaitHandlerRegistry.INSTANCE
+                    BlueprintExternalWaitHandler handler = BlueprintExternalWaitRegistry.INSTANCE
                             .get(externalWait.handlerId());
                     if (handler == null) {
                         this.state = State.ERROR;
@@ -724,12 +724,12 @@ public class BlueprintProcess {
             }
 
             BlueprintProcess.this.externalWaitingThreads.remove(this);
-            ExternalWaitHandler handler = this.externalWaitHandler;
+            BlueprintExternalWaitHandler handler = this.externalWaitHandler;
             BlueprintPlan.IntFlowTarget target = index.findFlowTarget(this.externalWaitNodeId, outputPortName);
             if (handler != null) {
-                ExternalWaitHandler.Completion completion = target != null
-                        ? ExternalWaitHandler.Completion.RESUMED
-                        : ExternalWaitHandler.Completion.NO_TARGET;
+                BlueprintExternalWaitHandler.Completion completion = target != null
+                        ? BlueprintExternalWaitHandler.Completion.RESUMED
+                        : BlueprintExternalWaitHandler.Completion.NO_TARGET;
                 handler.completeExternalWait(this, outputPortName, completion);
             }
             this.externalWaitNodeId = -1;
@@ -776,13 +776,8 @@ public class BlueprintProcess {
         }
 
         @Override
-        public void close() {
-            abort("closed");
-        }
-
-        @Override
         public void abort(String reason) {
-            ExternalWaitHandler handler = this.state == State.EXTERNAL_WAITING
+            BlueprintExternalWaitHandler handler = this.state == State.EXTERNAL_WAITING
                     ? this.externalWaitHandler : null;
             this.externalWaitHandler = null;
             BlueprintProcess.this.externalWaitingThreads.remove(this);
@@ -816,11 +811,6 @@ public class BlueprintProcess {
             this.externalWaitHandler = null;
             this.state = State.ERROR;
             this.executionStack.clear();
-        }
-
-        @Override
-        public Object unwrap() {
-            return this;
         }
 
         private void recycleIfNeeded() {

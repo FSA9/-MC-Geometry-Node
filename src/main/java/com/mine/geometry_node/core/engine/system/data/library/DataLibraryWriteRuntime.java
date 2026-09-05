@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.engine.system.data.library;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import net.minecraft.server.MinecraftServer;
@@ -16,8 +16,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Serializes graph-originated Data Library writes away from the server tick thread. */
-public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWaitHandler {
+/** Serializes Blueprint-originated Data Library writes away from the server tick thread. */
+public final class DataLibraryWriteRuntime implements ServerEngine, BlueprintExternalWaitHandler {
     public static final String ID = "geometry_node:data_library_write";
     public static final String SUCCESS_PORT = "flow_out";
     public static final String FAILURE_PORT = "failed";
@@ -26,7 +26,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWait
     private static final int QUEUE_CAPACITY = 256;
 
     private final Map<MinecraftServer, AssetTransferIoExecutor> executors = new ConcurrentHashMap<>();
-    private final Map<GraphExecutionHandle, PendingWrite> pendingWrites = new ConcurrentHashMap<>();
+    private final Map<BlueprintExecutionHandle, PendingWrite> pendingWrites = new ConcurrentHashMap<>();
 
     private DataLibraryWriteRuntime() {
     }
@@ -42,7 +42,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWait
     }
 
     @Override
-    public boolean beginExternalWait(GraphExecutionHandle handle, ExternalWaitRequest request) {
+    public boolean beginExternalWait(BlueprintExecutionHandle handle, BlueprintExternalWaitRequest request) {
         if (!(request instanceof DataLibraryWriteRequest writeRequest)) {
             return false;
         }
@@ -57,7 +57,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWait
         AtomicBoolean cancelled = new AtomicBoolean();
         CompletableFuture<DataLibraryEntry> future = executor.submit(() -> {
             if (cancelled.get()) {
-                throw new CancellationException("Graph Data Library write was cancelled before execution");
+                throw new CancellationException("Blueprint Data Library write was cancelled before execution");
             }
             return RemoteDataLibraryService.INSTANCE.upsert(
                     server,
@@ -76,7 +76,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWait
         return true;
     }
 
-    private void completeAsync(GraphExecutionHandle handle, PendingWrite pending, @Nullable Throwable error) {
+    private void completeAsync(BlueprintExecutionHandle handle, PendingWrite pending, @Nullable Throwable error) {
         if (!pendingWrites.remove(handle, pending)) {
             return;
         }
@@ -85,19 +85,20 @@ public final class DataLibraryWriteRuntime implements ServerEngine, ExternalWait
                 return;
             }
             if (error != null) {
-                GeometryNode.LOGGER.warn("Graph Data Library write failed: graph={}", handle.graphId(), rootCause(error));
+                GeometryNode.LOGGER.warn("Blueprint Data Library write failed: graph={}",
+                        handle.graphId(), rootCause(error));
             }
             handle.resume(error == null ? SUCCESS_PORT : FAILURE_PORT);
         });
     }
 
     @Override
-    public void completeExternalWait(GraphExecutionHandle handle, String outputPortName, Completion completion) {
+    public void completeExternalWait(BlueprintExecutionHandle handle, String outputPortName, Completion completion) {
         pendingWrites.remove(handle);
     }
 
     @Override
-    public void endExternalWait(GraphExecutionHandle handle, @Nullable String reason) {
+    public void endExternalWait(BlueprintExecutionHandle handle, @Nullable String reason) {
         PendingWrite pending = pendingWrites.remove(handle);
         if (pending != null) {
             pending.cancel();

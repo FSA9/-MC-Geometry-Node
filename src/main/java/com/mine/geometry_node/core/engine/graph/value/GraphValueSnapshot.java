@@ -145,6 +145,12 @@ public final class GraphValueSnapshot {
     public record FrozenValue(Object value, boolean copyOnRead) {
     }
 
+    /** Returns an isolated reader value while sharing fully immutable snapshots. */
+    public static Object read(FrozenValue frozenValue) {
+        Objects.requireNonNull(frozenValue, "frozenValue");
+        return frozenValue.copyOnRead() ? snapshot(frozenValue.value()) : frozenValue.value();
+    }
+
     private static final class SnapshotState {
         private boolean copyOnRead;
     }

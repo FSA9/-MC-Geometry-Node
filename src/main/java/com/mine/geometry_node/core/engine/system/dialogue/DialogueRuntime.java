@@ -7,9 +7,9 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePay
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.ChatDialoguePresenter;
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.DialoguePresenter;
 import com.mine.geometry_node.core.engine.system.dialogue.presenter.PacketDialoguePresenter;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitRequest;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandler;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphExecutionHandle;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -24,7 +24,7 @@ import java.util.UUID;
 /**
  * Minimal server-side facade for dialogue runtime state.
  */
-public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
+public class DialogueRuntime implements ServerEngine, BlueprintExternalWaitHandler {
     public static final String ID = "geometry_node:dialogue";
     public static final DialogueRuntime INSTANCE = new DialogueRuntime();
 
@@ -76,7 +76,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     }
 
     @Override
-    public boolean beginExternalWait(GraphExecutionHandle handle, ExternalWaitRequest request) {
+    public boolean beginExternalWait(BlueprintExecutionHandle handle, BlueprintExternalWaitRequest request) {
         if (!(request instanceof DialogueWaitRequest dialogueRequest)) {
             return false;
         }
@@ -100,7 +100,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
         }
 
         DialogueSession replaced = sessionStore.findForPlayer(player.getUUID());
-        GraphExecutionHandle replacedHandle = detachSessionInternal(
+        BlueprintExecutionHandle replacedHandle = detachSessionInternal(
                 replaced,
                 DialogueSession.CloseReason.REPLACED,
                 true
@@ -124,20 +124,20 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     }
 
     @Override
-    public void completeExternalWait(GraphExecutionHandle handle, String outputPortName,
-                                     ExternalWaitHandler.Completion completion) {
+    public void completeExternalWait(BlueprintExecutionHandle handle, String outputPortName,
+                                     BlueprintExternalWaitHandler.Completion completion) {
         DialogueSession match = findSessionByHandle(handle);
         if (match != null) {
             sessionStore.remove(match.getSessionId());
             match.setExecutionHandle(null);
-            match.close(completion == ExternalWaitHandler.Completion.NO_TARGET
+            match.close(completion == BlueprintExternalWaitHandler.Completion.NO_TARGET
                     ? DialogueSession.CloseReason.CLOSED
                     : DialogueSession.CloseReason.CHOSEN);
         }
     }
 
     @Override
-    public void endExternalWait(GraphExecutionHandle handle, @Nullable String reason) {
+    public void endExternalWait(BlueprintExecutionHandle handle, @Nullable String reason) {
         DialogueSession match = findSessionByHandle(handle);
         if (match != null) {
             closeSessionInternal(match, reason == null ? DialogueSession.CloseReason.CLOSED : reason, "closed", true, false);
@@ -262,7 +262,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
             if (!session.isActive()) {
                 continue;
             }
-            GraphExecutionHandle handle = session.executionHandle();
+            BlueprintExecutionHandle handle = session.executionHandle();
             if (handle == null || !handle.isActive()) {
                 detachSessionInternal(session, DialogueSession.CloseReason.FORCED, true);
                 continue;
@@ -302,7 +302,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     public void onServerStopping() {
         shuttingDown = true;
         for (DialogueSession session : sessionStore.snapshot()) {
-            GraphExecutionHandle handle = detachSessionInternal(
+            BlueprintExecutionHandle handle = detachSessionInternal(
                     session,
                     DialogueSession.CloseReason.SERVER_SHUTDOWN,
                     false
@@ -339,7 +339,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     }
 
     @Nullable
-    private DialogueSession findSessionByHandle(GraphExecutionHandle handle) {
+    private DialogueSession findSessionByHandle(BlueprintExecutionHandle handle) {
         for (DialogueSession session : sessionStore.view()) {
             if (session.executionHandle() == handle) {
                 return session;
@@ -348,7 +348,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
         return null;
     }
 
-    private String handleGraphId(GraphExecutionHandle handle) {
+    private String handleGraphId(BlueprintExecutionHandle handle) {
         return handle.graphId();
     }
 
@@ -365,26 +365,26 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
     }
 
     private void closeSessionInternal(DialogueSession session, String reason, String resumePort, boolean notifyClient, boolean resumeHandle) {
-        GraphExecutionHandle handle = detachSessionInternal(session, reason, notifyClient);
+        BlueprintExecutionHandle handle = detachSessionInternal(session, reason, notifyClient);
         if (resumeHandle && handle != null && handle.isActive()) {
             handle.resume(resumePort == null || resumePort.isBlank() ? "closed" : resumePort);
         }
     }
 
     private boolean hasActiveHandle(DialogueSession session) {
-        GraphExecutionHandle handle = session.executionHandle();
+        BlueprintExecutionHandle handle = session.executionHandle();
         return handle != null && handle.isActive();
     }
 
     @Nullable
-    private GraphExecutionHandle detachSessionInternal(@Nullable DialogueSession session,
+    private BlueprintExecutionHandle detachSessionInternal(@Nullable DialogueSession session,
                                                        @Nullable String reason,
                                                        boolean notifyClient) {
         if (session == null) {
             return null;
         }
         String closeReason = reason == null || reason.isBlank() ? DialogueSession.CloseReason.CLOSED : reason;
-        GraphExecutionHandle handle = session.executionHandle();
+        BlueprintExecutionHandle handle = session.executionHandle();
         ServerPlayer player = findPlayer(session);
         sessionStore.remove(session.getSessionId());
         session.setExecutionHandle(null);
@@ -453,7 +453,7 @@ public class DialogueRuntime implements ServerEngine, ExternalWaitHandler {
 
     @Nullable
     private ServerPlayer findPlayer(DialogueSession session) {
-        GraphExecutionHandle handle = session.executionHandle();
+        BlueprintExecutionHandle handle = session.executionHandle();
         if (handle != null && handle.level() != null) {
             ServerPlayer player = handle.level().getServer().getPlayerList().getPlayer(session.getPlayerId());
             if (player != null) {

@@ -45,6 +45,7 @@ public final class GraphAssetLifecycleIndex implements ServerEngine {
 
     @Override
     public void shutdown(MinecraftServer server) {
+        DynamicGraphManager.serverStopped(server);
         synchronized (this) {
             if (snapshot.belongsTo(server)) snapshot = Snapshot.EMPTY;
         }
@@ -71,7 +72,52 @@ public final class GraphAssetLifecycleIndex implements ServerEngine {
 
     public void replaceDynamicGraphs(MinecraftServer server,
                                      Map<String, GraphAssetDescriptor> graphs) {
-        update(server, graphs);
+        publishPrepared(prepareDynamicGraphs(server, graphs));
+    }
+
+    /** Builds an immutable replacement and its change set without touching runtime state. */
+    public PreparedUpdate prepareDynamicGraphs(MinecraftServer server,
+                                               Map<String, GraphAssetDescriptor> graphs) {
+        Snapshot previous = snapshot;
+        Snapshot comparisonBase = previous.belongsTo(server) ? previous : Snapshot.EMPTY;
+        Snapshot replacement = new Snapshot(server, canonicalizeDescriptors(graphs));
+        return new PreparedUpdate(previous, replacement,
+                calculateChanges(server, comparisonBase, replacement));
+    }
+
+    /** Builds an immutable replacement while comparing only graph ids touched by a file operation. */
+    public PreparedUpdate prepareDynamicGraphsIncrementally(
+            MinecraftServer server, Map<String, GraphAssetDescriptor> graphs,
+            Set<String> affectedGraphIds) {
+        Objects.requireNonNull(affectedGraphIds, "affectedGraphIds");
+        Snapshot previous = snapshot;
+        Snapshot comparisonBase = previous.belongsTo(server) ? previous : Snapshot.EMPTY;
+        Snapshot replacement = new Snapshot(server, canonicalizeDescriptors(graphs));
+        Set<String> canonicalIds = new HashSet<>();
+        for (String graphId : affectedGraphIds) {
+            String canonicalId = GraphAssetId.canonicalize(graphId);
+            if (!canonicalId.isEmpty()) canonicalIds.add(canonicalId);
+        }
+        return new PreparedUpdate(previous, replacement,
+                calculateChanges(server, comparisonBase, replacement, canonicalIds));
+    }
+
+    /** Publishes a previously prepared snapshot. Must run on the server thread. */
+    public void publishPrepared(PreparedUpdate prepared) {
+        Objects.requireNonNull(prepared, "prepared");
+        synchronized (this) {
+            if (snapshot != prepared.expected) {
+                throw new IllegalStateException("Graph snapshot changed while an update was being prepared");
+            }
+            snapshot = prepared.replacement;
+        }
+        prepared.changes.forEach(this::notifyListeners);
+    }
+
+    /** Immutable input for an incremental background rebuild. */
+    public Map<String, GraphAssetDescriptor> dynamicGraphsSnapshot(MinecraftServer server) {
+        Snapshot current = snapshot;
+        return current.belongsTo(server) ? current.effective : Map.of();
     }
 
     @Nullable
@@ -97,18 +143,6 @@ public final class GraphAssetLifecycleIndex implements ServerEngine {
             if (descriptor.runtimeKind() == runtimeKind) result.add(graphId);
         });
         return Collections.unmodifiableSet(result);
-    }
-
-    private void update(@Nullable MinecraftServer server,
-                        Map<String, GraphAssetDescriptor> dynamicReplacement) {
-        Map<GraphKind, Change> changes;
-        synchronized (this) {
-            Snapshot previous = snapshot;
-            snapshot = new Snapshot(server, canonicalizeDescriptors(dynamicReplacement));
-            Snapshot comparisonBase = previous.belongsTo(server) ? previous : Snapshot.EMPTY;
-            changes = calculateChanges(server, comparisonBase, snapshot);
-        }
-        changes.forEach(this::notifyListeners);
     }
 
     private static Map<String, GraphAssetDescriptor> canonicalizeDescriptors(
@@ -138,10 +172,16 @@ public final class GraphAssetLifecycleIndex implements ServerEngine {
 
     private static Map<GraphKind, Change> calculateChanges(@Nullable MinecraftServer server,
                                                             Snapshot previous, Snapshot current) {
-        Set<String> changedAssets = new TreeSet<>();
         Set<String> ids = new HashSet<>(previous.effective.keySet());
         ids.addAll(current.effective.keySet());
-        for (String graphId : ids) {
+        return calculateChanges(server, previous, current, ids);
+    }
+
+    private static Map<GraphKind, Change> calculateChanges(
+            @Nullable MinecraftServer server, Snapshot previous, Snapshot current,
+            Set<String> candidateIds) {
+        Set<String> changedAssets = new TreeSet<>();
+        for (String graphId : candidateIds) {
             if (!sameContent(previous.effective.get(graphId), current.effective.get(graphId))) {
                 changedAssets.add(graphId);
             }
@@ -186,6 +226,19 @@ public final class GraphAssetLifecycleIndex implements ServerEngine {
 
         private boolean belongsTo(@Nullable MinecraftServer server) {
             return serverReference.get() == server;
+        }
+    }
+
+    public static final class PreparedUpdate {
+        private final Snapshot expected;
+        private final Snapshot replacement;
+        private final Map<GraphKind, Change> changes;
+
+        private PreparedUpdate(Snapshot expected, Snapshot replacement,
+                               Map<GraphKind, Change> changes) {
+            this.expected = expected;
+            this.replacement = replacement;
+            this.changes = Map.copyOf(changes);
         }
     }
 }

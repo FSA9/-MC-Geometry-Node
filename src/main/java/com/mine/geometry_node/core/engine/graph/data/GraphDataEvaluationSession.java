@@ -15,26 +15,28 @@ public final class GraphDataEvaluationSession {
         this.cache = new GraphValueCache(index.getNodeCount());
     }
 
-    public void reset() {
-        cache.reset();
-    }
-
+    /** Starts a complete evaluation epoch, clearing values and cycle state. */
     public void beginEpoch() {
         cache.beginEpoch();
     }
 
+    /** Invalidates cached values without disturbing an in-progress cycle guard. */
     public void clearValues() {
         cache.clearValues();
     }
 
     @Nullable
     public Object evaluate(int nodeId, String portName, NodeEvaluator evaluator) {
-        if (nodeId < 0 || nodeId >= index.getNodeCount() || cache.isRecursing(nodeId)) {
+        if (nodeId < 0 || nodeId >= index.getNodeCount()
+                || !index.hasPort(nodeId, portName)
+                || cache.isRecursing(nodeId)) {
             return null;
         }
 
         int portId = index.getPortKey(portName);
-        Object cached = cache.get(nodeId, portName, portId);
+        if (portId < 0) return null;
+
+        Object cached = cache.get(nodeId, portId);
         if (!GraphValueCache.isCacheMiss(cached)) {
             return cached;
         }
@@ -46,7 +48,7 @@ public final class GraphDataEvaluationSession {
         } finally {
             cache.exitNode(nodeId);
         }
-        return cache.put(nodeId, portName, portId, value);
+        return cache.put(nodeId, portId, value);
     }
 
     @FunctionalInterface

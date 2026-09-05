@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.attachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.BlueprintEntityProcessHost;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.graph.scoped.OwnerScopedStateStore;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingSet;
@@ -53,10 +53,10 @@ public class EntityGraphAttachment {
     }
 
     public void unbindGraph(String graphId) {
-        unbindGraph(graphId, GraphCloseMode.IMMEDIATE);
+        unbindGraph(graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void unbindGraph(String graphId, GraphCloseMode closeMode) {
+    public void unbindGraph(String graphId, BlueprintCloseMode closeMode) {
         this.boundGraphs.remove(GraphBindingKey.blueprint(graphId));
         this.blueprints.removeProcess(graphId, closeMode);
     }
@@ -116,7 +116,7 @@ public class EntityGraphAttachment {
         blueprints.addProcess(process);
     }
     public void removeProcess(String graphId) { blueprints.removeProcess(graphId); }
-    public void removeProcess(String graphId, GraphCloseMode closeMode) { blueprints.removeProcess(graphId, closeMode); }
+    public void removeProcess(String graphId, BlueprintCloseMode closeMode) { blueprints.removeProcess(graphId, closeMode); }
     public Collection<BlueprintProcess> getProcesses() { return blueprints.processes(); }
     public long getNextScheduledTick() { return blueprints.nextScheduledTick(); }
     public BlueprintProcess getProcess(String graphId) { return blueprints.getProcess(graphId); }

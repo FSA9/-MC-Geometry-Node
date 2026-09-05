@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcessSeri
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import net.minecraft.core.HolderLookup;
@@ -114,16 +114,16 @@ public class BlueprintProcessContainer {
      * [卸载进程]
      */
     public void removeProcess(String graphId) {
-        removeProcess(graphId, GraphCloseMode.IMMEDIATE);
+        removeProcess(graphId, BlueprintCloseMode.IMMEDIATE);
     }
 
-    public void removeProcess(String graphId, GraphCloseMode closeMode) {
+    public void removeProcess(String graphId, BlueprintCloseMode closeMode) {
         String canonicalGraphId = GraphAssetId.require(graphId);
         BlueprintProcess process = this.processes.get(canonicalGraphId);
         if (process == null) return;
 
-        GraphCloseMode mode = closeMode != null ? closeMode : GraphCloseMode.IMMEDIATE;
-        if (mode == GraphCloseMode.DRAIN) {
+        BlueprintCloseMode mode = closeMode != null ? closeMode : BlueprintCloseMode.IMMEDIATE;
+        if (mode == BlueprintCloseMode.DRAIN) {
             this.dirtyMarker.run();
             process.requestDrain(() -> completeDrainingProcess(canonicalGraphId, process));
             return;

@@ -7,7 +7,7 @@ import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.event.GraphEventFields;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
-import com.mine.geometry_node.core.engine.graph.runtime.GraphCloseMode;
+import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionResult;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestInstance;
@@ -432,7 +432,7 @@ public final class QuestService {
         if (currentStatus != null && currentStatus.graphActive()) {
             bindIfValidQuest(owner, taskKey);
         } else {
-            BlueprintRuntime.INSTANCE.unbindGraph(owner, taskKey, GraphCloseMode.DRAIN);
+            BlueprintRuntime.INSTANCE.unbindGraph(owner, taskKey, BlueprintCloseMode.DRAIN);
         }
     }
 

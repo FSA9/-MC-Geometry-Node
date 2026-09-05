@@ -1,8 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
-import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.node.definition.port.PortType;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -19,7 +17,7 @@ public final class OwnerScopedStateStore {
     private static final int HARD_MAX_RECORDS = ScopedStateServerConfig.HARD_MAX_ENTRIES;
     private static final int HARD_MAX_TOTAL_RECORDS =
             HARD_MAX_RECORDS * ScopedStateNamespace.values().length;
-    private final Map<StateKey, StoredEntry> entries = new LinkedHashMap<>();
+    private final Map<StateKey, PersistentScopedStateEntry> entries = new LinkedHashMap<>();
     private final Map<ScopedStateNamespace, Integer> namespaceSizes =
             new EnumMap<>(ScopedStateNamespace.class);
     private long revision;
@@ -30,15 +28,9 @@ public final class OwnerScopedStateStore {
 
     public @Nullable ScopedStateEntry get(ScopedStateNamespace namespace, String name,
                                           HolderLookup.Provider registries) {
-        StoredEntry stored = entries.get(new StateKey(namespace, name));
+        PersistentScopedStateEntry stored = entries.get(new StateKey(namespace, name));
         if (stored == null) return null;
-        Object value = GraphValueCodecRegistry.fromTag(stored.value(), registries);
-        if (value == null) {
-            throw new ScopedStateAccessException(
-                    "OWNER blackboard value cannot be decoded: " + name);
-        }
-        Object frozen = GraphValueSnapshot.snapshot(value);
-        return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
+        return stored.read(registries, namespace.serializedName() + "/OWNER/" + name);
     }
 
     public ScopedStateEntry put(String name, Object value, int maxEntries,
@@ -53,17 +45,17 @@ public final class OwnerScopedStateStore {
         Objects.requireNonNull(value, "value");
         Objects.requireNonNull(limitNotifier, "limitNotifier");
         StateKey stateKey = new StateKey(namespace, name);
-        StoredEntry previous = entries.get(stateKey);
+        PersistentScopedStateEntry previous = entries.get(stateKey);
         int limit = Math.min(maxEntries, HARD_MAX_RECORDS);
         if (previous == null && size(namespace) >= limit) {
             limitNotifier.run();
             throw new ScopedStateAccessException(
                     "Scoped-state namespace entry limit exceeded: " + limit);
         }
-        Object frozen = GraphValueSnapshot.snapshot(value);
-        Tag encoded = ScopedStateValueCodec.encode(frozen, registries,
+        GraphValueSnapshot.FrozenValue frozen = GraphValueSnapshot.freeze(value);
+        Tag encoded = ScopedStateValueCodec.encode(frozen.value(), registries,
                 namespace.serializedName() + "/OWNER/" + name);
-        StoredEntry stored = new StoredEntry(encoded.copy());
+        PersistentScopedStateEntry stored = PersistentScopedStateEntry.written(encoded, frozen);
         revision++;
         entries.put(stateKey, stored);
         if (previous == null) {
@@ -71,7 +63,7 @@ public final class OwnerScopedStateStore {
             namespaceSizes.put(namespace, newSize);
             if (newSize == limit) limitNotifier.run();
         }
-        return new ScopedStateEntry(frozen, PortType.getTypeOf(frozen));
+        return stored.read(registries, namespace.serializedName() + "/OWNER/" + name);
     }
 
     public boolean remove(String name) {
@@ -131,12 +123,11 @@ public final class OwnerScopedStateStore {
 
     public CompoundTag save(CompoundTag root, HolderLookup.Provider registries) {
         ListTag serialized = new ListTag();
-        for (Map.Entry<StateKey, StoredEntry> item : entries.entrySet()) {
-            Tag value = item.getValue().value();
+        for (Map.Entry<StateKey, PersistentScopedStateEntry> item : entries.entrySet()) {
             CompoundTag tag = new CompoundTag();
             tag.putString("Namespace", item.getKey().namespace().serializedName());
             tag.putString("Name", item.getKey().name());
-            if (value != null) tag.put("Value", value.copy());
+            tag.put("Value", item.getValue().encodedCopy());
             serialized.add(tag);
         }
         root.put("Entries", serialized);
@@ -151,20 +142,24 @@ public final class OwnerScopedStateStore {
             if (entries.size() >= HARD_MAX_TOTAL_RECORDS) break;
             if (!(raw instanceof CompoundTag tag)) continue;
             String name = tag.getStringOr("Name", "");
-            ScopedStateNamespace namespace = ScopedStateNamespace.fromSerializedName(
-                    tag.getStringOr("Namespace", "public"));
+            ScopedStateNamespace namespace;
+            if (!tag.contains("Namespace")) {
+                namespace = ScopedStateNamespace.PUBLIC;
+            } else {
+                namespace = ScopedStateNamespace.fromSerializedName(
+                        tag.getStringOr("Namespace", "")).orElse(null);
+                if (namespace == null) continue;
+            }
             StateKey stateKey = new StateKey(namespace, name);
             Tag encoded = tag.get("Value");
             if (encoded != null) {
-                StoredEntry previous = entries.put(stateKey, new StoredEntry(encoded.copy()));
+                PersistentScopedStateEntry previous = entries.put(
+                        stateKey, PersistentScopedStateEntry.loaded(encoded));
                 if (previous == null) namespaceSizes.merge(namespace, 1, Integer::sum);
             }
         }
     }
 
     private record StateKey(ScopedStateNamespace namespace, String name) {
-    }
-
-    private record StoredEntry(Tag value) {
     }
 }

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
 import net.minecraft.world.entity.Entity;
+import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -25,7 +26,7 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
 
     @Override public ScopedStateScope scope() { return ScopedStateScope.OWNER; }
     @Override public String identity() { return ownerId; }
-    @Override public boolean available() { return owner.get() != null; }
+    @Override public boolean available() { return isAvailable(owner.get()); }
 
     @Override
     public @Nullable ScopedStateEntry get(String name) {
@@ -51,10 +52,7 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
     }
 
     private OwnerScopedStateStore store() {
-        Entity value = owner.get();
-        if (value == null) {
-            throw new ScopedStateAccessException("Blackboard owner is unavailable: " + ownerId);
-        }
+        Entity value = requireOwner();
         return value.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
                 .ownerScopedState();
     }
@@ -65,17 +63,19 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
 
     private Entity requireOwner() {
         Entity value = owner.get();
-        if (value == null) {
+        if (!isAvailable(value)) {
             throw new ScopedStateAccessException("Blackboard owner is unavailable: " + ownerId);
         }
         return value;
     }
 
+    private static boolean isAvailable(@Nullable Entity entity) {
+        return entity != null && !entity.isRemoved() && entity.level() instanceof ServerLevel;
+    }
+
     private void notifyLimit() {
         Entity valueOwner = requireOwner();
-        if (!(valueOwner.level() instanceof net.minecraft.server.level.ServerLevel level)) {
-            return;
-        }
+        ServerLevel level = (ServerLevel) valueOwner.level();
         ScopedStateLimitNotifier.notifyLimit(
                 level, namespace, ScopedStateScope.OWNER, ownerId, maxEntries);
     }

@@ -17,7 +17,7 @@ import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
-import com.mine.geometry_node.core.engine.graph.runtime.ExternalWaitHandlerRegistry;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
@@ -174,7 +174,7 @@ public class GeometryNode {
         GraphEntityReferenceIndex.INSTANCE.init();
         AssetLifecycleRegistry.INSTANCE.register(
                 AssetTypeCatalog.GRAPH_TYPE_ID,
-                DynamicGraphManager::loadAllFromDisk);
+                DynamicGraphManager::refresh);
 
         // 初始化图运行时注册表
         ServerEngineDriver.init();
@@ -184,8 +184,8 @@ public class GeometryNode {
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphDebugEngine.INSTANCE);
-        ExternalWaitHandlerRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
-        ExternalWaitHandlerRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
+        BlueprintExternalWaitRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
+        BlueprintExternalWaitRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();
