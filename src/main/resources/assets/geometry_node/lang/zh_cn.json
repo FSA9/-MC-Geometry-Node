@@ -409,7 +409,7 @@
     "geometry_node.node.set_scoped_state.comment.summary":  "创建或覆盖作用域状态。各输入行穿透当前输入值；当前值输出读取所选作用域和 Key 此刻实际保存的值。",
     "geometry_node.node.set_scoped_state.comment.state_value":  "所选作用域和 Key 当前实际保存的值，可能已被其他节点修改。",
     "geometry_node.node.set_scoped_state.comment.name":  "要创建或覆盖的 Key。",
-    "geometry_node.node.set_scoped_state.comment.value":  "节点执行时写入的值；对应的穿透输出始终保持为当前输入值。",
+    "geometry_node.node.set_scoped_state.comment.value":  "节点执行时写入的值；Java null 不执行写入并继续执行流，对应的穿透输出始终保持为当前输入值。",
     "geometry_node.node.clear_scoped_state":  "清除作用域状态",
     "geometry_node.node.clear_scoped_state.comment.summary":  "从所选作用域和目标中删除完整的 Key 与 Value；Key 不存在时不报错。",
     "geometry_node.node.clear_scoped_state.comment.name":  "要完整删除的 Key。",

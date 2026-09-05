@@ -29,7 +29,7 @@ public final class ClearScopedState extends BaseNode {
     }
 
     private NodeDef buildDefinition(ScopedStateScope scope) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.clear_scoped_state"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")

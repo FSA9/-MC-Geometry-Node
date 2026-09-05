@@ -7,7 +7,7 @@ import com.mine.geometry_node.api.MarkerRegistrationContext;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckProvider;
-import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
+import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckFactory;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.MissingNodeDefinitions;
 import com.mine.geometry_node.core.node.group.GroupNodeDefinitions;
@@ -15,7 +15,6 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -23,9 +22,8 @@ import java.util.*;
 public class NodeRegistry {
     public static final NodeRegistry INSTANCE = new NodeRegistry();
 
-    // 后端核心存储
-    private final Map<String, BaseNode> registry = new HashMap<>();
-    private final Map<String, NodeDef> defaultDefCache = new LinkedHashMap<>();
+    // A node and its optional runtime capabilities are committed as one registration.
+    private final Map<String, RegisteredNode> registeredNodes = new LinkedHashMap<>();
     private boolean initialized = false;
     private boolean initializing = false;
 
@@ -59,32 +57,50 @@ public class NodeRegistry {
                     continue;
                 }
 
-                String addonId = sanitizeAddonId(plugin.addonId(), plugin);
+                String addonId;
+                try {
+                    addonId = sanitizeAddonId(plugin.addonId(), plugin);
+                } catch (Exception | LinkageError error) {
+                    GeometryNode.LOGGER.error("Skipping node plugin with invalid metadata: provider={}",
+                            plugin.getClass().getName(), error);
+                    continue;
+                }
                 GeometryNode.LOGGER.info("Discovered node plugin: addon={}, provider={}",
                         addonId, plugin.getClass().getName());
 
-                try {
-                    plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
-
-                    plugin.registerNodes(new PluginNodeRegistrationContext(addonId));
-                } catch (Exception e) {
-                    GeometryNode.LOGGER.error("Node plugin registration failed: addon={}, provider={}",
-                            addonId, plugin.getClass().getName(), e);
-                }
+                registerPluginMarkers(plugin, addonId);
+                registerPluginNodes(plugin, addonId);
             }
 
             completed = true;
-            GeometryNode.LOGGER.info("Node registry loaded: nodes={}", registry.size());
+            GeometryNode.LOGGER.info("Node registry loaded: nodes={}", registeredNodes.size());
         } finally {
             initialized = completed;
             initializing = false;
         }
     }
 
+    private void registerPluginMarkers(GeometryNodePlugin plugin, String addonId) {
+        try {
+            plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
+        } catch (Exception | LinkageError error) {
+            GeometryNode.LOGGER.error("Marker registration failed: addon={}, provider={}",
+                    addonId, plugin.getClass().getName(), error);
+        }
+    }
+
+    private void registerPluginNodes(GeometryNodePlugin plugin, String addonId) {
+        try {
+            plugin.registerNodes(new PluginNodeRegistrationContext(addonId));
+        } catch (Exception | LinkageError error) {
+            GeometryNode.LOGGER.error("Node plugin registration failed: addon={}, provider={}",
+                    addonId, plugin.getClass().getName(), error);
+        }
+    }
+
     private void register(String path, BaseNode node, String addonId) {
         try {
-            NodeCategory category = getOrCreateCategory(path);
-            registerNode(category, node, addonId);
+            registerNode(path, node, addonId);
         } catch (Exception | LinkageError error) {
             logNodeRegistrationFailure(path, node, addonId, error);
         }
@@ -115,10 +131,10 @@ public class NodeRegistry {
         return current;
     }
 
-    private synchronized void registerNode(NodeCategory category, BaseNode node, String addonId) {
+    private synchronized void registerNode(String path, BaseNode node, String addonId) {
         // 1. 基础校验
-        if (node == null || category == null) {
-            GeometryNode.LOGGER.error("Skipping node registration with a null node or category");
+        if (node == null) {
+            GeometryNode.LOGGER.error("Skipping node registration with a null node");
             return; // 跳过，不中断后续
         }
 
@@ -144,28 +160,23 @@ public class NodeRegistry {
         }
 
         // 4. 重复检查
-        BaseNode existing = registry.get(typeId);
+        RegisteredNode existing = registeredNodes.get(typeId);
         if (existing != null) {
             GeometryNode.LOGGER.error("Skipping duplicate node type: type={}, existing={}, new={}, addon={}",
-                    typeId, existing.getClass().getName(), node.getClass().getName(), addonId);
+                    typeId, existing.node().getClass().getName(), node.getClass().getName(), addonId);
             return;
         }
 
         BehaviorNodeExecutor behaviorExecutor = node instanceof BehaviorExecutableNode executable
                 ? Objects.requireNonNull(executable.behaviorExecutor(),
                 "Behavior executor cannot be null: " + typeId) : null;
-        if (behaviorExecutor != null) {
-            BehaviorNodeExecutorRegistry.INSTANCE.register(typeId, behaviorExecutor);
-        }
-        if (node instanceof EventPrecheckProvider provider) {
-            EventPrecheckRegistry.register(typeId,
-                    Objects.requireNonNull(provider.eventPrecheckFactory(),
-                            "Event precheck factory cannot be null: " + typeId));
-        }
+        EventPrecheckFactory eventPrecheckFactory = node instanceof EventPrecheckProvider provider
+                ? Objects.requireNonNull(provider.eventPrecheckFactory(),
+                "Event precheck factory cannot be null: " + typeId) : null;
 
-        registry.put(typeId, node);
-        defaultDefCache.put(typeId, def);
-
+        NodeCategory category = getOrCreateCategory(path);
+        registeredNodes.put(typeId,
+                new RegisteredNode(node, def, behaviorExecutor, eventPrecheckFactory));
         category.addNode(node);
     }
 
@@ -182,9 +193,10 @@ public class NodeRegistry {
         NodeDef groupDef = GroupNodeDefinitions.resolve(data);
         if (groupDef != null) return groupDef;
 
-        BaseNode b = registry.get(data.type);
-        if (b != null) {
-            return b.hasDynamicDefinition() ? b.getDefinition(data) : defaultDefCache.get(data.type);
+        RegisteredNode registration = registeredNodes.get(data.type);
+        if (registration != null) {
+            BaseNode node = registration.node();
+            return node.hasDynamicDefinition() ? node.getDefinition(data) : registration.defaultDefinition();
         }
         NodeDef defaultDef = getDefaultDefinition(data.type);
         return defaultDef != null ? defaultDef : MissingNodeDefinitions.resolve(data);
@@ -192,24 +204,40 @@ public class NodeRegistry {
 
     @Nullable
     public BaseNode get(String typeId) {
-        return registry.get(typeId);
+        RegisteredNode registration = registeredNodes.get(typeId);
+        return registration != null ? registration.node() : null;
     }
 
     @Nullable
     public NodeDef getDefaultDefinition(String typeId) {
-        return defaultDefCache.get(typeId);
+        RegisteredNode registration = registeredNodes.get(typeId);
+        return registration != null ? registration.defaultDefinition() : null;
+    }
+
+    @Nullable
+    public BehaviorNodeExecutor getBehaviorExecutor(String typeId) {
+        RegisteredNode registration = registeredNodes.get(typeId);
+        return registration != null ? registration.behaviorExecutor() : null;
+    }
+
+    @Nullable
+    public EventPrecheckFactory getEventPrecheckFactory(String typeId) {
+        RegisteredNode registration = registeredNodes.get(typeId);
+        return registration != null ? registration.eventPrecheckFactory() : null;
     }
 
     public boolean has(String typeId) {
-        return registry.containsKey(typeId);
+        return registeredNodes.containsKey(typeId);
     }
 
     public Set<String> getAllTypeIds() {
-        return Collections.unmodifiableSet(registry.keySet());
+        return Collections.unmodifiableSet(registeredNodes.keySet());
     }
 
     public Collection<NodeDef> getAllDefinitions() {
-        return Collections.unmodifiableCollection(defaultDefCache.values());
+        return registeredNodes.values().stream()
+                .map(RegisteredNode::defaultDefinition)
+                .toList();
     }
 
     private static String sanitizeAddonId(String addonId, GeometryNodePlugin plugin) {
@@ -254,7 +282,18 @@ public class NodeRegistry {
 
         @Override
         public void registerMarkerType(MarkerType type) {
-            MarkerTypeRegistry.INSTANCE.register(type);
+            try {
+                MarkerTypeRegistry.INSTANCE.register(type);
+            } catch (Exception | LinkageError error) {
+                String typeId = type != null ? type.id() : "<null-marker>";
+                GeometryNode.LOGGER.error("Skipping marker type after registration failure: addon={}, type={}",
+                        addonId, typeId, error);
+            }
         }
+    }
+
+    private record RegisteredNode(BaseNode node, NodeDef defaultDefinition,
+                                  @Nullable BehaviorNodeExecutor behaviorExecutor,
+                                  @Nullable EventPrecheckFactory eventPrecheckFactory) {
     }
 }

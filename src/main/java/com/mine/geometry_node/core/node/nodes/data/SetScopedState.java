@@ -31,7 +31,7 @@ public final class SetScopedState extends BaseNode {
     }
 
     private NodeDef buildDefinition(ScopedStateScope scope) {
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.set_scoped_state"))
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
@@ -54,9 +54,13 @@ public final class SetScopedState extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        Object attrValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
+        if (attrValue == null) {
+            return next(StandardPorts.FLOW_OUT.getId());
+        }
+
         String attrName = getInput(context, StandardPorts.NAME.getId(), String.class);
         String key = ScopedStateNodeSupport.requireKey(attrName);
-        Object attrValue = getInput(context, StandardPorts.ANY_VALUE.getId(), Object.class);
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
