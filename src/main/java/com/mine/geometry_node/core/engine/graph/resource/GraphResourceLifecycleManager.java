@@ -2,43 +2,49 @@ package com.mine.geometry_node.core.engine.graph.resource;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
-import net.neoforged.neoforge.event.level.LevelEvent;
-import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Predicate;
 
 /** Dispatches lifecycle release requests to resource-specific stores. */
-public final class GraphResourceLifecycleManager {
+public final class GraphResourceLifecycleManager implements ServerEngine {
     public static final GraphResourceLifecycleManager INSTANCE = new GraphResourceLifecycleManager();
 
     private final Map<String, Store> stores = new LinkedHashMap<>();
-    private boolean initialized;
 
     private GraphResourceLifecycleManager() {
     }
 
-    public synchronized void init() {
-        if (initialized) return;
-        initialized = true;
-        var bus = NeoForge.EVENT_BUS;
-        bus.addListener((EntityLeaveLevelEvent event) -> {
-            if (event.getLevel() instanceof ServerLevel level) {
-                releaseEntity(level.getServer(), level.dimension(), event.getEntity().getUUID());
-            }
-        });
-        bus.addListener((LevelEvent.Unload event) -> {
-            if (event.getLevel() instanceof ServerLevel level) releaseLevel(level.getServer(), level.dimension());
-        });
-        bus.addListener((ServerStoppedEvent event) -> releaseServer(event.getServer()));
+    @Override
+    public String id() {
+        return "geometry_node:graph_resource_lifecycle";
+    }
+
+    @Override
+    public int tickOrder() {
+        return 900;
+    }
+
+    @Override
+    public void entityLeft(ServerLevel level, Entity entity) {
+        releaseEntity(level.getServer(), level.dimension(), entity.getUUID());
+    }
+
+    @Override
+    public void levelUnloaded(ServerLevel level) {
+        releaseLevel(level.getServer(), level.dimension());
+    }
+
+    @Override
+    public void shutdown(MinecraftServer server) {
+        releaseServer(server);
     }
 
     public synchronized void registerStore(String id, Store store) {
@@ -48,34 +54,33 @@ public final class GraphResourceLifecycleManager {
     }
 
     public void releaseBinding(MinecraftServer server, GraphResourceScope scope, GraphBindingKey binding) {
-        release(server, id -> id.type().lifetime() == GraphResourceLifetime.BINDING
-                && id.scope().equals(scope) && id.binding().equals(binding));
+        if (scope != null && binding != null) {
+            release(server, new GraphResourceRelease.Binding(scope, binding));
+        }
     }
 
     public void releaseProcess(MinecraftServer server, UUID processId) {
-        if (processId != null) release(server, id -> processId.equals(id.processInstanceId()));
+        if (processId != null) release(server, new GraphResourceRelease.Process(processId));
     }
 
     public void releaseOwner(MinecraftServer server, GraphResourceScope scope) {
-        release(server, id -> id.scope().equals(scope));
+        if (scope != null) release(server, new GraphResourceRelease.Owner(scope));
     }
 
     public void releaseEntity(MinecraftServer server, ResourceKey<Level> dimension, UUID entityId) {
         if (dimension == null || entityId == null) return;
-        release(server, id -> id.scope().dimension().equals(dimension)
-                && ((id.scope() instanceof GraphResourceScope.EntityScope entityScope
-                && entityId.equals(entityScope.ownerId())) || entityId.equals(id.targetEntityId())));
+        release(server, new GraphResourceRelease.Entity(dimension, entityId));
     }
 
     public void releaseLevel(MinecraftServer server, ResourceKey<Level> dimension) {
-        release(server, id -> id.scope().dimension().equals(dimension));
+        if (dimension != null) release(server, new GraphResourceRelease.LevelScope(dimension));
     }
 
     public void releaseServer(MinecraftServer server) {
-        release(server, ignored -> true);
+        release(server, GraphResourceRelease.Server.INSTANCE);
     }
 
-    private void release(MinecraftServer server, Predicate<GraphResourceId> predicate) {
+    private void release(MinecraftServer server, GraphResourceRelease release) {
         if (server == null) return;
         Store[] snapshot;
         synchronized (this) {
@@ -83,7 +88,7 @@ public final class GraphResourceLifecycleManager {
         }
         for (Store store : snapshot) {
             try {
-                store.remove(server, predicate);
+                store.remove(server, release);
             } catch (RuntimeException exception) {
                 GeometryNode.LOGGER.error("Graph resource store cleanup failed", exception);
             }
@@ -92,6 +97,6 @@ public final class GraphResourceLifecycleManager {
 
     @FunctionalInterface
     public interface Store {
-        void remove(MinecraftServer server, Predicate<GraphResourceId> predicate);
+        void remove(MinecraftServer server, GraphResourceRelease release);
     }
 }

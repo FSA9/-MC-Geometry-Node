@@ -62,12 +62,12 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
 
     @Override
     public void refresh(Runnable completion) {
-        enqueueMutation(generation -> refreshNow(() -> finishMutation(generation, completion)));
+        enqueueMutation(generation -> refreshNow(generation, () -> finishMutation(generation, completion)));
     }
 
     @Override
     public void create(DataLibraryUiRepository.Entry entry, Runnable completion) {
-        enqueueMutation(generation -> upload(List.of(entry), null, AssetTransferPurpose.DATA_LIBRARY_CREATE,
+        enqueueMutation(generation -> upload(generation, List.of(entry), null, AssetTransferPurpose.DATA_LIBRARY_CREATE,
                 () -> finishMutation(generation, completion)));
     }
 
@@ -77,34 +77,34 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         enqueueMutation(generation -> {
             if (previous == null || !previous.id().equals(entry.id())) {
                 failure(AssetTransferPurpose.DATA_LIBRARY_UPDATE, "Entry no longer exists: " + entry.id());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
                 return;
             }
             if (previous.type() != entry.type()) {
                 failure(AssetTransferPurpose.DATA_LIBRARY_UPDATE, "Entry type cannot be changed: " + entry.id());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
                 return;
             }
             if (!java.util.Objects.equals(previous.parentId(), entry.parentId())) {
                 sendMoveEntry(previous, entry.parentId(), response -> {
                     if (!response.success()) {
                         failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                         return;
                     }
                     if (java.util.Objects.equals(previous.key(), entry.key())
                             && java.util.Objects.equals(previous.value(), entry.value())) {
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                         return;
                     }
                     DataLibraryUiRepository.Entry moved = new DataLibraryUiRepository.Entry(
                             previous.id(), entry.parentId(), previous.type(), previous.key(), previous.value());
-                    upload(List.of(entry), moved, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
+                    upload(generation, List.of(entry), moved, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
                             () -> finishMutation(generation, completion));
                 });
                 return;
             }
-            upload(List.of(entry), previous, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
+            upload(generation, List.of(entry), previous, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
                     () -> finishMutation(generation, completion));
         });
     }
@@ -124,11 +124,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         RemoteDataLibraryOperation.DELETE, Set.copyOf(objectKeys),
                         null, null, "", expected), response -> {
                     if (!response.success()) failure(RemoteDataLibraryOperation.DELETE, response.message());
-                    refreshNow(() -> finishMutation(generation, completion));
+                    refreshNow(generation, () -> finishMutation(generation, completion));
                 });
             } catch (RuntimeException exception) {
                 failure(RemoteDataLibraryOperation.DELETE, exception.getMessage());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
             }
         });
     }
@@ -141,11 +141,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         REQUESTS.nextRequestId(), RemoteDataLibraryOperation.CREATE_FOLDER, Set.of(),
                         null, folder.parentId(), folder.name(), ""), response -> {
                     if (!response.success()) failure(RemoteDataLibraryOperation.CREATE_FOLDER, response.message());
-                    refreshNow(() -> finishMutation(generation, completion));
+                    refreshNow(generation, () -> finishMutation(generation, completion));
                 });
             } catch (RuntimeException exception) {
                 failure(RemoteDataLibraryOperation.CREATE_FOLDER, exception.getMessage());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
             }
         });
     }
@@ -156,7 +156,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         enqueueMutation(generation -> {
             if (previous == null || !previous.id().equals(folder.id())) {
                 failure(RemoteDataLibraryOperation.UPDATE_FOLDER, "Folder no longer exists: " + folder.id());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
                 return;
             }
             boolean moved = !java.util.Objects.equals(previous.parentId(), folder.parentId());
@@ -169,11 +169,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         folder.id(), folder.parentId(), name, expected), response -> {
                     if (!response.success()) {
                         failure(operation, response.message());
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                         return;
                     }
                     if (!moved || java.util.Objects.equals(previous.name(), folder.name())) {
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                         return;
                     }
                     DataLibraryUiRepository.Folder movedFolder = new DataLibraryUiRepository.Folder(
@@ -186,12 +186,12 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         if (!renamed.success()) {
                             failure(RemoteDataLibraryOperation.UPDATE_FOLDER, renamed.message());
                         }
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                     });
                 });
             } catch (RuntimeException exception) {
                 failure(operation, exception.getMessage());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
             }
         });
     }
@@ -202,7 +202,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             DataLibraryUiRepository.Entry current = snapshot.get().entriesById.get(entryId);
             if (current == null) {
                 failure(RemoteDataLibraryOperation.MOVE_ENTRY, "Entry no longer exists: " + entryId);
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
                 return;
             }
             if (java.util.Objects.equals(current.parentId(), parentId)) {
@@ -211,7 +211,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             }
             sendMoveEntry(current, parentId, response -> {
                 if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
             });
         });
     }
@@ -222,7 +222,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             DataLibraryUiRepository.Folder current = snapshot.get().foldersById.get(folderId);
             if (current == null) {
                 failure(RemoteDataLibraryOperation.MOVE_FOLDER, "Folder no longer exists: " + folderId);
-                refreshNow(() -> finishMutation(generation, completion));
+                refreshNow(generation, () -> finishMutation(generation, completion));
                 return;
             }
             if (java.util.Objects.equals(current.parentId(), parentId)) {
@@ -234,7 +234,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                     RemoteDataLibraryOperation.MOVE_FOLDER, Set.of(), current.id(), parentId, "", expected),
                     response -> {
                         if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_FOLDER, response.message());
-                        refreshNow(() -> finishMutation(generation, completion));
+                        refreshNow(generation, () -> finishMutation(generation, completion));
                     });
         });
     }
@@ -248,14 +248,15 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             mutations.clear();
             connectionGeneration++;
             mutationRunning = false;
+            snapshot.set(Snapshot.EMPTY);
         }
         REQUESTS.reset();
-        snapshot.set(Snapshot.EMPTY);
     }
 
-    private void upload(List<DataLibraryUiRepository.Entry> entries,
+    private void upload(long generation, List<DataLibraryUiRepository.Entry> entries,
                         DataLibraryUiRepository.Entry previous,
                         AssetTransferPurpose purpose, Runnable completion) {
+        if (!isGenerationActive(generation)) return;
         Path temporary = null;
         try {
             temporary = Files.createTempFile("geometrynode-data-library-", ".json");
@@ -268,19 +269,24 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         } catch (Exception exception) {
             deleteQuietly(temporary);
             failure(purpose, exception.getMessage());
-            refreshNow(completion);
+            refreshNow(generation, completion);
             return;
         }
         Path source = temporary;
+        if (!isGenerationActive(generation)) {
+            deleteQuietly(source);
+            return;
+        }
         UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
                 ClientAssetTransferRequest.dataLibraryUpload(source, purpose)));
         ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
             deleteQuietly(source);
+            if (!isGenerationActive(generation)) return;
             if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
                 failure(purpose, transferFailure(result, error, "Data Library upload failed"));
-                refreshNow(completion);
+                refreshNow(generation, completion);
             } else {
-                refreshNow(completion);
+                refreshNow(generation, completion);
             }
         });
     }
@@ -292,8 +298,10 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 RemoteDataLibraryOperation.MOVE_ENTRY, Set.of(), previous.id(), parentId, "", expected), completion);
     }
 
-    private void refreshNow(Runnable completion) {
+    private void refreshNow(long generation, Runnable completion) {
+        if (!isGenerationActive(generation)) return;
         control(RemoteDataLibraryOperation.PREPARE_REFRESH, Set.of(), prepared -> {
+            if (!isGenerationActive(generation)) return;
             if (!prepared.success()) {
                 failure(RemoteDataLibraryOperation.PREPARE_REFRESH, prepared.message());
                 run(completion);
@@ -308,26 +316,39 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 run(completion);
                 return;
             }
+            if (!isGenerationActive(generation)) {
+                deleteQuietly(target);
+                return;
+            }
             UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
                     ClientAssetTransferRequest.dataLibraryDownload(prepared.token(), target)));
             ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
                 try {
+                    if (!isGenerationActive(generation)) return;
                     if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
                         failure(RemoteDataLibraryOperation.PREPARE_REFRESH,
                                 transferFailure(result, error, "staging download failed"));
                         return;
                     }
                     DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                    snapshot.set(new Snapshot(DataLibraryUiMapper.folders(loaded),
+                    publishSnapshot(generation, new Snapshot(DataLibraryUiMapper.folders(loaded),
                             DataLibraryUiMapper.fromDocument(loaded), true));
                 } catch (Exception exception) {
-                    failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
+                    if (isGenerationActive(generation)) {
+                        failure(RemoteDataLibraryOperation.PREPARE_REFRESH, exception.getMessage());
+                    }
                 } finally {
                     deleteQuietly(target);
-                    run(completion);
+                    if (isGenerationActive(generation)) run(completion);
                 }
             });
         });
+    }
+
+    private void publishSnapshot(long generation, Snapshot value) {
+        synchronized (mutations) {
+            if (generation == connectionGeneration) snapshot.set(value);
+        }
     }
 
     private static Set<DataLibraryObjectKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {

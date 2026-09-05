@@ -15,6 +15,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final java.util.ArrayList<Runnable> pendingInitialLoad = new java.util.ArrayList<>();
     private boolean initialLoadInFlight;
+    private long connectionGeneration;
 
     private ClientDataLibraryRepository() {}
 
@@ -38,14 +39,17 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
             if (completion != null) completion.run();
             return;
         }
+        long generation;
         synchronized (pendingInitialLoad) {
             if (completion != null) pendingInitialLoad.add(completion);
             if (initialLoadInFlight) return;
             initialLoadInFlight = true;
+            generation = connectionGeneration;
         }
         remote.refresh(() -> {
             java.util.List<Runnable> callbacks;
             synchronized (pendingInitialLoad) {
+                if (generation != connectionGeneration) return;
                 callbacks = java.util.List.copyOf(pendingInitialLoad);
                 pendingInitialLoad.clear();
                 initialLoadInFlight = false;
@@ -53,6 +57,14 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
             notifyChanged();
             callbacks.forEach(Runnable::run);
         });
+    }
+
+    public void resetConnection() {
+        synchronized (pendingInitialLoad) {
+            connectionGeneration++;
+            pendingInitialLoad.clear();
+            initialLoadInFlight = false;
+        }
     }
 
     @Override

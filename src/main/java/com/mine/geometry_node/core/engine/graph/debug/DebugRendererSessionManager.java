@@ -5,11 +5,13 @@ import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMesh
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Interaction;
@@ -30,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 public final class DebugRendererSessionManager {
     public static final double DEFAULT_RADIUS = 256.0D;
@@ -54,14 +55,9 @@ public final class DebugRendererSessionManager {
     private static final int FOLLOW_TARGET_COLOR = 0xFFE86DFF;
     private static final int PATROL_COMPLETED_COLOR = 0xFF8A8A8A;
 
-    private static final Map<UUID, Session> SESSIONS = new HashMap<>();
-    private static final Map<UUID, RequestedPathTarget> REQUESTED_PATH_TARGETS = new HashMap<>();
-    private static final Map<UUID, FollowTarget> FOLLOW_TARGETS = new HashMap<>();
-    private static final Map<UUID, PatrolRoute> PATROL_ROUTES = new HashMap<>();
-    private static final Map<ServerLevel, LevelCache> LEVEL_CACHES = new IdentityHashMap<>();
+    private static final Map<MinecraftServer, DebugServerState> SERVERS = new IdentityHashMap<>();
     private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
     private static boolean registered;
-    private static long dirtyVersion;
 
     private DebugRendererSessionManager() {
     }
@@ -73,14 +69,20 @@ public final class DebugRendererSessionManager {
         var bus = NeoForge.EVENT_BUS;
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
-                SESSIONS.remove(player.getUUID());
-                clearRequestedPathTargetsIfUnused();
+                DebugServerState state = getState(player.level().getServer());
+                if (state != null) {
+                    state.sessions.remove(player.getUUID());
+                    clearRequestedPathTargetsIfUnused(state);
+                    discardStateIfEmpty(player.level().getServer(), state);
+                }
             }
         });
         bus.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
-                markDirty();
-                Session session = SESSIONS.get(player.getUUID());
+                DebugServerState state = getState(player.level().getServer());
+                if (state == null) return;
+                markDirty(state);
+                Session session = state.sessions.get(player.getUUID());
                 if (session != null) {
                     session.forceRefresh();
                     hydrateSchematicChannel(player, session);
@@ -89,25 +91,33 @@ public final class DebugRendererSessionManager {
             }
         });
         bus.addListener((ChunkEvent.Load event) -> {
-            if (event.getLevel() instanceof ServerLevel) {
-                markDirty();
+            if (event.getLevel() instanceof ServerLevel level) {
+                markDirty(level.getServer());
             }
         });
         bus.addListener((ChunkEvent.Unload event) -> {
-            if (event.getLevel() instanceof ServerLevel) {
-                markDirty();
+            if (event.getLevel() instanceof ServerLevel level) {
+                markDirty(level.getServer());
             }
         });
     }
 
     /** Releases state owned by the stopping server while retaining registered hydrators. */
-    public static void shutdown() {
-        SESSIONS.clear();
-        REQUESTED_PATH_TARGETS.clear();
-        FOLLOW_TARGETS.clear();
-        PATROL_ROUTES.clear();
-        LEVEL_CACHES.clear();
-        dirtyVersion = 0L;
+    public static void shutdown(MinecraftServer server) {
+        if (server != null) SERVERS.remove(server);
+    }
+
+    public static void levelUnloaded(ServerLevel level) {
+        if (level == null) return;
+        DebugServerState state = getState(level.getServer());
+        if (state == null) return;
+        boolean changed = state.levelCaches.remove(level) != null;
+        ResourceKey<Level> dimension = level.dimension();
+        changed |= state.requestedPathTargets.values().removeIf(target -> target.dimension().equals(dimension));
+        changed |= state.followTargets.values().removeIf(target -> target.dimension().equals(dimension));
+        changed |= state.patrolRoutes.values().removeIf(route -> route.dimension().equals(dimension));
+        if (changed) markDirty(state);
+        discardStateIfEmpty(level.getServer(), state);
     }
 
     public static int enableArea(ServerPlayer player, double radius) {
@@ -132,8 +142,11 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disableAll(ServerPlayer player, boolean notify) {
-        boolean changed = SESSIONS.remove(player.getUUID()) != null;
-        clearRequestedPathTargetsIfUnused();
+        MinecraftServer server = player.level().getServer();
+        DebugServerState state = state(server);
+        boolean changed = state.sessions.remove(player.getUUID()) != null;
+        clearRequestedPathTargetsIfUnused(state);
+        discardStateIfEmpty(server, state);
         sendDisabledSnapshot(player);
         if (notify) {
             player.sendSystemMessage(Component.literal(changed
@@ -144,7 +157,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disableArea(ServerPlayer player, boolean notify) {
-        Session session = SESSIONS.get(player.getUUID());
+        Session session = session(player);
         boolean changed = session != null && session.areaEnabled;
         if (session != null) {
             session.areaEnabled = false;
@@ -165,7 +178,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disableSchematic(ServerPlayer player, boolean notify) {
-        Session session = SESSIONS.get(player.getUUID());
+        Session session = session(player);
         boolean changed = session != null && session.schematicEnabled;
         if (session != null) {
             session.schematicEnabled = false;
@@ -185,7 +198,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disableGeometry(ServerPlayer player, boolean notify) {
-        Session session = SESSIONS.get(player.getUUID());
+        Session session = session(player);
         boolean changed = session != null && session.geometryEnabled;
         if (session != null) {
             session.geometryEnabled = false;
@@ -205,7 +218,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disableInteraction(ServerPlayer player, boolean notify) {
-        Session session = SESSIONS.get(player.getUUID());
+        Session session = session(player);
         boolean changed = session != null && session.interactionEnabled;
         if (session != null) {
             session.interactionEnabled = false;
@@ -225,7 +238,8 @@ public final class DebugRendererSessionManager {
     }
 
     public static int disablePathfinding(ServerPlayer player, boolean notify) {
-        Session session = SESSIONS.get(player.getUUID());
+        DebugServerState state = getState(player.level().getServer());
+        Session session = state != null ? state.sessions.get(player.getUUID()) : null;
         boolean changed = session != null && session.pathfindingEnabled;
         if (session != null) {
             session.pathfindingEnabled = false;
@@ -233,7 +247,10 @@ public final class DebugRendererSessionManager {
         } else {
             sendDisabledSnapshot(player);
         }
-        clearRequestedPathTargetsIfUnused();
+        if (state != null) {
+            clearRequestedPathTargetsIfUnused(state);
+            discardStateIfEmpty(player.level().getServer(), state);
+        }
         notifyDisabled(player, notify, changed, "Pathfinding");
         return changed ? 1 : 0;
     }
@@ -243,49 +260,62 @@ public final class DebugRendererSessionManager {
      * vanilla navigation state, so the channel itself is not behavior-tree-specific.
      */
     public static void recordRequestedPathTarget(Mob mob, Vec3 position) {
-        if (mob == null || position == null || !hasPathfindingSessions()) return;
-        REQUESTED_PATH_TARGETS.put(mob.getUUID(), new RequestedPathTarget(
-                mob.level().dimension(), position,
-                mob.level().getGameTime() + REQUESTED_TARGET_RETENTION_TICKS
+        if (mob == null || position == null || !(mob.level() instanceof ServerLevel level)) return;
+        DebugServerState state = getState(level.getServer());
+        if (state == null || !hasPathfindingSessions(state)) return;
+        state.requestedPathTargets.put(mob.getUUID(), new RequestedPathTarget(
+                level.dimension(), position,
+                level.getGameTime() + REQUESTED_TARGET_RETENTION_TICKS
         ));
     }
 
     /** Clears the requested target written through the behavior-tree producer hook above. */
     public static void clearRequestedPathTarget(Mob mob) {
-        if (mob != null && REQUESTED_PATH_TARGETS.remove(mob.getUUID()) != null) markDirty();
+        if (mob == null || !(mob.level() instanceof ServerLevel level)) return;
+        DebugServerState state = getState(level.getServer());
+        if (state != null && state.requestedPathTargets.remove(mob.getUUID()) != null) markDirty(state);
     }
 
     /** Behavior-tree producer hook for an active entity-to-entity Follow relationship. */
     public static void recordFollowTarget(Mob follower, Entity target) {
-        if (follower == null || target == null || !hasPathfindingSessions()) return;
-        FOLLOW_TARGETS.put(follower.getUUID(), new FollowTarget(
-                follower.level().dimension(), target.getUUID(),
-                follower.level().getGameTime() + FOLLOW_TARGET_RETENTION_TICKS
+        if (follower == null || target == null || !(follower.level() instanceof ServerLevel level)) return;
+        DebugServerState state = getState(level.getServer());
+        if (state == null || !hasPathfindingSessions(state)) return;
+        state.followTargets.put(follower.getUUID(), new FollowTarget(
+                level.dimension(), target.getUUID(),
+                level.getGameTime() + FOLLOW_TARGET_RETENTION_TICKS
         ));
     }
 
     /** Removes the active Follow relationship immediately when its action exits. */
     public static void clearFollowTarget(Mob follower) {
-        if (follower != null && FOLLOW_TARGETS.remove(follower.getUUID()) != null) markDirty();
+        if (follower == null || !(follower.level() instanceof ServerLevel level)) return;
+        DebugServerState state = getState(level.getServer());
+        if (state != null && state.followTargets.remove(follower.getUUID()) != null) markDirty(state);
     }
 
     /** Records the frozen waypoint route owned by an active Patrol action. */
     public static void recordPatrolRoute(Mob mob, List<Vec3> waypoints,
                                          int completedCount, boolean loop) {
-        if (mob == null || waypoints == null || waypoints.isEmpty()) return;
+        if (mob == null || waypoints == null || waypoints.isEmpty()
+                || !(mob.level() instanceof ServerLevel level)) return;
+        DebugServerState state = state(level.getServer());
         int completed = Math.max(0, Math.min(completedCount, waypoints.size()));
-        PATROL_ROUTES.put(mob.getUUID(), new PatrolRoute(mob.level().dimension(),
+        state.patrolRoutes.put(mob.getUUID(), new PatrolRoute(level.dimension(),
                 List.copyOf(waypoints), completed, loop));
-        markDirty();
+        markDirty(state);
     }
 
     /** Removes the frozen route when Patrol stops, fails, or is preempted. */
     public static void clearPatrolRoute(Mob mob) {
-        if (mob != null && PATROL_ROUTES.remove(mob.getUUID()) != null) markDirty();
+        if (mob == null || !(mob.level() instanceof ServerLevel level)) return;
+        DebugServerState state = getState(level.getServer());
+        if (state != null && state.patrolRoutes.remove(mob.getUUID()) != null) markDirty(state);
     }
 
     private static Session enableChannel(ServerPlayer player, double radius) {
-        Session session = SESSIONS.computeIfAbsent(player.getUUID(), ignored -> new Session());
+        Session session = state(player.level().getServer()).sessions.computeIfAbsent(
+                player.getUUID(), ignored -> new Session());
         session.radius = clampRadius(radius);
         session.forceRefresh();
         return session;
@@ -312,33 +342,34 @@ public final class DebugRendererSessionManager {
     }
 
     public static void tickLevel(ServerLevel level) {
-        if (SESSIONS.isEmpty()) return;
+        DebugServerState state = getState(level.getServer());
+        if (state == null || state.sessions.isEmpty()) return;
 
         long tick = level.getGameTime();
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
         boolean pathfindingCadence = Math.floorMod(tick, PATHFINDING_REFRESH_INTERVAL_TICKS) == 0;
-        LevelCache levelCache = LEVEL_CACHES.get(level);
+        LevelCache levelCache = state.levelCaches.get(level);
         boolean hasExpiredSources = levelCache != null
                 && levelCache.sources.values().stream().anyMatch(source -> source.isTransientExpired(tick));
 
         for (ServerPlayer player : level.players()) {
-            Session session = SESSIONS.get(player.getUUID());
+            Session session = state.sessions.get(player.getUUID());
             if (session == null) continue;
 
             ResourceKey<Level> dimension = level.dimension();
             boolean dimensionChanged = !dimension.equals(session.lastDimension);
             boolean moved = session.lastPosition == null
                     || session.lastPosition.distanceToSqr(player.position()) >= MOVE_REFRESH_DISTANCE_SQR;
-            boolean dirty = session.lastDirtyVersion != dirtyVersion;
+            boolean dirty = session.lastDirtyVersion != state.dirtyVersion;
             boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources
                     || session.pathfindingEnabled && pathfindingCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
-            MeshSnapshot snapshot = collectSnapshot(player, session);
+            MeshSnapshot snapshot = collectSnapshot(state, player, session);
             if (snapshot.signature != session.lastSignature) {
                 sendSnapshot(player, session, snapshot);
             }
-            updateBaseline(player, session, snapshot);
+            updateBaseline(state, player, session, snapshot);
         }
     }
 
@@ -362,7 +393,8 @@ public final class DebugRendererSessionManager {
                                               Vec3 center,
                                               Vec3 size,
                                               Vec3 rotation) {
-        if (level == null || center == null || size == null || !hasAreaSessions()) return;
+        if (level == null || center == null || size == null
+                || !hasAreaSessions(level.getServer())) return;
 
         String safeShape = shape == null || shape.isBlank() ? "box" : shape;
         Vec3 safeRotation = rotation != null ? rotation : Vec3.ZERO;
@@ -423,7 +455,8 @@ public final class DebugRendererSessionManager {
                                             List<GeometryDebugElement> meshes,
                                             long seenTick,
                                             long expiresAt) {
-        LevelCache cache = LEVEL_CACHES.computeIfAbsent(level, ignored -> new LevelCache());
+        DebugServerState state = state(level.getServer());
+        LevelCache cache = state.levelCaches.computeIfAbsent(level, ignored -> new LevelCache());
         SourceCache source = cache.sources.get(sourceId);
         long signature = sourceSignature(meshes);
         if (source != null && source.lastSeenTick == seenTick
@@ -435,33 +468,40 @@ public final class DebugRendererSessionManager {
             return;
         }
         cache.sources.put(sourceId, new SourceCache(List.copyOf(meshes), seenTick, signature, expiresAt));
-        dirtyVersion++;
+        markDirty(state);
     }
 
     private static void removeSource(ServerLevel level, DebugSourceId sourceId) {
-        LevelCache cache = LEVEL_CACHES.get(level);
+        DebugServerState state = getState(level.getServer());
+        if (state == null) return;
+        LevelCache cache = state.levelCaches.get(level);
         if (cache != null && cache.sources.remove(sourceId) != null) {
-            dirtyVersion++;
+            if (cache.sources.isEmpty()) state.levelCaches.remove(level);
+            markDirty(state);
+            discardStateIfEmpty(level.getServer(), state);
         }
     }
 
-    private static void removeGraphResources(net.minecraft.server.MinecraftServer server,
-                                             Predicate<GraphResourceId> predicate) {
+    private static void removeGraphResources(MinecraftServer server, GraphResourceRelease release) {
+        DebugServerState state = getState(server);
+        if (state == null) return;
         boolean changed = false;
-        var levelIterator = LEVEL_CACHES.entrySet().iterator();
+        var levelIterator = state.levelCaches.entrySet().iterator();
         while (levelIterator.hasNext()) {
             Map.Entry<ServerLevel, LevelCache> levelEntry = levelIterator.next();
             if (levelEntry.getKey().getServer() != server) continue;
             changed |= levelEntry.getValue().sources.keySet().removeIf(sourceId ->
                     sourceId.owner() instanceof DebugSourceId.Owner.Graph graph
-                            && predicate.test(graph.resourceId()));
+                            && release.matches(graph.resourceId()));
             if (levelEntry.getValue().sources.isEmpty()) levelIterator.remove();
         }
-        if (changed) dirtyVersion++;
+        if (changed) markDirty(state);
+        discardStateIfEmpty(server, state);
     }
 
-    public static void markDirty() {
-        dirtyVersion++;
+    public static void markDirty(MinecraftServer server) {
+        DebugServerState state = server != null ? getState(server) : null;
+        if (state != null) markDirty(state);
     }
 
     private static void hydrateSchematicChannel(ServerPlayer player, Session session) {
@@ -471,33 +511,35 @@ public final class DebugRendererSessionManager {
         }
     }
 
-    public static boolean hasAreaSessions() {
-        for (Session session : SESSIONS.values()) {
+    public static boolean hasAreaSessions(MinecraftServer server) {
+        DebugServerState state = getState(server);
+        if (state == null) return false;
+        for (Session session : state.sessions.values()) {
             if (session.areaEnabled) return true;
         }
         return false;
     }
 
-    private static boolean hasPathfindingSessions() {
-        for (Session session : SESSIONS.values()) {
+    private static boolean hasPathfindingSessions(DebugServerState state) {
+        for (Session session : state.sessions.values()) {
             if (session.pathfindingEnabled) return true;
         }
         return false;
     }
 
-    private static void clearRequestedPathTargetsIfUnused() {
-        if (!hasPathfindingSessions()) {
-            REQUESTED_PATH_TARGETS.clear();
-            FOLLOW_TARGETS.clear();
-            PATROL_ROUTES.clear();
+    private static void clearRequestedPathTargetsIfUnused(DebugServerState state) {
+        if (!hasPathfindingSessions(state)) {
+            state.requestedPathTargets.clear();
+            state.followTargets.clear();
+            state.patrolRoutes.clear();
         }
     }
 
-    private static MeshSnapshot collectSnapshot(ServerPlayer player, Session session) {
+    private static MeshSnapshot collectSnapshot(DebugServerState state, ServerPlayer player, Session session) {
         if (!session.hasAnyChannel()) return new MeshSnapshot(List.of(), 1L);
 
         ServerLevel level = player.level();
-        LevelCache cache = LEVEL_CACHES.get(level);
+        LevelCache cache = state.levelCaches.get(level);
         long currentTick = level.getGameTime();
         double radiusSqr = session.radius * session.radius;
         Vec3 origin = player.position();
@@ -525,9 +567,12 @@ public final class DebugRendererSessionManager {
             collectInteractionCandidates(level, origin, session.radius, radiusSqr, candidates);
         }
         if (session.pathfindingEnabled) {
-            collectPathfindingCandidates(level, origin, session.radius, radiusSqr, candidates);
+            collectPathfindingCandidates(state, level, origin, session.radius, radiusSqr, candidates);
         }
-        if (removedExpiredSource) dirtyVersion++;
+        if (removedExpiredSource) {
+            if (cache != null && cache.sources.isEmpty()) state.levelCaches.remove(level);
+            markDirty(state);
+        }
 
         candidates.sort((left, right) -> {
             int distanceOrder = Double.compare(left.distanceSqr, right.distanceSqr);
@@ -587,22 +632,23 @@ public final class DebugRendererSessionManager {
         }
     }
 
-    private static void collectPathfindingCandidates(ServerLevel level,
+    private static void collectPathfindingCandidates(DebugServerState state,
+                                                      ServerLevel level,
                                                       Vec3 origin,
                                                       double radius,
                                                       double radiusSqr,
                                                       List<Candidate> candidates) {
         AABB queryBounds = AABB.ofSize(origin, radius * 2.0D, radius * 2.0D, radius * 2.0D);
         long currentTick = level.getGameTime();
-        REQUESTED_PATH_TARGETS.entrySet().removeIf(entry -> {
+        state.requestedPathTargets.entrySet().removeIf(entry -> {
             RequestedPathTarget target = entry.getValue();
             return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
         });
-        FOLLOW_TARGETS.entrySet().removeIf(entry -> {
+        state.followTargets.entrySet().removeIf(entry -> {
             FollowTarget target = entry.getValue();
             return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
         });
-        PATROL_ROUTES.entrySet().removeIf(entry -> {
+        state.patrolRoutes.entrySet().removeIf(entry -> {
             PatrolRoute route = entry.getValue();
             return route.dimension().equals(level.dimension())
                     && (level.getEntity(entry.getKey()) == null
@@ -611,9 +657,9 @@ public final class DebugRendererSessionManager {
         List<Mob> mobs = level.getEntitiesOfClass(Mob.class, queryBounds, mob -> {
             Path path = mob.getNavigation().getPath();
             return !mob.isRemoved() && (path != null && !path.isDone()
-                    || requestedPathTarget(mob, level, currentTick) != null
-                    || followTarget(mob, level, currentTick) != null
-                    || patrolRoute(mob, level) != null);
+                    || requestedPathTarget(state, mob, level, currentTick) != null
+                    || followTarget(state, mob, level, currentTick) != null
+                    || patrolRoute(state, mob, level) != null);
         });
         mobs.sort((left, right) -> Double.compare(left.distanceToSqr(origin), right.distanceToSqr(origin)));
 
@@ -622,9 +668,9 @@ public final class DebugRendererSessionManager {
             Mob mob = mobs.get(i);
             if (mob.distanceToSqr(origin) > radiusSqr) continue;
             Path path = mob.getNavigation().getPath();
-            RequestedPathTarget requested = requestedPathTarget(mob, level, currentTick);
-            FollowTarget follow = followTarget(mob, level, currentTick);
-            PatrolRoute patrol = patrolRoute(mob, level);
+            RequestedPathTarget requested = requestedPathTarget(state, mob, level, currentTick);
+            FollowTarget follow = followTarget(state, mob, level, currentTick);
+            PatrolRoute patrol = patrolRoute(state, mob, level);
             if (follow != null) addFollowLine(level, mob, follow, candidates, origin);
             if (patrol != null) addPatrolRoute(mob, patrol, candidates, origin);
             if (path == null || path.isDone()) {
@@ -648,20 +694,22 @@ public final class DebugRendererSessionManager {
         }
     }
 
-    private static RequestedPathTarget requestedPathTarget(Mob mob, ServerLevel level, long currentTick) {
-        RequestedPathTarget target = REQUESTED_PATH_TARGETS.get(mob.getUUID());
+    private static RequestedPathTarget requestedPathTarget(DebugServerState state, Mob mob,
+                                                           ServerLevel level, long currentTick) {
+        RequestedPathTarget target = state.requestedPathTargets.get(mob.getUUID());
         return target != null && target.dimension().equals(level.dimension()) && target.expiresAt() >= currentTick
                 ? target : null;
     }
 
-    private static FollowTarget followTarget(Mob mob, ServerLevel level, long currentTick) {
-        FollowTarget target = FOLLOW_TARGETS.get(mob.getUUID());
+    private static FollowTarget followTarget(DebugServerState state, Mob mob,
+                                             ServerLevel level, long currentTick) {
+        FollowTarget target = state.followTargets.get(mob.getUUID());
         return target != null && target.dimension().equals(level.dimension())
                 && target.expiresAt() >= currentTick ? target : null;
     }
 
-    private static PatrolRoute patrolRoute(Mob mob, ServerLevel level) {
-        PatrolRoute route = PATROL_ROUTES.get(mob.getUUID());
+    private static PatrolRoute patrolRoute(DebugServerState state, Mob mob, ServerLevel level) {
+        PatrolRoute route = state.patrolRoutes.get(mob.getUUID());
         return route != null && route.dimension().equals(level.dimension()) ? route : null;
     }
 
@@ -802,14 +850,19 @@ public final class DebugRendererSessionManager {
     }
 
     private static void refreshPlayer(ServerPlayer player, Session session) {
-        MeshSnapshot snapshot = collectSnapshot(player, session);
+        DebugServerState state = state(player.level().getServer());
+        MeshSnapshot snapshot = collectSnapshot(state, player, session);
         sendSnapshot(player, session, snapshot);
-        updateBaseline(player, session, snapshot);
+        updateBaseline(state, player, session, snapshot);
     }
 
     private static void finishDisableOrRefresh(ServerPlayer player, Session session) {
         if (!session.hasAnyChannel()) {
-            SESSIONS.remove(player.getUUID());
+            MinecraftServer server = player.level().getServer();
+            DebugServerState state = state(server);
+            state.sessions.remove(player.getUUID());
+            clearRequestedPathTargetsIfUnused(state);
+            discardStateIfEmpty(server, state);
             sendDisabledSnapshot(player);
             return;
         }
@@ -821,11 +874,33 @@ public final class DebugRendererSessionManager {
         NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(false, 0.0D, List.of()));
     }
 
-    private static void updateBaseline(ServerPlayer player, Session session, MeshSnapshot snapshot) {
+    private static void updateBaseline(DebugServerState state, ServerPlayer player,
+                                       Session session, MeshSnapshot snapshot) {
         session.lastPosition = player.position();
         session.lastDimension = player.level().dimension();
-        session.lastDirtyVersion = dirtyVersion;
+        session.lastDirtyVersion = state.dirtyVersion;
         session.lastSignature = snapshot.signature;
+    }
+
+    private static Session session(ServerPlayer player) {
+        DebugServerState state = getState(player.level().getServer());
+        return state != null ? state.sessions.get(player.getUUID()) : null;
+    }
+
+    private static DebugServerState state(MinecraftServer server) {
+        return SERVERS.computeIfAbsent(server, ignored -> new DebugServerState());
+    }
+
+    private static DebugServerState getState(MinecraftServer server) {
+        return SERVERS.get(server);
+    }
+
+    private static void markDirty(DebugServerState state) {
+        state.dirtyVersion++;
+    }
+
+    private static void discardStateIfEmpty(MinecraftServer server, DebugServerState state) {
+        if (state.isEmpty()) SERVERS.remove(server, state);
     }
 
     private static long sourceSignature(List<GeometryDebugElement> meshes) {
@@ -901,6 +976,21 @@ public final class DebugRendererSessionManager {
 
     private record PatrolRoute(ResourceKey<Level> dimension, List<Vec3> waypoints,
                                int completedCount, boolean loop) {
+    }
+
+    private static final class DebugServerState {
+        private final Map<UUID, Session> sessions = new HashMap<>();
+        private final Map<UUID, RequestedPathTarget> requestedPathTargets = new HashMap<>();
+        private final Map<UUID, FollowTarget> followTargets = new HashMap<>();
+        private final Map<UUID, PatrolRoute> patrolRoutes = new HashMap<>();
+        private final Map<ServerLevel, LevelCache> levelCaches = new IdentityHashMap<>();
+        private long dirtyVersion;
+
+        private boolean isEmpty() {
+            return sessions.isEmpty() && requestedPathTargets.isEmpty()
+                    && followTargets.isEmpty() && patrolRoutes.isEmpty()
+                    && levelCaches.isEmpty();
+        }
     }
 
     private static final class LevelCache {

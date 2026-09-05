@@ -66,6 +66,7 @@ public class CreateSchematicProjection extends BaseNode {
     private static final float DEFAULT_ALPHA = 0.38f;
     private static final float DEFAULT_VIEW_RANGE = 128.0f;
     private static final int DEFAULT_DURATION_TICKS = 200;
+    private static final int MAX_DURATION_TICKS = 72_000;
     private static final int DIRECT_SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
 
     @Override
@@ -126,7 +127,8 @@ public class CreateSchematicProjection extends BaseNode {
     private static void addDebugRows(NodeDef.Builder builder) {
         builder.addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX);
         builder.addPassthroughInput(StandardPorts.ALPHA.toInput(DEFAULT_ALPHA), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0.05f, PortMetaKeys.NUMERIC_MAX, 1.0f));
-        builder.addPassthroughInput(StandardPorts.TICK.toInput(DEFAULT_DURATION_TICKS), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1));
+        builder.addPassthroughInput(StandardPorts.TICK.toInput(DEFAULT_DURATION_TICKS), UIHint.INPUT, null,
+                Map.of(PortMetaKeys.NUMERIC_MIN, 1, PortMetaKeys.NUMERIC_MAX, MAX_DURATION_TICKS));
         builder.addPassthroughInput(StandardPorts.RADIUS.toInput(DEFAULT_VIEW_RANGE), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 1.0f));
     }
 
@@ -209,6 +211,7 @@ public class CreateSchematicProjection extends BaseNode {
 
         BlockPos origin = BlockPos.containing(originValue);
         PacketPayloadData payloadData = toPacketPayload(data.blocks());
+        PacketNbtPayloadData nbtPayloadData = toPacketNbtPayload(data.blockEntities(), data.entities());
         PacketSchematicProjection packet = new PacketSchematicProjection(
                 GraphResourceIdCodec.encode(resourceId),
                 context.getGraphId(),
@@ -221,11 +224,11 @@ public class CreateSchematicProjection extends BaseNode {
                 data.length(),
                 durationTicks,
                 alpha,
-                data.truncated(),
+                data.truncated() || payloadData.truncated() || nbtPayloadData.truncated(),
                 payloadData.states(),
                 payloadData.blocks(),
-                toPacketBlockEntities(data.blockEntities()),
-                toPacketEntities(data.entities())
+                nbtPayloadData.blockEntities(),
+                nbtPayloadData.entities()
         );
 
         List<ServerPlayer> targets = projectionTargets(context, level, origin.getCenter(), viewRange, onlySelfVisible);
@@ -403,31 +406,67 @@ public class CreateSchematicProjection extends BaseNode {
 
     private static PacketPayloadData toPacketPayload(List<SchematicData.Block> blocks) {
         LinkedHashMap<String, Integer> palette = new LinkedHashMap<>();
-        List<PacketSchematicProjection.Block> packetBlocks = new ArrayList<>(blocks.size());
+        List<PacketSchematicProjection.Block> packetBlocks = new ArrayList<>(
+                Math.min(blocks.size(), PacketSchematicProjection.MAX_BLOCKS));
+        boolean truncated = false;
         for (SchematicData.Block block : blocks) {
             if (block.color() == 0) {
                 continue;
             }
-            int stateIndex = palette.computeIfAbsent(block.state(), ignored -> palette.size());
+            if (packetBlocks.size() >= PacketSchematicProjection.MAX_BLOCKS) {
+                truncated = true;
+                break;
+            }
+            String state = block.state() == null ? "" : block.state();
+            if (state.length() > PacketSchematicProjection.MAX_STATE_LENGTH) {
+                truncated = true;
+                continue;
+            }
+            Integer stateIndex = palette.get(state);
+            if (stateIndex == null) {
+                if (palette.size() >= PacketSchematicProjection.MAX_STATES) {
+                    truncated = true;
+                    continue;
+                }
+                stateIndex = palette.size();
+                palette.put(state, stateIndex);
+            }
             packetBlocks.add(new PacketSchematicProjection.Block(block.x(), block.y(), block.z(), stateIndex, block.color()));
         }
-        return new PacketPayloadData(new ArrayList<>(palette.keySet()), packetBlocks);
+        return new PacketPayloadData(new ArrayList<>(palette.keySet()), packetBlocks, truncated);
     }
 
-    private static List<PacketSchematicProjection.BlockEntity> toPacketBlockEntities(List<SchematicData.BlockEntity> blockEntities) {
-        List<PacketSchematicProjection.BlockEntity> packetBlockEntities = new ArrayList<>(blockEntities.size());
+    private static PacketNbtPayloadData toPacketNbtPayload(List<SchematicData.BlockEntity> blockEntities,
+                                                           List<SchematicData.Entity> entities) {
+        List<PacketSchematicProjection.BlockEntity> packetBlockEntities = new ArrayList<>(
+                Math.min(blockEntities.size(), PacketSchematicProjection.MAX_BLOCK_ENTITIES));
+        List<PacketSchematicProjection.Entity> packetEntities = new ArrayList<>(
+                Math.min(entities.size(), PacketSchematicProjection.MAX_ENTITIES));
+        long totalNbtBytes = 0L;
+        boolean truncated = false;
         for (SchematicData.BlockEntity blockEntity : blockEntities) {
+            long nbtBytes = blockEntity.tag() == null ? 0L : blockEntity.tag().sizeInBytes();
+            if (packetBlockEntities.size() >= PacketSchematicProjection.MAX_BLOCK_ENTITIES
+                    || nbtBytes > PacketSchematicProjection.MAX_NBT_BYTES
+                    || totalNbtBytes + nbtBytes > PacketSchematicProjection.MAX_TOTAL_NBT_BYTES) {
+                truncated = true;
+                continue;
+            }
             packetBlockEntities.add(new PacketSchematicProjection.BlockEntity(blockEntity.x(), blockEntity.y(), blockEntity.z(), blockEntity.tag()));
+            totalNbtBytes += nbtBytes;
         }
-        return packetBlockEntities;
-    }
-
-    private static List<PacketSchematicProjection.Entity> toPacketEntities(List<SchematicData.Entity> entities) {
-        List<PacketSchematicProjection.Entity> packetEntities = new ArrayList<>(entities.size());
         for (SchematicData.Entity entity : entities) {
+            long nbtBytes = entity.tag() == null ? 0L : entity.tag().sizeInBytes();
+            if (packetEntities.size() >= PacketSchematicProjection.MAX_ENTITIES
+                    || nbtBytes > PacketSchematicProjection.MAX_NBT_BYTES
+                    || totalNbtBytes + nbtBytes > PacketSchematicProjection.MAX_TOTAL_NBT_BYTES) {
+                truncated = true;
+                continue;
+            }
             packetEntities.add(new PacketSchematicProjection.Entity(entity.x(), entity.y(), entity.z(), entity.tag()));
+            totalNbtBytes += nbtBytes;
         }
-        return packetEntities;
+        return new PacketNbtPayloadData(packetBlockEntities, packetEntities, truncated);
     }
 
     private static List<ServerPlayer> projectionTargets(ExecutionContext context,
@@ -589,12 +628,20 @@ public class CreateSchematicProjection extends BaseNode {
         if (value == null || value <= 0) {
             return DEFAULT_DURATION_TICKS;
         }
-        return Math.max(1, value);
+        return Math.clamp(value, 1, MAX_DURATION_TICKS);
     }
 
     private record PacketPayloadData(
             List<String> states,
-            List<PacketSchematicProjection.Block> blocks
+            List<PacketSchematicProjection.Block> blocks,
+            boolean truncated
+    ) {
+    }
+
+    private record PacketNbtPayloadData(
+            List<PacketSchematicProjection.BlockEntity> blockEntities,
+            List<PacketSchematicProjection.Entity> entities,
+            boolean truncated
     ) {
     }
 

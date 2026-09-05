@@ -17,6 +17,11 @@ public interface GraphQueryTarget extends CommandInvocationContext.CommandTarget
                                   String connectionDirection, List<String> connectionKinds,
                                   int offset, int limit);
 
+    CommandResult getGraphMetadata(List<String> select);
+
+    CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags, String parentFrame,
+                                   List<String> select, int offset, int limit);
+
     CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit);
 
     CommandResult validateGraph(int offset, int limit);

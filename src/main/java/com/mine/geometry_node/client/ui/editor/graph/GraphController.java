@@ -14,12 +14,14 @@ import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorMoveToNode
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -394,55 +396,129 @@ public class GraphController {
         if (removeIndex < 1 || removeIndex > totalCount) return;
         ensurePortConfig(node);
 
-        for (int i = removeIndex; i < totalCount; i++) {
-            String oldSuffix = "_" + (i + 1);
-            String newSuffix = "_" + i;
-            shiftMapData(node.inputs, oldSuffix, newSuffix);
-            shiftMapData(node.outputs, oldSuffix, newSuffix);
-            shiftMapData(node.execOutputs, oldSuffix, newSuffix);
-            shiftPortConfig(node.portConfig, oldSuffix, newSuffix);
-            shiftConnections(nodeId, oldSuffix, newSuffix);
-        }
+        NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
+        if (definition == null) return;
+        DynamicPortPlan inputPlan = dynamicPortPlan(definition, true, removeIndex, totalCount);
+        DynamicPortPlan outputPlan = dynamicPortPlan(definition, false, removeIndex, totalCount);
 
-        String lastSuffix = "_" + totalCount;
-        node.inputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-        node.outputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-        node.execOutputs.keySet().removeIf(k -> k.endsWith(lastSuffix));
-        removePortConfigSuffix(node.portConfig, lastSuffix);
-        shiftConnections(nodeId, lastSuffix, null);
+        shiftDynamicMap(node.inputs, inputPlan);
+        shiftDynamicMap(node.outputs, outputPlan);
+        shiftDynamicMap(node.execOutputs, outputPlan);
+        shiftDynamicMap(node.portConfig.inputs, inputPlan);
+        shiftDynamicMap(node.portConfig.execInputs, inputPlan);
+        shiftDynamicMap(node.portConfig.outputs, outputPlan);
+        shiftDynamicMap(node.portConfig.execOutputs, outputPlan);
+        shiftInboundConnections(nodeId, inputPlan);
+        rebuildConnectedInputs(node);
 
         setNodeInputValue(nodeId, propertyKey, totalCount - 1);
+        mContext.notifyGraphConnectionsRebuildRequested();
     }
 
-    private <V> void shiftMapData(java.util.Map<String, V> map, String oldSuffix, String newSuffix) {
-        map.keySet().removeIf(k -> k.endsWith(newSuffix));
-
-        Map<String, V> toMove = new java.util.HashMap<>();
-        for (Map.Entry<String, V> entry : map.entrySet()) {
-            if (entry.getKey().endsWith(oldSuffix)) {
-                String newKey = entry.getKey().substring(0, entry.getKey().length() - oldSuffix.length()) + newSuffix;
-                toMove.put(newKey, entry.getValue());
+    private static DynamicPortPlan dynamicPortPlan(NodeDef definition, boolean inputSide,
+                                                   int removeIndex, int totalCount) {
+        Map<Integer, List<String>> groups = new LinkedHashMap<>();
+        Integer activeIndex = null;
+        for (PortRow row : definition.rows()) {
+            boolean dynamic = row.hintParams() != null
+                    && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
+            if (!dynamic) {
+                activeIndex = null;
+                continue;
             }
+            Object declaredIndex = row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX);
+            if (declaredIndex instanceof Number number) activeIndex = number.intValue();
+            if (activeIndex == null) continue;
+            var port = inputSide ? row.leftPort() : row.rightPort();
+            if (port != null) groups.computeIfAbsent(activeIndex, ignored -> new ArrayList<>()).add(port.id());
         }
 
-        map.keySet().removeIf(k -> k.endsWith(oldSuffix));
-        map.putAll(toMove);
+        Map<String, Integer> indices = new LinkedHashMap<>();
+        groups.forEach((index, ports) -> ports.forEach(port -> indices.put(port, index)));
+        Map<String, String> renames = new LinkedHashMap<>();
+        for (int index = removeIndex + 1; index <= totalCount; index++) {
+            List<String> sources = groups.getOrDefault(index, List.of());
+            List<String> targets = groups.getOrDefault(index - 1, List.of());
+            String oldSuffix = "_" + index;
+            String newSuffix = "_" + (index - 1);
+            for (int port = 0; port < sources.size(); port++) {
+                String source = sources.get(port);
+                if (source.endsWith(oldSuffix)) {
+                    renames.put(source,
+                            source.substring(0, source.length() - oldSuffix.length()) + newSuffix);
+                } else if (sources.size() == targets.size()) {
+                    renames.put(source, targets.get(port));
+                } else {
+                    throw new IllegalStateException(
+                            "Dynamic port IDs must carry their branch index when branch shapes differ");
+                }
+            }
+        }
+        return new DynamicPortPlan(indices, renames, removeIndex);
     }
 
-    private void shiftPortConfig(NodeData.PortsConfig settings, String oldSuffix, String newSuffix) {
-        if (settings == null) return;
-        shiftMapData(settings.inputs, oldSuffix, newSuffix);
-        shiftMapData(settings.execInputs, oldSuffix, newSuffix);
-        shiftMapData(settings.outputs, oldSuffix, newSuffix);
-        shiftMapData(settings.execOutputs, oldSuffix, newSuffix);
+    private static <V> void shiftDynamicMap(Map<String, V> values, DynamicPortPlan plan) {
+        if (values == null || values.isEmpty()) return;
+        Map<String, V> original = new LinkedHashMap<>(values);
+        values.keySet().removeIf(key -> plan.isAffected(key));
+        for (Map.Entry<String, String> rename : plan.renames().entrySet()) {
+            if (original.containsKey(rename.getKey())) values.put(rename.getValue(), original.get(rename.getKey()));
+        }
     }
 
-    private void removePortConfigSuffix(NodeData.PortsConfig settings, String suffix) {
-        if (settings == null) return;
-        settings.inputs.keySet().removeIf(k -> k.endsWith(suffix));
-        settings.execInputs.keySet().removeIf(k -> k.endsWith(suffix));
-        settings.outputs.keySet().removeIf(k -> k.endsWith(suffix));
-        settings.execOutputs.keySet().removeIf(k -> k.endsWith(suffix));
+    private void shiftInboundConnections(String targetNodeId, DynamicPortPlan plan) {
+        for (NodeData source : mContext.getCurrentGraph().nodes.values()) {
+            for (Map.Entry<String, List<Connection>> entry : source.outputs.entrySet()) {
+                List<Connection> shifted = new ArrayList<>();
+                for (Connection connection : entry.getValue()) {
+                    shifted.add(shiftInboundConnection(connection, targetNodeId, plan));
+                }
+                entry.getValue().clear();
+                shifted.stream().filter(java.util.Objects::nonNull).forEach(entry.getValue()::add);
+            }
+            for (Map.Entry<String, Connection> entry : new ArrayList<>(source.execOutputs.entrySet())) {
+                Connection shifted = shiftInboundConnection(entry.getValue(), targetNodeId, plan);
+                if (shifted == null) source.execOutputs.remove(entry.getKey());
+                else source.execOutputs.put(entry.getKey(), shifted);
+            }
+        }
+    }
+
+    private static Connection shiftInboundConnection(Connection connection, String targetNodeId,
+                                                       DynamicPortPlan plan) {
+        if (connection == null || !targetNodeId.equals(connection.targetNodeId())) return connection;
+        Integer index = plan.indices().get(connection.targetPortName());
+        if (index == null || index < plan.removeIndex()) return connection;
+        if (index == plan.removeIndex()) return null;
+        String renamed = plan.renames().get(connection.targetPortName());
+        return renamed == null ? null : new Connection(targetNodeId, renamed);
+    }
+
+    private void rebuildConnectedInputs(NodeData target) {
+        target.connectedInputs.clear();
+        for (NodeData source : mContext.getCurrentGraph().nodes.values()) {
+            for (List<Connection> connections : source.outputs.values()) {
+                for (Connection connection : connections) {
+                    if (target.id.equals(connection.targetNodeId())) {
+                        target.connectedInputs.add(connection.targetPortName());
+                    }
+                }
+            }
+            for (Connection connection : source.execOutputs.values()) {
+                if (connection != null && target.id.equals(connection.targetNodeId())) {
+                    target.connectedInputs.add(connection.targetPortName());
+                }
+            }
+        }
+    }
+
+    private record DynamicPortPlan(Map<String, Integer> indices,
+                                   Map<String, String> renames,
+                                   int removeIndex) {
+        private boolean isAffected(String portId) {
+            Integer index = indices.get(portId);
+            return index != null && index >= removeIndex;
+        }
     }
 
     private void removeInvalidPortConfig(Map<String, NodeData.PortConfig> settings, Set<String> validPorts) {
@@ -452,44 +528,6 @@ public class GraphController {
 
     private void ensurePortConfig(NodeData node) {
         node.ensurePortConfig();
-    }
-
-    private void shiftConnections(String targetNodeId, String oldSuffix, String newSuffix) {
-        List<Runnable> connectionUpdates = new ArrayList<>();
-
-        for (NodeData otherNode : mContext.getCurrentGraph().nodes.values()) {
-            for (String outPort : otherNode.outputs.keySet()) {
-                for (Connection link : otherNode.getConnections(outPort)) {
-                    if (link.targetNodeId().equals(targetNodeId) && link.targetPortName().endsWith(oldSuffix)) {
-                        connectionUpdates.add(() -> {
-                            removeConnection(otherNode.id, outPort, targetNodeId, link.targetPortName());
-                            if (newSuffix != null) {
-                                String newPortName = link.targetPortName().substring(0, link.targetPortName().length() - oldSuffix.length()) + newSuffix;
-                                addConnection(otherNode.id, outPort, targetNodeId, newPortName);
-                            }
-                        });
-                    }
-                }
-            }
-            for (Map.Entry<String, Connection> entry : otherNode.execOutputs.entrySet()) {
-                String outPort = entry.getKey();
-                Connection link = entry.getValue();
-                if (link.targetNodeId().equals(targetNodeId) && link.targetPortName().endsWith(oldSuffix)) {
-                    connectionUpdates.add(() -> {
-                        removeExecutionConnection(otherNode.id, outPort);
-                        if (newSuffix != null) {
-                            String newPortName = link.targetPortName().substring(
-                                    0, link.targetPortName().length() - oldSuffix.length()) + newSuffix;
-                            addExecutionConnection(otherNode.id, outPort, targetNodeId, newPortName);
-                        }
-                    });
-                }
-            }
-        }
-
-        for (Runnable r : connectionUpdates) {
-            r.run();
-        }
     }
 
     public PortType getResolvedPortType(String nodeId, String portId, boolean inputSide) {

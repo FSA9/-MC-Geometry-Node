@@ -38,6 +38,11 @@ final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTa
     @Override public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         return unavailable();
     }
+    @Override public CommandResult getGraphMetadata(List<String> select) { return unavailable(); }
+    @Override public CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags,
+                                                    String parentFrame, List<String> select, int offset, int limit) {
+        return unavailable();
+    }
     @Override public CommandResult validateGraph(int offset, int limit) { return unavailable(); }
     @Override public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
         return unavailable();
@@ -51,7 +56,7 @@ final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTa
         }
         List<UiSurfaceRegistry.Lease<ViewportSurface>> viewports = UiSurfaceRegistry.INSTANCE
                 .leases(UiSurfaceType.VIEWPORT, ViewportSurface.class).stream()
-                .filter(lease -> lease.visible() && lease.owner().currentGraphSession() != null).toList();
+                .filter(lease -> lease.visible() && !lease.owner().openGraphSessions().isEmpty()).toList();
         String defaultViewport = viewports.stream().filter(lease -> lease.interactionSerial() > 0)
                 .max(java.util.Comparator.comparingLong(UiSurfaceRegistry.Lease::interactionSerial))
                 .or(() -> viewports.size() == 1 ? java.util.Optional.of(viewports.getFirst())
@@ -77,8 +82,24 @@ final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTa
         if (id.type() == UiSurfaceType.VIEWPORT) {
             UiSurfaceRegistry.Lease<ViewportSurface> lease = UiSurfaceRegistry.INSTANCE
                     .lease(id, ViewportSurface.class).orElse(null);
-            GraphSession session = lease == null ? null : lease.owner().currentGraphSession();
+            ViewportSurface viewport = lease == null ? null : lease.owner();
+            GraphSession session = viewport == null ? null : viewport.currentGraphSession();
             data.addProperty("has_graph", session != null);
+            JsonArray tabs = new JsonArray();
+            if (viewport != null) {
+                for (GraphSession openSession : viewport.openGraphSessions()) {
+                    if (openSession == null || openSession.fileReference().isDeleted()) continue;
+                    BoundGraphScope openScope = BoundGraphScope.capture(openSession.editorContext);
+                    JsonObject tab = new JsonObject();
+                    tab.addProperty("tab_name", openSession.tabName);
+                    tab.addProperty("session_id", openSession.sessionId().toString());
+                    tab.addProperty("scope_id", openScope.id());
+                    tab.addProperty("revision", openSession.revision());
+                    tab.addProperty("current", openSession == session);
+                    tabs.add(tab);
+                }
+            }
+            data.add("tabs", tabs);
             if (session != null) {
                 BoundGraphScope scope = BoundGraphScope.capture(session.editorContext);
                 data.addProperty("tab_name", session.tabName);

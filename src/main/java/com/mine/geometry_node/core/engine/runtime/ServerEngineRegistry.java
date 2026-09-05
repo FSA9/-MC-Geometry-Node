@@ -11,6 +11,7 @@ public final class ServerEngineRegistry {
     public static final ServerEngineRegistry INSTANCE = new ServerEngineRegistry();
 
     private final Map<String, ServerEngine> engines = new LinkedHashMap<>();
+    private volatile List<ServerEngine> snapshot = List.of();
 
     private ServerEngineRegistry() {
     }
@@ -24,9 +25,10 @@ public final class ServerEngineRegistry {
         if (existing != null) throw new IllegalStateException("Duplicate server engine: " + id);
         engine.init();
         engines.put(id, engine);
+        snapshot = List.copyOf(engines.values());
     }
 
-    public synchronized Collection<ServerEngine> all() {
-        return List.copyOf(engines.values());
+    public Collection<ServerEngine> all() {
+        return snapshot;
     }
 }

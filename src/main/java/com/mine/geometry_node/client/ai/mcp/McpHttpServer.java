@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ai.mcp;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.sun.net.httpserver.HttpExchange;
@@ -217,6 +218,23 @@ public final class McpHttpServer implements AutoCloseable {
             sendJson(exchange, 400, jsonRpcError(-32600, "Request method is required"));
             return;
         }
+        String negotiatedVersion = dispatcher.initializedProtocolVersion();
+        if (negotiatedVersion != null) {
+            List<String> protocolHeaders = headerValues(exchange, "MCP-Protocol-Version");
+            if (protocolHeaders.size() != 1) {
+                exchange.getResponseHeaders().set("MCP-Protocol-Version", negotiatedVersion);
+                sendJson(exchange, 400, invalidProtocolVersion(request, "", negotiatedVersion,
+                        "MCP-Protocol-Version header is missing or repeated"));
+                return;
+            }
+            String requestedVersion = normalize(protocolHeaders.get(0));
+            if (!negotiatedVersion.equals(requestedVersion)) {
+                exchange.getResponseHeaders().set("MCP-Protocol-Version", negotiatedVersion);
+                sendJson(exchange, 400, invalidProtocolVersion(request, requestedVersion, negotiatedVersion,
+                        "MCP-Protocol-Version does not match the negotiated version"));
+                return;
+            }
+        }
         if (!isSupportedMethod(method) && !method.startsWith("notifications/")) {
             sendJson(exchange, 404, jsonRpcError(-32601, "Method not found: " + method));
             return;
@@ -294,57 +312,34 @@ public final class McpHttpServer implements AutoCloseable {
         return response;
     }
 
-    private static JsonObject unsupportedProtocolVersion(String requested) {
-        JsonObject response = jsonRpcError(-32022, "Unsupported MCP protocol version");
+    private static JsonObject invalidProtocolVersion(JsonObject request, String requested,
+                                                     String expected, String message) {
+        JsonObject response = jsonRpcError(request.get("id"), -32022, message);
         JsonObject data = new JsonObject();
-        com.google.gson.JsonArray supported = new com.google.gson.JsonArray();
-        supported.add("2025-06-18");
-        supported.add(McpRequestDispatcher.MCP_PROTOCOL_VERSION);
-        data.add("supported", supported);
         data.addProperty("requested", requested);
+        data.addProperty("expected", expected);
         response.getAsJsonObject("error").add("data", data);
+        return response;
+    }
+
+    private static JsonObject jsonRpcError(JsonElement id, int code, String message) {
+        JsonObject response = jsonRpcError(code, message);
+        if (id != null && (id.isJsonNull() || id.isJsonPrimitive())) response.add("id", id.deepCopy());
         return response;
     }
 
     private static boolean isSupportedMethod(String method) {
         return switch (method) {
             case "initialize", "notifications/initialized", "notifications/cancelled",
-                    "resources/list", "resources/templates/list", "resources/read",
                     "tools/list", "tools/call" -> true;
             default -> false;
         };
-    }
-
-    private static String requestMetadataString(JsonObject request, String key) {
-        JsonObject params = request.has("params") && request.get("params").isJsonObject()
-                ? request.getAsJsonObject("params") : null;
-        JsonObject metadata = params != null && params.has("_meta") && params.get("_meta").isJsonObject()
-                ? params.getAsJsonObject("_meta") : null;
-        return metadata == null ? "" : string(metadata, key);
-    }
-
-    private static String requestName(JsonObject request, String method) {
-        if (!"tools/call".equals(method) && !"resources/read".equals(method)) return null;
-        JsonObject params = request.has("params") && request.get("params").isJsonObject()
-                ? request.getAsJsonObject("params") : null;
-        return params == null ? "" : string(params, "tools/call".equals(method) ? "name" : "uri");
     }
 
     private static String string(JsonObject object, String key) {
         if (object == null || !object.has(key) || !object.get(key).isJsonPrimitive()
                 || !object.getAsJsonPrimitive(key).isString()) return "";
         return object.get(key).getAsString();
-    }
-
-    private static String decodeHeaderValue(String value) {
-        value = normalize(value);
-        if (!value.startsWith("=?base64?") || !value.endsWith("?=")) return value;
-        try {
-            String encoded = value.substring(9, value.length() - 2);
-            return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException malformed) {
-            return "";
-        }
     }
 
     private static String header(HttpExchange exchange, String name) {

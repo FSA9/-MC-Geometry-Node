@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.blueprint.event.subscription;
 
-import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import net.minecraft.world.entity.Entity;
@@ -23,8 +22,10 @@ import java.util.WeakHashMap;
 public final class GraphSubscriptionIndex {
     private final Map<String, Map<String, List<EventSubscription>>> globalSubscriptions = new HashMap<>();
     private final Map<String, Map<Entity, Map<String, List<EventSubscription>>>> entitySubscriptions = new HashMap<>();
-    private final Map<String, BlueprintPlan> registeredGlobalGraphs = new HashMap<>();
-    private final Map<Entity, Map<String, BlueprintPlan>> registeredEntityGraphs = new WeakHashMap<>();
+    private final Map<String, CompiledGraphSubscriptions> templatesByGraphId = new HashMap<>();
+    private final Map<String, CompiledGraphSubscriptions> registeredGlobalGraphs = new HashMap<>();
+    private final Map<Entity, Map<String, CompiledGraphSubscriptions>> registeredEntityGraphs = new WeakHashMap<>();
+    private final Map<String, Map<Entity, Set<String>>> receiveSubscribers = new HashMap<>();
 
     public boolean isGlobalGraphRegistered(String graphId) {
         return registeredGlobalGraphs.containsKey(graphId);
@@ -54,18 +55,20 @@ public final class GraphSubscriptionIndex {
     }
 
     public void registerGlobalGraph(String graphId, BlueprintPlan plan) {
-        BlueprintPlan previous = registeredGlobalGraphs.get(graphId);
-        if (previous == plan) return;
+        CompiledGraphSubscriptions template = template(graphId, plan);
+        CompiledGraphSubscriptions previous = registeredGlobalGraphs.get(graphId);
+        if (previous == template) return;
         if (previous != null) removeGlobalSubscriptions(graphId, previous);
-        registeredGlobalGraphs.put(graphId, plan);
-        addGlobalSubscriptions(graphId, plan);
+        registeredGlobalGraphs.put(graphId, template);
+        addGlobalSubscriptions(graphId, template);
     }
 
     public void unregisterGlobalGraph(String graphId, @Nullable BlueprintPlan plan) {
-        BlueprintPlan registered = registeredGlobalGraphs.remove(graphId);
-        BlueprintPlan cleanupPlan = registered != null ? registered : plan;
-        if (cleanupPlan != null) {
-            removeGlobalSubscriptions(graphId, cleanupPlan);
+        CompiledGraphSubscriptions registered = registeredGlobalGraphs.remove(graphId);
+        if (registered != null) {
+            removeGlobalSubscriptions(graphId, registered);
+        } else if (plan != null) {
+            removeGlobalSubscriptions(graphId, cleanupTemplate(graphId, plan));
         } else {
             globalSubscriptions.values().removeIf(graphs -> {
                 graphs.remove(graphId);
@@ -75,28 +78,57 @@ public final class GraphSubscriptionIndex {
     }
 
     public void registerEntityGraph(Entity entity, String graphId, BlueprintPlan plan) {
-        Map<String, BlueprintPlan> graphs = registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
-        BlueprintPlan previous = graphs.get(graphId);
-        if (previous == plan) return;
+        CompiledGraphSubscriptions template = template(graphId, plan);
+        Map<String, CompiledGraphSubscriptions> graphs =
+                registeredEntityGraphs.computeIfAbsent(entity, ignored -> new HashMap<>());
+        CompiledGraphSubscriptions previous = graphs.get(graphId);
+        if (previous == template) return;
         if (previous != null) removeEntitySubscriptions(entity, graphId, previous);
-        graphs.put(graphId, plan);
-        addEntitySubscriptions(entity, graphId, plan);
+        graphs.put(graphId, template);
+        addEntitySubscriptions(entity, graphId, template);
     }
 
     public void unregisterEntityGraph(Entity entity, String graphId, @Nullable BlueprintPlan plan) {
-        Map<String, BlueprintPlan> graphs = registeredEntityGraphs.get(entity);
-        BlueprintPlan registered = graphs != null ? graphs.remove(graphId) : null;
+        Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.get(entity);
+        CompiledGraphSubscriptions registered = graphs != null ? graphs.remove(graphId) : null;
         if (graphs != null && graphs.isEmpty()) registeredEntityGraphs.remove(entity);
 
-        BlueprintPlan cleanupPlan = registered != null ? registered : plan;
-        if (cleanupPlan != null) {
-            removeEntitySubscriptions(entity, graphId, cleanupPlan);
+        if (registered != null) {
+            removeEntitySubscriptions(entity, graphId, registered);
+        } else if (plan != null) {
+            removeEntitySubscriptions(entity, graphId, cleanupTemplate(graphId, plan));
         } else {
             entitySubscriptions.values().removeIf(entities -> {
                 removeEntityGraph(entities, entity, graphId);
                 return entities.isEmpty();
             });
+            receiveSubscribers.values().removeIf(entities -> {
+                Set<String> graphIds = entities.get(entity);
+                if (graphIds != null) {
+                    graphIds.remove(graphId);
+                    if (graphIds.isEmpty()) entities.remove(entity);
+                }
+                return entities.isEmpty();
+            });
         }
+    }
+
+    public void unregisterEntity(Entity entity) {
+        Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.remove(entity);
+        if (graphs == null) return;
+        graphs.forEach((graphId, template) -> removeEntitySubscriptions(entity, graphId, template));
+    }
+
+    public void discardTemplate(String graphId) {
+        templatesByGraphId.remove(graphId);
+    }
+
+    public Map<Entity, Set<String>> receiveSubscribersFor(String frequency) {
+        Map<Entity, Set<String>> entities = receiveSubscribers.get(frequency);
+        if (entities == null || entities.isEmpty()) return Collections.emptyMap();
+        Map<Entity, Set<String>> snapshot = new LinkedHashMap<>();
+        entities.forEach((entity, graphIds) -> snapshot.put(entity, Set.copyOf(graphIds)));
+        return Map.copyOf(snapshot);
     }
 
     public Set<String> globalGraphsFor(String eventType) {
@@ -133,29 +165,25 @@ public final class GraphSubscriptionIndex {
         return entities != null ? flatten(entities.get(entity)) : Collections.emptyList();
     }
 
-    private void addGlobalSubscriptions(String graphId, BlueprintPlan plan) {
-        for (String eventType : eventTypes(plan)) {
-            List<EventSubscription> subscriptions = buildSubscriptions(graphId, plan, eventType);
-            if (!subscriptions.isEmpty()) {
+    private void addGlobalSubscriptions(String graphId, CompiledGraphSubscriptions template) {
+        template.subscriptionsByEventType().forEach((eventType, subscriptions) ->
                 globalSubscriptions.computeIfAbsent(eventType, ignored -> new LinkedHashMap<>())
-                        .put(graphId, subscriptions);
-            }
-        }
+                        .put(graphId, subscriptions));
     }
 
-    private void addEntitySubscriptions(Entity entity, String graphId, BlueprintPlan plan) {
-        for (String eventType : eventTypes(plan)) {
-            List<EventSubscription> subscriptions = buildSubscriptions(graphId, plan, eventType);
-            if (!subscriptions.isEmpty()) {
+    private void addEntitySubscriptions(Entity entity, String graphId, CompiledGraphSubscriptions template) {
+        template.subscriptionsByEventType().forEach((eventType, subscriptions) ->
                 entitySubscriptions.computeIfAbsent(eventType, ignored -> new WeakHashMap<>())
                         .computeIfAbsent(entity, ignored -> new LinkedHashMap<>())
-                        .put(graphId, subscriptions);
-            }
+                        .put(graphId, subscriptions));
+        for (String frequency : template.receiveFrequencies()) {
+            receiveSubscribers.computeIfAbsent(frequency, ignored -> new WeakHashMap<>())
+                    .computeIfAbsent(entity, ignored -> new HashSet<>()).add(graphId);
         }
     }
 
-    private void removeGlobalSubscriptions(String graphId, BlueprintPlan plan) {
-        for (String eventType : eventTypes(plan)) {
+    private void removeGlobalSubscriptions(String graphId, CompiledGraphSubscriptions template) {
+        for (String eventType : template.subscriptionsByEventType().keySet()) {
             Map<String, List<EventSubscription>> graphs = globalSubscriptions.get(eventType);
             if (graphs == null) continue;
             graphs.remove(graphId);
@@ -163,12 +191,23 @@ public final class GraphSubscriptionIndex {
         }
     }
 
-    private void removeEntitySubscriptions(Entity entity, String graphId, BlueprintPlan plan) {
-        for (String eventType : eventTypes(plan)) {
+    private void removeEntitySubscriptions(Entity entity, String graphId,
+                                           CompiledGraphSubscriptions template) {
+        for (String eventType : template.subscriptionsByEventType().keySet()) {
             Map<Entity, Map<String, List<EventSubscription>>> entities = entitySubscriptions.get(eventType);
             if (entities == null) continue;
             removeEntityGraph(entities, entity, graphId);
             if (entities.isEmpty()) entitySubscriptions.remove(eventType);
+        }
+        for (String frequency : template.receiveFrequencies()) {
+            Map<Entity, Set<String>> entities = receiveSubscribers.get(frequency);
+            if (entities == null) continue;
+            Set<String> graphIds = entities.get(entity);
+            if (graphIds != null) {
+                graphIds.remove(graphId);
+                if (graphIds.isEmpty()) entities.remove(entity);
+            }
+            if (entities.isEmpty()) receiveSubscribers.remove(frequency);
         }
     }
 
@@ -180,17 +219,18 @@ public final class GraphSubscriptionIndex {
         if (graphs.isEmpty()) entities.remove(entity);
     }
 
-    private static List<EventSubscription> buildSubscriptions(String graphId, BlueprintPlan plan, String eventType) {
-        List<Integer> nodeIds = plan.findNodesByType(eventType);
-        if (nodeIds.isEmpty()) return Collections.emptyList();
+    private CompiledGraphSubscriptions template(String graphId, BlueprintPlan plan) {
+        CompiledGraphSubscriptions existing = templatesByGraphId.get(graphId);
+        if (existing != null && existing.plan() == plan) return existing;
+        CompiledGraphSubscriptions compiled = CompiledGraphSubscriptions.compile(graphId, plan);
+        templatesByGraphId.put(graphId, compiled);
+        return compiled;
+    }
 
-        List<EventSubscription> subscriptions = new ArrayList<>(nodeIds.size());
-        for (int nodeId : nodeIds) {
-            subscriptions.add(new EventSubscription(
-                    graphId, plan, nodeId, eventType,
-                    EventPrecheckRegistry.build(graphId, plan, nodeId, eventType)));
-        }
-        return List.copyOf(subscriptions);
+    private CompiledGraphSubscriptions cleanupTemplate(String graphId, BlueprintPlan plan) {
+        CompiledGraphSubscriptions existing = templatesByGraphId.get(graphId);
+        return existing != null && existing.plan() == plan
+                ? existing : CompiledGraphSubscriptions.compile(graphId, plan);
     }
 
     private static List<EventSubscription> flatten(@Nullable Map<String, List<EventSubscription>> graphs) {
@@ -199,10 +239,6 @@ public final class GraphSubscriptionIndex {
         List<EventSubscription> result = new ArrayList<>(size);
         graphs.values().forEach(result::addAll);
         return List.copyOf(result);
-    }
-
-    private static Set<String> eventTypes(BlueprintPlan plan) {
-        return plan.getEventTypes();
     }
 
     private static String canonicalEventType(String eventType) {

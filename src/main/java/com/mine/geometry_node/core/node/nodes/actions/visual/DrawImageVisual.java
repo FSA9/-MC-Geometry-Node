@@ -3,9 +3,9 @@ package com.mine.geometry_node.core.node.nodes.actions.visual;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.visual.image.ImagePathReference;
+import com.mine.geometry_node.core.engine.system.visual.image.ImageVisualRequest;
 import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
@@ -22,7 +22,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -117,14 +116,11 @@ public final class DrawImageVisual extends BaseNode {
             putInputExpression(context, StandardPorts.HEIGHT.getId(), "height", expressions);
             putInputExpression(context, StandardPorts.ALPHA.getId(), "alpha", expressions);
 
-            List<GraphEngineServices.VisualAsset> assets = List.of();
             if (reference.source() == ImagePathReference.Source.SERVER) {
-                GraphEngineServices.VisualAsset asset = ServerImageAssetService.load(level.getServer(), reference.path());
-                extraData.putString("imageRef", asset.assetId());
-                assets = List.of(asset);
-            } else {
-                extraData.putString("imageRef", reference.path());
+                return ExecutionResult.externalWait(ServerImageAssetService.ID, new ImageVisualRequest(
+                        reference.path(), duration, expressions, extraData, position, visibleRange));
             }
+            extraData.putString("imageRef", reference.path());
 
             context.broadcastDynamicVisual(
                     "image_visual",
@@ -134,9 +130,9 @@ public final class DrawImageVisual extends BaseNode {
                     extraData,
                     position,
                     visibleRange,
-                    assets
+                    List.of()
             );
-        } catch (IOException | IllegalArgumentException exception) {
+        } catch (IllegalArgumentException exception) {
             if (RateLimitedLog.acquire(context,
                     "image_visual:" + rawPath + ':' + exception.getClass().getName())) {
                 GeometryNode.LOGGER.warn("Unable to display image '{}': {}", rawPath, exception.getMessage());

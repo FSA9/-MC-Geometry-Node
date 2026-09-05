@@ -41,6 +41,7 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                     return;
                 }
                 String surfaceRef = "";
+                String sessionId = "";
                 if (arguments.has("surface_ref")) {
                     if (!arguments.get("surface_ref").isJsonPrimitive()
                             || !arguments.getAsJsonPrimitive("surface_ref").isString()) {
@@ -49,7 +50,15 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                     }
                     surfaceRef = arguments.get("surface_ref").getAsString();
                 }
-                ViewportGraphTargetResolver.Resolution resolution = targetResolver.resolve(surfaceRef);
+                if (arguments.has("session_id")) {
+                    if (!arguments.get("session_id").isJsonPrimitive()
+                            || !arguments.getAsJsonPrimitive("session_id").isString()) {
+                        result.complete(CommandResult.failure("ARGUMENT_INVALID", "session_id 必须是字符串"));
+                        return;
+                    }
+                    sessionId = arguments.get("session_id").getAsString();
+                }
+                ViewportGraphTargetResolver.Resolution resolution = targetResolver.resolve(surfaceRef, sessionId);
                 if (!resolution.ok()) {
                     result.complete(resolution.failure());
                     return;

@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.terminal.command;
 
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.Connection;
+import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -31,17 +32,20 @@ final class GraphReadSnapshot {
     private final NodeGraph graph;
     private final Map<String, NodeData> nodes;
     private final Map<String, NodeDef> definitions;
+    private final Map<String, FrameData> frames;
     private final List<Edge> edges;
     private final Map<String, List<Edge>> outgoing;
     private final Map<String, List<Edge>> incoming;
     private final Map<String, List<Edge>> direct;
 
     private GraphReadSnapshot(NodeGraph graph, Map<String, NodeData> nodes, Map<String, NodeDef> definitions,
+                              Map<String, FrameData> frames,
                               List<Edge> edges, Map<String, List<Edge>> outgoing,
                               Map<String, List<Edge>> incoming, Map<String, List<Edge>> direct) {
         this.graph = graph;
         this.nodes = Collections.unmodifiableMap(nodes);
         this.definitions = Collections.unmodifiableMap(definitions);
+        this.frames = Collections.unmodifiableMap(frames);
         this.edges = List.copyOf(edges);
         this.outgoing = freezeIndex(outgoing);
         this.incoming = freezeIndex(incoming);
@@ -62,6 +66,14 @@ final class GraphReadSnapshot {
             NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(node);
             if (definition != null) definitions.put(nodeId, definition);
         });
+        Map<String, FrameData> frames = new LinkedHashMap<>();
+        if (source != null && source.frames != null) {
+            source.frames.entrySet().stream().filter(entry -> entry.getKey() != null && entry.getValue() != null)
+                    .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+                        entry.getValue().id = entry.getKey();
+                        frames.put(entry.getKey(), entry.getValue());
+                    });
+        }
         List<Edge> edges = new ArrayList<>();
         for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
             String sourceId = entry.getKey();
@@ -94,7 +106,7 @@ final class GraphReadSnapshot {
         }
         Map<String, List<Edge>> direct = new LinkedHashMap<>();
         directSets.forEach((nodeId, nodeEdges) -> direct.put(nodeId, List.copyOf(nodeEdges)));
-        return new GraphReadSnapshot(source, nodes, definitions, edges, outgoing, incoming, direct);
+        return new GraphReadSnapshot(source, nodes, definitions, frames, edges, outgoing, incoming, direct);
     }
 
     NodeGraph graph() { return graph; }
@@ -104,6 +116,8 @@ final class GraphReadSnapshot {
     NodeData node(String nodeId) { return nodes.get(nodeId); }
 
     NodeDef definition(String nodeId) { return definitions.get(nodeId); }
+
+    Map<String, FrameData> frames() { return frames; }
 
     List<Edge> edges() { return edges; }
 

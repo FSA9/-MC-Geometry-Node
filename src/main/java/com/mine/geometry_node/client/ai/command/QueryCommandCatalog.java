@@ -22,6 +22,8 @@ final class QueryCommandCatalog {
         registry.register(getNodeTypeDetails());
         registry.register(getNodeTypePortOptions());
         registry.register(queryGraphNodes());
+        registry.register(getGraphMetadata());
+        registry.register(queryGraphFrames());
         registry.register(getGraphStats());
         registry.register(validateGraph());
         registry.register(getPortOptions());
@@ -77,7 +79,7 @@ final class QueryCommandCatalog {
                 offsetArgument(), limitArgument()
         );
         return querySpec("query_graph_nodes",
-                "以可组合过滤器查询当前图节点，并只投影 identity、values、connections、comments、ports、position、metadata 中需要的字段",
+                "以可组合过滤器查询目标图节点，并只投影 identity、values、connections、comments、ports、position、metadata 中需要的字段",
                 "query_graph_nodes [node_ids JSON] [type_ids JSON] [directory] [query] [comment] [connection] "
                         + "[select JSON] [direction] [connection_kinds JSON] [offset] [limit]",
                 arguments, graphNodeQueryOutput(), true,
@@ -123,7 +125,7 @@ final class QueryCommandCatalog {
                 offsetArgument(), limitArgument()
         );
         return querySpec("get_graph_stats",
-                "轻量查询当前图的节点数量、连接数量、Frame 数量、Comment 数量、孤立节点以及按类型或分类统计；不返回整图内容",
+                "轻量查询目标图的节点数量、连接数量、Frame 数量、Comment 数量、孤立节点以及按类型或分类统计；不返回整图内容",
                 "get_graph_stats [type_id] [category] [none|type|category] [offset] [limit]",
                 arguments, graphStatsOutput(), true,
                 (target, values) -> target.getGraphStats(text(values, "type_id"), text(values, "category"),
@@ -131,7 +133,7 @@ final class QueryCommandCatalog {
     }
 
     private static CommandSpec validateGraph() {
-        return querySpec("validate_graph", "只读检查当前蓝图的节点、端口和连接引用", "validate_graph [offset] [limit]",
+        return querySpec("validate_graph", "只读检查目标图的节点、端口和连接引用", "validate_graph [offset] [limit]",
                 List.of(offsetArgument(), limitArgument()), validationOutput(), true,
                 (target, values) -> target.validateGraph(integer(values, "offset"), integer(values, "limit")));
     }
@@ -170,14 +172,20 @@ final class QueryCommandCatalog {
     private static CommandSpec getSurfaceContext() {
         List<CommandArgumentSpec> arguments = List.of(argument(
                 "surface_ref", "界面引用，例如 V1、T1 或 A1", true, null, stringSchema(2)));
+        JsonObject tab = object(properties(
+                property("tab_name", stringSchema(0)), property("session_id", stringSchema(1)),
+                property("scope_id", stringSchema(1)), property("revision", integerSchema(0, null)),
+                property("current", booleanSchema())),
+                "tab_name", "session_id", "scope_id", "revision", "current");
         JsonObject output = object(properties(
                 property("surface_ref", stringSchema(1)), property("type", stringSchema(1)),
                 property("visible", booleanSchema()), property("has_graph", booleanSchema()),
                 property("tab_name", stringSchema(0)), property("session_id", stringSchema(1)),
-                property("scope_id", stringSchema(1)), property("revision", integerSchema(0, null))),
+                property("scope_id", stringSchema(1)), property("revision", integerSchema(0, null)),
+                property("tabs", arraySchema(tab, 0, null))),
                 "surface_ref", "type", "visible");
         return new CommandSpec("get_surface_context", List.of(),
-                "读取指定 GeometryNode 窗口的当前上下文；Viewport 会包含当前蓝图 Tab、Group Scope 和 revision",
+                "读取指定 GeometryNode 窗口的上下文；Viewport 会列出前台及后台蓝图 Tab 的 session、Scope 和 revision",
                 "get_surface_context <surface_ref>", arguments, output, ToolContract.CommandEffect.READ_ONLY,
                 ToolContract.RiskLevel.READ_ONLY, false, false, CommandSpec.Exposure.MODEL_VISIBLE,
                 (context, values) -> context.target() instanceof UiSurfaceQueryTarget target
@@ -192,6 +200,7 @@ final class QueryCommandCatalog {
         if (requiresGraph) {
             effectiveArguments = new java.util.ArrayList<>(arguments);
             effectiveArguments.add(surfaceRefArgument());
+            effectiveArguments.add(sessionIdArgument());
             effectiveArguments = List.copyOf(effectiveArguments);
         }
         return new CommandSpec(name, List.of(), description, usage, effectiveArguments, outputSchema,
@@ -206,6 +215,11 @@ final class QueryCommandCatalog {
 
     private static CommandArgumentSpec surfaceRefArgument() {
         return argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
+                false, new JsonPrimitive(""), stringSchema(0));
+    }
+
+    private static CommandArgumentSpec sessionIdArgument() {
+        return argument("session_id", "可选的 Graph Session ID；用于选择目标 Viewport 中的后台 Tab",
                 false, new JsonPrimitive(""), stringSchema(0));
     }
 
@@ -258,6 +272,39 @@ final class QueryCommandCatalog {
                 property("recursive", booleanSchema()), property("items", arraySchema(item, 0, MAX_LIMIT)),
                 property("page", pageSchema())
         ), "query", "path", "recursive", "items", "page");
+    }
+
+    private static CommandSpec getGraphMetadata() {
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("select", "返回图级字段的任意组合", false, jsonArray("kind"),
+                        enumArraySchema(1, 4, "kind", "comment", "tags", "version"))
+        );
+        return querySpec("get_graph_metadata",
+                "按需读取根 Graph 的 kind、Comment、Tags 或版本，不返回节点和 Frame 内容",
+                "get_graph_metadata [select JSON]", arguments, graphMetadataOutput(), true,
+                (target, values) -> target.getGraphMetadata(strings(values, "select")));
+    }
+
+    private static CommandSpec queryGraphFrames() {
+        List<CommandArgumentSpec> arguments = List.of(
+                argument("frame_ids", "可选的 Frame ID 列表；空列表查询全部 Frame", false,
+                        jsonArray(), arraySchema(stringSchema(1), 0, MAX_LIMIT)),
+                queryArgument(),
+                argument("tags", "要求 Frame 同时包含的 Tags；空列表不限制", false,
+                        jsonArray(), arraySchema(stringSchema(1), 0, MAX_LIMIT)),
+                argument("parent_frame", "父级过滤；any 表示不限，root 表示顶层，否则为精确 Frame ID", false,
+                        new JsonPrimitive("any"), stringSchema(1)),
+                argument("select", "返回字段的任意组合", false, jsonArray("identity"),
+                        enumArraySchema(1, 6, "identity", "tags", "position", "style", "hierarchy", "contents")),
+                offsetArgument(), limitArgument()
+        );
+        return querySpec("query_graph_frames",
+                "以 ID、标题或 Tags 查询当前 Scope 的 Frame，并按需返回身份、位置、样式、层级或直属节点",
+                "query_graph_frames [frame_ids JSON] [query] [tags JSON] [parent_frame] [select JSON] [offset] [limit]",
+                arguments, graphFrameQueryOutput(), true,
+                (target, values) -> target.queryGraphFrames(strings(values, "frame_ids"), text(values, "query"),
+                        strings(values, "tags"), text(values, "parent_frame"), strings(values, "select"),
+                        integer(values, "offset"), integer(values, "limit")));
     }
 
     private static JsonObject nodeCatalogOutput() {
@@ -447,6 +494,49 @@ final class QueryCommandCatalog {
         if (minItems != null) schema.addProperty("minItems", minItems);
         if (maxItems != null) schema.addProperty("maxItems", maxItems);
         return schema;
+    }
+
+    private static JsonObject graphMetadataOutput() {
+        return object(properties(
+                property("select", arraySchema(stringSchema(1), 1, 4)),
+                property("kind", stringSchema(0)), property("comment", stringSchema(0)),
+                property("tags", arraySchema(stringSchema(0), 0, MAX_LIMIT)),
+                property("version", stringSchema(0)),
+                property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
+                property("revision", integerSchema(0, null)), property("surface_ref", stringSchema(0))
+        ), "select");
+    }
+
+    private static JsonObject graphFrameQueryOutput() {
+        JsonObject identity = object(properties(
+                property("frame_id", stringSchema(1)), property("title", stringSchema(0))
+        ), "frame_id", "title");
+        JsonObject position = object(properties(
+                property("x", numberSchema()), property("y", numberSchema()),
+                property("width", numberSchema()), property("height", numberSchema())
+        ), "x", "y", "width", "height");
+        JsonObject style = object(properties(property("color", integerSchema(null, null))), "color");
+        JsonObject hierarchy = object(properties(
+                property("parent_frame", stringSchema(0)),
+                property("child_frame_ids", arraySchema(stringSchema(1), 0, MAX_LIMIT))
+        ), "parent_frame", "child_frame_ids");
+        JsonObject item = object(properties(
+                property("identity", identity), property("tags", arraySchema(stringSchema(0), 0, MAX_LIMIT)),
+                property("position", position), property("style", style), property("hierarchy", hierarchy),
+                property("contents", arraySchema(stringSchema(1), 0, MAX_LIMIT))
+        ));
+        JsonObject filters = object(properties(
+                property("frame_ids", arraySchema(stringSchema(1), 0, MAX_LIMIT)),
+                property("query", stringSchema(0)), property("tags", arraySchema(stringSchema(1), 0, MAX_LIMIT)),
+                property("parent_frame", stringSchema(1))
+        ), "frame_ids", "query", "tags", "parent_frame");
+        return object(properties(
+                property("filters", filters), property("select", arraySchema(stringSchema(1), 1, 6)),
+                property("items", arraySchema(item, 0, MAX_LIMIT)), property("page", pageSchema()),
+                property("snapshot_frame_count", integerSchema(0, null)),
+                property("session_id", stringSchema(1)), property("scope_id", stringSchema(1)),
+                property("revision", integerSchema(0, null)), property("surface_ref", stringSchema(0))
+        ), "filters", "select", "items", "page", "snapshot_frame_count");
     }
 
     private static JsonObject enumArraySchema(int minItems, int maxItems, String... values) {

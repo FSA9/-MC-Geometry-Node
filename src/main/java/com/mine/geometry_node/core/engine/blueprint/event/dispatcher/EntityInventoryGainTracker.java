@@ -30,9 +30,14 @@ public final class EntityInventoryGainTracker {
 
     public void clear(Entity entity) {
         if (entity != null && entity.level() instanceof ServerLevel level) {
-            Map<Entity, List<ItemStack>> snapshots = servers.get(level.getServer());
-            if (snapshots != null) snapshots.remove(entity);
+            clear(level, entity);
         }
+    }
+
+    public void clear(ServerLevel level, Entity entity) {
+        if (level == null || entity == null) return;
+        Map<Entity, List<ItemStack>> snapshots = servers.get(level.getServer());
+        if (snapshots != null) snapshots.remove(entity);
     }
 
     public void tick(ServerLevel level, Entity entity, boolean listening) {

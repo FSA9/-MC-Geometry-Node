@@ -36,7 +36,7 @@ public final class GraphPatchCodec {
     public static GraphPatch fromJson(String json) {
         try {
             return fromJsonTree(JsonParser.parseString(json).getAsJsonObject());
-        } catch (IllegalStateException | UnsupportedOperationException | NumberFormatException exception) {
+        } catch (IllegalStateException | UnsupportedOperationException | IllegalArgumentException exception) {
             throw new JsonParseException("invalid GraphPatch JSON", exception);
         }
     }
@@ -83,15 +83,19 @@ public final class GraphPatchCodec {
                 json.addProperty("alias", value.alias()); json.addProperty("title", value.title()); json.add("position", position(value.position()));
                 json.addProperty("width", value.width()); json.addProperty("height", value.height());
             }
+            case GraphPatch.RemoveFrame value -> json.add("frame", frame(value.frame()));
             case GraphPatch.SetFrameProperty value -> { json.add("frame", frame(value.frame())); json.addProperty("property", value.property()); json.add("value", value.value()); }
-            case GraphPatch.AddDynamicBranch value -> { json.add("node", node(value.node())); json.addProperty("branch_kind", value.branchKind()); json.addProperty("alias", value.alias()); }
-            case GraphPatch.RemoveDynamicBranch value -> { json.add("node", node(value.node())); json.addProperty("branch_id", value.branchId()); }
+            case GraphPatch.AddDynamicBranch value -> { json.add("node", node(value.node())); json.addProperty("direction", value.direction()); json.addProperty("alias", value.alias()); }
+            case GraphPatch.RemoveDynamicBranch value -> json.add("branch", branch(value.branch()));
             case GraphPatch.AddGroupVirtualPort value -> {
                 json.add("node", node(value.node())); json.addProperty("direction", value.direction());
                 json.addProperty("port_type", value.portType()); json.addProperty("alias", value.alias());
             }
-            case GraphPatch.RemoveGroupVirtualPort value -> { json.add("node", node(value.node())); json.addProperty("port_id", value.portId()); }
-            case GraphPatch.RenamePort value -> { json.add("node", node(value.node())); json.addProperty("port_id", value.portId()); json.addProperty("name", value.name()); }
+            case GraphPatch.RemoveGroupVirtualPort value -> json.add("port", port(value.port()));
+            case GraphPatch.RenamePort value -> {
+                json.add("port", port(value.port())); json.addProperty("direction", value.direction());
+                json.addProperty("name", value.name());
+            }
         }
         return json;
     }
@@ -117,7 +121,7 @@ public final class GraphPatchCodec {
             }
             case "set_port_value" -> {
                 requireOnly(json, "op", "port", "value", "expected_old_value");
-                yield new GraphPatch.SetPortValue(port(json, "port"), required(json, "value"), optional(json, "expected_old_value"));
+                yield new GraphPatch.SetPortValue(port(json, "port"), present(json, "value"), optional(json, "expected_old_value"));
             }
             case "set_select_value" -> {
                 requireOnly(json, "op", "port", "option_id", "expected_old_value", "option_context_token");
@@ -126,35 +130,39 @@ public final class GraphPatchCodec {
             }
             case "set_node_property" -> {
                 requireOnly(json, "op", "node", "property", "value");
-                yield new GraphPatch.SetNodeProperty(node(json, "node"), string(json, "property"), required(json, "value"));
+                yield new GraphPatch.SetNodeProperty(node(json, "node"), string(json, "property"), present(json, "value"));
             }
             case "add_frame" -> {
                 requireOnly(json, "op", "alias", "title", "position", "width", "height");
                 yield new GraphPatch.AddFrame(string(json, "alias"), string(json, "title"), position(json, "position"), number(json, "width"), number(json, "height"));
             }
+            case "remove_frame" -> {
+                requireOnly(json, "op", "frame");
+                yield new GraphPatch.RemoveFrame(frame(json, "frame"));
+            }
             case "set_frame_property" -> {
                 requireOnly(json, "op", "frame", "property", "value");
-                yield new GraphPatch.SetFrameProperty(frame(json, "frame"), string(json, "property"), required(json, "value"));
+                yield new GraphPatch.SetFrameProperty(frame(json, "frame"), string(json, "property"), present(json, "value"));
             }
             case "add_dynamic_branch" -> {
-                requireOnly(json, "op", "node", "branch_kind", "alias");
-                yield new GraphPatch.AddDynamicBranch(node(json, "node"), string(json, "branch_kind"), string(json, "alias"));
+                requireOnly(json, "op", "node", "direction", "alias");
+                yield new GraphPatch.AddDynamicBranch(node(json, "node"), string(json, "direction"), string(json, "alias"));
             }
             case "remove_dynamic_branch" -> {
-                requireOnly(json, "op", "node", "branch_id");
-                yield new GraphPatch.RemoveDynamicBranch(node(json, "node"), string(json, "branch_id"));
+                requireOnly(json, "op", "branch");
+                yield new GraphPatch.RemoveDynamicBranch(branch(json, "branch"));
             }
             case "add_group_virtual_port" -> {
                 requireOnly(json, "op", "node", "direction", "port_type", "alias");
                 yield new GraphPatch.AddGroupVirtualPort(node(json, "node"), string(json, "direction"), string(json, "port_type"), string(json, "alias"));
             }
             case "remove_group_virtual_port" -> {
-                requireOnly(json, "op", "node", "port_id");
-                yield new GraphPatch.RemoveGroupVirtualPort(node(json, "node"), string(json, "port_id"));
+                requireOnly(json, "op", "port");
+                yield new GraphPatch.RemoveGroupVirtualPort(port(json, "port"));
             }
             case "rename_port" -> {
-                requireOnly(json, "op", "node", "port_id", "name");
-                yield new GraphPatch.RenamePort(node(json, "node"), string(json, "port_id"), string(json, "name"));
+                requireOnly(json, "op", "port", "direction", "name");
+                yield new GraphPatch.RenamePort(port(json, "port"), string(json, "direction"), string(json, "name"));
             }
             default -> throw new JsonParseException("unknown GraphPatch operation: " + op);
         };
@@ -173,7 +181,14 @@ public final class GraphPatchCodec {
     }
 
     private static JsonObject port(GraphPatch.PortRef ref) {
-        JsonObject json = new JsonObject(); json.add("node", node(ref.node())); json.addProperty("port_id", ref.portId()); return json;
+        JsonObject json = new JsonObject();
+        if (ref.alias() != null) {
+            json.addProperty("alias", ref.alias());
+        } else {
+            json.add("node", node(ref.node()));
+            json.addProperty("port_id", ref.portId());
+        }
+        return json;
     }
 
     private static JsonObject frame(GraphPatch.FrameRef ref) {
@@ -188,9 +203,42 @@ public final class GraphPatchCodec {
         return new GraphPatch.FrameRef(optionalString(json, "id"), optionalString(json, "alias"));
     }
 
+    private static JsonObject branch(GraphPatch.BranchRef ref) {
+        JsonObject json = new JsonObject();
+        if (ref.alias() != null) {
+            json.addProperty("alias", ref.alias());
+        } else {
+            json.add("node", node(ref.node()));
+            json.addProperty("direction", ref.direction());
+            json.addProperty("index", ref.index());
+        }
+        return json;
+    }
+
+    private static GraphPatch.BranchRef branch(JsonObject parent, String name) {
+        JsonObject json = object(parent, name);
+        requireOnly(json, "node", "direction", "index", "alias");
+        String alias = optionalString(json, "alias");
+        if (alias != null) {
+            if (json.has("node") || json.has("direction") || json.has("index")) {
+                throw new JsonParseException("branch alias cannot be combined with node, direction, or index");
+            }
+            return GraphPatch.BranchRef.alias(alias);
+        }
+        return new GraphPatch.BranchRef(node(json, "node"), string(json, "direction"),
+                integer(json, "index"), null);
+    }
+
     private static GraphPatch.PortRef port(JsonObject parent, String name) {
         JsonObject json = object(parent, name);
-        requireOnly(json, "node", "port_id");
+        requireOnly(json, "node", "port_id", "alias");
+        String alias = optionalString(json, "alias");
+        if (alias != null) {
+            if (json.has("node") || json.has("port_id")) {
+                throw new JsonParseException("port alias cannot be combined with node or port_id");
+            }
+            return GraphPatch.PortRef.alias(alias);
+        }
         return new GraphPatch.PortRef(node(json, "node"), string(json, "port_id"));
     }
 
@@ -218,6 +266,11 @@ public final class GraphPatchCodec {
         JsonElement value = object.get(name);
         if (value == null || value.isJsonNull()) throw new JsonParseException("missing field: " + name);
         return value;
+    }
+
+    private static JsonElement present(JsonObject object, String name) {
+        if (!object.has(name)) throw new JsonParseException("missing field: " + name);
+        return object.get(name);
     }
 
     private static JsonObject object(JsonObject parent, String name) {

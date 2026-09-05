@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
@@ -24,7 +25,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import java.util.function.Predicate;
 
 /** Runtime store for public Areas. Entries are non-persistent and owned by graph bindings. */
 public final class AreaResourceStore {
@@ -67,7 +67,7 @@ public final class AreaResourceStore {
                 ? state.debugOwnersByDimension.getOrDefault(level.dimension(), Set.of())
                 : Set.of();
         Map<GraphResourceId, List<DebugRenderShape>> shapesByOwner = new LinkedHashMap<>();
-        if (state != null && DebugRendererSessionManager.hasAreaSessions()) {
+        if (state != null && DebugRendererSessionManager.hasAreaSessions(level.getServer())) {
             for (AreaResource resource : state.entries.values()) {
                 if (!resource.address().dimension().equals(level.dimension())) continue;
                 AreaResource.Resolved resolved = resource.resolve(level);
@@ -103,10 +103,10 @@ public final class AreaResourceStore {
         servers.remove(server);
     }
 
-    private synchronized void removeOwned(MinecraftServer server, Predicate<GraphResourceId> predicate) {
+    private synchronized void removeOwned(MinecraftServer server, GraphResourceRelease release) {
         ServerState state = servers.get(server);
         if (state == null) return;
-        state.entries.entrySet().removeIf(entry -> predicate.test(entry.getValue().owner()));
+        state.entries.entrySet().removeIf(entry -> release.matches(entry.getValue().owner()));
     }
 
     private static final class ServerState {

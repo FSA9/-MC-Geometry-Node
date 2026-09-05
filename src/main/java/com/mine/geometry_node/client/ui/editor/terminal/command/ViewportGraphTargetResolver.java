@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** Resolves a viewport for one MCP call and caches fixed transaction targets for the run. */
 public final class ViewportGraphTargetResolver implements AutoCloseable {
@@ -18,10 +19,10 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
 
     public ViewportGraphTargetResolver() {}
 
-    public Resolution resolve(String surfaceRef) {
+    public Resolution resolve(String surfaceRef, String sessionId) {
         List<UiSurfaceRegistry.Lease<ViewportSurface>> candidates = UiSurfaceRegistry.INSTANCE
                 .leases(UiSurfaceType.VIEWPORT, ViewportSurface.class).stream()
-                .filter(lease -> lease.visible() && lease.owner().currentGraphSession() != null)
+                .filter(lease -> lease.visible() && !lease.owner().openGraphSessions().isEmpty())
                 .toList();
 
         UiSurfaceRegistry.Lease<ViewportSurface> selected;
@@ -52,7 +53,24 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
         }
 
         ViewportSurface viewport = selected.owner();
-        GraphSession session = viewport.currentGraphSession();
+        GraphSession session;
+        if (sessionId != null && !sessionId.isBlank()) {
+            UUID requestedSessionId;
+            try {
+                requestedSessionId = UUID.fromString(sessionId.strip());
+            } catch (IllegalArgumentException failure) {
+                return Resolution.failure("SESSION_ID_INVALID", "无效的 Graph Session ID: " + sessionId);
+            }
+            session = viewport.openGraphSessions().stream()
+                    .filter(candidate -> candidate.sessionId().equals(requestedSessionId))
+                    .findFirst().orElse(null);
+            if (session == null) {
+                return Resolution.failure("GRAPH_SESSION_UNAVAILABLE",
+                        "指定 Graph Session 不在目标 Viewport 的 Tab 中: " + sessionId);
+            }
+        } else {
+            session = viewport.currentGraphSession();
+        }
         if (session == null) return Resolution.failure("NO_ACTIVE_GRAPH", "目标 Viewport 未打开蓝图");
         BoundGraphScope scope = BoundGraphScope.capture(session.editorContext);
         TargetKey key = new TargetKey(selected.id(), selected.generation(), session.sessionId().toString(), scope.id());
@@ -61,7 +79,7 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
         BoundGraphQueryTarget target = targets.computeIfAbsent(key, ignored -> new BoundGraphQueryTarget(
                 session, scope, fixedSurfaceRef,
                 () -> fixedLease.isCurrent()
-                        && fixedLease.owner().currentGraphSession() == session
+                        && fixedLease.owner().openGraphSessions().contains(session)
                         && BoundGraphScope.capture(session.editorContext).equals(scope), idempotencyStore));
         targets.entrySet().removeIf(entry -> !entry.getKey().equals(key) && !entry.getValue().isTargetCurrent());
         return Resolution.success(target);

@@ -19,6 +19,7 @@ import com.mine.geometry_node.client.ui.workspace.registration.BuiltinSidebarPan
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
 import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
@@ -108,6 +109,7 @@ public class GeometryNodeClient {
         ClientDialogueState.reset();
         RemoteAssetClient.reset();
         ClientAssetTransferPlanState.reset();
+        ClientDataLibraryRepository.INSTANCE.resetConnection();
         NetworkRemoteDataLibraryGateway.INSTANCE.resetConnection();
         ClientAssetTransferService.INSTANCE.resetConnection();
         ClientAssetPreviewService.INSTANCE.resetConnection();

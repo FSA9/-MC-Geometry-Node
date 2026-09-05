@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
 
+/** A compiled, immutable precheck that may be shared by every binding of one graph plan. */
 @FunctionalInterface
 public interface EventPrecheck {
     EventPrecheck ALWAYS = (level, target, eventData) -> true;

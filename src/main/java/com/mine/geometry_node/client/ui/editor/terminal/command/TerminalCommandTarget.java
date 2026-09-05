@@ -155,6 +155,17 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
     }
 
     @Override
+    public CommandResult getGraphMetadata(List<String> select) {
+        return new TerminalGraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select);
+    }
+
+    @Override
+    public CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags,
+                                          String parentFrame, List<String> select, int offset, int limit) {
+        return queries().queryGraphFrames(frameIds, query, tags, parentFrame, select, offset, limit);
+    }
+
+    @Override
     public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         return queries().getGraphStats(typeId, category, groupBy, offset, limit);
     }

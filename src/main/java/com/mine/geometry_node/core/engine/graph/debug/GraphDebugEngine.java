@@ -15,5 +15,6 @@ public final class GraphDebugEngine implements ServerEngine {
     @Override public int tickOrder() { return 400; }
     @Override public void init() { DebugRendererSessionManager.register(); }
     @Override public void tickLevel(ServerLevel level) { DebugRendererSessionManager.tickLevel(level); }
-    @Override public void shutdown(MinecraftServer server) { DebugRendererSessionManager.shutdown(); }
+    @Override public void levelUnloaded(ServerLevel level) { DebugRendererSessionManager.levelUnloaded(level); }
+    @Override public void shutdown(MinecraftServer server) { DebugRendererSessionManager.shutdown(server); }
 }

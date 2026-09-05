@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -13,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.function.Predicate;
 
 /** Runtime store for non-persistent force fields addressed by dimension + ID. */
 public final class ForceFieldResourceStore {
@@ -59,9 +59,9 @@ public final class ForceFieldResourceStore {
         servers.remove(server);
     }
 
-    private synchronized void removeOwned(MinecraftServer server, Predicate<GraphResourceId> predicate) {
+    private synchronized void removeOwned(MinecraftServer server, GraphResourceRelease release) {
         ServerState state = servers.get(server);
-        if (state != null) state.entries.entrySet().removeIf(entry -> predicate.test(entry.getValue().owner()));
+        if (state != null) state.entries.entrySet().removeIf(entry -> release.matches(entry.getValue().owner()));
     }
 
     private static final class ServerState {

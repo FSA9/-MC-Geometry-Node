@@ -12,18 +12,27 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 final class SchematicThumbnailCache {
     private static final int MAX_CACHE_ENTRIES = 256;
+    private static final int MAX_PENDING_JOBS = 64;
     private static final Map<String, Entry> CACHE = new LinkedHashMap<>(64, 0.75f, true);
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "GeometryNode-SchematicThumbnail");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
+            1, 1, 30L, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(MAX_PENDING_JOBS), task -> {
+                Thread thread = new Thread(task, "GeometryNode-SchematicThumbnail");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    static {
+        EXECUTOR.allowCoreThreadTimeOut(true);
+    }
 
     private SchematicThumbnailCache() {
     }
@@ -195,7 +204,13 @@ final class SchematicThumbnailCache {
         private synchronized void start() {
             if (started || evicted || thumbnail != null) return;
             started = true;
-            future = EXECUTOR.submit(this::decode);
+            try {
+                future = EXECUTOR.submit(this::decode);
+            } catch (RejectedExecutionException ignored) {
+                started = false;
+                future = null;
+                notifyObservers();
+            }
         }
 
         private void decode() {

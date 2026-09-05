@@ -76,12 +76,18 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 public final class SchematicProjectionRenderer {
+    private static final int MAX_ACTIVE_PROJECTIONS = 64;
+    private static final long MAX_TOTAL_GEOMETRY = 524_288L;
+    private static final long MAX_TOTAL_NBT_BYTES = 32L * 1024L * 1024L;
+    private static final long MAX_TOTAL_ESTIMATED_BYTES = 64L * 1024L * 1024L;
     private static final int WHITE = 255;
     private static final int BOUNDS_FACE_ALPHA = 38;
     private static final int BOUNDS_LINE_ALPHA = 210;
@@ -90,7 +96,7 @@ public final class SchematicProjectionRenderer {
     private static final int FALLBACK_EDGE_ALPHA_SCALE = 210;
     private static final float EDGE_WIDTH = 1.2f;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final Map<String, Projection> PROJECTIONS = new HashMap<>();
+    private static final Map<String, Projection> PROJECTIONS = new LinkedHashMap<>();
     private static ModelBlockRenderer modelRenderer;
     private static FluidRenderer fluidRenderer;
     private static Object fluidModelSet;
@@ -110,10 +116,91 @@ public final class SchematicProjectionRenderer {
             }
             return;
         }
-        Projection previous = PROJECTIONS.put(cacheKey, new Projection(packet, Minecraft.getInstance().level));
+        long geometry = projectionGeometry(packet);
+        long nbtBytes = projectionNbtBytes(packet);
+        long estimatedBytes = projectionEstimatedBytes(packet);
+        if (geometry > MAX_TOTAL_GEOMETRY || nbtBytes > MAX_TOTAL_NBT_BYTES
+                || estimatedBytes > MAX_TOTAL_ESTIMATED_BYTES) return;
+        while (!fitsProjectionBudget(cacheKey, geometry, nbtBytes, estimatedBytes)) {
+            if (!evictOldestProjectionOtherThan(cacheKey)) return;
+        }
+
+        Projection previous = PROJECTIONS.remove(cacheKey);
         if (previous != null) {
             previous.close();
         }
+        Projection replacement = new Projection(packet, Minecraft.getInstance().level,
+                geometry, nbtBytes, estimatedBytes);
+        PROJECTIONS.put(cacheKey, replacement);
+    }
+
+    private static boolean fitsProjectionBudget(String replacedKey, long geometry, long nbtBytes,
+                                                long estimatedBytes) {
+        int count = 1;
+        long totalGeometry = geometry;
+        long totalNbtBytes = nbtBytes;
+        long totalEstimatedBytes = estimatedBytes;
+        for (Map.Entry<String, Projection> entry : PROJECTIONS.entrySet()) {
+            if (entry.getKey().equals(replacedKey)) continue;
+            count++;
+            totalGeometry = saturatingAdd(totalGeometry, entry.getValue().budgetGeometry);
+            totalNbtBytes = saturatingAdd(totalNbtBytes, entry.getValue().budgetNbtBytes);
+            totalEstimatedBytes = saturatingAdd(
+                    totalEstimatedBytes, entry.getValue().budgetEstimatedBytes);
+        }
+        return count <= MAX_ACTIVE_PROJECTIONS && totalGeometry <= MAX_TOTAL_GEOMETRY
+                && totalNbtBytes <= MAX_TOTAL_NBT_BYTES
+                && totalEstimatedBytes <= MAX_TOTAL_ESTIMATED_BYTES;
+    }
+
+    private static boolean evictOldestProjectionOtherThan(String protectedKey) {
+        Iterator<Map.Entry<String, Projection>> iterator = PROJECTIONS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, Projection> entry = iterator.next();
+            if (entry.getKey().equals(protectedKey)) continue;
+            iterator.remove();
+            entry.getValue().close();
+            return true;
+        }
+        return false;
+    }
+
+    private static long projectionGeometry(PacketSchematicProjection packet) {
+        return saturatingAdd(packet.blocks().size(),
+                saturatingAdd(packet.blockEntities().size(), packet.entities().size()));
+    }
+
+    private static long projectionNbtBytes(PacketSchematicProjection packet) {
+        long bytes = 0L;
+        for (PacketSchematicProjection.BlockEntity blockEntity : packet.blockEntities()) {
+            bytes = saturatingAdd(bytes, blockEntity.tag().sizeInBytes());
+        }
+        for (PacketSchematicProjection.Entity entity : packet.entities()) {
+            bytes = saturatingAdd(bytes, entity.tag().sizeInBytes());
+        }
+        return bytes;
+    }
+
+    private static long projectionEstimatedBytes(PacketSchematicProjection packet) {
+        long bytes = 128L;
+        bytes = saturatingAdd(bytes, (long) packet.resourceId().length() * 2L);
+        bytes = saturatingAdd(bytes, (long) packet.graphId().length() * 2L);
+        bytes = saturatingAdd(bytes, (long) packet.dimension().length() * 2L);
+        for (String state : packet.states()) {
+            bytes = saturatingAdd(bytes, 4L + (long) (state == null ? 0 : state.length()) * 2L);
+        }
+        bytes = saturatingAdd(bytes, (long) packet.blocks().size() * 20L);
+        for (PacketSchematicProjection.BlockEntity blockEntity : packet.blockEntities()) {
+            bytes = saturatingAdd(bytes, 16L + blockEntity.tag().sizeInBytes());
+        }
+        for (PacketSchematicProjection.Entity entity : packet.entities()) {
+            bytes = saturatingAdd(bytes, 28L + entity.tag().sizeInBytes());
+        }
+        return bytes;
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
     public static void clear() {
@@ -1246,8 +1333,12 @@ public final class SchematicProjectionRenderer {
         private final Long2ObjectOpenHashMap<BlockState> statesByPosition;
         private final Long2ObjectOpenHashMap<BlockEntity> blockEntitiesByPosition;
         private final long expiresAt;
+        private final long budgetGeometry;
+        private final long budgetNbtBytes;
+        private final long budgetEstimatedBytes;
 
-        private Projection(PacketSchematicProjection packet, ClientLevel level) {
+        private Projection(PacketSchematicProjection packet, ClientLevel level,
+                           long budgetGeometry, long budgetNbtBytes, long budgetEstimatedBytes) {
             this.dimension = packet.dimension();
             this.originX = packet.originX();
             this.originY = packet.originY();
@@ -1260,6 +1351,9 @@ public final class SchematicProjectionRenderer {
             this.length = packet.length();
             this.bounds = new AABB(originX, originY, originZ, originX + width, originY + height, originZ + length);
             this.alpha = packet.alpha();
+            this.budgetGeometry = budgetGeometry;
+            this.budgetNbtBytes = budgetNbtBytes;
+            this.budgetEstimatedBytes = budgetEstimatedBytes;
             this.occupied = new LongOpenHashSet(Math.max(16, packet.blocks().size() * 2));
             this.statesByPosition = new Long2ObjectOpenHashMap<>(Math.max(16, packet.blocks().size() * 2));
             this.blockEntitiesByPosition = new Long2ObjectOpenHashMap<>(Math.max(16, packet.blockEntities().size() * 2));

@@ -16,6 +16,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import net.minecraft.server.MinecraftServer;
@@ -68,7 +69,9 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     public boolean bind(Mob owner, String graphId) {
         requireServerOwner(owner);
         String normalized = requireAvailable(graphId);
-        return owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
+        boolean added = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
+        if (added) GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
+        return added;
     }
 
     public BehaviorTreeProcess startBound(Mob owner) {
@@ -105,6 +108,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         }
         boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
         if (removed) {
+            GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
             GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(),
                     new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID()),
                     GraphBindingKey.behaviorTree(normalized));
@@ -121,6 +125,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         }
         boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
         if (removed) {
+            GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
             GraphResourceScope scope = new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID());
             for (String graphId : bindings) {
                 GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(), scope,

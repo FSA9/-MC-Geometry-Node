@@ -42,7 +42,11 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
         this.transactions = new GraphPatchTransactionService(session, scope, targetValidator, idempotencyStore);
     }
 
-    @Override public boolean hasGraph() { return DocumentManager.INSTANCE.getSessions().contains(session) && resolve() != null; }
+    @Override public boolean hasGraph() {
+        return targetValidator.getAsBoolean()
+                && DocumentManager.INSTANCE.getSessions().contains(session)
+                && resolve() != null;
+    }
     @Override public CommandResult applyGraphPatch(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
         return transactions.apply(patch, cancellation);
     }
@@ -68,6 +72,14 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
                                                  int offset, int limit) {
         return withScope(queries().getGraphStats(typeId, category, groupBy, offset, limit));
     }
+    @Override public CommandResult getGraphMetadata(java.util.List<String> select) {
+        return withScope(new TerminalGraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select));
+    }
+    @Override public CommandResult queryGraphFrames(java.util.List<String> frameIds, String query,
+                                                    java.util.List<String> tags, String parentFrame,
+                                                    java.util.List<String> select, int offset, int limit) {
+        return withScope(queries().queryGraphFrames(frameIds, query, tags, parentFrame, select, offset, limit));
+    }
     private CommandResult withScope(CommandResult result) {
         long responseRevision = revision();
         JsonObject data = result.data();
@@ -78,9 +90,11 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
         return new CommandResult(result.ok(), result.code(), result.message(), data, result.diagnostics(),
                 responseRevision, result.changeId(), result.clientAction());
     }
-    @Override public CommandResult validateGraph(int offset, int limit) { return queries().validateGraph(offset, limit); }
+    @Override public CommandResult validateGraph(int offset, int limit) {
+        return withScope(queries().validateGraph(offset, limit));
+    }
     @Override public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
-        return queries().getPortOptions(nodeId, portId, query, offset, limit);
+        return withScope(queries().getPortOptions(nodeId, portId, query, offset, limit));
     }
 
     public String sessionId() { return session.sessionId().toString(); }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.WorldDispat
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceStore;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldTickService;
+import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -28,7 +29,6 @@ import java.util.*;
  */
 public final class BlueprintEventHandler {
 
-    private static final Comparator<ScheduledEntity> ENTITY_SCHEDULE_ORDER = Comparator.comparingLong(ScheduledEntity::nextTick);
     private final Map<MinecraftServer, ServerSchedule> servers = new WeakHashMap<>();
     private final AreaTriggerDispatcher areaTriggers = new AreaTriggerDispatcher();
     private boolean registered;
@@ -82,24 +82,40 @@ public final class BlueprintEventHandler {
         ForceFieldResourceStore.INSTANCE.shutdown(server);
     }
 
+    public void forgetEntity(ServerLevel level, Entity entity) {
+        if (level == null || entity == null) return;
+        ServerSchedule schedule = servers.get(level.getServer());
+        if (schedule == null) return;
+        UUID entityId = entity.getUUID();
+        ResourceKey<Level> scheduledDimension = schedule.scheduledDimensions.get(entityId);
+        if (!level.dimension().equals(scheduledDimension)) return;
+        DueTickScheduler<UUID, ScheduledEntity> scheduler = schedule.activeEntityQueues.get(scheduledDimension);
+        if (scheduler != null) {
+            scheduler.cancel(entityId);
+            if (scheduler.isEmpty()) schedule.activeEntityQueues.remove(scheduledDimension, scheduler);
+        }
+        schedule.scheduledDimensions.remove(entityId, scheduledDimension);
+    }
+
+    public void forgetLevel(ServerLevel level) {
+        if (level == null) return;
+        ServerSchedule schedule = servers.get(level.getServer());
+        if (schedule == null) return;
+        ResourceKey<Level> dimension = level.dimension();
+        schedule.activeEntityQueues.remove(dimension);
+        schedule.scheduledDimensions.entrySet().removeIf(entry -> dimension.equals(entry.getValue()));
+    }
+
     private void tickScheduledEntities(ServerLevel level) {
         ServerSchedule schedule = servers.computeIfAbsent(level.getServer(), ignored -> new ServerSchedule());
-        PriorityQueue<ScheduledEntity> queue = schedule.activeEntityQueues.get(level.dimension());
+        DueTickScheduler<UUID, ScheduledEntity> queue = schedule.activeEntityQueues.get(level.dimension());
         if (queue == null || queue.isEmpty()) return;
 
         long currentTime = level.getGameTime();
-        while (!queue.isEmpty()) {
-            ScheduledEntity scheduled = queue.peek();
-            if (schedule.activeEntitySchedules.get(scheduled.entityId()) != scheduled) {
-                queue.poll();
-                continue;
-            }
-            if (scheduled.nextTick() > currentTime) {
-                return;
-            }
-
-            queue.poll();
-            schedule.activeEntitySchedules.remove(scheduled.entityId(), scheduled);
+        DueTickScheduler.Scheduled<UUID, ScheduledEntity> due;
+        while ((due = queue.pollDue(currentTime)) != null) {
+            ScheduledEntity scheduled = due.value();
+            schedule.scheduledDimensions.remove(scheduled.entityId(), level.dimension());
 
             Entity entity = scheduled.entityRef().get();
             if (entity == null || entity.isRemoved()) {
@@ -128,8 +144,7 @@ public final class BlueprintEventHandler {
         UUID entityId = entity.getUUID();
         if (entity.isRemoved() || entity.level().isClientSide() || !(entity.level() instanceof ServerLevel level)) {
             if (entity.level() instanceof ServerLevel level) {
-                ServerSchedule schedule = servers.get(level.getServer());
-                if (schedule != null) schedule.activeEntitySchedules.remove(entityId);
+                forgetEntity(level, entity);
             }
             return;
         }
@@ -137,26 +152,34 @@ public final class BlueprintEventHandler {
 
         long nextTick = attachment != null ? attachment.getNextScheduledTick() : Long.MAX_VALUE;
         if (nextTick == Long.MAX_VALUE) {
-            schedule.activeEntitySchedules.remove(entityId);
+            ResourceKey<Level> previousDimension = schedule.scheduledDimensions.remove(entityId);
+            DueTickScheduler<UUID, ScheduledEntity> previous =
+                    previousDimension != null ? schedule.activeEntityQueues.get(previousDimension) : null;
+            if (previous != null) {
+                previous.cancel(entityId);
+                if (previous.isEmpty()) schedule.activeEntityQueues.remove(previousDimension, previous);
+            }
             return;
         }
 
         ResourceKey<Level> levelKey = level.dimension();
-        ScheduledEntity current = schedule.activeEntitySchedules.get(entityId);
-        if (current != null
-                && current.levelKey().equals(levelKey)
-                && current.nextTick() == nextTick
-                && current.entityRef().get() == entity) {
-            return;
+        ResourceKey<Level> previousDimension = schedule.scheduledDimensions.put(entityId, levelKey);
+        if (previousDimension != null && !previousDimension.equals(levelKey)) {
+            DueTickScheduler<UUID, ScheduledEntity> previous = schedule.activeEntityQueues.get(previousDimension);
+            if (previous != null) {
+                previous.cancel(entityId);
+                if (previous.isEmpty()) schedule.activeEntityQueues.remove(previousDimension, previous);
+            }
         }
 
         ScheduledEntity scheduled = new ScheduledEntity(entityId, levelKey, new WeakReference<>(entity), nextTick);
-        schedule.activeEntitySchedules.put(entityId, scheduled);
-        schedule.activeEntityQueues.computeIfAbsent(levelKey, ignored -> new PriorityQueue<>(ENTITY_SCHEDULE_ORDER)).offer(scheduled);
+        schedule.activeEntityQueues.computeIfAbsent(levelKey, ignored -> new DueTickScheduler<>())
+                .schedule(entityId, scheduled, nextTick);
     }
 
     private static final class ServerSchedule {
-        private final Map<ResourceKey<Level>, PriorityQueue<ScheduledEntity>> activeEntityQueues = new HashMap<>();
-        private final Map<UUID, ScheduledEntity> activeEntitySchedules = new HashMap<>();
+        private final Map<ResourceKey<Level>, DueTickScheduler<UUID, ScheduledEntity>> activeEntityQueues =
+                new HashMap<>();
+        private final Map<UUID, ResourceKey<Level>> scheduledDimensions = new HashMap<>();
     }
 }

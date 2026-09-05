@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAtt
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
@@ -25,6 +26,7 @@ import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
+import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
@@ -170,22 +172,25 @@ public class GeometryNode {
         NodeRegistry.INSTANCE.init();
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
-        GraphResourceLifecycleManager.INSTANCE.init();
-        GraphEntityReferenceIndex.INSTANCE.init();
         AssetLifecycleRegistry.INSTANCE.register(
                 AssetTypeCatalog.GRAPH_TYPE_ID,
                 DynamicGraphManager::refresh);
 
         // 初始化图运行时注册表
         ServerEngineDriver.init();
+        ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphAssetLifecycleIndex.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(ServerImageAssetService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphDebugEngine.INSTANCE);
         BlueprintExternalWaitRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         BlueprintExternalWaitRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
+        BlueprintExternalWaitRegistry.INSTANCE.register(ServerImageAssetService.INSTANCE);
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();

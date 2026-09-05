@@ -80,6 +80,24 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     @Override
+    public void entityJoined(ServerLevel level, Entity entity) {
+        registerEntityListeners(entity);
+        eventHandler.markActive(entity);
+    }
+
+    @Override
+    public void entityLeft(ServerLevel level, Entity entity) {
+        eventHandler.forgetEntity(level, entity);
+        engine.unregisterEntityListeners(entity);
+        inventoryGainTracker.clear(level, entity);
+    }
+
+    @Override
+    public void levelUnloaded(ServerLevel level) {
+        eventHandler.forgetLevel(level);
+    }
+
+    @Override
     public void shutdown(MinecraftServer server) {
         eventHandler.shutdown(server);
         playerInput.shutdown(server);

@@ -106,6 +106,8 @@ public final class CommandCatalog {
                         "GraphPatch JSON；session_id、scope_id、expected_revision 必须来自当前图上下文",
                         true, null, patchSchema, null),
                 argument("surface_ref", "可选的 Viewport 引用，例如 V1；为空时使用最近交互或唯一 Viewport",
+                        false, new JsonPrimitive(""), stringSchema(0), null),
+                argument("session_id", "可选的 Graph Session ID；用于选择目标 Viewport 中的后台 Tab",
                         false, new JsonPrimitive(""), stringSchema(0), null));
         JsonObject output = CommandSpec.objectSchema(properties(
                 property("patch_hash", stringSchema(64)), property("change_id", stringSchema(1)),
@@ -115,12 +117,15 @@ public final class CommandCatalog {
         return new CommandSpec("apply_graph_patch", List.of(),
                 "提交 GraphPatch JSON 字符串。根字段: session_id, scope_id, "
                         + "expected_revision, idempotency_key, operations。type_id 必须是不带 geometry_node: 前缀的短 ID。"
-                        + "当前支持 add_node(alias,type_id,position,properties={}), "
-                        + "move_node(node,position), set_port_value(port,value,expected_old_value), "
-                        + "set_select_value(port,option_id,expected_old_value,option_context_token), "
-                        + "connect(from,to)。position 必须是 {x:number,y:number}；node 使用 {id:string} 或此前 "
-                        + "add_node 的 {alias:string}；port 使用 {node:{id|alias},port_id:string}。connect.from 必须是输出端口，"
-                        + "connect.to 必须是输入端口；不要猜端口 ID。"
+                        + "支持节点增删移动、端口值、连接与断开、节点属性、Frame 增删与属性、动态分支、图组虚拟端口和端口重命名。"
+                        + "position 为 {x:number,y:number}；node/frame/branch 使用 {id...} 或先前创建的 {alias...}。"
+                        + "普通 port 为 {node:{id|alias},port_id:string}；Patch 内生成的 port 为 {alias:string}。"
+                        + "节点属性仅 custom_name/custom_color/comment/parent_frame；Frame 属性仅 title/tags/color/position/size/parent_frame。"
+                        + "parent_frame 的 value 为 null 或 {id:string}/{alias:string}。动态分支 direction 为 input/output，"
+                        + "其端口别名为 branchAlias.basePortId。图组虚拟端口目标必须是当前 Group Scope 的 group_in/group_out。"
+                        + "rename_port 必须同时提供端口的 input/output direction。"
+                        + "connect.from 必须是输出端口，connect.to 必须是输入端口；不要猜端口 ID。"
+                        + "surface_ref 和外层 session_id 共同选择 Viewport 中的目标 Tab，外层 session_id 必须与 Patch 根字段一致。"
                         + "document/scope/revision 来自 get_graph_stats 或 query_graph_nodes；创建前 SELECT token 来自 "
                         + "get_node_type_port_options，已有实例 token 来自 get_port_options。"
                         + "调用由 MCP 客户端授权；GeometryNode 完成事务预检后原子提交为一次 Undo",

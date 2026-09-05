@@ -15,6 +15,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFiel
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
@@ -40,7 +41,6 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /** Polls live Area resources and dispatches listeners without creating Areas implicitly. */
 public final class AreaTriggerDispatcher {
@@ -62,34 +62,39 @@ public final class AreaTriggerDispatcher {
         cleanupStaleStates(state, currentTick);
 
         LevelGraphAttachment attachment = LevelGraphAttachment.get(hostLevel);
-        GraphResourceScope scope = new GraphResourceScope.LevelScope(hostLevel.dimension());
+        GraphResourceScope scope = scope(hostLevel);
+        Map<StateKey, ListenerState> scopeStates =
+                state.statesByScope.computeIfAbsent(scope, ignored -> new HashMap<>());
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
         for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(hostLevel, OnAreaEvent.TYPE_ID)) {
-            tickGraph(state, hostLevel, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+            tickGraph(scopeStates, hostLevel, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
                     currentTick, seenStates, queryCache);
         }
-        pruneScope(state, scope, seenStates);
+        pruneScope(state, scope, scopeStates, seenStates);
     }
 
     public void tickEntity(ServerLevel hostLevel, Entity owner, EntityGraphAttachment attachment, long currentTick) {
         if (owner == null || owner.isRemoved() || attachment == null || attachment.getBoundGraphs().isEmpty()) return;
         ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
         cleanupStaleStates(state, currentTick);
-
         GraphResourceScope scope = new GraphResourceScope.EntityScope(hostLevel.dimension(), owner.getUUID());
+        Map<StateKey, ListenerState> scopeStates =
+                state.statesByScope.computeIfAbsent(scope, ignored -> new HashMap<>());
+
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
         for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, OnAreaEvent.TYPE_ID)) {
-            tickGraph(state, hostLevel, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+            tickGraph(scopeStates, hostLevel, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
                     currentTick, seenStates, queryCache);
         }
-        pruneScope(state, scope, seenStates);
+        pruneScope(state, scope, scopeStates, seenStates);
     }
 
-    private void tickGraph(ServerState serverState, ServerLevel hostLevel, @Nullable Entity owner,
+    private void tickGraph(Map<StateKey, ListenerState> scopeStates,
+                           ServerLevel hostLevel, @Nullable Entity owner,
                            String graphId, @Nullable BlueprintPlan plan,
                            Function<String, BlueprintProcess> processFinder,
                            Consumer<BlueprintProcess> mountAction,
@@ -107,7 +112,7 @@ public final class AreaTriggerDispatcher {
         for (ListenerGroup group : groups.values()) {
             StateKey stateKey = new StateKey(stateResource, plan, group.key);
             seenStates.add(stateKey);
-            ListenerState listenerState = serverState.states.computeIfAbsent(stateKey,
+            ListenerState listenerState = scopeStates.computeIfAbsent(stateKey,
                     ignored -> new ListenerState());
             listenerState.lastSeenTick = currentTick;
             if (!shouldTick(currentTick, group.key.interval(), group.key.offset())) continue;
@@ -291,24 +296,34 @@ public final class AreaTriggerDispatcher {
                 GraphBindingKey.blueprint(graphId), GraphResourceSelector.Graph.INSTANCE, null, null);
     }
 
-    private static void pruneScope(ServerState state, GraphResourceScope scope, Set<StateKey> seen) {
-        state.states.entrySet().removeIf(entry -> entry.getKey().resourceId().scope().equals(scope)
-                && !seen.contains(entry.getKey()));
+    private static void pruneScope(ServerState state, GraphResourceScope scope,
+                                   Map<StateKey, ListenerState> scopeStates, Set<StateKey> seen) {
+        scopeStates.keySet().removeIf(key -> !seen.contains(key));
+        if (scopeStates.isEmpty()) state.statesByScope.remove(scope, scopeStates);
     }
 
     private static void cleanupStaleStates(ServerState state, long tick) {
         if (state.lastCleanupTick == tick || Math.floorMod(tick, STALE_CLEANUP_INTERVAL) != 0) return;
         state.lastCleanupTick = tick;
-        state.states.entrySet().removeIf(entry -> tick - entry.getValue().lastSeenTick > STALE_STATE_TICKS);
+        state.statesByScope.values().forEach(states ->
+                states.entrySet().removeIf(entry -> tick - entry.getValue().lastSeenTick > STALE_STATE_TICKS));
+        state.statesByScope.values().removeIf(Map::isEmpty);
     }
 
     public void shutdown(MinecraftServer server) {
         servers.remove(server);
     }
 
-    private void removeGraphResources(MinecraftServer server, Predicate<GraphResourceId> predicate) {
+    private void removeGraphResources(MinecraftServer server, GraphResourceRelease release) {
         ServerState state = servers.get(server);
-        if (state != null) state.states.keySet().removeIf(key -> predicate.test(key.resourceId()));
+        if (state == null) return;
+        state.statesByScope.values().forEach(states ->
+                states.keySet().removeIf(key -> release.matches(key.resourceId())));
+        state.statesByScope.values().removeIf(Map::isEmpty);
+    }
+
+    private static GraphResourceScope scope(ServerLevel level) {
+        return new GraphResourceScope.LevelScope(level.dimension());
     }
 
     private enum AreaPhase {
@@ -398,7 +413,7 @@ public final class AreaTriggerDispatcher {
     }
 
     private static final class ServerState {
-        private final Map<StateKey, ListenerState> states = new HashMap<>();
+        private final Map<GraphResourceScope, Map<StateKey, ListenerState>> statesByScope = new HashMap<>();
         private long lastCleanupTick = Long.MIN_VALUE;
     }
 }

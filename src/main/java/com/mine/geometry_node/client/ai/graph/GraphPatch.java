@@ -59,11 +59,21 @@ public record GraphPatch(
         public static NodeRef alias(String alias) { return new NodeRef(null, alias); }
     }
 
-    public record PortRef(NodeRef node, String portId) {
+    /** References either a concrete node port or a port created earlier in this patch. */
+    public record PortRef(NodeRef node, String portId, String alias) {
         public PortRef {
-            node = Objects.requireNonNull(node, "node");
-            portId = requireNonBlank(portId, "portId");
+            portId = normalizeOptional(portId);
+            alias = normalizeOptional(alias);
+            boolean concrete = node != null && portId != null && alias == null;
+            boolean generated = node == null && portId == null && alias != null;
+            if (!concrete && !generated) {
+                throw new IllegalArgumentException(
+                        "port ref requires either node + portId or exactly one alias");
+            }
         }
+
+        public PortRef(NodeRef node, String portId) { this(node, portId, null); }
+        public static PortRef alias(String alias) { return new PortRef(null, null, alias); }
     }
 
     /** Frame aliases have a separate namespace from node aliases. */
@@ -78,6 +88,23 @@ public record GraphPatch(
         public static FrameRef alias(String alias) { return new FrameRef(null, alias); }
     }
 
+    /** A concrete dynamic branch or one created earlier in the same patch. */
+    public record BranchRef(NodeRef node, String direction, Integer index, String alias) {
+        public BranchRef {
+            direction = normalizeOptional(direction);
+            alias = normalizeOptional(alias);
+            boolean concrete = node != null && direction != null && index != null && index > 0 && alias == null;
+            boolean generated = node == null && direction == null && index == null && alias != null;
+            if (!concrete && !generated) {
+                throw new IllegalArgumentException(
+                        "branch ref requires node + direction + positive index or exactly one alias");
+            }
+            if (concrete) direction = requireOneOf(direction, "direction", "input", "output");
+        }
+
+        public static BranchRef alias(String alias) { return new BranchRef(null, null, null, alias); }
+    }
+
     public record Position(double x, double y) {
         public Position {
             if (!Double.isFinite(x) || !Double.isFinite(y)) throw new IllegalArgumentException("position must be finite");
@@ -85,7 +112,7 @@ public record GraphPatch(
     }
 
     public sealed interface Operation permits AddNode, RemoveNode, MoveNode, Connect, Disconnect, SetPortValue,
-            SetSelectValue, SetNodeProperty, AddFrame, SetFrameProperty, AddDynamicBranch, RemoveDynamicBranch,
+            SetSelectValue, SetNodeProperty, AddFrame, RemoveFrame, SetFrameProperty, AddDynamicBranch, RemoveDynamicBranch,
             AddGroupVirtualPort, RemoveGroupVirtualPort, RenamePort {
         String op();
     }
@@ -175,6 +202,11 @@ public record GraphPatch(
         @Override public String op() { return "add_frame"; }
     }
 
+    public record RemoveFrame(FrameRef frame) implements Operation {
+        public RemoveFrame { frame = Objects.requireNonNull(frame, "frame"); }
+        @Override public String op() { return "remove_frame"; }
+    }
+
     public record SetFrameProperty(FrameRef frame, String property, JsonElement value) implements Operation {
         public SetFrameProperty {
             frame = Objects.requireNonNull(frame, "frame");
@@ -185,19 +217,19 @@ public record GraphPatch(
         @Override public JsonElement value() { return copyJson(value); }
     }
 
-    public record AddDynamicBranch(NodeRef node, String branchKind, String alias) implements Operation {
+    public record AddDynamicBranch(NodeRef node, String direction, String alias) implements Operation {
         public AddDynamicBranch {
             node = Objects.requireNonNull(node, "node");
-            branchKind = requireNonBlank(branchKind, "branchKind");
+            direction = requireOneOf(direction, "direction", "input", "output");
             alias = requireNonBlank(alias, "alias");
+            if (alias.indexOf('.') >= 0) throw new IllegalArgumentException("branch alias cannot contain '.'");
         }
         @Override public String op() { return "add_dynamic_branch"; }
     }
 
-    public record RemoveDynamicBranch(NodeRef node, String branchId) implements Operation {
+    public record RemoveDynamicBranch(BranchRef branch) implements Operation {
         public RemoveDynamicBranch {
-            node = Objects.requireNonNull(node, "node");
-            branchId = requireNonBlank(branchId, "branchId");
+            branch = Objects.requireNonNull(branch, "branch");
         }
         @Override public String op() { return "remove_dynamic_branch"; }
     }
@@ -208,22 +240,22 @@ public record GraphPatch(
             direction = requireOneOf(direction, "direction", "input", "output");
             portType = requireNonBlank(portType, "portType");
             alias = requireNonBlank(alias, "alias");
+            if (alias.indexOf('.') >= 0) throw new IllegalArgumentException("group port alias cannot contain '.'");
         }
         @Override public String op() { return "add_group_virtual_port"; }
     }
 
-    public record RemoveGroupVirtualPort(NodeRef node, String portId) implements Operation {
+    public record RemoveGroupVirtualPort(PortRef port) implements Operation {
         public RemoveGroupVirtualPort {
-            node = Objects.requireNonNull(node, "node");
-            portId = requireNonBlank(portId, "portId");
+            port = Objects.requireNonNull(port, "port");
         }
         @Override public String op() { return "remove_group_virtual_port"; }
     }
 
-    public record RenamePort(NodeRef node, String portId, String name) implements Operation {
+    public record RenamePort(PortRef port, String direction, String name) implements Operation {
         public RenamePort {
-            node = Objects.requireNonNull(node, "node");
-            portId = requireNonBlank(portId, "portId");
+            port = Objects.requireNonNull(port, "port");
+            direction = requireOneOf(direction, "direction", "input", "output");
             name = requireNonBlank(name, "name");
         }
         @Override public String op() { return "rename_port"; }

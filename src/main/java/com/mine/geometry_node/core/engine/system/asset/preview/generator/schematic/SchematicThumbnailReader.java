@@ -1,12 +1,16 @@
 package com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic;
 
+import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits;
 import com.mine.geometry_node.core.schematic.SchematicBlockColor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,6 +41,11 @@ public final class SchematicThumbnailReader {
     }
 
     private static CompoundTag readRoot(Path path) throws IOException {
+        long sourceBytes = Files.size(path);
+        if (sourceBytes > AssetPreviewLimits.MAX_SCHEMATIC_SOURCE_BYTES) {
+            throw new IOException("Schematic source exceeds preview limit: " + sourceBytes + " bytes");
+        }
+
         IOException compressedError = null;
         try {
             return NbtIo.readCompressed(path, NbtAccounter.create(MAX_NBT_BYTES));
@@ -44,8 +53,8 @@ public final class SchematicThumbnailReader {
             compressedError = e;
         }
 
-        try {
-            return NbtIo.read(path);
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
+            return NbtIo.read(input, NbtAccounter.create(MAX_NBT_BYTES));
         } catch (IOException e) {
             e.addSuppressed(compressedError);
             throw e;

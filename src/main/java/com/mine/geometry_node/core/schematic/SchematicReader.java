@@ -6,7 +6,10 @@ import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,6 +17,7 @@ import java.util.Map;
 
 public final class SchematicReader {
     private static final long MAX_NBT_BYTES = 256L * 1024L * 1024L;
+    private static final long MAX_SOURCE_BYTES = MAX_NBT_BYTES;
 
     private SchematicReader() {
     }
@@ -34,6 +38,11 @@ public final class SchematicReader {
     }
 
     private static CompoundTag readRoot(Path path) throws IOException {
+        long sourceBytes = Files.size(path);
+        if (sourceBytes > MAX_SOURCE_BYTES) {
+            throw new IOException("Schematic source exceeds limit: " + sourceBytes + " bytes");
+        }
+
         IOException compressedError = null;
         try {
             return NbtIo.readCompressed(path, NbtAccounter.create(MAX_NBT_BYTES));
@@ -41,8 +50,8 @@ public final class SchematicReader {
             compressedError = e;
         }
 
-        try {
-            return NbtIo.read(path);
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
+            return NbtIo.read(input, NbtAccounter.create(MAX_NBT_BYTES));
         } catch (IOException e) {
             e.addSuppressed(compressedError);
             throw e;

@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** JSON-RPC dispatcher for the MCP Streamable HTTP lifecycle. */
 public final class McpRequestDispatcher implements AutoCloseable {
-    static final String GRAPH_STATS_RESOURCE_URI = "geometry-node://current-graph/stats";
     /** Most recent protocol version; older listed version remains formally negotiated for Codex clients. */
     public static final String MCP_PROTOCOL_VERSION = "2025-11-25";
     private static final java.util.Set<String> SUPPORTED_PROTOCOL_VERSIONS =
@@ -52,21 +51,27 @@ public final class McpRequestDispatcher implements AutoCloseable {
             GeometryNode, MCP, or a tool name.
 
             TARGET SELECTION
-            - Graph tools accept an optional surface_ref such as V1. Preserve and use an explicit surface_ref
-              whenever the user names a viewport or when a workflow has already selected one.
+            - Graph tools accept an optional surface_ref such as V1 and session_id. surface_ref selects the
+              viewport; session_id selects one of that viewport's tabs, including a background tab.
             - Call get_ui_context before graph tools when the user mentions UI references such as V1, T1, or A1,
               compares multiple windows, or leaves the target ambiguous while multiple viewports may exist.
-            - Use get_surface_context for details about one known surface. Without surface_ref, graph tools target
-              the most recently interacted viewport, or the only available viewport. Do not guess between targets.
-            - A graph transaction is bound to the resolved graph session and current group scope. Do not silently
-              switch to another viewport, tab, graph group, or root graph during the workflow.
+            - Use get_surface_context to list the current and background tabs of one viewport. When the user names
+              a JSON tab, resolve its session_id there and pass both surface_ref and session_id to later graph tools.
+              Without surface_ref, graph tools target the most recently interacted or only available viewport;
+              without session_id, they target that viewport's current tab. Do not guess between ambiguous targets.
+            - A graph transaction is bound to the resolved viewport, graph session, group scope, and revision. It
+              may edit a background tab without switching the visible tab. Do not silently change any target part.
 
             READING THE GRAPH
+            - Use get_graph_metadata for root-graph kind, comment, tags, or version. Select only the graph-level
+              fields needed; this metadata remains rooted at the graph asset even while editing inside a group.
             - Use get_graph_stats for counts, type/category distribution, frame or comment counts, isolated-node
               counts, and other summaries. It intentionally does not return the full graph.
             - Use query_graph_nodes for graph contents. Filter by node IDs, short type IDs, node directory, text,
               comment presence, or connection state, and select only the identity, values, connections, comments,
               ports, position, or metadata fields needed. Use direction and kind filters for connection queries.
+            - Use query_graph_frames for frames in the current group scope. Filter by frame IDs, title/tag text,
+              required tags, or parent frame, and select only identity, tags, position, style, hierarchy, or contents.
             - Empty node_ids/type_ids, an empty directory/query, comment_filter=any, and connection_state=any mean
               no restriction for that filter. directory matches that exact node menu directory and its descendants;
               it is not the broad runtime category used by get_graph_stats.
@@ -77,12 +82,17 @@ public final class McpRequestDispatcher implements AutoCloseable {
               pagination metadata and request additional pages when the answer depends on omitted results.
 
             QUERY EXAMPLES
+            - Inspect background tab 2.json in V2: call get_surface_context with {\"surface_ref\":\"V2\"}, find the
+              matching tab's session_id, then pass {\"surface_ref\":\"V2\",\"session_id\":\"...\"} to graph tools.
+            - Read only graph tags and comment: get_graph_metadata with {\"select\":[\"tags\",\"comment\"]}.
             - List nodes: query_graph_nodes with {\"select\":[\"identity\"]}.
             - Inspect Follow nodes: query_graph_nodes with
               {\"type_ids\":[\"behavior_follow\"],\"select\":[\"identity\",\"values\",\"comments\"]}.
             - Inspect one node's outgoing behavior edges: query_graph_nodes with
               {\"node_ids\":[\"node-1\"],\"select\":[\"connections\"],\"connection_direction\":\"outgoing\",
               \"connection_kinds\":[\"behavior\"]}.
+            - Inspect top-level frame hierarchy: query_graph_frames with
+              {\"parent_frame\":\"root\",\"select\":[\"identity\",\"hierarchy\"]}.
 
             DISCOVERING NODE CONTRACTS
             - The appended NODE TYPE CATALOG is the live authoritative menu tree. If it gives the exact type_id,
@@ -101,13 +111,24 @@ public final class McpRequestDispatcher implements AutoCloseable {
             - The only model-visible write tool is apply_graph_patch. Its patch_json argument is a JSON string, not
               an embedded object. A patch must contain the current session_id, scope_id, expected_revision, a
               non-empty idempotency_key, and operations. Obtain session, scope, and revision from get_graph_stats
-              or query_graph_nodes immediately before planning the write.
-            - Currently executable operations are add_node, move_node, set_port_value, set_select_value, and
-              connect. add_node requires a unique alias, an exact short type_id without a namespace, a finite
-              {x,y} position, and an empty properties object. A node reference is exactly one of {\"id\":...}
-              for an existing node or
-              {\"alias\":...} for a node created earlier in the same patch. A port reference contains that node
-              reference plus an exact port_id. connect.from is an output and connect.to is an input.
+              or query_graph_nodes immediately before planning the write. Pass surface_ref and session_id as tool
+              arguments too; the outer session_id must equal the session_id inside patch_json.
+            - Executable operations are add_node, remove_node, move_node, set_port_value, set_select_value,
+              connect, disconnect, set_node_property, add_frame, remove_frame, set_frame_property,
+              add_dynamic_branch, remove_dynamic_branch, add_group_virtual_port, remove_group_virtual_port,
+              and rename_port. add_node requires a unique alias, an exact short type_id without a namespace,
+              a finite {x,y} position, and optional properties. A node or frame reference is exactly one of
+              {\"id\":...} or {\"alias\":...}. A concrete port reference is
+              {\"node\":{\"id\"|\"alias\":...},\"port_id\":...}; a generated port reference is
+              {\"alias\":...}. connect.from is an output and connect.to is an input.
+            - Node properties are custom_name, custom_color, comment, and parent_frame. Frame properties are
+              title, tags, color, position, size, and parent_frame. parent_frame values are null or a FrameRef
+              object, never a bare alias string. Frame operations are root-scope only.
+            - Dynamic branch direction is input or output. A new branch alias identifies the branch; each generated
+              port is referenced as branchAlias.basePortId. A concrete branch reference contains node, direction,
+              and its 1-based index. Group virtual ports target group_in/group_out in the current Group Scope and
+              declare direction plus an exact PortType name; their alias directly identifies the generated port.
+              rename_port also requires the port's input or output direction.
             - Supply expected_old_value when changing an existing input. Do not overwrite a connected input value,
               use SELECT labels as values, rely on implicit rewiring, or send unsupported operation kinds.
             - Prefer one coherent patch for one user request. Aliases allow newly added nodes to be configured and
@@ -168,9 +189,6 @@ public final class McpRequestDispatcher implements AutoCloseable {
             case "initialize" -> initialize(requestId, request);
             case "notifications/initialized" -> notification(request);
             case "notifications/cancelled" -> cancelNotification(request);
-            case "resources/list" -> listResources(requestId, request);
-            case "resources/templates/list" -> listResourceTemplates(requestId, request);
-            case "resources/read" -> readResource(requestScope, requestId, request);
             case "tools/list" -> listTools(requestId, request);
             case "tools/call" -> callTool(requestScope, requestId, request);
             default -> initialized.get()
@@ -188,7 +206,7 @@ public final class McpRequestDispatcher implements AutoCloseable {
         gateway.close();
     }
 
-    private Reply initialize(JsonElement id, JsonObject request) {
+    private synchronized Reply initialize(JsonElement id, JsonObject request) {
         if (initialized.get()) return protocolError(id, -32600, "MCP server is already initialized");
         if (id == null || !request.has("params") || !request.get("params").isJsonObject()) {
             return protocolError(id, -32602, "initialize requires params");
@@ -208,8 +226,8 @@ public final class McpRequestDispatcher implements AutoCloseable {
         if (object(params.get("capabilities")) == null || object(params.get("clientInfo")) == null) {
             return protocolError(id, -32602, "initialize requires capabilities and clientInfo");
         }
-        initialized.set(true);
         negotiatedVersion = requested;
+        initialized.set(true);
         JsonObject result = new JsonObject();
         result.addProperty("protocolVersion", negotiatedVersion);
         result.add("capabilities", serverCapabilities());
@@ -219,6 +237,11 @@ public final class McpRequestDispatcher implements AutoCloseable {
     }
 
     public String negotiatedProtocolVersion() { return negotiatedVersion; }
+
+    /** Returns the negotiated version only after initialization has been atomically published. */
+    String initializedProtocolVersion() {
+        return initialized.get() ? negotiatedVersion : null;
+    }
 
     private Reply notification(JsonObject request) {
         return new Reply(null);
@@ -234,73 +257,6 @@ public final class McpRequestDispatcher implements AutoCloseable {
             }
         }
         return new Reply(null);
-    }
-
-    private Reply listResources(JsonElement id, JsonObject request) {
-        if (id == null) return protocolError(null, -32600, "resources/list requires an id");
-        JsonObject params = optionalObject(request.get("params"));
-        if (params == null || !hasOnly(params, "cursor", "_meta")
-                || params.has("cursor") && !params.get("cursor").isJsonNull()) {
-            return protocolError(id, -32602, "Invalid resources/list params");
-        }
-        JsonObject resource = new JsonObject();
-        resource.addProperty("uri", GRAPH_STATS_RESOURCE_URI);
-        resource.addProperty("name", "Current GeometryNode graph statistics");
-        resource.addProperty("description", "Lightweight current graph statistics, including node and connection "
-                + "counts without graph contents. Read this for count, length, or summary questions.");
-        resource.addProperty("mimeType", "application/json");
-        JsonArray resources = new JsonArray();
-        resources.add(resource);
-        JsonObject result = completeResult();
-        result.add("resources", resources);
-        return success(id, result);
-    }
-
-    private Reply listResourceTemplates(JsonElement id, JsonObject request) {
-        if (id == null) return protocolError(null, -32600, "resources/templates/list requires an id");
-        JsonObject params = optionalObject(request.get("params"));
-        if (params == null || !hasOnly(params, "cursor", "_meta")
-                || params.has("cursor") && !params.get("cursor").isJsonNull()) {
-            return protocolError(id, -32602, "Invalid resources/templates/list params");
-        }
-        JsonObject result = completeResult();
-        result.add("resourceTemplates", new JsonArray());
-        return success(id, result);
-    }
-
-    private Reply readResource(String requestScope, JsonElement id, JsonObject request) {
-        if (id == null) return protocolError(null, -32600, "resources/read requires an id");
-        JsonObject params = object(request.get("params"));
-        if (params == null || !hasOnly(params, "uri", "_meta")
-                || !GRAPH_STATS_RESOURCE_URI.equals(string(params.get("uri")))) {
-            return protocolError(id, -32602, "Unknown or invalid resource URI");
-        }
-        CommandSpec command = catalog.find("get_graph_stats").orElse(null);
-        if (command == null) return protocolError(id, -32603, "Graph statistics command is unavailable");
-
-        AtomicBoolean cancelled = new AtomicBoolean();
-        activeCalls.put(requestScope, cancelled);
-        CommandResult commandResult;
-        try {
-            commandResult = executeCommand(command, new JsonObject(), cancelled);
-        } finally {
-            activeCalls.remove(requestScope);
-        }
-        String text = commandResult.toJson().toString();
-        if (exceedsResultLimit(text)) {
-            return protocolError(id, -32003, "Resource result exceeds the MCP size limit");
-        }
-        if (!commandResult.ok()) return protocolError(id, -32002, commandResult.message());
-
-        JsonObject content = new JsonObject();
-        content.addProperty("uri", GRAPH_STATS_RESOURCE_URI);
-        content.addProperty("mimeType", "application/json");
-        content.addProperty("text", text);
-        JsonArray contents = new JsonArray();
-        contents.add(content);
-        JsonObject result = completeResult();
-        result.add("contents", contents);
-        return success(id, result);
     }
 
     private Reply listTools(JsonElement id, JsonObject request) {
@@ -509,7 +465,6 @@ public final class McpRequestDispatcher implements AutoCloseable {
         JsonObject tools = new JsonObject();
         tools.addProperty("listChanged", false);
         capabilities.add("tools", tools);
-        capabilities.add("resources", new JsonObject());
         return capabilities;
     }
 

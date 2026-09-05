@@ -15,6 +15,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.meta.SchemaKeys;
+import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -263,6 +264,59 @@ final class TerminalGraphQueryService {
         return CommandResult.success("GRAPH_NODES_QUERIED", "在蓝图中找到 " + page.total() + " 个匹配节点", data);
     }
 
+    CommandResult getGraphMetadata(List<String> select) {
+        GraphReadSnapshot snapshot = snapshot();
+        NodeGraph current = snapshot.graph();
+        if (current == null) return CommandResult.failure("NO_ACTIVE_GRAPH", "当前没有可用的 Graph");
+        JsonObject data = new JsonObject();
+        data.add("select", strings(select));
+        if (select.contains("kind")) data.addProperty("kind", text(current.graphKind));
+        if (select.contains("comment")) data.addProperty("comment", text(current.comment));
+        if (select.contains("tags")) data.add("tags", limitedStrings(current.tags));
+        if (select.contains("version")) data.addProperty("version", text(current.version));
+        return CommandResult.success("GRAPH_METADATA", "已读取 Graph 元数据", data);
+    }
+
+    CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags, String parentFrame,
+                                   List<String> select, int offset, int limit) {
+        GraphReadSnapshot snapshot = snapshot();
+        Set<String> requestedIds = Set.copyOf(frameIds);
+        String normalizedQuery = text(query).trim().toLowerCase(Locale.ROOT);
+        String effectiveParentFrame = parentFrame == null || parentFrame.isBlank() ? "any" : parentFrame;
+        List<Map.Entry<String, FrameData>> matches = snapshot.frames().entrySet().stream()
+                .filter(entry -> requestedIds.isEmpty() || requestedIds.contains(entry.getKey()))
+                .filter(entry -> matchesFrameQuery(entry.getKey(), entry.getValue(), normalizedQuery))
+                .filter(entry -> containsAllTags(entry.getValue(), tags))
+                .filter(entry -> matchesParentFrame(entry.getValue(), effectiveParentFrame))
+                .toList();
+        PageSlice<Map.Entry<String, FrameData>> page = page(matches, offset, limit);
+        JsonArray items = new JsonArray();
+        for (Map.Entry<String, FrameData> entry : page.items()) {
+            String frameId = entry.getKey();
+            FrameData frame = entry.getValue();
+            JsonObject item = new JsonObject();
+            if (select.contains("identity")) item.add("identity", frameIdentity(frameId, frame));
+            if (select.contains("tags")) item.add("tags", limitedStrings(frame.tags));
+            if (select.contains("position")) item.add("position", framePosition(frame));
+            if (select.contains("style")) item.add("style", frameStyle(frame));
+            if (select.contains("hierarchy")) item.add("hierarchy", frameHierarchy(snapshot, frameId, frame));
+            if (select.contains("contents")) item.add("contents", frameContents(snapshot, frameId));
+            items.add(item);
+        }
+        JsonObject filters = new JsonObject();
+        filters.add("frame_ids", strings(frameIds));
+        filters.addProperty("query", text(query));
+        filters.add("tags", strings(tags));
+        filters.addProperty("parent_frame", effectiveParentFrame);
+        JsonObject data = new JsonObject();
+        data.add("filters", filters);
+        data.add("select", strings(select));
+        data.add("items", items);
+        data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
+        data.addProperty("snapshot_frame_count", snapshot.frames().size());
+        return CommandResult.success("GRAPH_FRAMES_QUERIED", "在当前 Scope 中找到 " + page.total() + " 个匹配 Frame", data);
+    }
+
     CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         String canonicalTypeId = "";
@@ -475,6 +529,76 @@ final class TerminalGraphQueryService {
         JsonArray array = new JsonArray();
         values.forEach(array::add);
         return array;
+    }
+
+    private static JsonArray limitedStrings(List<String> values) {
+        JsonArray array = new JsonArray();
+        if (values == null) return array;
+        values.stream().filter(java.util.Objects::nonNull).limit(DETAILS_COLLECTION_LIMIT).forEach(array::add);
+        return array;
+    }
+
+    private static boolean matchesFrameQuery(String frameId, FrameData frame, String query) {
+        if (query.isEmpty()) return true;
+        if (frameId.toLowerCase(Locale.ROOT).contains(query) || text(frame.title).toLowerCase(Locale.ROOT).contains(query)) {
+            return true;
+        }
+        return frame.tags != null && frame.tags.stream().filter(java.util.Objects::nonNull)
+                .anyMatch(tag -> tag.toLowerCase(Locale.ROOT).contains(query));
+    }
+
+    private static boolean containsAllTags(FrameData frame, List<String> requestedTags) {
+        if (requestedTags.isEmpty()) return true;
+        return frame.tags != null && frame.tags.containsAll(requestedTags);
+    }
+
+    private static boolean matchesParentFrame(FrameData frame, String requestedParent) {
+        if (requestedParent == null || requestedParent.equals("any")) return true;
+        if (requestedParent.equals("root")) return frame.parentFrame == null || frame.parentFrame.isBlank();
+        return requestedParent.equals(frame.parentFrame);
+    }
+
+    private static JsonObject frameIdentity(String frameId, FrameData frame) {
+        JsonObject identity = new JsonObject();
+        identity.addProperty("frame_id", frameId);
+        identity.addProperty("title", text(frame.title));
+        return identity;
+    }
+
+    private static JsonObject framePosition(FrameData frame) {
+        JsonObject position = new JsonObject();
+        position.addProperty("x", coordinate(frame.uiPos, 0));
+        position.addProperty("y", coordinate(frame.uiPos, 1));
+        position.addProperty("width", coordinate(frame.uiSize, 0));
+        position.addProperty("height", coordinate(frame.uiSize, 1));
+        return position;
+    }
+
+    private static JsonObject frameStyle(FrameData frame) {
+        JsonObject style = new JsonObject();
+        style.addProperty("color", frame.color);
+        return style;
+    }
+
+    private static JsonObject frameHierarchy(GraphReadSnapshot snapshot, String frameId, FrameData frame) {
+        JsonObject hierarchy = new JsonObject();
+        hierarchy.addProperty("parent_frame", text(frame.parentFrame));
+        List<String> children = snapshot.frames().entrySet().stream()
+                .filter(entry -> frameId.equals(entry.getValue().parentFrame))
+                .map(Map.Entry::getKey).sorted().limit(DETAILS_COLLECTION_LIMIT).toList();
+        hierarchy.add("child_frame_ids", strings(children));
+        return hierarchy;
+    }
+
+    private static JsonArray frameContents(GraphReadSnapshot snapshot, String frameId) {
+        List<String> nodeIds = snapshot.nodes().entrySet().stream()
+                .filter(entry -> frameId.equals(entry.getValue().parentFrame))
+                .map(Map.Entry::getKey).sorted().limit(DETAILS_COLLECTION_LIMIT).toList();
+        return strings(nodeIds);
+    }
+
+    private static double coordinate(float[] values, int index) {
+        return values != null && index < values.length ? finite(values[index]) : 0.0;
     }
 
     private static JsonArray valueArray(NodeData node, NodeDef definition, GraphReadSnapshot snapshot, String nodeId) {

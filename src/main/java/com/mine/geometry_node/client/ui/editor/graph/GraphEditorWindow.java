@@ -15,6 +15,7 @@ import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import icyllis.modernui.core.Context;
@@ -24,6 +25,8 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
+
+import java.util.List;
 
 public class GraphEditorWindow extends LinearLayout
         implements AreaEditorWindow, SurfaceRegistrationAware, ViewportSurface {
@@ -94,6 +97,13 @@ public class GraphEditorWindow extends LinearLayout
     @Override
     public GraphSession currentGraphSession() {
         return mGraphViewportPanel.currentSession();
+    }
+
+    @Override
+    public List<GraphSession> openGraphSessions() {
+        return DocumentManager.INSTANCE.getSessions().stream()
+                .filter(session -> session != null && !session.fileReference().isDeleted())
+                .toList();
     }
 
     @Override
