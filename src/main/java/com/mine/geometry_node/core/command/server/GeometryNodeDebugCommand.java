@@ -15,7 +15,6 @@ public final class GeometryNodeDebugCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("geometry_node")
-                        .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_GAMEMASTER))
                         .then(Commands.literal("debug")
                                 .then(Commands.literal("on")
                                         .executes(context -> enableAll(context, DebugRendererSessionManager.DEFAULT_RADIUS))
