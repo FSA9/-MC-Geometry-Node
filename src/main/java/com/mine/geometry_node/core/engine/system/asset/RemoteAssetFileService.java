@@ -108,7 +108,7 @@ public final class RemoteAssetFileService {
         }
 
         String committedPath = ServerAssetPaths.pathToId(root(server), target);
-        return AssetLifecycleRegistry.INSTANCE.refresh(
+        return AssetLifecycleDispatcher.INSTANCE.refresh(
                         server, affectedTypeIds, Set.of(committedPath), false)
                 .handle((ignored, refreshFailure) -> new UploadCommitResult(
                         commit, refreshFailure, sourceSize, sourceLastModified));

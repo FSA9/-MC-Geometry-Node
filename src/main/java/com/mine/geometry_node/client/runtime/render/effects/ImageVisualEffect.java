@@ -29,7 +29,7 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
     private final LiveValue.State<Float> width;
     private final LiveValue.State<Float> height;
     private final LiveValue.State<Float> alpha;
-    private Identifier texture;
+    private ClientImageAssetManager.TextureLease textureLease;
     private boolean textureResolved;
     private float imageAspect;
     private boolean imageAspectResolved;
@@ -62,9 +62,10 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
                        SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         if (!textureResolved) {
-            texture = ClientImageAssetManager.resolve(imageSource, imageReference);
-            textureResolved = true;
+            textureLease = ClientImageAssetManager.acquire(imageSource, imageReference);
+            textureResolved = textureLease != null || !"server".equals(imageSource);
         }
+        Identifier texture = textureLease == null ? null : textureLease.texture();
         if (texture == null) return;
 
         ExpressionEvaluationContext context = expressionContext(partialTick);
@@ -123,12 +124,24 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
     private float imageAspect() {
         if (imageAspectResolved) return imageAspect;
         imageAspectResolved = true;
+        Identifier texture = textureLease == null ? null : textureLease.texture();
+        if (texture == null) return 0.0F;
         var abstractTexture = Minecraft.getInstance().getTextureManager().getTexture(texture);
         if (!(abstractTexture instanceof DynamicTexture dynamicTexture)) return 0.0F;
         var pixels = dynamicTexture.getPixels();
         if (pixels == null || pixels.isClosed() || pixels.getWidth() <= 0 || pixels.getHeight() <= 0) return 0.0F;
         imageAspect = pixels.getWidth() / (float) pixels.getHeight();
         return imageAspect;
+    }
+
+    @Override
+    public void close() {
+        if (textureLease != null) {
+            textureLease.close();
+            textureLease = null;
+        } else if (!textureResolved && "server".equals(imageSource)) {
+            ClientImageAssetManager.discardPendingServerAsset(imageReference);
+        }
     }
 
     private record DisplaySize(float width, float height) {

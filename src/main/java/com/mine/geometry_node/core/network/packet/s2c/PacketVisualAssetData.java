@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
-import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetValidator;
+import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -16,7 +16,7 @@ public record PacketVisualAssetData(String assetId, byte[] data) implements Cust
     );
 
     public PacketVisualAssetData(RegistryFriendlyByteBuf buf) {
-        this(buf.readUtf(128), buf.readByteArray(ImageAssetValidator.MAX_ENCODED_BYTES));
+        this(buf.readUtf(128), buf.readByteArray(AssetTransferLimits.MAX_FILE_BYTES));
     }
 
     private void write(RegistryFriendlyByteBuf buf) {

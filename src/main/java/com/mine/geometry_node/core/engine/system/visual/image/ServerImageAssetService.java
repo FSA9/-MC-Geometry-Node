@@ -34,8 +34,6 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
     public static final String ID = "geometry_node:server_image_asset";
     public static final ServerImageAssetService INSTANCE = new ServerImageAssetService();
 
-    private static final int MAX_CACHE_ENTRIES = 128;
-    private static final long MAX_CACHE_BYTES = 64L * 1024L * 1024L;
     private static final int IO_QUEUE_CAPACITY = 64;
     private static final int MAX_FAILURE_LOG_KEYS = 256;
     private static final long FAILURE_LOG_INTERVAL_NANOS = Duration.ofMinutes(1).toNanos();
@@ -174,7 +172,7 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
             throw new IOException("Server image escapes geometry_nodes: " + relativePath);
         }
         long size = Files.size(realPath);
-        if (size <= 0 || size > ImageAssetValidator.MAX_ENCODED_BYTES) {
+        if (size <= 0 || size > RuntimeImageServerConfig.maxEncodedBytes()) {
             throw new IOException("Server image has an unsupported file size: " + size);
         }
         FileTime modified = Files.getLastModifiedTime(realPath);
@@ -182,7 +180,10 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
         if (cached != null) return cached;
 
         byte[] data = Files.readAllBytes(realPath);
-        ImageAssetValidator.validateImage(data);
+        ImageAssetValidator.validateImage(data,
+                RuntimeImageServerConfig.maxEncodedBytes(),
+                RuntimeImageServerConfig.maxDimension(),
+                RuntimeImageServerConfig.maxPixels());
         GraphEngineServices.VisualAsset asset = new GraphEngineServices.VisualAsset(
                 ImageAssetValidator.contentId(data), data);
         if (state.generation != generation) throw new IOException("Server image load was cancelled");
@@ -241,7 +242,8 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
             if (previous != null) cachedBytes -= previous.bytes();
             cachedBytes += value.bytes();
             Iterator<Map.Entry<Path, CachedAsset>> iterator = cache.entrySet().iterator();
-            while ((cache.size() > MAX_CACHE_ENTRIES || cachedBytes > MAX_CACHE_BYTES) && iterator.hasNext()) {
+            while ((cache.size() > RuntimeImageServerConfig.cacheMaxEntries()
+                    || cachedBytes > RuntimeImageServerConfig.cacheMaxBytes()) && iterator.hasNext()) {
                 Map.Entry<Path, CachedAsset> eldest = iterator.next();
                 cachedBytes -= eldest.getValue().bytes();
                 iterator.remove();

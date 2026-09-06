@@ -1,5 +1,10 @@
-package com.mine.geometry_node.core.engine.graph.scoped;
+package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -34,8 +39,8 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
     }
 
     @Override
-    public ScopedStateEntry put(String name, Object value) {
-        return store().put(namespace, name, value,
+    public void put(String name, Object value) {
+        store().put(namespace, name, value,
                 maxEntries, registries(), this::notifyLimit);
     }
 
@@ -44,7 +49,7 @@ public final class OwnerScopedStateProvider implements ScopedStateProvider {
         return store().remove(namespace, name);
     }
 
-    @Override public long revision() { return store().revision(); }
+    @Override public long revision() { return store().revision(namespace); }
     @Override public boolean hasRecord(String name) { return store().hasRecord(namespace, name); }
     @Override public int size() { return store().size(namespace); }
     @Override public Map<String, ScopedStateEntry> entries(int limit) {

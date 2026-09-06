@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.attachment;
 
 import com.mine.geometry_node.core.engine.blueprint.attachment.BlueprintEntityProcessHost;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
-import com.mine.geometry_node.core.engine.graph.scoped.OwnerScopedStateStore;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.OwnerScopedStateStore;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;

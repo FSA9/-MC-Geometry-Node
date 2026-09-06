@@ -21,6 +21,7 @@ import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.ScopedStateStorage;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
@@ -28,8 +29,6 @@ import com.mine.geometry_node.core.engine.system.marker.MarkerService;
 import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadingService;
 import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
-import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.asset.ServerAssetMetadataCache;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -173,10 +172,6 @@ public class GeometryNode {
         NodeRegistry.INSTANCE.init();
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
-        AssetLifecycleRegistry.INSTANCE.register(
-                AssetTypeCatalog.GRAPH_TYPE_ID,
-                DynamicGraphManager::refresh);
-
         // 初始化图运行时注册表
         ServerEngineDriver.init();
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
@@ -216,6 +211,10 @@ public class GeometryNode {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
+        int removedGroups = ScopedStateStorage.reconcileGroups(event.getServer());
+        if (removedGroups > 0) {
+            LOGGER.info("[GeometryNode] Removed {} orphaned GROUP scoped-state buckets", removedGroups);
+        }
     }
 
     @SubscribeEvent

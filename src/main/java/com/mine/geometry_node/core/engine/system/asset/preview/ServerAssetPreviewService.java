@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.AssetTypeDefinition;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewSourceChangedException;
@@ -34,17 +35,12 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     private static final int MAX_ACTIVE_PER_SERVER = 64;
 
     private final ServerAssetPreviewStore store = new ServerAssetPreviewStore();
-    private final ServerAssetPreviewGeneratorRegistry generators = new ServerAssetPreviewGeneratorRegistry();
+    private final ServerAssetPreviewGeneratorRegistry generators = new ServerAssetPreviewGeneratorRegistry(store);
     private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ServerIO", 2, 64);
     private final Map<MinecraftServer, ServerState> states = new ConcurrentHashMap<>();
     private boolean initialized;
 
     private ServerAssetPreviewService() {
-        generators.registerBuiltins(store);
-    }
-
-    public void registerGenerator(AssetPreviewKind kind, ServerAssetPreviewGenerator generator) {
-        generators.register(kind, generator);
     }
 
     public synchronized void init() {
@@ -117,12 +113,12 @@ public final class ServerAssetPreviewService implements AutoCloseable {
             }
             CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> promise = new CompletableFuture<>();
             CompletableFuture<Optional<ServerAssetPreviewStore.StoredPreview>> worker = io.submit(() -> {
-                Path source = validateSource(state.server, revision);
+                ValidatedSource source = validateSource(state.server, revision);
                 Optional<ServerAssetPreviewStore.StoredPreview> cached = store.find(state.server, revision);
                 if (cached.isPresent()) return cached;
-                ServerAssetPreviewGenerator generator = generators.get(revision.identity().kind());
+                ServerAssetPreviewGenerator generator = generators.get(source.definition());
                 return generator == null ? Optional.empty()
-                        : Optional.of(generator.generate(state.server, source, revision));
+                        : Optional.of(generator.generate(state.server, source.path(), revision));
             });
             InFlightPreview created = new InFlightPreview(promise, worker);
             created.waiters = 1;
@@ -252,26 +248,29 @@ public final class ServerAssetPreviewService implements AutoCloseable {
         result(onlinePlayer(state, key), key.requestId(), code, detail);
     }
 
-    private static Path validateSource(MinecraftServer server, AssetPreviewRevision revision) throws Exception {
+    private static ValidatedSource validateSource(MinecraftServer server, AssetPreviewRevision revision) throws Exception {
         try {
             if (revision.formatVersion() != AssetPreviewLimits.FORMAT_VERSION) {
                 throw new InvalidPreviewRequestException();
             }
             Path source = RemoteAssetFileService.resolveTransferSource(server, revision.identity().remotePath());
-            AssetPreviewKind actualKind = AssetTypeCatalog.previewKind(AssetTypeCatalog.inspect(source).typeId());
-            if (!actualKind.equals(revision.identity().kind())) {
+            AssetTypeDefinition definition = AssetTypeCatalog.definition(AssetTypeCatalog.inspect(source).typeId());
+            if (definition == null || !definition.previewKind().equals(revision.identity().kind())) {
                 throw new InvalidPreviewRequestException();
             }
             if (Files.size(source) != revision.sourceSize()
                     || Files.getLastModifiedTime(source).toMillis() != revision.sourceLastModified()) {
                 throw new StaleRevisionException();
             }
-            return source;
+            return new ValidatedSource(source, definition);
         } catch (StaleRevisionException | InvalidPreviewRequestException exception) {
             throw exception;
         } catch (Exception exception) {
             throw new InvalidPreviewRequestException(exception);
         }
+    }
+
+    private record ValidatedSource(Path path, AssetTypeDefinition definition) {
     }
 
     private static boolean hasCause(Throwable error, Class<? extends Throwable> type) {

@@ -1,6 +1,8 @@
-package com.mine.geometry_node.core.engine.graph.scoped;
+package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;

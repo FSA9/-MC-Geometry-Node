@@ -55,14 +55,18 @@ public class ClientVisualManager {
         }
 
         for (int i = ACTIVE_EFFECTS.size() - 1; i >= 0; i--) {
-            if (ACTIVE_EFFECTS.get(i).tick()) {
+            AbstractVisualEffect effect = ACTIVE_EFFECTS.get(i);
+            if (effect.tick()) {
                 ACTIVE_EFFECTS.remove(i);
+                effect.close();
             }
         }
     }
 
     public static void clear() {
-        PENDING_ADDITIONS.clear();
+        AbstractVisualEffect pendingEffect;
+        while ((pendingEffect = PENDING_ADDITIONS.poll()) != null) pendingEffect.close();
+        for (AbstractVisualEffect effect : ACTIVE_EFFECTS) effect.close();
         ACTIVE_EFFECTS.clear();
     }
 

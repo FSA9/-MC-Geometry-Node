@@ -1,5 +1,7 @@
-package com.mine.geometry_node.core.engine.graph.scoped;
+package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -25,7 +27,7 @@ final class PersistentScopedStateEntry {
     }
 
     static PersistentScopedStateEntry written(Tag encodedValue,
-                                                GraphValueSnapshot.FrozenValue frozenValue) {
+                                               GraphValueSnapshot.FrozenValue frozenValue) {
         return new PersistentScopedStateEntry(
                 encodedValue, Objects.requireNonNull(frozenValue, "frozenValue"));
     }
@@ -34,26 +36,36 @@ final class PersistentScopedStateEntry {
         return encodedValue.copy();
     }
 
-    ScopedStateEntry read(HolderLookup.Provider registries, String location) {
-        GraphValueSnapshot.FrozenValue current = frozenValue;
-        if (current == null) {
-            current = hydrate(registries, location);
+    boolean equivalentTo(GraphValueSnapshot.FrozenValue candidate,
+                         HolderLookup.Provider registries, String location) {
+        try {
+            return GraphValueSnapshot.equivalent(
+                    frozen(registries, location).value(), candidate.value());
+        } catch (ScopedStateAccessException ignored) {
+            // A valid write must be able to replace a corrupt persisted value.
+            return false;
         }
+    }
+
+    ScopedStateEntry read(HolderLookup.Provider registries, String location) {
+        GraphValueSnapshot.FrozenValue current = frozen(registries, location);
         Object value = GraphValueSnapshot.read(current);
         return new ScopedStateEntry(value, PortType.getTypeOf(current.value()));
+    }
+
+    private GraphValueSnapshot.FrozenValue frozen(
+            HolderLookup.Provider registries, String location) {
+        GraphValueSnapshot.FrozenValue current = frozenValue;
+        return current != null ? current : hydrate(registries, location);
     }
 
     private synchronized GraphValueSnapshot.FrozenValue hydrate(
             HolderLookup.Provider registries, String location) {
         if (frozenValue != null) return frozenValue;
-        if (decodeFailure != null) {
-            throw decodeException(location, decodeFailure);
-        }
+        if (decodeFailure != null) throw decodeException(location, decodeFailure);
         try {
             Object decoded = GraphValueCodecRegistry.fromTag(encodedValue, registries);
-            if (decoded == null) {
-                throw new IllegalArgumentException("Decoded value is null");
-            }
+            if (decoded == null) throw new IllegalArgumentException("Decoded value is null");
             frozenValue = GraphValueSnapshot.freeze(decoded);
             return frozenValue;
         } catch (RuntimeException exception) {

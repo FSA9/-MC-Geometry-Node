@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
+import com.mine.geometry_node.core.engine.graph.scoped.storage.ScopedStateStorage;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.OwnerScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -121,7 +123,7 @@ public final class ScopedStateProviderResolver {
             return isAvailable(entity) && entity.getTeam() != null;
         }
         @Override public ScopedStateEntry get(String name) { return delegate().get(name); }
-        @Override public ScopedStateEntry put(String name, Object value) { return delegate().put(name, value); }
+        @Override public void put(String name, Object value) { delegate().put(name, value); }
         @Override public boolean remove(String name) { return delegate().remove(name); }
         @Override public boolean hasRecord(String name) { return delegate().hasRecord(name); }
         @Override public Map<String, ScopedStateEntry> entries(int limit) {

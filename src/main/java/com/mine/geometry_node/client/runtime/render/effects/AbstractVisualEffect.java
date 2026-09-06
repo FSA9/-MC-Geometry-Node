@@ -40,6 +40,10 @@ public abstract class AbstractVisualEffect {
         return remainingTicks <= 0;
     }
 
+    /** Releases resources owned for this effect instance. */
+    public void close() {
+    }
+
     protected final LiveValue.State<Float> captureFloat(PortDef port, String key, float snapshot) {
         ExpressionData expression = expressions.get(key);
         ExpressionSpec spec = ExpressionSpec.fromScalar(expression);

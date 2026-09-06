@@ -6,10 +6,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 public final class ImageAssetValidator {
-    public static final int MAX_ENCODED_BYTES = 1_000_000;
-    public static final int MAX_DIMENSION = 4096;
-    public static final long MAX_PIXELS = 4_194_304L;
-
     private static final byte[] PNG_SIGNATURE = {
             (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
     };
@@ -17,12 +13,13 @@ public final class ImageAssetValidator {
     private ImageAssetValidator() {
     }
 
-    public static Dimensions validateImage(byte[] data) throws IOException {
+    public static Dimensions validateImage(byte[] data, int maxEncodedBytes,
+                                           int maxDimension, long maxPixels) throws IOException {
         if (data == null || data.length < 10) {
             throw new IOException("Image data is incomplete");
         }
-        if (data.length > MAX_ENCODED_BYTES) {
-            throw new IOException("Image exceeds " + MAX_ENCODED_BYTES + " encoded bytes");
+        if (data.length > maxEncodedBytes) {
+            throw new IOException("Image exceeds " + maxEncodedBytes + " encoded bytes");
         }
 
         Dimensions dimensions;
@@ -38,7 +35,7 @@ public final class ImageAssetValidator {
             dimensions = readTga(data);
         }
 
-        validateDimensions(dimensions);
+        validateDimensions(dimensions, maxDimension, maxPixels);
         return dimensions;
     }
 
@@ -107,13 +104,14 @@ public final class ImageAssetValidator {
         return new Dimensions(readUnsignedShortLe(data, 12), readUnsignedShortLe(data, 14));
     }
 
-    private static void validateDimensions(Dimensions dimensions) throws IOException {
+    private static void validateDimensions(Dimensions dimensions, int maxDimension,
+                                           long maxPixels) throws IOException {
         int width = dimensions.width;
         int height = dimensions.height;
         if (width <= 0 || height <= 0) {
             throw new IOException("Image dimensions must be positive");
         }
-        if (width > MAX_DIMENSION || height > MAX_DIMENSION || (long) width * height > MAX_PIXELS) {
+        if (width > maxDimension || height > maxDimension || (long) width * height > maxPixels) {
             throw new IOException("Image dimensions exceed the supported limit: " + width + "x" + height);
         }
     }

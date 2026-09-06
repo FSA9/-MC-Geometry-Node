@@ -168,12 +168,13 @@ public final class BehaviorBlackboard {
             ScopedStateEntry entry = values.get(name);
             return entry != null ? new ScopedStateEntry(freeze(entry.value()), entry.type()) : null;
         }
-        @Override public ScopedStateEntry put(String name, Object value) {
+        @Override public void put(String name, Object value) {
             Object frozen = freeze(value);
             ScopedStateEntry entry = new ScopedStateEntry(frozen, PortType.getTypeOf(value));
+            ScopedStateEntry previous = values.get(name);
+            if (previous != null && GraphValueSnapshot.equivalent(previous.value(), frozen)) return;
             revision++;
             values.put(name, entry);
-            return entry;
         }
         @Override public boolean remove(String name) {
             if (values.remove(name) == null) return false;

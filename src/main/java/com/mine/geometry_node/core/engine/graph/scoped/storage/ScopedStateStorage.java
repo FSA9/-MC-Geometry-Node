@@ -1,13 +1,19 @@
-package com.mine.geometry_node.core.engine.graph.scoped;
+package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateServerConfig;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
@@ -15,14 +21,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 
-/** Persistent storage for named shared, scoreboard group, and dimension blackboards. */
+/** Persistent storage for named shared, scoreboard group, and dimension scoped state. */
 public final class ScopedStateStorage extends SavedData {
     private static final int VERSION = 4;
     private static final int MAX_BUCKETS = 4_096;
-    private static final int HARD_MAX_RECORDS_PER_BUCKET =
-            ScopedStateServerConfig.HARD_MAX_ENTRIES;
+    private static final int HARD_MAX_RECORDS_PER_BUCKET = ScopedStateServerConfig.HARD_MAX_ENTRIES;
     private static final Codec<ScopedStateStorage> CODEC = CompoundTag.CODEC.xmap(
             ScopedStateStorage::load, storage -> storage.save(new CompoundTag()));
 
@@ -30,7 +34,7 @@ public final class ScopedStateStorage extends SavedData {
             Identifier.fromNamespaceAndPath(GeometryNode.MODID, "scoped_state"),
             ScopedStateStorage::new, CODEC);
 
-    private final Map<ScopeKey, Bucket> buckets = new LinkedHashMap<>();
+    private final Map<ScopeKey, PersistentScopedStateBucket> buckets = new LinkedHashMap<>();
 
     public static ScopedStateStorage get(ServerLevel level) {
         return level.getServer().getDataStorage().computeIfAbsent(TYPE);
@@ -63,6 +67,30 @@ public final class ScopedStateStorage extends SavedData {
         return removed;
     }
 
+    /** Removes every namespace bucket owned by a scoreboard team that no longer exists. */
+    public static boolean removeGroup(MinecraftServer server, String teamName) {
+        String identity = "scoreboard:" + normalizeIdentity(teamName);
+        ScopedStateStorage storage = get(server.overworld());
+        boolean removed = storage.buckets.keySet().removeIf(key ->
+                key.scope() == ScopedStateScope.GROUP && key.identity().equals(identity));
+        if (removed) storage.setDirty();
+        return removed;
+    }
+
+    /** Clears orphaned GROUP buckets left by worlds saved before team deletion cleanup existed. */
+    public static int reconcileGroups(MinecraftServer server) {
+        java.util.Set<String> activeIdentities = server.getScoreboard().getTeamNames().stream()
+                .map(name -> "scoreboard:" + name)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        ScopedStateStorage storage = get(server.overworld());
+        int before = storage.buckets.size();
+        storage.buckets.keySet().removeIf(key -> key.scope() == ScopedStateScope.GROUP
+                && !activeIdentities.contains(key.identity()));
+        int removed = before - storage.buckets.size();
+        if (removed > 0) storage.setDirty();
+        return removed;
+    }
+
     private static ScopedStateStorage load(CompoundTag root) {
         ScopedStateStorage storage = new ScopedStateStorage();
         for (Tag rawBucket : root.getListOrEmpty("Buckets")) {
@@ -92,22 +120,14 @@ public final class ScopedStateStorage extends SavedData {
             }
             if (identity.isEmpty()) continue;
             ScopeKey scopeKey = new ScopeKey(namespace, scope, identity);
-            Bucket bucket = storage.buckets.get(scopeKey);
+            PersistentScopedStateBucket bucket = storage.buckets.get(scopeKey);
             if (bucket == null) {
-                if (storage.buckets.size() >= MAX_BUCKETS) break;
-                bucket = new Bucket();
+                if (storage.buckets.size() >= MAX_BUCKETS) continue;
+                bucket = new PersistentScopedStateBucket();
                 storage.buckets.put(scopeKey, bucket);
             }
-            for (Tag rawEntry : tag.getListOrEmpty("Entries")) {
-                if (bucket.entries.size() >= HARD_MAX_RECORDS_PER_BUCKET) break;
-                if (!(rawEntry instanceof CompoundTag entryTag)) continue;
-                String name = entryTag.getStringOr("Name", "");
-                Tag value = entryTag.get("Value");
-                if (value != null) {
-                    bucket.entries.put(name, PersistentScopedStateEntry.loaded(value));
-                }
-            }
-            if (bucket.entries.isEmpty()) storage.buckets.remove(scopeKey);
+            bucket.loadEntries(tag.getListOrEmpty("Entries"), HARD_MAX_RECORDS_PER_BUCKET);
+            if (bucket.isEmpty()) storage.buckets.remove(scopeKey);
         }
         return storage;
     }
@@ -115,20 +135,12 @@ public final class ScopedStateStorage extends SavedData {
     private CompoundTag save(CompoundTag root) {
         root.putInt("Version", VERSION);
         ListTag bucketTags = new ListTag();
-        for (Map.Entry<ScopeKey, Bucket> bucketEntry : buckets.entrySet()) {
+        for (Map.Entry<ScopeKey, PersistentScopedStateBucket> bucketEntry : buckets.entrySet()) {
             CompoundTag tag = new CompoundTag();
             tag.putString("Namespace", bucketEntry.getKey().namespace().serializedName());
             tag.putString("Scope", bucketEntry.getKey().scope().name());
             tag.putString("Identity", bucketEntry.getKey().identity());
-            ListTag entries = new ListTag();
-            for (Map.Entry<String, PersistentScopedStateEntry> stored
-                    : bucketEntry.getValue().entries.entrySet()) {
-                CompoundTag entryTag = new CompoundTag();
-                entryTag.putString("Name", stored.getKey());
-                entryTag.put("Value", stored.getValue().encodedCopy());
-                entries.add(entryTag);
-            }
-            tag.put("Entries", entries);
+            tag.put("Entries", bucketEntry.getValue().saveEntries());
             bucketTags.add(tag);
         }
         root.put("Buckets", bucketTags);
@@ -170,107 +182,81 @@ public final class ScopedStateStorage extends SavedData {
 
         @Override
         public @Nullable ScopedStateEntry get(String name) {
-            Bucket bucket = buckets.get(storageKey);
-            PersistentScopedStateEntry stored = bucket != null ? bucket.entries.get(name) : null;
-            if (stored == null) return null;
-            return stored.read(registries,
-                    namespace.serializedName() + "/" + scope + "/" + name);
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket != null ? bucket.get(name, registries, location(name)) : null;
         }
 
         @Override
-        public ScopedStateEntry put(String name, Object value) {
-            Objects.requireNonNull(value, "value");
-            GraphValueSnapshot.FrozenValue frozen = GraphValueSnapshot.freeze(value);
-            Tag encoded = ScopedStateValueCodec.encode(
-                    frozen.value(), registries, scope + "/" + name);
-            Bucket bucket = bucketForMutation(storageKey);
-            PersistentScopedStateEntry previous = bucket.entries.get(name);
-            int currentSize = ScopedStateStorage.size(bucket);
-            if (previous == null
-                    && currentSize >= maxEntries) {
-                ScopedStateLimitNotifier.notifyLimit(level, namespace, scope,
-                        storageKey.identity(), maxEntries);
-                throw new ScopedStateAccessException(
-                        "Scoped-state namespace entry limit exceeded: " + maxEntries);
+        public void put(String name, Object value) {
+            PersistentScopedStateBucket bucket = bucketForMutation(storageKey);
+            boolean changed;
+            try {
+                changed = bucket.put(name, value, maxEntries, registries, location(name),
+                        this::notifyLimit);
+            } catch (RuntimeException exception) {
+                if (bucket.isEmpty()) buckets.remove(storageKey);
+                throw exception;
             }
-            bucket.revision++;
-            PersistentScopedStateEntry stored =
-                    PersistentScopedStateEntry.written(encoded, frozen);
-            bucket.entries.put(name, stored);
-            setDirty();
-            if (previous == null && currentSize + 1 == maxEntries) {
-                ScopedStateLimitNotifier.notifyLimit(level, namespace, scope,
-                        storageKey.identity(), maxEntries);
-            }
-            return stored.read(registries,
-                    namespace.serializedName() + "/" + scope + "/" + name);
+            if (changed) setDirty();
         }
 
         @Override
         public boolean remove(String name) {
-            Bucket bucket = buckets.get(storageKey);
-            if (bucket == null || bucket.entries.remove(name) == null) return false;
-            bucket.revision++;
-            if (bucket.entries.isEmpty()) buckets.remove(storageKey);
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            if (bucket == null || !bucket.remove(name)) return false;
+            if (bucket.isEmpty()) buckets.remove(storageKey);
             setDirty();
             return true;
         }
 
         @Override public boolean hasRecord(String name) {
-            Bucket bucket = buckets.get(storageKey);
-            return bucket != null && bucket.entries.containsKey(name);
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket != null && bucket.hasRecord(name);
         }
 
         @Override public long revision() {
-            Bucket bucket = buckets.get(storageKey);
-            return bucket != null ? bucket.revision : 0L;
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket != null ? bucket.revision() : 0L;
         }
 
         @Override public int size() {
-            Bucket bucket = buckets.get(storageKey);
-            return bucket != null ? ScopedStateStorage.size(bucket) : 0;
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket != null ? bucket.size() : 0;
         }
 
         @Override public Map<String, ScopedStateEntry> entries(int limit) {
-            if (limit <= 0) return Map.of();
-            Bucket bucket = buckets.get(storageKey);
-            if (bucket == null || bucket.entries.isEmpty()) return Map.of();
-            Map<String, ScopedStateEntry> result = new LinkedHashMap<>();
-            for (String name : bucket.entries.keySet()) {
-                try {
-                    ScopedStateEntry entry = get(name);
-                    if (entry != null) result.put(name, entry);
-                } catch (RuntimeException ignored) {
-                    // Snapshot enumeration is best-effort; direct get keeps the diagnostic failure.
-                }
-                if (result.size() >= limit) break;
-            }
-            return Map.copyOf(result);
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket != null
+                    ? bucket.entries(registries, locationPrefix(), limit) : Map.of();
+        }
+
+        private void notifyLimit() {
+            ScopedStateLimitNotifier.notifyLimit(level, namespace, scope,
+                    storageKey.identity(), maxEntries);
+        }
+
+        private String location(String name) {
+            return locationPrefix() + name;
+        }
+
+        private String locationPrefix() {
+            return namespace.serializedName() + "/" + scope + "/";
         }
     }
 
-    private static int size(Bucket bucket) {
-        return bucket.entries.size();
-    }
-
-    private Bucket bucketForMutation(ScopeKey key) {
-        Bucket existing = buckets.get(key);
+    private PersistentScopedStateBucket bucketForMutation(ScopeKey key) {
+        PersistentScopedStateBucket existing = buckets.get(key);
         if (existing != null) return existing;
         if (buckets.size() >= MAX_BUCKETS) {
             throw new ScopedStateAccessException(
                     "Persistent blackboard scope limit exceeded: " + MAX_BUCKETS);
         }
-        Bucket created = new Bucket();
+        PersistentScopedStateBucket created = new PersistentScopedStateBucket();
         buckets.put(key, created);
         return created;
     }
 
     private record ScopeKey(ScopedStateNamespace namespace,
                             ScopedStateScope scope, String identity) {
-    }
-
-    private static final class Bucket {
-        private final Map<String, PersistentScopedStateEntry> entries = new LinkedHashMap<>();
-        private long revision;
     }
 }

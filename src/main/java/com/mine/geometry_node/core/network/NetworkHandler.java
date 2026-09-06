@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetOperationResult;
-import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleRegistry;
+import com.mine.geometry_node.core.engine.system.asset.AssetLifecycleDispatcher;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
@@ -46,16 +46,11 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 public class NetworkHandler {
-    private static final Map<ServerPlayer, Set<String>> SENT_VISUAL_ASSETS =
-            Collections.synchronizedMap(new WeakHashMap<>());
-
     public static void init() {
         ClientboundPayloadRegistry.registerDedicatedServerTypes();
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
@@ -306,18 +301,10 @@ public class NetworkHandler {
                 if (asset == null || asset.data().length == 0) continue;
                 PacketVisualAssetData assetPacket = new PacketVisualAssetData(asset.assetId(), asset.data());
                 for (ServerPlayer player : targetPlayers) {
-                    if (markVisualAssetSent(player, asset.assetId())) {
-                        sendToPlayer(player, assetPacket);
-                    }
+                    sendToPlayer(player, assetPacket);
                 }
             }
             sendToPlayers(targetPlayers, packet);
-        }
-    }
-
-    private static boolean markVisualAssetSent(ServerPlayer player, String assetId) {
-        synchronized (SENT_VISUAL_ASSETS) {
-            return SENT_VISUAL_ASSETS.computeIfAbsent(player, ignored -> new HashSet<>()).add(assetId);
         }
     }
 
@@ -401,7 +388,7 @@ public class NetworkHandler {
             };
             operation.whenComplete((result, error) -> {
                 if (error != null) {
-                    AssetLifecycleRegistry.INSTANCE.refreshAll(server)
+                    AssetLifecycleDispatcher.INSTANCE.refreshAll(server)
                             .whenComplete((ignored, reloadError) -> server.execute(() -> {
                                 if (reloadError != null) error.addSuppressed(reloadError);
                                 sendToPlayer(player, new PacketRemoteAssetFileOperationResponse(
@@ -416,7 +403,7 @@ public class NetworkHandler {
                     case CREATE_DIRECTORY -> "新建文件夹";
                     case RENAME -> "重命名";
                 };
-                AssetLifecycleRegistry.INSTANCE.refresh(
+                AssetLifecycleDispatcher.INSTANCE.refresh(
                                 server, result.affectedTypeIds(), result.affectedPaths(), result.directoryScope())
                         .whenComplete((ignored, refreshError) -> server.execute(() -> {
                             String refreshWarning = refreshError == null ? ""

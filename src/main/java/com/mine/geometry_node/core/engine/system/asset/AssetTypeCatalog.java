@@ -3,8 +3,11 @@ package com.mine.geometry_node.core.engine.system.asset;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
+import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerSchematicPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.visual.image.ImageAssetFormats;
 
 import java.io.Reader;
@@ -15,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 /** Single content-aware source for asset type and variant identification. */
 public final class AssetTypeCatalog {
@@ -28,7 +32,8 @@ public final class AssetTypeCatalog {
 
     static {
         register(new AssetTypeDefinition(SCHEMATIC_TYPE_ID,
-                simpleExtensionRecognizer(".schem", ".schematic"), AssetPreviewKind.SCHEMATIC));
+                simpleExtensionRecognizer(".schem", ".schematic"), AssetPreviewKind.SCHEMATIC,
+                Optional.empty(), Optional.of(ServerSchematicPreviewGenerator::new)));
         register(new AssetTypeDefinition(IMAGE_TYPE_ID, new AssetTypeRecognizer() {
             @Override
             public boolean supportsCandidatePath(String normalizedPath) {
@@ -39,7 +44,7 @@ public final class AssetTypeCatalog {
             public String inspectVariant(Path file, String normalizedPath) {
                 return file != null && Files.isRegularFile(file) ? "" : null;
             }
-        }, AssetPreviewKind.IMAGE));
+        }, AssetPreviewKind.IMAGE, Optional.empty(), Optional.of(ServerImagePreviewGenerator::new)));
         register(new AssetTypeDefinition(GRAPH_TYPE_ID, new AssetTypeRecognizer() {
             @Override
             public boolean supportsCandidatePath(String normalizedPath) {
@@ -52,7 +57,7 @@ public final class AssetTypeCatalog {
                 String graphTypeId = inspectGraphType(file);
                 return graphTypeId.isEmpty() ? null : graphTypeId;
             }
-        }, AssetPreviewKind.NONE));
+        }, AssetPreviewKind.NONE, Optional.of(DynamicGraphManager::refresh), Optional.empty()));
     }
 
     private AssetTypeCatalog() {
