@@ -25,6 +25,7 @@ import com.mine.geometry_node.core.node.nodes.actions.schematic.*;
 import com.mine.geometry_node.core.node.nodes.actions.visual.*;
 import com.mine.geometry_node.core.node.nodes.actions.world.*;
 import com.mine.geometry_node.core.node.nodes.data.*;
+import com.mine.geometry_node.core.node.nodes.data.area.*;
 import com.mine.geometry_node.core.node.nodes.data.container.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.*;
 import com.mine.geometry_node.core.node.nodes.data.entity.attribution.*;
@@ -310,6 +311,16 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Data/World
         registry.register("data/world", new GetGameTime());
         registry.register("data/world", new GetWorldTime());
+
+        // Data/Area
+        registry.register("data/area", new GetAreaId());
+        registry.register("data/area", new GetAreaDimension());
+        registry.register("data/area", new GetAreaShape());
+        registry.register("data/area", new GetAreaCenter());
+        registry.register("data/area", new GetAreaSize());
+        registry.register("data/area", new GetAreaRadius());
+        registry.register("data/area", new GetAreaHeight());
+        registry.register("data/area", new GetAreaRotation());
 
         // Data/Entity
         registry.register("data/entity", new GetEntitiesByRadius());

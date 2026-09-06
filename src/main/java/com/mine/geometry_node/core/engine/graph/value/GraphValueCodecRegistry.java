@@ -31,13 +31,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Graph value persistence registry. Codec lookup and persistable port-type
@@ -45,10 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class GraphValueCodecRegistry {
 
-    private static final Map<Class<?>, GraphValueCodec<?>> CLASS_TO_SERIALIZER = new ConcurrentHashMap<>();
-    private static final Map<String, GraphValueCodec<?>> ID_TO_SERIALIZER = new ConcurrentHashMap<>();
-    private static final Map<PortType, PersistentTypeRegistration> PORT_TYPE_REGISTRATIONS =
-            new EnumMap<>(PortType.class);
+    private static volatile RegistrySnapshot SNAPSHOT = RegistrySnapshot.empty();
 
     // 包装盒的标准字段名
     private static final String TYPE_KEY = "_gn_type";
@@ -61,23 +58,23 @@ public final class GraphValueCodecRegistry {
     }
 
     public static synchronized <T> void register(GraphValueCodec<T> serializer) {
-        registerNbtOnly(serializer);
+        publishCodec(serializer, null);
     }
 
     private static synchronized <T> void registerNbtOnly(GraphValueCodec<T> serializer) {
-        registerCodec(serializer);
+        publishCodec(serializer, null);
     }
 
     public static synchronized <T> void register(GraphValueCodec<T> serializer,
                                                  GraphValueJsonCodec jsonCodec,
                                                  PortType... portTypes) {
         Objects.requireNonNull(jsonCodec, "persistent JSON codec");
-        validatePersistentTypes(portTypes);
-        registerCodec(serializer);
-        registerPersistentTypes(serializer.getTargetClass(), serializer, jsonCodec, portTypes);
+        publishCodec(serializer, jsonCodec, portTypes);
     }
 
-    private static <T> void registerCodec(GraphValueCodec<T> serializer) {
+    private static <T> void publishCodec(GraphValueCodec<T> serializer,
+                                         @Nullable GraphValueJsonCodec jsonCodec,
+                                         PortType... portTypes) {
         Objects.requireNonNull(serializer, "serializer");
         Class<T> targetClass = Objects.requireNonNull(serializer.getTargetClass(), "serializer target class");
         String typeId = Objects.requireNonNull(serializer.getTypeId(), "serializer type id");
@@ -87,45 +84,71 @@ public final class GraphValueCodecRegistry {
         if (NULL_TYPE_ID.equals(typeId) || LIST_TYPE_ID.equals(typeId) || DICT_TYPE_ID.equals(typeId)) {
             throw new IllegalArgumentException("Graph value codec type id is reserved: " + typeId);
         }
-        if (CLASS_TO_SERIALIZER.containsKey(targetClass)) {
+        RegistrySnapshot current = SNAPSHOT;
+        Map<Class<?>, GraphValueCodec<?>> classCodecs = new HashMap<>(current.classCodecs());
+        Map<String, GraphValueCodec<?>> idCodecs = new HashMap<>(current.idCodecs());
+        EnumMap<PortType, PersistentTypeRegistration> persistentTypes =
+                new EnumMap<>(PortType.class);
+        persistentTypes.putAll(current.persistentTypes());
+        if (classCodecs.containsKey(targetClass)) {
             throw new IllegalStateException("Graph value codec already registered for class: "
                     + targetClass.getName());
         }
-        if (ID_TO_SERIALIZER.containsKey(typeId)) {
+        if (idCodecs.containsKey(typeId)) {
             throw new IllegalStateException("Graph value codec type id already registered: " + typeId);
         }
-        CLASS_TO_SERIALIZER.put(targetClass, serializer);
-        ID_TO_SERIALIZER.put(typeId, serializer);
+        validatePersistentTypes(persistentTypes, portTypes);
+        classCodecs.put(targetClass, serializer);
+        idCodecs.put(typeId, serializer);
+        if (jsonCodec != null) {
+            registerPersistentTypes(
+                    persistentTypes, targetClass, serializer, jsonCodec, portTypes);
+        }
+        SNAPSHOT = new RegistrySnapshot(classCodecs, idCodecs, persistentTypes);
     }
 
     private static synchronized void registerNative(Class<?> valueClass,
                                                     GraphValueJsonCodec jsonCodec,
                                                     PortType... portTypes) {
         Objects.requireNonNull(jsonCodec, "persistent JSON codec");
-        validatePersistentTypes(portTypes);
-        registerPersistentTypes(valueClass, null, jsonCodec, portTypes);
+        RegistrySnapshot current = SNAPSHOT;
+        EnumMap<PortType, PersistentTypeRegistration> persistentTypes =
+                new EnumMap<>(PortType.class);
+        persistentTypes.putAll(current.persistentTypes());
+        validatePersistentTypes(persistentTypes, portTypes);
+        registerPersistentTypes(persistentTypes, valueClass, null, jsonCodec, portTypes);
+        SNAPSHOT = new RegistrySnapshot(
+                current.classCodecs(), current.idCodecs(), persistentTypes);
     }
 
-    private static void validatePersistentTypes(PortType... portTypes) {
+    private static void validatePersistentTypes(
+            Map<PortType, PersistentTypeRegistration> persistentTypes,
+            PortType... portTypes) {
         if (portTypes == null) return;
+        EnumSet<PortType> seen = EnumSet.noneOf(PortType.class);
         for (PortType portType : portTypes) {
             Objects.requireNonNull(portType, "persistent port type");
-            if (PORT_TYPE_REGISTRATIONS.containsKey(portType)) {
+            if (!seen.add(portType)) {
+                throw new IllegalArgumentException(
+                        "Persistent graph value type is repeated in one registration: " + portType);
+            }
+            if (persistentTypes.containsKey(portType)) {
                 throw new IllegalStateException("Persistent graph value type already registered: " + portType);
             }
         }
     }
 
-    private static void registerPersistentTypes(Class<?> valueClass, @Nullable GraphValueCodec<?> nbtCodec,
-                                                GraphValueJsonCodec jsonCodec,
-                                                PortType... portTypes) {
+    private static void registerPersistentTypes(
+            Map<PortType, PersistentTypeRegistration> persistentTypes,
+            Class<?> valueClass, @Nullable GraphValueCodec<?> nbtCodec,
+            GraphValueJsonCodec jsonCodec, PortType... portTypes) {
         Objects.requireNonNull(valueClass, "persistent value class");
         Objects.requireNonNull(jsonCodec, "persistent JSON codec");
         if (portTypes == null) return;
         for (PortType portType : portTypes) {
             PersistentTypeRegistration registration =
                     new PersistentTypeRegistration(portType, valueClass, nbtCodec, jsonCodec);
-            PORT_TYPE_REGISTRATIONS.put(portType, registration);
+            persistentTypes.put(portType, registration);
         }
     }
 
@@ -388,27 +411,29 @@ public final class GraphValueCodecRegistry {
     }
 
     public static Set<PortType> supportedPortTypes() {
-        return Set.copyOf(PORT_TYPE_REGISTRATIONS.keySet());
+        return SNAPSHOT.persistentTypes().keySet();
     }
 
     public static boolean supportsPortType(@Nullable PortType type) {
-        return type != null && PORT_TYPE_REGISTRATIONS.containsKey(type);
+        return type != null && SNAPSHOT.persistentTypes().containsKey(type);
     }
 
     public static JsonElement toJson(PortType type, Object value, HolderLookup.Provider provider) {
-        PersistentTypeRegistration registration = requirePersistentType(type);
+        PersistentTypeRegistration registration = requirePersistentType(SNAPSHOT, type);
         if (value == null) return JsonNull.INSTANCE;
         return registration.jsonCodec().encode(value, provider);
     }
 
     public static Object fromJson(PortType type, JsonElement value, HolderLookup.Provider provider) {
-        PersistentTypeRegistration registration = requirePersistentType(type);
+        PersistentTypeRegistration registration = requirePersistentType(SNAPSHOT, type);
         if (value == null || value.isJsonNull()) return null;
         return registration.jsonCodec().decode(value, provider);
     }
 
-    private static PersistentTypeRegistration requirePersistentType(@Nullable PortType type) {
-        PersistentTypeRegistration registration = type == null ? null : PORT_TYPE_REGISTRATIONS.get(type);
+    private static PersistentTypeRegistration requirePersistentType(
+            RegistrySnapshot snapshot, @Nullable PortType type) {
+        PersistentTypeRegistration registration = type == null
+                ? null : snapshot.persistentTypes().get(type);
         if (registration == null) {
             throw new IllegalArgumentException("Unsupported persistent graph value type: " + type);
         }
@@ -416,7 +441,8 @@ public final class GraphValueCodecRegistry {
     }
 
     @Nullable
-    private static Tag encodeScalar(Object value, HolderLookup.Provider provider) {
+    private static Tag encodeScalar(Object value, HolderLookup.Provider provider,
+                                    RegistrySnapshot snapshot) {
         if (value == null) return null;
 
         if (value instanceof Entity entity) {
@@ -432,14 +458,15 @@ public final class GraphValueCodecRegistry {
         if (value instanceof String s) return StringTag.valueOf(s);
         if (value instanceof Boolean b) return ByteTag.valueOf(b);
         if (value instanceof Number number) {
-            return encodeScalar(GraphNumberNormalizer.normalize(number), provider);
+            return encodeScalar(GraphNumberNormalizer.normalize(number), provider, snapshot);
         }
 
         // Item implementations may use concrete subclasses. This is an explicit adapter to the
         // ITEM contract, not an order-dependent polymorphic codec lookup.
         if (value instanceof Item item) {
             @SuppressWarnings("unchecked")
-            GraphValueCodec<Item> itemCodec = (GraphValueCodec<Item>) CLASS_TO_SERIALIZER.get(Item.class);
+            GraphValueCodec<Item> itemCodec =
+                    (GraphValueCodec<Item>) snapshot.classCodecs().get(Item.class);
             CompoundTag wrapper = new CompoundTag();
             wrapper.putString(TYPE_KEY, itemCodec.getTypeId());
             wrapper.put(DATA_KEY, itemCodec.serialize(item, provider));
@@ -448,7 +475,8 @@ public final class GraphValueCodecRegistry {
 
         // Registered graph values use exact runtime classes. Polymorphic codecs must
         // provide an explicit adapter instead of depending on map iteration order.
-        GraphValueCodec<Object> serializer = (GraphValueCodec<Object>) CLASS_TO_SERIALIZER.get(value.getClass());
+        GraphValueCodec<Object> serializer =
+                (GraphValueCodec<Object>) snapshot.classCodecs().get(value.getClass());
         if (serializer != null) {
             CompoundTag wrapper = new CompoundTag();
             wrapper.putString(TYPE_KEY, serializer.getTypeId());
@@ -467,6 +495,11 @@ public final class GraphValueCodecRegistry {
      * Encodes a complete graph persistence value or fails.
      */
     public static Tag toTagStrict(Object value, HolderLookup.Provider provider) {
+        return toTagStrict(value, provider, SNAPSHOT);
+    }
+
+    private static Tag toTagStrict(Object value, HolderLookup.Provider provider,
+                                   RegistrySnapshot snapshot) {
         if (value == null) {
             throw new IllegalArgumentException("Graph values cannot contain null");
         }
@@ -476,7 +509,7 @@ public final class GraphValueCodecRegistry {
             ListTag encoded = new ListTag();
             for (Object item : list) {
                 CompoundTag element = new CompoundTag();
-                element.put("v", toNestedTagStrict(item, provider));
+                element.put("v", toNestedTagStrict(item, provider, snapshot));
                 encoded.add(element);
             }
             wrapper.put(DATA_KEY, encoded);
@@ -490,12 +523,12 @@ public final class GraphValueCodecRegistry {
                 if (!(entry.getKey() instanceof String key)) {
                     throw new IllegalArgumentException("Graph map keys must be strings");
                 }
-                encoded.put(key, toNestedTagStrict(entry.getValue(), provider));
+                encoded.put(key, toNestedTagStrict(entry.getValue(), provider, snapshot));
             }
             wrapper.put(DATA_KEY, encoded);
             return wrapper;
         }
-        Tag encoded = encodeScalar(value, provider);
+        Tag encoded = encodeScalar(value, provider, snapshot);
         if (encoded == null) {
             throw new IllegalArgumentException("Unsupported graph value type: "
                     + value.getClass().getName());
@@ -505,6 +538,12 @@ public final class GraphValueCodecRegistry {
 
     @Nullable
     public static Object fromTag(Tag tag, HolderLookup.Provider provider) {
+        return fromTag(tag, provider, SNAPSHOT);
+    }
+
+    @Nullable
+    private static Object fromTag(Tag tag, HolderLookup.Provider provider,
+                                  RegistrySnapshot snapshot) {
         if (tag == null) return null;
 
         // --- 快车道 ---
@@ -530,7 +569,7 @@ public final class GraphValueCodecRegistry {
                 List<Object> resultList = new ArrayList<>();
                 for (int i = 0; i < nbtList.size(); i++) {
                     CompoundTag elementWrapper = nbtList.getCompoundOrEmpty(i);
-                    resultList.add(fromTag(elementWrapper.get("v"), provider));
+                    resultList.add(fromTag(elementWrapper.get("v"), provider, snapshot));
                 }
                 return resultList;
             }
@@ -539,12 +578,12 @@ public final class GraphValueCodecRegistry {
                 CompoundTag dataTag = compound.getCompoundOrEmpty(DATA_KEY);
                 Map<String, Object> resultMap = new HashMap<>();
                 for (String key : dataTag.keySet()) {
-                    resultMap.put(key, fromTag(dataTag.get(key), provider)); // 递归反序列化 Value
+                    resultMap.put(key, fromTag(dataTag.get(key), provider, snapshot));
                 }
                 return resultMap;
             }
 
-            GraphValueCodec<?> serializer = ID_TO_SERIALIZER.get(typeId);
+            GraphValueCodec<?> serializer = snapshot.idCodecs().get(typeId);
             if (serializer != null && compound.contains(DATA_KEY)) {
                 return serializer.deserialize(compound.get(DATA_KEY), provider);
             } else {
@@ -558,25 +597,32 @@ public final class GraphValueCodecRegistry {
     }
 
     public static boolean isSupported(Object value) {
+        return isSupported(value, SNAPSHOT);
+    }
+
+    private static boolean isSupported(Object value, RegistrySnapshot snapshot) {
         if (value == null) return false;
-        if (value instanceof Entity) return supportsPortType(PortType.ENTITY);
+        if (value instanceof Entity) return snapshot.persistentTypes().containsKey(PortType.ENTITY);
 
         if (value instanceof List<?> list) {
-            return supportsPortType(PortType.LIST)
-                    && list.stream().allMatch(GraphValueCodecRegistry::isSupportedNested);
+            return snapshot.persistentTypes().containsKey(PortType.LIST)
+                    && list.stream().allMatch(valueItem -> isSupportedNested(valueItem, snapshot));
         }
         if (value instanceof Map<?, ?> map) {
-            return supportsPortType(PortType.DICT) && map.entrySet().stream().allMatch(entry ->
-                    entry.getKey() instanceof String && isSupportedNested(entry.getValue()));
+            return snapshot.persistentTypes().containsKey(PortType.DICT)
+                    && map.entrySet().stream().allMatch(entry ->
+                            entry.getKey() instanceof String
+                                    && isSupportedNested(entry.getValue(), snapshot));
         }
 
-        if (CLASS_TO_SERIALIZER.containsKey(value.getClass())) return true;
-        return PORT_TYPE_REGISTRATIONS.values().stream()
+        if (snapshot.classCodecs().containsKey(value.getClass())) return true;
+        return snapshot.persistentTypes().values().stream()
                 .anyMatch(registration -> registration.valueClass().isInstance(value));
     }
 
-    private static Tag toNestedTagStrict(@Nullable Object value, HolderLookup.Provider provider) {
-        return value == null ? nullTag() : toTagStrict(value, provider);
+    private static Tag toNestedTagStrict(@Nullable Object value, HolderLookup.Provider provider,
+                                         RegistrySnapshot snapshot) {
+        return value == null ? nullTag() : toTagStrict(value, provider, snapshot);
     }
 
     private static CompoundTag nullTag() {
@@ -585,8 +631,8 @@ public final class GraphValueCodecRegistry {
         return marker;
     }
 
-    private static boolean isSupportedNested(@Nullable Object value) {
-        return value == null || isSupported(value);
+    private static boolean isSupportedNested(@Nullable Object value, RegistrySnapshot snapshot) {
+        return value == null || isSupported(value, snapshot);
     }
 
     private static String requireString(Tag tag, String valueType) {
@@ -622,6 +668,21 @@ public final class GraphValueCodecRegistry {
                                               Class<?> valueClass,
                                               @Nullable GraphValueCodec<?> nbtCodec,
                                               GraphValueJsonCodec jsonCodec) {}
+
+    private record RegistrySnapshot(
+            Map<Class<?>, GraphValueCodec<?>> classCodecs,
+            Map<String, GraphValueCodec<?>> idCodecs,
+            Map<PortType, PersistentTypeRegistration> persistentTypes) {
+        private RegistrySnapshot {
+            classCodecs = Map.copyOf(classCodecs);
+            idCodecs = Map.copyOf(idCodecs);
+            persistentTypes = Map.copyOf(persistentTypes);
+        }
+
+        private static RegistrySnapshot empty() {
+            return new RegistrySnapshot(Map.of(), Map.of(), Map.of());
+        }
+    }
 
     private static void putVector(CompoundTag target, String key, Vec3 value) {
         ListTag vector = new ListTag();

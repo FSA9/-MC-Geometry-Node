@@ -26,17 +26,14 @@ public final class GraphDataEvaluationSession {
     }
 
     @Nullable
-    public Object evaluate(int nodeId, String portName, NodeEvaluator evaluator) {
+    public Object evaluate(int nodeId, int portKey, NodeEvaluator evaluator) {
         if (nodeId < 0 || nodeId >= index.getNodeCount()
-                || !index.hasPort(nodeId, portName)
+                || !index.hasPort(nodeId, portKey)
                 || cache.isRecursing(nodeId)) {
             return null;
         }
 
-        int portId = index.getPortKey(portName);
-        if (portId < 0) return null;
-
-        Object cached = cache.get(nodeId, portId);
+        Object cached = cache.get(nodeId, portKey);
         if (!GraphValueCache.isCacheMiss(cached)) {
             return cached;
         }
@@ -44,15 +41,15 @@ public final class GraphDataEvaluationSession {
         cache.enterNode(nodeId);
         Object value;
         try {
-            value = evaluator.compute(nodeId, portName);
+            value = evaluator.compute(nodeId, portKey);
         } finally {
             cache.exitNode(nodeId);
         }
-        return cache.put(nodeId, portId, value);
+        return cache.put(nodeId, portKey, value);
     }
 
     @FunctionalInterface
     public interface NodeEvaluator {
-        @Nullable Object compute(int nodeId, String portName);
+        @Nullable Object compute(int nodeId, int portKey);
     }
 }

@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeInd
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -161,6 +162,11 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         return nodes.getPortName(portKey);
     }
 
+    @Override
+    public @Nullable BaseNode getNodeImplementation(int nodeId) {
+        return nodes.getNodeImplementation(nodeId);
+    }
+
 
     // ====================================================
     // 5. 图查询 API - O(1) (Graph Query Operations)
@@ -175,6 +181,11 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         return nodes.hasPort(nodeId, portName);
     }
 
+    @Override
+    public boolean hasPort(int nodeId, int portKey) {
+        return nodes.hasPort(nodeId, portKey);
+    }
+
     @SuppressWarnings("unchecked")
     public <T> T getStaticInput(int nodeId, String portId, Class<T> type, T defaultValue) {
         return nodes.getStaticInput(nodeId, portId, type, defaultValue);
@@ -187,8 +198,18 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     }
 
     @Override
+    public @Nullable Object getStaticInput(int nodeId, int portKey) {
+        return nodes.getStaticInput(nodeId, portKey);
+    }
+
+    @Override
     public boolean isDataPassthroughOutput(int nodeId, String portName) {
         return nodes.isDataPassthroughOutput(nodeId, portName);
+    }
+
+    @Override
+    public boolean isDataPassthroughOutput(int nodeId, int portKey) {
+        return nodes.isDataPassthroughOutput(nodeId, portKey);
     }
 
     /**
@@ -210,6 +231,11 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     @Nullable
     public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {
         return nodes.findDataInput(targetNodeId, inputPortName);
+    }
+
+    @Override
+    public DataConnectionSource findDataInput(int targetNodeId, int inputPortKey) {
+        return nodes.findDataInput(targetNodeId, inputPortKey);
     }
 
     /**

@@ -216,15 +216,7 @@ public final class AreaTriggerDispatcher {
         if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return true;
 
         AreaResource resource = result.resource();
-        AreaResource.Resolved area = result.area();
         int insideCount = result.hitsById().size();
-        double radius = switch (area.shape()) {
-            case SPHERE -> Math.max(area.size().x, Math.max(area.size().y, area.size().z)) * 0.5D;
-            case CYLINDER -> Math.max(area.size().x, area.size().z) * 0.5D;
-            case BOX -> 0.0D;
-        };
-        double height = area.shape() == AreaShape.CYLINDER
-                ? area.size().y : 0.0D;
 
         for (UUID entityId : entityIds) {
             AreaEntityQuery.Hit hit = result.hitsById().get(entityId);
@@ -241,17 +233,9 @@ public final class AreaTriggerDispatcher {
                     StandardPorts.HIT_POS.getId(), hit != null ? hit.hitPos() : trigger.position(),
                     StandardPorts.VECTOR.getId(), hit != null ? hit.velocity() : trigger.getDeltaMovement(),
                     StandardPorts.TYPE.getId(), phase.id,
-                    StandardPorts.SHAPE.getId(), area.shape().id(),
-                    StandardPorts.CENTER.getId(), area.center(),
-                    StandardPorts.SIZE_3.getId(), area.size(),
-                    StandardPorts.RADIUS.getId(), (float) radius,
-                    StandardPorts.HEIGHT.getId(), (float) height,
-                    StandardPorts.ROTATION.getId(), area.rotation(),
                     StandardPorts.AREA.getId(), resource.reference(),
-                    StandardPorts.AREA_ID.getId(), resource.address().id(),
                     StandardPorts.FORCE_FIELD_ID.getId(), source.forceFieldId(),
                     OnAreaEvent.SOURCE_PORT, group.key.source().id,
-                    StandardPorts.DIMENSION.getId(), resource.address().dimension().identifier().toString(),
                     OnAreaEvent.INSIDE_COUNT_PORT, insideCount,
                     OnAreaEvent.TARGET_PORT, group.key.targetType().id()
             ).values();

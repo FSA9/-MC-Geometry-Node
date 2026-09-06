@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.graph.compile.artifact;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.graph.compile.ExplicitNullInput;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -16,23 +17,26 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     private final String[] nodeIds;
     private final Map<String, Integer> nodeKeys;
     private final String[] nodeTypes;
-    private final Map<String, Object>[] staticInputs;
-    private final Set<String>[] copiedStaticInputs;
+    private final BaseNode[] nodeImplementations;
+    private final Map<Integer, Object>[] staticInputs;
+    private final Set<Integer>[] copiedStaticInputs;
     private final Map<Integer, DataConnectionSource>[] dataInputs;
-    private final Set<String>[] ports;
-    private final Set<String>[] dataPassthroughOutputs;
+    private final Set<Integer>[] ports;
+    private final Set<Integer>[] dataPassthroughOutputs;
     private final Map<String, Integer> portKeys;
     private final String[] portNames;
 
     public CompiledNodeIndex(
             String[] nodeIds,
             String[] nodeTypes,
+            BaseNode[] nodeImplementations,
             Map<String, Object>[] staticInputs,
             Map<Integer, DataConnectionSource>[] dataInputs,
             Set<String>[] ports,
             Set<String>[] dataPassthroughOutputs,
             Map<String, Integer> portKeys) {
-        if (nodeIds.length != nodeTypes.length || nodeIds.length != staticInputs.length
+        if (nodeIds.length != nodeTypes.length || nodeIds.length != nodeImplementations.length
+                || nodeIds.length != staticInputs.length
                 || nodeIds.length != dataInputs.length || nodeIds.length != ports.length
                 || nodeIds.length != dataPassthroughOutputs.length) {
             throw new IllegalArgumentException("Compiled node arrays must have the same length");
@@ -40,11 +44,12 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
         this.nodeIds = nodeIds.clone();
         this.nodeKeys = buildNodeKeys(this.nodeIds);
         this.nodeTypes = nodeTypes.clone();
-        this.staticInputs = copyStaticInputArray(staticInputs);
+        this.nodeImplementations = nodeImplementations.clone();
+        this.staticInputs = copyStaticInputArray(staticInputs, portKeys);
         this.copiedStaticInputs = mutableInputKeys(this.staticInputs);
         this.dataInputs = copyIntegerMapArray(dataInputs);
-        this.ports = copySetArray(ports);
-        this.dataPassthroughOutputs = copySetArray(dataPassthroughOutputs);
+        this.ports = mapPortSets(ports, portKeys);
+        this.dataPassthroughOutputs = mapPortSets(dataPassthroughOutputs, portKeys);
         this.portKeys = Map.copyOf(portKeys);
         this.portNames = buildPortNames(this.portKeys);
     }
@@ -70,11 +75,17 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     }
 
     @Override
+    public @Nullable BaseNode getNodeImplementation(int nodeId) {
+        return validNode(nodeId) ? nodeImplementations[nodeId] : null;
+    }
+
+    @Override
     public int getPortKey(String portName) {
-        return portKeys.getOrDefault(portName, -1);
+        return portName != null ? portKeys.getOrDefault(portName, -1) : -1;
     }
 
     @Nullable
+    @Override
     public String getPortName(int portKey) {
         return portKey >= 0 && portKey < portNames.length ? portNames[portKey] : null;
     }
@@ -85,19 +96,18 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
 
     @Override
     @Nullable
-    public DataConnectionSource findDataInput(int targetNodeId, String inputPortName) {
-        int portKey = getPortKey(inputPortName);
-        return validNode(targetNodeId) && portKey >= 0
-                ? dataInputs[targetNodeId].get(portKey) : null;
+    public DataConnectionSource findDataInput(int targetNodeId, int inputPortKey) {
+        return validNode(targetNodeId) && inputPortKey >= 0
+                ? dataInputs[targetNodeId].get(inputPortKey) : null;
     }
 
     @Override
     @Nullable
-    public Object getStaticInput(int nodeId, String portName) {
+    public Object getStaticInput(int nodeId, int portKey) {
         if (!validNode(nodeId)) return null;
-        Object value = staticInputs[nodeId].get(portName);
+        Object value = staticInputs[nodeId].get(portKey);
         if (value == ExplicitNullInput.INSTANCE) return null;
-        return copiedStaticInputs[nodeId].contains(portName)
+        return copiedStaticInputs[nodeId].contains(portKey)
                 ? GraphValueSnapshot.snapshot(value) : value;
     }
 
@@ -107,13 +117,13 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
     }
 
     @Override
-    public boolean isDataPassthroughOutput(int nodeId, String portName) {
-        return validNode(nodeId) && dataPassthroughOutputs[nodeId].contains(portName);
+    public boolean isDataPassthroughOutput(int nodeId, int portKey) {
+        return validNode(nodeId) && dataPassthroughOutputs[nodeId].contains(portKey);
     }
 
     @Override
-    public boolean hasPort(int nodeId, String portName) {
-        return validNode(nodeId) && ports[nodeId].contains(portName);
+    public boolean hasPort(int nodeId, int portKey) {
+        return validNode(nodeId) && ports[nodeId].contains(portKey);
     }
 
     private boolean validNode(int nodeId) {
@@ -135,15 +145,19 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
         return names;
     }
 
-    private static Map<String, Object>[] copyStaticInputArray(Map<String, Object>[] source) {
-        @SuppressWarnings("unchecked") Map<String, Object>[] result = new Map[source.length];
+    private static Map<Integer, Object>[] copyStaticInputArray(
+            Map<String, Object>[] source, Map<String, Integer> portKeys) {
+        @SuppressWarnings("unchecked") Map<Integer, Object>[] result = new Map[source.length];
         for (int i = 0; i < source.length; i++) {
             if (source[i] == null || source[i].isEmpty()) {
                 result[i] = Map.of();
                 continue;
             }
-            Map<String, Object> copy = new HashMap<>(source[i].size());
-            source[i].forEach((key, value) -> copy.put(key, GraphValueSnapshot.snapshot(value)));
+            Map<Integer, Object> copy = new HashMap<>(source[i].size());
+            source[i].forEach((name, value) -> {
+                Integer key = portKeys.get(name);
+                if (key != null) copy.put(key, GraphValueSnapshot.snapshot(value));
+            });
             result[i] = Map.copyOf(copy);
         }
         return result;
@@ -157,18 +171,27 @@ public final class CompiledNodeIndex implements CompiledDataIndex {
         return result;
     }
 
-    private static Set<String>[] copySetArray(Set<String>[] source) {
-        @SuppressWarnings("unchecked") Set<String>[] result = new Set[source.length];
+    private static Set<Integer>[] mapPortSets(Set<String>[] source, Map<String, Integer> portKeys) {
+        @SuppressWarnings("unchecked") Set<Integer>[] result = new Set[source.length];
         for (int i = 0; i < source.length; i++) {
-            result[i] = source[i] != null ? Set.copyOf(source[i]) : Set.of();
+            if (source[i] == null || source[i].isEmpty()) {
+                result[i] = Set.of();
+                continue;
+            }
+            java.util.HashSet<Integer> keys = new java.util.HashSet<>();
+            for (String name : source[i]) {
+                Integer key = portKeys.get(name);
+                if (key != null) keys.add(key);
+            }
+            result[i] = Set.copyOf(keys);
         }
         return result;
     }
 
-    private static Set<String>[] mutableInputKeys(Map<String, Object>[] inputs) {
-        @SuppressWarnings("unchecked") Set<String>[] result = new Set[inputs.length];
+    private static Set<Integer>[] mutableInputKeys(Map<Integer, Object>[] inputs) {
+        @SuppressWarnings("unchecked") Set<Integer>[] result = new Set[inputs.length];
         for (int index = 0; index < inputs.length; index++) {
-            Set<String> keys = new java.util.HashSet<>();
+            Set<Integer> keys = new java.util.HashSet<>();
             inputs[index].forEach((key, value) -> {
                 if (GraphValueSnapshot.requiresReadCopy(value)) keys.add(key);
             });

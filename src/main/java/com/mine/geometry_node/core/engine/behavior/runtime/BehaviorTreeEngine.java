@@ -34,8 +34,8 @@ public final class BehaviorTreeEngine {
     private final BehaviorRuntimeBudget budget;
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
 
-    public BehaviorTreeEngine(BehaviorNodeExecutorRegistry executors, BehaviorRuntimeBudget budget) {
-        this.evaluator = new BehaviorTreeEvaluator(Objects.requireNonNull(executors, "executors"));
+    public BehaviorTreeEngine(BehaviorRuntimeBudget budget) {
+        this.evaluator = new BehaviorTreeEvaluator();
         this.budget = Objects.requireNonNull(budget, "budget");
     }
 

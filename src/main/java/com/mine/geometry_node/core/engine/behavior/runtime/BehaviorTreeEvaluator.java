@@ -17,7 +17,6 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
-import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.port.TypeConverter;
@@ -38,13 +37,11 @@ import java.util.WeakHashMap;
 public final class BehaviorTreeEvaluator {
     private static final long NODE_EXCEPTION_LOG_INTERVAL_TICKS = 100L;
 
-    private final BehaviorNodeExecutorRegistry executors;
     private final ThreadLocal<EvaluationPass> currentPass = new ThreadLocal<>();
     private final Map<BehaviorTreeProcess, Map<Integer, Long>> nodeExceptionLogTicks =
             new WeakHashMap<>();
 
-    public BehaviorTreeEvaluator(BehaviorNodeExecutorRegistry executors) {
-        this.executors = Objects.requireNonNull(executors, "executors");
+    public BehaviorTreeEvaluator() {
     }
 
     public EvaluationOutcome evaluate(BehaviorTreeProcess instance) {
@@ -116,7 +113,7 @@ public final class BehaviorTreeEvaluator {
                     "Behavior plan references an invalid node index");
         }
 
-        BehaviorNodeExecutor executor = executors.get(instance.plan().getNodeType(nodeIndex));
+        BehaviorNodeExecutor executor = instance.plan().getNodeExecutor(nodeIndex);
         if (executor == null) {
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
                     "No behavior executor is registered for " + instance.plan().getNodeType(nodeIndex));
@@ -231,8 +228,8 @@ public final class BehaviorTreeEvaluator {
     @Nullable
     private Object resolveConnectedInput(BehaviorTreeProcess instance, int targetNodeIndex,
                                          CompiledDataIndex.DataConnectionSource source) {
-        Object value = instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortName(),
-                (nodeIndex, outputPort) -> computeDataNode(instance, nodeIndex, outputPort));
+        Object value = instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortKey(),
+                (sourceNode, outputPort) -> computeDataNode(instance, sourceNode, outputPort));
         return PortConversionRegistry.convert(value, source.sourceType(), source.targetType(),
                 dataContext(instance, targetNodeIndex));
     }
@@ -259,11 +256,17 @@ public final class BehaviorTreeEvaluator {
                 dataContext(instance, targetNodeIndex));
     }
 
-    private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, String outputPort) {
-        if (instance.plan().isDataPassthroughOutput(nodeIndex, outputPort)) {
-            return resolveInput(instance, nodeIndex, outputPort);
+    private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, int outputPortKey) {
+        String outputPort = instance.plan().getPortName(outputPortKey);
+        if (outputPort == null) return null;
+        if (instance.plan().isDataPassthroughOutput(nodeIndex, outputPortKey)) {
+            CompiledDataIndex.DataConnectionSource source =
+                    instance.plan().findDataInput(nodeIndex, outputPortKey);
+            return source != null
+                    ? resolveConnectedInput(instance, nodeIndex, source)
+                    : instance.plan().getStaticInput(nodeIndex, outputPortKey);
         }
-        BaseNode node = NodeRegistry.INSTANCE.get(instance.plan().getNodeType(nodeIndex));
+        BaseNode node = instance.plan().getNodeImplementation(nodeIndex);
         if (node == null) {
             throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
                     "Data node implementation is unavailable: " + instance.plan().getNodeType(nodeIndex));
@@ -422,7 +425,7 @@ public final class BehaviorTreeEvaluator {
         if (!instance.rawNodeState(nodeIndex).isActive()) {
             return abortChildren(instance, nodeIndex, reason, visited);
         }
-        BehaviorNodeExecutor executor = executors.get(instance.plan().getNodeType(nodeIndex));
+        BehaviorNodeExecutor executor = instance.plan().getNodeExecutor(nodeIndex);
         if (executor == null) {
             String detail = "No behavior executor is registered for "
                     + instance.plan().getNodeType(nodeIndex);

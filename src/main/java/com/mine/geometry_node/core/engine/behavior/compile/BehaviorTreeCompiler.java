@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.engine.behavior.compile;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
 import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
@@ -13,7 +15,6 @@ import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDiagnost
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationException;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphValidationResult;
-import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
@@ -126,6 +127,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         CompiledNodeIndex nodes = compilation.nodes.index();
         int size = nodes.getNodeCount();
         @SuppressWarnings("unchecked") Set<BehaviorExecutableNode.Resource>[] resources = new Set[size];
+        BehaviorNodeExecutor[] executors = new BehaviorNodeExecutor[size];
         int[] parents = new int[size];
         java.util.Arrays.fill(parents, -1);
         int[][] children = new int[size][];
@@ -134,7 +136,8 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
         for (int nodeIndex = 0; nodeIndex < size; nodeIndex++) {
             String nodeId = nodes.getNodeId(nodeIndex);
             CompiledNodeTable.NodeDescriptor descriptor = compilation.nodes.descriptor(nodeId);
-            BaseNode node = NodeRegistry.INSTANCE.get(descriptor.type());
+            BaseNode node = nodes.getNodeImplementation(nodeIndex);
+            executors[nodeIndex] = BehaviorNodeExecutorRegistry.INSTANCE.get(descriptor.type());
             resources[nodeIndex] = node instanceof BehaviorExecutableNode executable
                     ? executable.requiredResources() : Set.of();
             if (root < 0 && ROOT_TYPE_ID.equals(descriptor.type())) root = nodeIndex;
@@ -144,7 +147,7 @@ public final class BehaviorTreeCompiler implements GraphCompiler<BehaviorTreePla
             for (int child : children[nodeIndex]) parents[child] = nodeIndex;
         }
         return BehaviorTreePlan.createCompiled(
-                context.assetId(), nodes, resources,
+                context.assetId(), nodes, executors, resources,
                 root, parents, children,
                 compilation.rootSchedule);
     }

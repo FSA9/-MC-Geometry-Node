@@ -5,7 +5,9 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
+import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutor;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -15,6 +17,7 @@ import java.util.Set;
 public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex {
     private final String assetId;
     private final CompiledNodeIndex nodes;
+    private final BehaviorNodeExecutor[] executors;
     private final Set<BehaviorExecutableNode.Resource>[] resources;
     private final int rootNode;
     private final int[] parents;
@@ -22,11 +25,16 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     private final RootSchedule rootSchedule;
 
     private BehaviorTreePlan(String assetId, CompiledNodeIndex nodes,
+                             BehaviorNodeExecutor[] executors,
                              Set<BehaviorExecutableNode.Resource>[] resources, int rootNode,
                              int[] parents, int[][] children,
                              RootSchedule rootSchedule) {
         this.assetId = assetId != null ? assetId : "";
         this.nodes = Objects.requireNonNull(nodes, "nodes");
+        this.executors = Objects.requireNonNull(executors, "executors").clone();
+        if (this.executors.length != nodes.getNodeCount()) {
+            throw new IllegalArgumentException("Behavior executor array must match node count");
+        }
         this.resources = copyResources(resources);
         this.rootNode = rootNode;
         this.parents = parents.clone();
@@ -36,10 +44,11 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
 
     public static BehaviorTreePlan createCompiled(
             String assetId, CompiledNodeIndex nodes,
+            BehaviorNodeExecutor[] executors,
             Set<BehaviorExecutableNode.Resource>[] resources, int rootNode,
             int[] parents, int[][] children,
             RootSchedule rootSchedule) {
-        return new BehaviorTreePlan(assetId, nodes, resources,
+        return new BehaviorTreePlan(assetId, nodes, executors, resources,
                 rootNode, parents, children, rootSchedule);
     }
 
@@ -73,8 +82,17 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
         return nodes.getNodeType(nodeId);
     }
 
+    @Override
+    public @Nullable BaseNode getNodeImplementation(int nodeId) {
+        return nodes.getNodeImplementation(nodeId);
+    }
+
     public Set<BehaviorExecutableNode.Resource> getNodeResources(int nodeId) {
         return resources[Objects.checkIndex(nodeId, resources.length)];
+    }
+
+    public @Nullable BehaviorNodeExecutor getNodeExecutor(int nodeId) {
+        return validNode(nodeId) ? executors[nodeId] : null;
     }
 
     public int getRootNode() {
@@ -106,9 +124,19 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     @Override
+    public DataConnectionSource findDataInput(int targetNodeId, int inputPortKey) {
+        return nodes.findDataInput(targetNodeId, inputPortKey);
+    }
+
+    @Override
     @Nullable
     public Object getStaticInput(int nodeId, String portName) {
         return nodes.getStaticInput(nodeId, portName);
+    }
+
+    @Override
+    public Object getStaticInput(int nodeId, int portKey) {
+        return nodes.getStaticInput(nodeId, portKey);
     }
 
     @Override
@@ -117,8 +145,23 @@ public final class BehaviorTreePlan implements CompiledGraph, CompiledDataIndex 
     }
 
     @Override
+    public boolean isDataPassthroughOutput(int nodeId, int portKey) {
+        return nodes.isDataPassthroughOutput(nodeId, portKey);
+    }
+
+    @Override
     public boolean hasPort(int nodeId, String portName) {
         return nodes.hasPort(nodeId, portName);
+    }
+
+    @Override
+    public boolean hasPort(int nodeId, int portKey) {
+        return nodes.hasPort(nodeId, portKey);
+    }
+
+    @Override
+    public @Nullable String getPortName(int portKey) {
+        return nodes.getPortName(portKey);
     }
 
     public RootSchedule rootSchedule() {

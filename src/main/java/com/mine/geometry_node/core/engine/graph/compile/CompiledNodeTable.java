@@ -2,8 +2,10 @@ package com.mine.geometry_node.core.engine.graph.compile;
 
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
+import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
@@ -36,6 +38,7 @@ public final class CompiledNodeTable {
         Map<String, NodeDescriptor> descriptors = new LinkedHashMap<>();
         String[] ids = new String[size];
         String[] types = new String[size];
+        BaseNode[] implementations = new BaseNode[size];
         @SuppressWarnings("unchecked") Map<String, Object>[] staticInputs = new Map[size];
         @SuppressWarnings("unchecked") Set<String>[] ports = new Set[size];
         @SuppressWarnings("unchecked") Set<String>[] dataPassthroughOutputs = new Set[size];
@@ -47,6 +50,7 @@ public final class CompiledNodeTable {
                     flattened.staticInputs().getOrDefault(nodeId, Map.of());
             ids[nodeIndex] = nodeId;
             types[nodeIndex] = schema.typeId();
+            implementations[nodeIndex] = NodeRegistry.INSTANCE.get(schema.typeId());
             staticInputs[nodeIndex] = flattenedInputs;
             ports[nodeIndex] = schema.portIds();
             dataPassthroughOutputs[nodeIndex] = schema.dataPassthroughOutputs();
@@ -67,14 +71,16 @@ public final class CompiledNodeTable {
             if (portKey == null) continue;
             PortDef sourcePort = source.outputs().get(entry.getValue().sourcePortName());
             PortDef targetPort = target.inputs().get(entry.getKey().portName());
+            Integer sourcePortKey = portKeys.get(entry.getValue().sourcePortName());
+            if (sourcePortKey == null) continue;
             dataInputs[target.index()].putIfAbsent(portKey,
                     new CompiledDataIndex.DataConnectionSource(
-                            source.index(), entry.getValue().sourcePortName(),
+                            source.index(), sourcePortKey,
                             portType(sourcePort), portType(targetPort)));
         }
 
         return new CompiledNodeTable(nodeIds, descriptors,
-                new CompiledNodeIndex(ids, types, staticInputs, dataInputs, ports,
+                new CompiledNodeIndex(ids, types, implementations, staticInputs, dataInputs, ports,
                         dataPassthroughOutputs, portKeys));
     }
 

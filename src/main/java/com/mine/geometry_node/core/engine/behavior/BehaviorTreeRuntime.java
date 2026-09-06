@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeCompiler;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorEventHandler;
-import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorNodeExecutorRegistry;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeEngine;
 import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
 import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugAccess;
@@ -34,8 +33,7 @@ import java.util.Set;
 public final class BehaviorTreeRuntime implements GraphRuntime {
     public static final BehaviorTreeRuntime INSTANCE = new BehaviorTreeRuntime();
 
-    private final BehaviorTreeEngine engine = new BehaviorTreeEngine(
-            BehaviorNodeExecutorRegistry.INSTANCE, BehaviorRuntimeBudget.DEFAULT);
+    private final BehaviorTreeEngine engine = new BehaviorTreeEngine(BehaviorRuntimeBudget.DEFAULT);
 
     private BehaviorTreeRuntime() {
     }

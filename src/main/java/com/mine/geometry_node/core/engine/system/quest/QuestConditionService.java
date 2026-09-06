@@ -99,7 +99,7 @@ public final class QuestConditionService {
                         BaseQuestConditionsNode.conditionPort(i));
                 if (source == null) continue;
 
-                Object raw = process.evaluateDataOutput(source.sourceNodeId(), source.sourcePortName());
+                Object raw = process.evaluateDataOutput(source.sourceNodeId(), source.sourcePortKey());
                 if (raw instanceof QuestConditionValue condition && !condition.displayText().isBlank()) {
                     checks.add(new QuestConditionCheck(
                             condition.displayText(),

@@ -16,7 +16,6 @@ import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolv
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
-import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
@@ -178,15 +177,23 @@ public class BlueprintProcess {
 
     @Nullable
     public Object evaluateDataOutput(int nodeId, String portName) {
-        if (this.shutDown || this.draining || this.level == null || portName == null || portName.isBlank()
-                || nodeId < 0 || nodeId >= index.getNodeCount()) {
+        int portKey = index.getPortKey(portName);
+        return portKey >= 0 ? evaluateDataOutput(nodeId, portKey) : null;
+    }
+
+    @Nullable
+    public Object evaluateDataOutput(int nodeId, int portKey) {
+        if (this.shutDown || this.draining || this.level == null
+                || nodeId < 0 || nodeId >= index.getNodeCount()
+                || !index.hasPort(nodeId, portKey)) {
             return null;
         }
 
         ExecutionThread thread = borrowThread(nodeId, "flow_in");
         try {
-            return thread.evaluateDataOutput(nodeId, portName);
+            return thread.evaluateDataOutput(nodeId, portKey);
         } catch (Exception e) {
+            String portName = index.getPortName(portKey);
             if (RateLimitedLog.acquire(diagnosticKey("data_output", nodeId, portName))) {
                 GeometryNode.LOGGER.error("Blueprint data output evaluation failed: graph={}, node={}, port={}",
                         graphId, index.getNodeId(nodeId), portName, e);
@@ -586,7 +593,7 @@ public class BlueprintProcess {
                     }
 
                     String nodeType = index.getNodeType(currentFlowId);
-                    BaseNode logic = NodeRegistry.INSTANCE.get(nodeType);
+                    BaseNode logic = index.getNodeImplementation(currentFlowId);
                     if (logic == null) {
                         if (RateLimitedLog.acquire(diagnosticKey("missing_execution_node", currentFlowId, nodeType))) {
                             GeometryNode.LOGGER.error("Blueprint execution node type is unavailable: graph={}, node={}, type={}",
@@ -820,27 +827,29 @@ public class BlueprintProcess {
             }
         }
 
-        private Object executeDataNode(int nodeId, String portName) {
-            return dataEvaluation.evaluate(nodeId, portName, dataNodeEvaluator);
+        private Object executeDataNode(int nodeId, int portKey) {
+            return dataEvaluation.evaluate(nodeId, portKey, dataNodeEvaluator);
         }
 
         private Object resolveConnectedInput(CompiledDataIndex.DataConnectionSource source) {
-            Object value = executeDataNode(source.sourceNodeId(), source.sourcePortName());
+            Object value = executeDataNode(source.sourceNodeId(), source.sourcePortKey());
             return PortConversionRegistry.convert(value, source.sourceType(),
                     source.targetType(), this);
         }
 
-        private Object computeDataNode(int nodeId, String portName) {
+        private Object computeDataNode(int nodeId, int portKey) {
+            String portName = index.getPortName(portKey);
+            if (portName == null) return null;
             int prevActive = this.activeNodeId;
             try {
-                if (index.isDataPassthroughOutput(nodeId, portName)) {
+                if (index.isDataPassthroughOutput(nodeId, portKey)) {
                     CompiledDataIndex.DataConnectionSource source =
-                            index.findDataInput(nodeId, portName);
+                            index.findDataInput(nodeId, portKey);
                     return source != null
                             ? resolveConnectedInput(source)
-                            : index.getStaticInput(nodeId, portName);
+                            : index.getStaticInput(nodeId, portKey);
                 }
-                BaseNode logic = NodeRegistry.INSTANCE.get(index.getNodeType(nodeId));
+                BaseNode logic = index.getNodeImplementation(nodeId);
                 if (logic == null) {
                     if (RateLimitedLog.acquire(diagnosticKey("missing_data_node", nodeId, portName))) {
                         GeometryNode.LOGGER.error("Blueprint data node type is unavailable: graph={}, node={}, type={}, port={}",
@@ -856,9 +865,9 @@ public class BlueprintProcess {
             }
         }
 
-        private Object evaluateDataOutput(int nodeId, String portName) {
+        private Object evaluateDataOutput(int nodeId, int portKey) {
             dataEvaluation.beginEpoch();
-            return executeDataNode(nodeId, portName);
+            return executeDataNode(nodeId, portKey);
         }
 
         private void finishDetachedEvaluation() {
