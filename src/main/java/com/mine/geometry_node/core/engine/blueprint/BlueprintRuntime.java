@@ -14,8 +14,9 @@ import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileHit;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
-import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.blueprint.compile.BlueprintCompiler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -57,14 +58,18 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     @Override
+    public GraphCompiler<? extends CompiledGraph> compiler() {
+        return BlueprintCompiler.INSTANCE;
+    }
+
+    @Override
     public String id() {
         return "geometry_node:blueprint";
     }
 
     @Override
     public void init() {
-        GraphCompilationService.INSTANCE.register(BlueprintCompiler.INSTANCE);
-        GraphAssetLifecycleIndex.INSTANCE.addChangeListener(
+        ServerGraphRepository.INSTANCE.addChangeListener(
                 GraphKind.BLUEPRINT, this::onGraphAssetsChanged);
         eventHandler.init();
     }
@@ -106,8 +111,8 @@ public final class BlueprintRuntime implements GraphRuntime {
     }
 
     @Nullable
-    public BlueprintPlan getGraphIndex(String graphId) {
-        return engine.getGraphIndex(graphId);
+    public BlueprintPlan getGraphIndex(MinecraftServer server, String graphId) {
+        return engine.getGraphIndex(server, graphId);
     }
 
     public void bindGraph(Entity entity, String graphId) {
@@ -255,16 +260,18 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     private void syncPlayerInputInterception(Entity entity) {
         if (!(entity instanceof ServerPlayer player)) return;
-        int mask = collectInterceptionMask(engine.getGlobalGraphsForEvent(
+        MinecraftServer server = player.level().getServer();
+        int mask = collectInterceptionMask(server, engine.getGlobalGraphsForEvent(
                 player.level(), OnPlayerKeyEvent.TYPE_ID));
-        mask |= collectInterceptionMask(engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID));
+        mask |= collectInterceptionMask(server,
+                engine.getEntityGraphsForEvent(player, OnPlayerKeyEvent.TYPE_ID));
         playerInput.syncInterceptions(player, mask);
     }
 
-    private int collectInterceptionMask(Set<String> graphIds) {
+    private int collectInterceptionMask(MinecraftServer server, Set<String> graphIds) {
         int mask = 0;
         for (String graphId : graphIds) {
-            BlueprintPlan plan = engine.getGraphIndex(graphId);
+            BlueprintPlan plan = engine.getGraphIndex(server, graphId);
             if (plan == null) continue;
             for (int nodeId : plan.findNodesByType(OnPlayerKeyEvent.TYPE_ID)) {
                 if (!plan.getStaticInput(nodeId, StandardPorts.INTERCEPT.getId(), Boolean.class, false)) continue;
@@ -290,11 +297,11 @@ public final class BlueprintRuntime implements GraphRuntime {
                 eventData, StandardPorts.INTERCEPT.getId());
     }
 
-    private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
+    private void onGraphAssetsChanged(ServerGraphRepository.Change change) {
         Map<String, BlueprintPlan> newIndexes = new LinkedHashMap<>();
         for (String graphId : change.assetIds()) {
-            BlueprintPlan index = GraphAssetLifecycleIndex.INSTANCE
-                    .getArtifact(graphId, GraphKind.BLUEPRINT) instanceof BlueprintPlan value
+            BlueprintPlan index = ServerGraphRepository.INSTANCE
+                    .getArtifact(change.server(), graphId, GraphKind.BLUEPRINT) instanceof BlueprintPlan value
                     ? value : null;
             newIndexes.put(graphId, index);
         }

@@ -378,7 +378,8 @@ public final class QuestService {
         if (normalizedKey.isEmpty()) {
             return QuestOperationResult.of(QuestOperationResult.Code.INVALID_TASK_KEY);
         }
-        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(normalizedKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(
+                owner.level().getServer(), normalizedKey);
         if (index == null) {
             return QuestOperationResult.of(QuestOperationResult.Code.TASK_NOT_FOUND);
         }

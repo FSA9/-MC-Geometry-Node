@@ -69,8 +69,9 @@ public final class CreateArea extends BaseNode {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                 .text("summary")
                 .input(StandardPorts.FLOW_IN, "flow_in")
-                .output(StandardPorts.FLOW_OUT, "flow_out")
-                .output(StandardPorts.BOOL, "bool")
+                        .output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.BOOL, "bool")
+                        .output(StandardPorts.AREA, "area")
                 .input(StandardPorts.AREA_ID, "area_id")
                 .input(StandardPorts.DIMENSION, "dimension")
                 .input(ANCHOR_PORT, "anchor")
@@ -91,6 +92,7 @@ public final class CreateArea extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.AREA.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(areaIdPort(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID))
                 .addPassthroughInput(PortDef.create(ANCHOR_PORT, "geometry_node.port.area_anchor", PortType.STRING,
@@ -117,6 +119,7 @@ public final class CreateArea extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         boolean success = false;
+        context.setNodeResult(StandardPorts.AREA.getId(), null);
         String areaId = getInput(context, StandardPorts.AREA_ID.getId(), String.class);
         ServerLevel hostLevel = context.getLevel();
         ServerLevel areaLevel = hostLevel != null
@@ -164,9 +167,10 @@ public final class CreateArea extends BaseNode {
                     reportDiagnostics(context, address.id(), "rotation", liveRotation);
                     reportDiagnostics(context, address.id(), "radius", liveRadius);
                     reportDiagnostics(context, address.id(), "height", liveHeight);
-                    AreaResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, resourceOwner,
+                    var resource = AreaResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, resourceOwner,
                             shape, areaLevel.getGameTime(), liveCenter, liveSize, liveRotation,
                             liveRadius, liveHeight, anchorId);
+                    context.setNodeResult(StandardPorts.AREA.getId(), resource.reference());
                     success = true;
                 }
             }
@@ -177,7 +181,8 @@ public final class CreateArea extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
+        return StandardPorts.BOOL.getId().equals(portName) || StandardPorts.AREA.getId().equals(portName)
+                ? context.getNodeResult(portName) : null;
     }
 
     private static LiveValue<Vec3> captureXyz(PortDef port, Vec3 snapshot, ExpressionData expression) {

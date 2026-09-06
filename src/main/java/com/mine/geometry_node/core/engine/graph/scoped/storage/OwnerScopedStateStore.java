@@ -27,7 +27,8 @@ public final class OwnerScopedStateStore {
     public @Nullable ScopedStateEntry get(ScopedStateNamespace namespace, String name,
                                           HolderLookup.Provider registries) {
         PersistentScopedStateBucket bucket = buckets.get(namespace);
-        return bucket != null ? bucket.get(name, registries, location(namespace, name)) : null;
+        return bucket != null ? bucket.get(name, registries, location(namespace, name),
+                () -> removeEmptyBucket(namespace, bucket)) : null;
     }
 
     public void put(String name, Object value, int maxEntries,
@@ -43,7 +44,8 @@ public final class OwnerScopedStateStore {
                 namespace, ignored -> new PersistentScopedStateBucket());
         try {
             bucket.put(
-                    name, value, limit, registries, location(namespace, name), limitNotifier);
+                    name, value, limit, registries, locationPrefix(namespace),
+                    limitNotifier, () -> {});
         } catch (RuntimeException exception) {
             if (bucket.isEmpty()) buckets.remove(namespace);
             throw exception;
@@ -96,7 +98,8 @@ public final class OwnerScopedStateStore {
                                                  HolderLookup.Provider registries, int limit) {
         PersistentScopedStateBucket bucket = buckets.get(namespace);
         return bucket != null
-                ? bucket.entries(registries, locationPrefix(namespace), limit) : Map.of();
+                ? bucket.entries(registries, locationPrefix(namespace), limit,
+                        () -> removeEmptyBucket(namespace, bucket)) : Map.of();
     }
 
     public CompoundTag save(CompoundTag root, HolderLookup.Provider registries) {
@@ -140,9 +143,15 @@ public final class OwnerScopedStateStore {
         }
         serializedByNamespace.forEach((namespace, entries) -> {
             PersistentScopedStateBucket bucket = new PersistentScopedStateBucket();
-            bucket.loadEntries(entries.values(), HARD_MAX_RECORDS);
+            bucket.loadEntries(entries.values(), HARD_MAX_RECORDS, locationPrefix(namespace));
+            bucket.removeCorruptEntries(registries, locationPrefix(namespace), () -> {});
             if (!bucket.isEmpty()) buckets.put(namespace, bucket);
         });
+    }
+
+    private void removeEmptyBucket(ScopedStateNamespace namespace,
+                                   PersistentScopedStateBucket bucket) {
+        if (bucket.isEmpty()) buckets.remove(namespace, bucket);
     }
 
     private static String location(ScopedStateNamespace namespace, String name) {

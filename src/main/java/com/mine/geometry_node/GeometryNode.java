@@ -10,8 +10,7 @@ import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRu
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
@@ -177,7 +176,7 @@ public class GeometryNode {
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
-        ServerEngineRegistry.INSTANCE.register(GraphAssetLifecycleIndex.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(ServerGraphRepository.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerAssetMetadataCache.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
@@ -220,7 +219,7 @@ public class GeometryNode {
     @SubscribeEvent
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
         LOGGER.info("[GeometryNode] Server about to start, loading dynamic graphs...");
-        DynamicGraphManager.prepareForServerStart(event.getServer());
+        ServerGraphRepository.INSTANCE.start(event.getServer());
     }
 
 }

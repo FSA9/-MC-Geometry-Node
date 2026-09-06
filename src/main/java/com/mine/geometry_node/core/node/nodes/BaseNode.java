@@ -154,7 +154,6 @@ public abstract class BaseNode {
     private static ExpressionBinding.EntityProperty entityBinding(Entity entity,
                                                                     ExpressionBinding.Property property) {
         return new ExpressionBinding.EntityProperty(
-                entity.level().dimension().identifier().toString(),
                 entity.getUUID(),
                 entity.getId(),
                 property,

@@ -31,6 +31,7 @@ public enum PortType {
     SLOT(0xFFB0BEC5, SlotRef.DEFAULT.serialize()),
     BLOCK_STATE(0xFF8D6E63, null),
     GEOMETRY(0xFF26A69A, GeometryValue.EMPTY),
+    AREA(0xFF29B6A8, null),
     XYZ(0xFF00BCD4, Vec3.ZERO),
     COLOR(0xFFFFD54F, ColorValue.WHITE),
     LIST(0xFFFF9800, List.of()),

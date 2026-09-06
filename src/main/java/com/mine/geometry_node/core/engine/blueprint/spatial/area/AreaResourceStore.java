@@ -47,6 +47,7 @@ public final class AreaResourceStore {
         AreaResource resource = new AreaResource(address, owner, ++state.generation,
                 shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
         state.entries.put(address, resource);
+        state.snapshotsByDimension.remove(address.dimension());
         return resource;
     }
 
@@ -56,9 +57,41 @@ public final class AreaResourceStore {
         return state != null ? state.entries.get(address) : null;
     }
 
+    @Nullable
+    public synchronized AreaResource get(MinecraftServer server, AreaRef reference) {
+        AreaResource resource = get(server, reference.address());
+        return resource != null && resource.reference().equals(reference) ? resource : null;
+    }
+
     public synchronized boolean remove(MinecraftServer server, AreaAddress address) {
         ServerState state = servers.get(server);
-        return state != null && state.entries.remove(address) != null;
+        if (state == null || state.entries.remove(address) == null) return false;
+        state.snapshotsByDimension.remove(address.dimension());
+        return true;
+    }
+
+    public synchronized boolean remove(MinecraftServer server, AreaRef reference) {
+        ServerState state = servers.get(server);
+        if (state == null) return false;
+        AreaResource resource = state.entries.get(reference.address());
+        if (resource == null || !resource.reference().equals(reference)) return false;
+        state.entries.remove(reference.address());
+        state.snapshotsByDimension.remove(reference.address().dimension());
+        return true;
+    }
+
+    public synchronized List<AreaResource> snapshot(ServerLevel level) {
+        ServerState state = servers.get(level.getServer());
+        if (state == null || state.entries.isEmpty()) return List.of();
+        List<AreaResource> cached = state.snapshotsByDimension.get(level.dimension());
+        if (cached != null) return cached;
+        List<AreaResource> result = new ArrayList<>();
+        for (AreaResource resource : state.entries.values()) {
+            if (resource.address().dimension().equals(level.dimension())) result.add(resource);
+        }
+        List<AreaResource> snapshot = List.copyOf(result);
+        state.snapshotsByDimension.put(level.dimension(), snapshot);
+        return snapshot;
     }
 
     public synchronized void tickDebug(ServerLevel level) {
@@ -106,11 +139,14 @@ public final class AreaResourceStore {
     private synchronized void removeOwned(MinecraftServer server, GraphResourceRelease release) {
         ServerState state = servers.get(server);
         if (state == null) return;
-        state.entries.entrySet().removeIf(entry -> release.matches(entry.getValue().owner()));
+        if (state.entries.entrySet().removeIf(entry -> release.matches(entry.getValue().owner()))) {
+            state.snapshotsByDimension.clear();
+        }
     }
 
     private static final class ServerState {
-        private final Map<AreaAddress, AreaResource> entries = new HashMap<>();
+        private final Map<AreaAddress, AreaResource> entries = new LinkedHashMap<>();
+        private final Map<ResourceKey<Level>, List<AreaResource>> snapshotsByDimension = new HashMap<>();
         private final Map<ResourceKey<Level>, Set<GraphResourceId>> debugOwnersByDimension = new HashMap<>();
         private long generation;
     }

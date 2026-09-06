@@ -11,9 +11,10 @@ import com.mine.geometry_node.core.engine.behavior.runtime.BehaviorTreeProcess;
 import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugAccess;
 import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugSnapshot;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
-import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
@@ -45,14 +46,18 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     @Override
+    public GraphCompiler<? extends CompiledGraph> compiler() {
+        return BehaviorTreeCompiler.INSTANCE;
+    }
+
+    @Override
     public String id() {
         return "geometry_node:behavior_tree";
     }
 
     @Override
     public void init() {
-        GraphCompilationService.INSTANCE.register(BehaviorTreeCompiler.INSTANCE);
-        GraphAssetLifecycleIndex.INSTANCE.addChangeListener(
+        ServerGraphRepository.INSTANCE.addChangeListener(
                 GraphKind.BEHAVIOR_TREE, this::onGraphAssetsChanged);
         BehaviorEventHandler.init();
     }
@@ -67,8 +72,8 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     }
 
     public boolean bind(Mob owner, String graphId) {
-        requireServerOwner(owner);
-        String normalized = requireAvailable(graphId);
+        ServerLevel level = requireServerOwner(owner);
+        String normalized = requireAvailable(level.getServer(), graphId);
         boolean added = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
         if (added) GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
         return added;
@@ -86,7 +91,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
 
     public BehaviorTreeProcess switchTo(Mob owner, String graphId) {
         ServerLevel level = requireServerOwner(owner);
-        String normalized = requireAvailable(graphId);
+        String normalized = requireAvailable(level.getServer(), graphId);
         if (!boundGraphs(owner).contains(normalized)) {
             throw new IllegalStateException("Behavior tree is not bound: " + normalized);
         }
@@ -228,16 +233,16 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         return level;
     }
 
-    private static String requireAvailable(String graphId) {
+    private static String requireAvailable(MinecraftServer server, String graphId) {
         String normalized = GraphAssetId.require(graphId);
-        if (GraphAssetLifecycleIndex.INSTANCE.getArtifact(
-                normalized, GraphKind.BEHAVIOR_TREE) == null) {
+        if (ServerGraphRepository.INSTANCE.getArtifact(
+                server, normalized, GraphKind.BEHAVIOR_TREE) == null) {
             throw new IllegalArgumentException("Behavior tree is unavailable: " + normalized);
         }
         return normalized;
     }
 
-    private void onGraphAssetsChanged(GraphAssetLifecycleIndex.Change change) {
+    private void onGraphAssetsChanged(ServerGraphRepository.Change change) {
         engine.graphAssetsChanged(change.server(), change.assetIds());
     }
 }

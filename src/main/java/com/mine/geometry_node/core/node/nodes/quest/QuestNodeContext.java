@@ -28,7 +28,8 @@ final class QuestNodeContext {
         if (context == null || context.getGraphId() == null || context.getGraphId().isBlank()) {
             return false;
         }
-        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(context.getGraphId());
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(
+                context.getLevel().getServer(), context.getGraphId());
         return index != null && GraphTypeRegistry.QUEST.id().equals(index.getGraphTypeId());
     }
 }

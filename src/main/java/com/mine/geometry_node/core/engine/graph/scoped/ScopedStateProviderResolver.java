@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.core.engine.graph.scoped.storage.ScopedStateStorage;
 import com.mine.geometry_node.core.engine.graph.scoped.storage.OwnerScopedStateProvider;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.AreaScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -28,6 +29,9 @@ public final class ScopedStateProviderResolver {
         Objects.requireNonNull(target, "target");
         if (target instanceof ScopedStateTarget.OwnerTarget ownerTarget) {
             return owner(ownerTarget.entity(), namespace);
+        }
+        if (target instanceof ScopedStateTarget.AreaTarget areaTarget) {
+            return new AreaScopedStateProvider(context.level(), areaTarget.area(), namespace);
         }
         if (target instanceof ScopedStateTarget.SharedTarget) {
             return shared(context.level(), namespace);

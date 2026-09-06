@@ -19,6 +19,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -35,9 +36,12 @@ public final class ScopedStateStorage extends SavedData {
             ScopedStateStorage::new, CODEC);
 
     private final Map<ScopeKey, PersistentScopedStateBucket> buckets = new LinkedHashMap<>();
+    private boolean entriesValidated;
 
     public static ScopedStateStorage get(ServerLevel level) {
-        return level.getServer().getDataStorage().computeIfAbsent(TYPE);
+        ScopedStateStorage storage = level.getServer().getDataStorage().computeIfAbsent(TYPE);
+        storage.validateEntries(level.registryAccess());
+        return storage;
     }
 
     public ScopedStateProvider provider(ScopedStateNamespace namespace,
@@ -126,7 +130,10 @@ public final class ScopedStateStorage extends SavedData {
                 bucket = new PersistentScopedStateBucket();
                 storage.buckets.put(scopeKey, bucket);
             }
-            bucket.loadEntries(tag.getListOrEmpty("Entries"), HARD_MAX_RECORDS_PER_BUCKET);
+            if (bucket.loadEntries(tag.getListOrEmpty("Entries"),
+                    HARD_MAX_RECORDS_PER_BUCKET, locationPrefix(scopeKey))) {
+                storage.setDirty();
+            }
             if (bucket.isEmpty()) storage.buckets.remove(scopeKey);
         }
         return storage;
@@ -183,7 +190,8 @@ public final class ScopedStateStorage extends SavedData {
         @Override
         public @Nullable ScopedStateEntry get(String name) {
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
-            return bucket != null ? bucket.get(name, registries, location(name)) : null;
+            return bucket != null ? bucket.get(name, registries, location(name),
+                    () -> removeCorruptEntry(storageKey, bucket)) : null;
         }
 
         @Override
@@ -191,8 +199,8 @@ public final class ScopedStateStorage extends SavedData {
             PersistentScopedStateBucket bucket = bucketForMutation(storageKey);
             boolean changed;
             try {
-                changed = bucket.put(name, value, maxEntries, registries, location(name),
-                        this::notifyLimit);
+                changed = bucket.put(name, value, maxEntries, registries, locationPrefix(),
+                        this::notifyLimit, ScopedStateStorage.this::setDirty);
             } catch (RuntimeException exception) {
                 if (bucket.isEmpty()) buckets.remove(storageKey);
                 throw exception;
@@ -210,8 +218,7 @@ public final class ScopedStateStorage extends SavedData {
         }
 
         @Override public boolean hasRecord(String name) {
-            PersistentScopedStateBucket bucket = buckets.get(storageKey);
-            return bucket != null && bucket.hasRecord(name);
+            return get(name) != null;
         }
 
         @Override public long revision() {
@@ -227,7 +234,8 @@ public final class ScopedStateStorage extends SavedData {
         @Override public Map<String, ScopedStateEntry> entries(int limit) {
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
             return bucket != null
-                    ? bucket.entries(registries, locationPrefix(), limit) : Map.of();
+                    ? bucket.entries(registries, locationPrefix(), limit,
+                            () -> removeCorruptEntry(storageKey, bucket)) : Map.of();
         }
 
         private void notifyLimit() {
@@ -240,7 +248,7 @@ public final class ScopedStateStorage extends SavedData {
         }
 
         private String locationPrefix() {
-            return namespace.serializedName() + "/" + scope + "/";
+            return ScopedStateStorage.locationPrefix(storageKey);
         }
     }
 
@@ -254,6 +262,30 @@ public final class ScopedStateStorage extends SavedData {
         PersistentScopedStateBucket created = new PersistentScopedStateBucket();
         buckets.put(key, created);
         return created;
+    }
+
+    private void validateEntries(HolderLookup.Provider registries) {
+        if (entriesValidated) return;
+        entriesValidated = true;
+        Iterator<Map.Entry<ScopeKey, PersistentScopedStateBucket>> iterator =
+                buckets.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<ScopeKey, PersistentScopedStateBucket> item = iterator.next();
+            PersistentScopedStateBucket bucket = item.getValue();
+            bucket.removeCorruptEntries(
+                    registries, locationPrefix(item.getKey()), this::setDirty);
+            if (bucket.isEmpty()) iterator.remove();
+        }
+    }
+
+    private void removeCorruptEntry(ScopeKey key, PersistentScopedStateBucket bucket) {
+        if (bucket.isEmpty()) buckets.remove(key, bucket);
+        setDirty();
+    }
+
+    private static String locationPrefix(ScopeKey key) {
+        return key.namespace().serializedName() + "/" + key.scope() + "/"
+                + key.identity() + "/";
     }
 
     private record ScopeKey(ScopedStateNamespace namespace,

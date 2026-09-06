@@ -9,11 +9,12 @@ import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubs
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
+import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
@@ -26,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * [核心引擎门面]
@@ -155,14 +157,14 @@ public final class BlueprintEngine {
         Set<String> structureIds = new HashSet<>();
 
         for (String graphId : getGlobalGraphsForEvent(level, MULTIBLOCK_BUILT_EVENT_TYPE)) {
-            collectMultiblockStructureIds(graphId, structureIds);
+            collectMultiblockStructureIds(level.getServer(), graphId, structureIds);
         }
 
         if (target != null) {
             EntityGraphAttachment entityAttachment = getAttachment(target);
             if (entityAttachment != null) {
                 for (String graphId : getEntityGraphsForEvent(target, MULTIBLOCK_BUILT_EVENT_TYPE)) {
-                    collectMultiblockStructureIds(graphId, structureIds);
+                    collectMultiblockStructureIds(level.getServer(), graphId, structureIds);
                 }
             }
         }
@@ -230,7 +232,7 @@ public final class BlueprintEngine {
                                                java.util.function.Function<String, BlueprintProcess> processFinder,
                                                Consumer<BlueprintProcess> mountAction) {
 
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(level.getServer(), graphId);
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findReceiveBlueprintNodes(targetFrequency);
@@ -250,7 +252,7 @@ public final class BlueprintEngine {
                                                    @Nullable Map<String, Object> eventData,
                                                    java.util.function.Function<String, BlueprintProcess> processFinder,
                                                    Consumer<BlueprintProcess> mountAction) {
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(level.getServer(), graphId);
         if (index == null) return;
 
         List<Integer> startNodeIds = index.findMultiblockBuiltNodes(structureId);
@@ -291,8 +293,9 @@ public final class BlueprintEngine {
         }
     }
 
-    private void collectMultiblockStructureIds(String graphId, Set<String> structureIds) {
-        BlueprintPlan index = getGraphIndex(graphId);
+    private void collectMultiblockStructureIds(MinecraftServer server, String graphId,
+                                               Set<String> structureIds) {
+        BlueprintPlan index = getGraphIndex(server, graphId);
         if (index != null) {
             structureIds.addAll(index.getMultiblockStructureIds());
         }
@@ -343,7 +346,7 @@ public final class BlueprintEngine {
         EntityGraphAttachment attachment = getAttachment(target);
         if (attachment == null || !attachment.getBoundGraphs().contains(resolvedGraphId)) return;
 
-        BlueprintPlan index = getGraphIndex(resolvedGraphId);
+        BlueprintPlan index = getGraphIndex(level.getServer(), resolvedGraphId);
         if (index == null) return;
 
         for (int nodeId : index.findNodesByType(eventNodeId)) {
@@ -364,7 +367,7 @@ public final class BlueprintEngine {
         GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         for (String graphId : storage.getGraphs()) {
-            BlueprintPlan index = getGraphIndex(graphId);
+            BlueprintPlan index = getGraphIndex(level.getServer(), graphId);
             if (index != null) {
                 graphSubscriptions.registerGlobalGraph(graphId, index);
             }
@@ -378,7 +381,7 @@ public final class BlueprintEngine {
 
     public void bindGraph(Entity entity, String graphId) {
         graphId = GraphAssetId.require(graphId);
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(entity.level().getServer(), graphId);
         if (index == null) return;
 
         EntityGraphAttachment attachment = getAttachment(entity);
@@ -406,7 +409,7 @@ public final class BlueprintEngine {
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.addGraph(graphId);
 
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(level.getServer(), graphId);
         if (index != null) {
             state(level).graphSubscriptions.registerGlobalGraph(graphId, index);
             LevelGraphAttachment attachment = LevelGraphAttachment.get(level);
@@ -442,7 +445,8 @@ public final class BlueprintEngine {
 
     public void unbindGlobalGraph(ServerLevel level, String graphId, BlueprintCloseMode closeMode) {
         graphId = GraphAssetId.require(graphId);
-        state(level).graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
+        state(level).graphSubscriptions.unregisterGlobalGraph(
+                graphId, getGraphIndex(level.getServer(), graphId));
         GlobalGraphStorage storage = GlobalGraphStorage.get(level.getServer().overworld());
         storage.removeGraph(graphId);
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -474,7 +478,8 @@ public final class BlueprintEngine {
             }
         }
         for (String graphId : graphIds) {
-            graphSubscriptions.unregisterGlobalGraph(graphId, getGraphIndex(graphId));
+            graphSubscriptions.unregisterGlobalGraph(
+                    graphId, getGraphIndex(level.getServer(), graphId));
         }
         storage.clearGraphs();
         for (ServerLevel loadedLevel : level.getServer().getAllLevels()) {
@@ -515,13 +520,13 @@ public final class BlueprintEngine {
     }
 
     private void registerEntityForGraph(Entity entity, String graphId) {
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(entity.level().getServer(), graphId);
         if (index == null) return;
         state(entity).graphSubscriptions.registerEntityGraph(entity, graphId, index);
     }
 
     private void unregisterEntityForGraph(Entity entity, String graphId) {
-        BlueprintPlan index = getGraphIndex(graphId);
+        BlueprintPlan index = getGraphIndex(entity.level().getServer(), graphId);
         unregisterEntityForGraph(entity, graphId, index);
     }
 
@@ -629,8 +634,11 @@ public final class BlueprintEngine {
             }
             for (String graphId : newIndexes.keySet()) {
                 Set<Entity> registeredEntities = registeredEntitiesByGraph.get(graphId);
-                Set<Entity> boundEntities = GraphBindingRuntimeIndex.INSTANCE.entities(
-                        server, GraphBindingKey.blueprint(graphId));
+                Set<Entity> boundEntities = GraphBindingRuntimeIndex.INSTANCE.entityIds(
+                                server, GraphBindingKey.blueprint(graphId)).stream()
+                        .map(entityId -> GraphEntityReferenceResolver.resolve(entityId, server))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toUnmodifiableSet());
                 registeredEntities.addAll(boundEntities);
                 affectedEntities.addAll(boundEntities);
                 for (Entity entity : boundEntities) {
@@ -665,11 +673,11 @@ public final class BlueprintEngine {
     }
 
     @Nullable
-    public BlueprintPlan getGraphIndex(String graphId) {
+    public BlueprintPlan getGraphIndex(MinecraftServer server, String graphId) {
         String normalizedId = GraphAssetId.canonicalize(graphId);
         if (normalizedId.isEmpty()) return null;
-        return asBlueprintIndex(GraphAssetLifecycleIndex.INSTANCE
-                .getArtifact(normalizedId, GraphKind.BLUEPRINT));
+        return asBlueprintIndex(ServerGraphRepository.INSTANCE
+                .getArtifact(server, normalizedId, GraphKind.BLUEPRINT));
     }
 
     public String resolveGraphId(@Nullable String graphId) {

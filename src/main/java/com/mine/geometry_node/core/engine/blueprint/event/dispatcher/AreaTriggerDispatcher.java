@@ -68,7 +68,8 @@ public final class AreaTriggerDispatcher {
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
         for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(hostLevel, OnAreaEvent.TYPE_ID)) {
-            tickGraph(scopeStates, hostLevel, null, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+            tickGraph(scopeStates, hostLevel, null, graphId,
+                    BlueprintRuntime.INSTANCE.getGraphIndex(hostLevel.getServer(), graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
                     currentTick, seenStates, queryCache);
         }
@@ -86,7 +87,8 @@ public final class AreaTriggerDispatcher {
         Set<StateKey> seenStates = new HashSet<>();
         Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
         for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, OnAreaEvent.TYPE_ID)) {
-            tickGraph(scopeStates, hostLevel, owner, graphId, BlueprintRuntime.INSTANCE.getGraphIndex(graphId),
+            tickGraph(scopeStates, hostLevel, owner, graphId,
+                    BlueprintRuntime.INSTANCE.getGraphIndex(hostLevel.getServer(), graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
                     currentTick, seenStates, queryCache);
         }
@@ -119,33 +121,50 @@ public final class AreaTriggerDispatcher {
 
             ServerLevel areaLevel = RegistryDataManager.resolveDimension(hostLevel.getServer(),
                     group.key.dimensionId());
-            if (areaLevel == null || group.key.sourceId().isBlank()) {
+            if (areaLevel == null) {
                 listenerState.reset();
                 continue;
             }
-            ResolvedAreaSource source = resolveSource(hostLevel.getServer(), areaLevel, group.key);
-            if (source == null) {
+            List<ResolvedAreaSource> sources = resolveSources(
+                    hostLevel.getServer(), areaLevel, group.key);
+            if (sources.isEmpty()) {
                 listenerState.reset();
                 continue;
             }
-            if (listenerState.areaGeneration != source.areaResource().generation()
-                    || listenerState.forceFieldGeneration != source.forceFieldGeneration()) {
-                listenerState.inside = Set.of();
-                listenerState.areaGeneration = source.areaResource().generation();
-                listenerState.forceFieldGeneration = source.forceFieldGeneration();
-            }
+            Set<AreaRef> seenAreas = new HashSet<>();
+            for (ResolvedAreaSource source : sources) {
+                AreaRef areaRef = source.areaResource().reference();
+                seenAreas.add(areaRef);
+                SourceListenerState sourceState = listenerState.areas.computeIfAbsent(
+                        areaRef, ignored -> new SourceListenerState());
+                if (sourceState.areaGeneration != source.areaResource().generation()
+                        || sourceState.forceFieldGeneration != source.forceFieldGeneration()) {
+                    sourceState.inside = Set.of();
+                    sourceState.areaGeneration = source.areaResource().generation();
+                    sourceState.forceFieldGeneration = source.forceFieldGeneration();
+                }
 
-            AreaQueryResult result = findEntities(areaLevel, source.areaResource(), source.area(),
-                    group.key.targetType(), source.excludedEntityId(), queryCache);
-            Set<UUID> previous = listenerState.inside;
-            Set<UUID> current = result.hitsById().keySet();
-            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.ENTER,
-                    difference(current, previous), source, result, processFinder, mountAction);
-            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.STAY,
-                    intersection(current, previous), source, result, processFinder, mountAction);
-            dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group, AreaPhase.EXIT,
-                    difference(previous, current), source, result, processFinder, mountAction);
-            listenerState.inside = new LinkedHashSet<>(current);
+                AreaQueryResult result = findEntities(areaLevel, source.areaResource(), source.area(),
+                        group.key.targetType(), source.excludedEntityId(), queryCache);
+                Set<UUID> previous = sourceState.inside;
+                Set<UUID> current = result.hitsById().keySet();
+                boolean alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
+                        AreaPhase.ENTER, difference(current, previous), source, result,
+                        processFinder, mountAction);
+                if (alive) {
+                    alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
+                            AreaPhase.STAY, intersection(current, previous), source, result,
+                            processFinder, mountAction);
+                }
+                if (alive) {
+                    alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
+                            AreaPhase.EXIT, difference(previous, current), source, result,
+                            processFinder, mountAction);
+                }
+                if (alive) sourceState.inside = new LinkedHashSet<>(current);
+                else seenAreas.remove(areaRef);
+            }
+            listenerState.areas.keySet().retainAll(seenAreas);
         }
     }
 
@@ -164,8 +183,14 @@ public final class AreaTriggerDispatcher {
                     RegistryDataManager.DEFAULT_DIMENSION);
             AreaSource source = AreaSource.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.SUBSCRIPTION_SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
+            AreaMatch match = source == AreaSource.AREA
+                    ? AreaMatch.fromId(plan.getStaticInput(nodeId,
+                            OnAreaEvent.SUBSCRIPTION_MATCH_PORT, String.class,
+                            OnAreaEvent.MATCH_EXACT))
+                    : AreaMatch.EXACT;
             String sourceId = source == AreaSource.FORCE_FIELD
                     ? plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_FORCE_FIELD_ID_PORT, String.class, "")
+                    : match == AreaMatch.ALL ? ""
                     : plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_AREA_ID_PORT, String.class, "");
             AreaTargetType target = AreaTargetType.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
@@ -174,7 +199,7 @@ public final class AreaTriggerDispatcher {
             int offset = Math.floorMod(plan.getStaticInput(nodeId,
                     OnAreaEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
             ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(), source,
-                    sourceId == null ? "" : sourceId.trim(), target, interval, offset);
+                    match, sourceId == null ? "" : sourceId.trim(), target, interval, offset);
             AreaPhase phase = AreaPhase.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
             listeners.add(new CompiledListener(nodeId, key, phase));
@@ -182,13 +207,13 @@ public final class AreaTriggerDispatcher {
         return List.copyOf(listeners);
     }
 
-    private void dispatchPhase(ServerLevel hostLevel, ServerLevel areaLevel, @Nullable Entity owner,
-                               String graphId, BlueprintPlan plan, ListenerGroup group, AreaPhase phase,
-                               Set<UUID> entityIds, ResolvedAreaSource source, AreaQueryResult result,
-                               Function<String, BlueprintProcess> processFinder,
-                               Consumer<BlueprintProcess> mountAction) {
+    private boolean dispatchPhase(ServerLevel hostLevel, ServerLevel areaLevel, @Nullable Entity owner,
+                                  String graphId, BlueprintPlan plan, ListenerGroup group, AreaPhase phase,
+                                  Set<UUID> entityIds, ResolvedAreaSource source, AreaQueryResult result,
+                                  Function<String, BlueprintProcess> processFinder,
+                                  Consumer<BlueprintProcess> mountAction) {
         List<Integer> nodes = group.nodes.get(phase);
-        if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return;
+        if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return true;
 
         AreaResource resource = result.resource();
         AreaResource.Resolved area = result.area();
@@ -206,6 +231,9 @@ public final class AreaTriggerDispatcher {
             Entity trigger = hit != null ? hit.entity()
                     : GraphEntityReferenceResolver.resolve(entityId, areaLevel);
             if (trigger == null || trigger.isRemoved()) continue;
+            if (AreaResourceStore.INSTANCE.get(hostLevel.getServer(), resource.reference()) == null) {
+                return false;
+            }
             Entity eventEntity = owner != null ? owner : trigger;
             Map<String, Object> eventData = EventPayload.of(
                     StandardPorts.ENTITY.getId(), eventEntity,
@@ -219,6 +247,7 @@ public final class AreaTriggerDispatcher {
                     StandardPorts.RADIUS.getId(), (float) radius,
                     StandardPorts.HEIGHT.getId(), (float) height,
                     StandardPorts.ROTATION.getId(), area.rotation(),
+                    StandardPorts.AREA.getId(), resource.reference(),
                     StandardPorts.AREA_ID.getId(), resource.address().id(),
                     StandardPorts.FORCE_FIELD_ID.getId(), source.forceFieldId(),
                     OnAreaEvent.SOURCE_PORT, group.key.source().id,
@@ -230,8 +259,12 @@ public final class AreaTriggerDispatcher {
                 // The process keeps its host level; the selected dimension only controls Area lookup and querying.
                 BlueprintRuntime.INSTANCE.executeEventNode(hostLevel, owner, graphId, plan, nodeId,
                         eventData, processFinder, mountAction);
+                if (AreaResourceStore.INSTANCE.get(hostLevel.getServer(), resource.reference()) == null) {
+                    return false;
+                }
             }
         }
+        return true;
     }
 
     private static AreaQueryResult findEntities(ServerLevel level, AreaResource resource,
@@ -250,29 +283,40 @@ public final class AreaTriggerDispatcher {
         });
     }
 
-    @Nullable
-    private static ResolvedAreaSource resolveSource(MinecraftServer server, ServerLevel areaLevel,
-                                                    ListenerKey key) {
+    private static List<ResolvedAreaSource> resolveSources(MinecraftServer server, ServerLevel areaLevel,
+                                                           ListenerKey key) {
         ForceFieldResource forceField = null;
         AreaAddress areaAddress;
         if (key.source() == AreaSource.FORCE_FIELD) {
+            if (key.sourceId().isBlank()) return List.of();
             ForceFieldAddress forceAddress = ForceFieldAddress.tryCreate(
                     areaLevel.dimension(), key.sourceId());
-            if (forceAddress == null) return null;
+            if (forceAddress == null) return List.of();
             forceField = ForceFieldResourceStore.INSTANCE.get(server, forceAddress);
-            if (forceField == null) return null;
+            if (forceField == null) return List.of();
             areaAddress = forceField.area();
         } else {
+            if (key.match() == AreaMatch.ALL) {
+                List<ResolvedAreaSource> result = new ArrayList<>();
+                for (AreaResource resource : AreaResourceStore.INSTANCE.snapshot(areaLevel)) {
+                    AreaResource.Resolved area = resource.resolve(areaLevel);
+                    if (area != null) {
+                        result.add(new ResolvedAreaSource(resource, area, "",
+                                Long.MIN_VALUE, null));
+                    }
+                }
+                return List.copyOf(result);
+            }
             areaAddress = AreaAddress.tryCreate(areaLevel.dimension(), key.sourceId());
         }
-        if (areaAddress == null) return null;
+        if (areaAddress == null) return List.of();
         AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, areaAddress);
         AreaResource.Resolved area = areaResource != null ? areaResource.resolve(areaLevel) : null;
-        if (areaResource == null || area == null) return null;
-        return new ResolvedAreaSource(areaResource, area,
+        if (areaResource == null || area == null) return List.of();
+        return List.of(new ResolvedAreaSource(areaResource, area,
                 forceField != null ? forceField.address().id() : "",
                 forceField != null ? forceField.generation() : Long.MIN_VALUE,
-                forceField != null ? areaResource.anchorEntityId() : null);
+                forceField != null ? areaResource.anchorEntityId() : null));
     }
 
     private static boolean shouldTick(long tick, int interval, int offset) {
@@ -360,7 +404,16 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private record ListenerKey(String dimensionId, AreaSource source, String sourceId,
+    private enum AreaMatch {
+        EXACT,
+        ALL;
+
+        private static AreaMatch fromId(@Nullable String id) {
+            return OnAreaEvent.MATCH_ALL.equals(id) ? ALL : EXACT;
+        }
+    }
+
+    private record ListenerKey(String dimensionId, AreaSource source, AreaMatch match, String sourceId,
                                AreaTargetType targetType,
                                int interval, int offset) {
     }
@@ -400,16 +453,18 @@ public final class AreaTriggerDispatcher {
     }
 
     private static final class ListenerState {
-        private Set<UUID> inside = Set.of();
-        private long areaGeneration = Long.MIN_VALUE;
-        private long forceFieldGeneration = Long.MIN_VALUE;
+        private final Map<AreaRef, SourceListenerState> areas = new HashMap<>();
         private long lastSeenTick;
 
         private void reset() {
-            inside = Set.of();
-            areaGeneration = Long.MIN_VALUE;
-            forceFieldGeneration = Long.MIN_VALUE;
+            areas.clear();
         }
+    }
+
+    private static final class SourceListenerState {
+        private Set<UUID> inside = Set.of();
+        private long areaGeneration = Long.MIN_VALUE;
+        private long forceFieldGeneration = Long.MIN_VALUE;
     }
 
     private static final class ServerState {

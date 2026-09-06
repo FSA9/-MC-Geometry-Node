@@ -13,6 +13,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
@@ -34,6 +35,8 @@ public class BlueprintProcessContainer {
     private final Runnable dirtyMarker;
     private final Runnable scheduleChangedCallback;
     private final Consumer<BlueprintProcess> processRemovedCallback;
+    @Nullable private CompoundTag pendingLoadTag;
+    @Nullable private HolderLookup.Provider pendingLoadProvider;
 
     public BlueprintProcessContainer(Runnable dirtyMarker) {
         this(dirtyMarker, () -> {}, ignored -> {});
@@ -54,6 +57,7 @@ public class BlueprintProcessContainer {
      * [心跳驱动] 只唤醒真正存在到期等待任务的常驻进程。
      */
     public void tick(ServerLevel level, @Nullable Entity target) {
+        attachServer(level.getServer());
         long currentTime = level.getGameTime();
 
         DueTickScheduler.Scheduled<String, BlueprintProcess> scheduled;
@@ -78,10 +82,11 @@ public class BlueprintProcessContainer {
     /**
      * [智能获取进程] 自带热更新比对机制。
      */
-    public BlueprintProcess getProcess(String graphId) {
+    public BlueprintProcess getProcess(MinecraftServer server, String graphId) {
+        attachServer(server);
         graphId = GraphAssetId.require(graphId);
         BlueprintProcess process = this.processes.get(graphId);
-        BlueprintPlan latestIndex = BlueprintRuntime.INSTANCE.getGraphIndex(graphId);
+        BlueprintPlan latestIndex = BlueprintRuntime.INSTANCE.getGraphIndex(server, graphId);
 
         if (latestIndex != null) {
             // 如果内存没进程，或者图纸版本更新了，强行重建
@@ -143,6 +148,7 @@ public class BlueprintProcessContainer {
      * [清理全部]
      */
     public void clear() {
+        discardPendingLoad();
         for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_unloaded");
@@ -156,6 +162,7 @@ public class BlueprintProcessContainer {
     }
 
     public void clearProcessesForSerialization() {
+        discardPendingLoad();
         for (BlueprintProcess process : this.processes.values()) {
             process.setTickScheduleCallback(null);
             process.shutdown("graph_reloaded");
@@ -184,6 +191,13 @@ public class BlueprintProcessContainer {
      * [序列化] 将进程和属性保存到 NBT
      */
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
+        if (pendingLoadTag != null) {
+            for (String key : new java.util.HashSet<>(tag.keySet())) tag.remove(key);
+            for (String key : pendingLoadTag.keySet()) {
+                tag.put(key, pendingLoadTag.get(key).copy());
+            }
+            return tag;
+        }
         return BlueprintProcessSerializer.saveContainer(this, tag, provider);
     }
 
@@ -191,7 +205,23 @@ public class BlueprintProcessContainer {
      * [反序列化] 从 NBT 恢复进程和属性
      */
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
-        BlueprintProcessSerializer.loadContainer(this, tag, provider);
+        clearProcessesForSerialization();
+        pendingLoadTag = tag.copy();
+        pendingLoadProvider = provider;
+    }
+
+    public void attachServer(MinecraftServer server) {
+        if (server == null || pendingLoadTag == null || pendingLoadProvider == null) return;
+        CompoundTag saved = pendingLoadTag;
+        HolderLookup.Provider provider = pendingLoadProvider;
+        pendingLoadTag = null;
+        pendingLoadProvider = null;
+        BlueprintProcessSerializer.loadContainer(this, saved, provider, server);
+    }
+
+    private void discardPendingLoad() {
+        pendingLoadTag = null;
+        pendingLoadProvider = null;
     }
 
     public Map<String, BlueprintProcess> getProcessesMap() {

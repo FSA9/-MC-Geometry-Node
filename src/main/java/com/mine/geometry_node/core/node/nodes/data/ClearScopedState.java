@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.node.nodes.data;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -40,6 +41,8 @@ public final class ClearScopedState extends BaseNode {
         ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {
             builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
+        } else if (ScopedStateNodeSupport.usesArea(scope)) {
+            builder.addPassthroughInput(StandardPorts.AREA.toInput(), UIHint.DEFAULT, null, null);
         } else if (scope == ScopedStateScope.WORLD) {
             ScopedStateNodeSupport.addDimensionInput(builder);
         }
@@ -54,7 +57,9 @@ public final class ClearScopedState extends BaseNode {
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
-        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
+        AreaRef area = ScopedStateNodeSupport.usesArea(scope)
+                ? getInput(context, StandardPorts.AREA.getId(), AreaRef.class) : null;
+        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity, area);
 
         if (target != null) {
             context.clearScopedState(target, key);

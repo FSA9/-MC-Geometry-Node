@@ -53,6 +53,10 @@ final class PersistentScopedStateEntry {
         return new ScopedStateEntry(value, PortType.getTypeOf(current.value()));
     }
 
+    void validate(HolderLookup.Provider registries, String location) {
+        frozen(registries, location);
+    }
+
     private GraphValueSnapshot.FrozenValue frozen(
             HolderLookup.Provider registries, String location) {
         GraphValueSnapshot.FrozenValue current = frozenValue;

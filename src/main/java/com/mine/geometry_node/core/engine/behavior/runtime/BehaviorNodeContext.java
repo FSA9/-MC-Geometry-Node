@@ -195,7 +195,7 @@ public final class BehaviorNodeContext {
         ensureValid();
         Object raw = staticInput(StandardPorts.BLACKBOARD_SCOPE.getId());
         try {
-            return ScopedStateScope.resolve(raw, ScopedStateScope.INSTANCE, ScopedStateScope.ALL);
+            return ScopedStateScope.resolve(raw, ScopedStateScope.INSTANCE, ScopedStateScope.BEHAVIOR);
         } catch (IllegalArgumentException exception) {
             throw new BehaviorContractViolation(exception.getMessage());
         }

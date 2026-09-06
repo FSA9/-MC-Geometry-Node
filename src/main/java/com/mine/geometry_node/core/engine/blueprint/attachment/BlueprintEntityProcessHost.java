@@ -23,6 +23,9 @@ public final class BlueprintEntityProcessHost {
 
     public void attachOwner(Entity entity) {
         owner = new WeakReference<>(entity);
+        if (entity.level() instanceof ServerLevel level) {
+            container.attachServer(level.getServer());
+        }
         for (BlueprintProcess process : container.getProcesses()) {
             process.setGraphOwner(entity);
         }
@@ -58,8 +61,10 @@ public final class BlueprintEntityProcessHost {
 
     @Nullable
     public BlueprintProcess getProcess(String graphId) {
-        BlueprintProcess process = container.getProcess(graphId);
-        if (process != null) process.setGraphOwner(owner.get());
+        Entity entity = owner.get();
+        if (entity == null || !(entity.level() instanceof ServerLevel level)) return null;
+        BlueprintProcess process = container.getProcess(level.getServer(), graphId);
+        if (process != null) process.setGraphOwner(entity);
         return process;
     }
 

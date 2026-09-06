@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.server;
 
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -15,8 +15,9 @@ public class ServerGraphListCommand {
                         .requires(source -> source.permissions().hasPermission(net.minecraft.server.permissions.Permissions.COMMANDS_MODERATOR))
                         .then(Commands.literal("server")
                                 .executes(context -> {
-                                    Set<String> dynamicGraphs = GraphAssetLifecycleIndex.INSTANCE.getGraphIds();
                                     CommandSourceStack source = context.getSource();
+                                    Set<String> dynamicGraphs = ServerGraphRepository.INSTANCE
+                                            .getGraphIds(source.getServer());
 
                                     if (dynamicGraphs.isEmpty()) {
                                         source.sendSuccess(() -> Component.translatable("geometry_node.command.graph_list.dynamic_empty"), false);

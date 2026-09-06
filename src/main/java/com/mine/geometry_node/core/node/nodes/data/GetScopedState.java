@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
@@ -35,6 +36,8 @@ public final class GetScopedState extends BaseNode {
         ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {
             builder.addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT, null, null);
+        } else if (ScopedStateNodeSupport.usesArea(scope)) {
+            builder.addPassthroughInput(StandardPorts.AREA.toInput(), UIHint.DEFAULT, null, null);
         } else if (scope == ScopedStateScope.WORLD) {
             ScopedStateNodeSupport.addDimensionInput(builder);
         }
@@ -49,7 +52,9 @@ public final class GetScopedState extends BaseNode {
         ScopedStateScope scope = ScopedStateNodeSupport.selectedScope(context);
         Entity entity = ScopedStateNodeSupport.usesEntity(scope)
                 ? getInputFromList(context, StandardPorts.ENTITY.getId(), 0, Entity.class) : null;
-        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity);
+        AreaRef area = ScopedStateNodeSupport.usesArea(scope)
+                ? getInput(context, StandardPorts.AREA.getId(), AreaRef.class) : null;
+        ScopedStateTarget target = ScopedStateNodeSupport.resolveTarget(context, scope, entity, area);
 
         if (target == null) return null;
         return context.getScopedState(target, ScopedStateNodeSupport.requireKey(attrName));

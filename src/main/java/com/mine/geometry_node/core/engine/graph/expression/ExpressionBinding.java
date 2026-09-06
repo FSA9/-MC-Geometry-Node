@@ -17,10 +17,9 @@ public sealed interface ExpressionBinding permits ExpressionBinding.Constant, Ex
         }
     }
 
-    record EntityProperty(String dimensionId, UUID entityUuid, int runtimeEntityId,
-                          Property property, double fallbackValue) implements ExpressionBinding {
+    record EntityProperty(UUID entityUuid, int runtimeEntityId, Property property,
+                          double fallbackValue) implements ExpressionBinding {
         public EntityProperty {
-            dimensionId = dimensionId == null ? "" : dimensionId;
             if (entityUuid == null) {
                 throw new IllegalArgumentException("entityUuid cannot be null");
             }

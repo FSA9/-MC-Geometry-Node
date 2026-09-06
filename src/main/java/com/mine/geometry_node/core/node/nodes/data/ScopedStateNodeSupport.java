@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data;
 
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
@@ -22,7 +23,7 @@ final class ScopedStateNodeSupport {
     static final ScopedStateScope DEFAULT_SCOPE = ScopedStateScope.OWNER;
     static final String DEFAULT_DIMENSION = RegistryDataManager.DEFAULT_DIMENSION;
 
-    private static final String[] SCOPES = ScopedStateScope.optionIds(ScopedStateScope.PERSISTENT);
+    private static final String[] SCOPES = ScopedStateScope.optionIds(ScopedStateScope.GRAPH);
     private ScopedStateNodeSupport() {
     }
 
@@ -37,6 +38,10 @@ final class ScopedStateNodeSupport {
 
     static boolean usesEntity(ScopedStateScope scope) {
         return scope == ScopedStateScope.OWNER || scope == ScopedStateScope.GROUP;
+    }
+
+    static boolean usesArea(ScopedStateScope scope) {
+        return scope == ScopedStateScope.AREA;
     }
 
     static void addScopeInput(NodeDef.Builder builder) {
@@ -60,8 +65,10 @@ final class ScopedStateNodeSupport {
     }
 
     @Nullable
-    static ScopedStateTarget resolveTarget(GraphDataContext context, ScopedStateScope scope, @Nullable Entity entity) {
+    static ScopedStateTarget resolveTarget(GraphDataContext context, ScopedStateScope scope,
+                                           @Nullable Entity entity, @Nullable AreaRef area) {
         return switch (scope) {
+            case AREA -> area != null ? ScopedStateTarget.area(area) : null;
             case OWNER -> entity != null ? ScopedStateTarget.owner(entity) : null;
             case SHARED -> ScopedStateTarget.shared();
             case GROUP -> entity != null ? ScopedStateTarget.group(entity) : null;
@@ -84,7 +91,7 @@ final class ScopedStateNodeSupport {
 
     private static ScopedStateScope normalizeScope(@Nullable Object value) {
         try {
-            return ScopedStateScope.resolve(value, DEFAULT_SCOPE, ScopedStateScope.PERSISTENT);
+            return ScopedStateScope.resolve(value, DEFAULT_SCOPE, ScopedStateScope.GRAPH);
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException(exception.getMessage(), exception);
         }

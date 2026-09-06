@@ -8,6 +8,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -329,14 +330,14 @@ public class BlueprintProcessSerializer {
         return tag;
     }
 
-    public static void loadContainer(BlueprintProcessContainer container, CompoundTag tag, HolderLookup.Provider provider) {
-        container.clearProcessesForSerialization();
+    public static void loadContainer(BlueprintProcessContainer container, CompoundTag tag,
+                                     HolderLookup.Provider provider, MinecraftServer server) {
         if (tag.contains("ActiveProcesses")) {
             ListTag list = tag.getListOrEmpty("ActiveProcesses");
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag pTag = list.getCompoundOrEmpty(i);
                 String graphId = pTag.getStringOr("GraphId", "");
-                BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(graphId);
+                BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(server, graphId);
                 if (index != null) {
                     container.putProcessForSerialization(load(pTag, index, provider));
                 }

@@ -25,11 +25,11 @@ public final class QuestConditionService {
     }
 
     public QuestConditionResult evaluate(Entity owner, String taskKey, QuestConditionKind kind) {
-        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
-        if (index == null || owner == null || kind == null
-                || !(owner.level() instanceof ServerLevel level)) {
+        if (owner == null || kind == null || !(owner.level() instanceof ServerLevel level)) {
             return QuestConditionResult.evaluationFailed();
         }
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(level.getServer(), taskKey);
+        if (index == null) return QuestConditionResult.evaluationFailed();
 
         List<Integer> conditionNodes = index.findNodesByType(kind.nodeTypeId());
         if (conditionNodes.isEmpty()) {
@@ -66,11 +66,11 @@ public final class QuestConditionService {
 
     /** Evaluates every authored condition for a read-only quest-screen snapshot. */
     public List<QuestConditionCheck> evaluateChecks(Entity owner, String taskKey, QuestConditionKind kind) {
-        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
-        if (index == null || owner == null || kind == null
-                || !(owner.level() instanceof ServerLevel level)) {
+        if (owner == null || kind == null || !(owner.level() instanceof ServerLevel level)) {
             return List.of();
         }
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(level.getServer(), taskKey);
+        if (index == null) return List.of();
 
         List<Integer> conditionNodes = index.findNodesByType(kind.nodeTypeId());
         if (conditionNodes.isEmpty()) return List.of();

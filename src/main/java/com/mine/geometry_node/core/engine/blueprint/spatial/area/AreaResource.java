@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationC
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.TransientScopedStateStore;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -17,6 +18,8 @@ public final class AreaResource {
     private final AreaAddress address;
     private final GraphResourceId owner;
     private final long generation;
+    private final UUID incarnation;
+    private final TransientScopedStateStore scopedState = new TransientScopedStateStore();
     private final AreaShape shape;
     private final long creationGameTime;
     private final LiveValue.State<Vec3> center;
@@ -39,6 +42,7 @@ public final class AreaResource {
         this.address = Objects.requireNonNull(address, "address");
         this.owner = Objects.requireNonNull(owner, "owner");
         this.generation = generation;
+        this.incarnation = UUID.randomUUID();
         this.shape = Objects.requireNonNull(shape, "shape");
         this.creationGameTime = creationGameTime;
         this.center = Objects.requireNonNull(center, "center").newState();
@@ -52,6 +56,8 @@ public final class AreaResource {
     public AreaAddress address() { return address; }
     public GraphResourceId owner() { return owner; }
     public long generation() { return generation; }
+    public AreaRef reference() { return new AreaRef(address, incarnation); }
+    public TransientScopedStateStore scopedState() { return scopedState; }
     public AreaShape shape() { return shape; }
     public long creationGameTime() { return creationGameTime; }
     @Nullable public UUID anchorEntityId() { return anchorEntityId; }

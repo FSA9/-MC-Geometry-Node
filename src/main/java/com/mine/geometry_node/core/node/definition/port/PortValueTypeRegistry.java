@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.definition.port;
 
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
+
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
 import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -78,6 +80,7 @@ public final class PortValueTypeRegistry {
         register(types, RichTextValue.class, PortType.RICH_TEXT);
         register(types, ColorValue.class, PortType.COLOR);
         register(types, GeometryValue.class, PortType.GEOMETRY);
+        register(types, AreaRef.class, PortType.AREA);
         register(types, SlotRef.class, PortType.SLOT);
         register(types, Entity.class, PortType.ENTITY);
         register(types, UUID.class, PortType.ENTITY);

@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
-import com.mine.geometry_node.core.engine.graph.storage.DynamicGraphManager;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
@@ -57,7 +57,7 @@ public final class AssetTypeCatalog {
                 String graphTypeId = inspectGraphType(file);
                 return graphTypeId.isEmpty() ? null : graphTypeId;
             }
-        }, AssetPreviewKind.NONE, Optional.of(DynamicGraphManager::refresh), Optional.empty()));
+        }, AssetPreviewKind.NONE, Optional.of(ServerGraphRepository.INSTANCE::refresh), Optional.empty()));
     }
 
     private AssetTypeCatalog() {

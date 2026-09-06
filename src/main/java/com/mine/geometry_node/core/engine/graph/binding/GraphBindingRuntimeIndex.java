@@ -1,13 +1,11 @@
 package com.mine.geometry_node.core.engine.graph.binding;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
-import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -40,18 +38,6 @@ public final class GraphBindingRuntimeIndex implements ServerEngine {
     }
 
     @Override
-    public void levelUnloaded(ServerLevel level) {
-        ServerIndex index = servers.get(level.getServer());
-        if (index == null) return;
-        for (Map.Entry<UUID, WeakReference<Entity>> entry : Set.copyOf(index.entitiesById.entrySet())) {
-            Entity entity = entry.getValue().get();
-            if (entity == null || entity.level() == level) {
-                forget(index, entry.getKey(), entry.getValue());
-            }
-        }
-    }
-
-    @Override
     public void shutdown(MinecraftServer server) {
         servers.remove(server);
     }
@@ -75,45 +61,27 @@ public final class GraphBindingRuntimeIndex implements ServerEngine {
         }
         if (current.isEmpty()) {
             index.bindingsByEntity.remove(entityId);
-            index.entitiesById.remove(entityId);
         } else {
             index.bindingsByEntity.put(entityId, current);
-            index.entitiesById.put(entityId, new WeakReference<>(entity));
         }
     }
 
-    public Set<Entity> entities(MinecraftServer server, GraphBindingKey binding) {
+    public Set<UUID> entityIds(MinecraftServer server, GraphBindingKey binding) {
         if (server == null || binding == null) return Set.of();
         ServerIndex index = servers.get(server);
         if (index == null) return Set.of();
         Set<UUID> entityIds = index.entityIdsByBinding.get(binding);
-        if (entityIds == null || entityIds.isEmpty()) return Set.of();
-
-        Set<Entity> result = new HashSet<>();
-        for (UUID entityId : Set.copyOf(entityIds)) {
-            WeakReference<Entity> reference = index.entitiesById.get(entityId);
-            Entity entity = reference != null ? reference.get() : null;
-            if (isLoadedOn(entity, server)) {
-                result.add(entity);
-            } else {
-                forget(index, entityId, reference);
-            }
-        }
-        return Set.copyOf(result);
+        return entityIds == null || entityIds.isEmpty() ? Set.of() : Set.copyOf(entityIds);
     }
 
     private void forget(ServerLevel level, Entity entity) {
         if (level == null || entity == null || entity.level() != level) return;
         ServerIndex index = servers.get(level.getServer());
         if (index == null) return;
-        UUID entityId = entity.getUUID();
-        WeakReference<Entity> reference = index.entitiesById.get(entityId);
-        if (reference != null && reference.get() != entity) return;
-        forget(index, entityId, reference);
+        forget(index, entity.getUUID());
     }
 
-    private static void forget(ServerIndex index, UUID entityId, WeakReference<Entity> reference) {
-        if (reference != null) index.entitiesById.remove(entityId, reference);
+    private static void forget(ServerIndex index, UUID entityId) {
         Set<GraphBindingKey> bindings = index.bindingsByEntity.remove(entityId);
         if (bindings == null) return;
         for (GraphBindingKey binding : bindings) removeBinding(index, entityId, binding);
@@ -126,14 +94,8 @@ public final class GraphBindingRuntimeIndex implements ServerEngine {
         if (entityIds.isEmpty()) index.entityIdsByBinding.remove(binding);
     }
 
-    private static boolean isLoadedOn(Entity entity, MinecraftServer server) {
-        return entity != null && !entity.isRemoved()
-                && entity.level() instanceof ServerLevel level && level.getServer() == server;
-    }
-
     private static final class ServerIndex {
         private final Map<GraphBindingKey, Set<UUID>> entityIdsByBinding = new HashMap<>();
         private final Map<UUID, Set<GraphBindingKey>> bindingsByEntity = new HashMap<>();
-        private final Map<UUID, WeakReference<Entity>> entitiesById = new HashMap<>();
     }
 }

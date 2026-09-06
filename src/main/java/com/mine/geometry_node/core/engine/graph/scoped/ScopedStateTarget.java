@@ -1,18 +1,25 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
+
 import net.minecraft.world.entity.Entity;
 
 import java.util.Objects;
 
 /**
- * Explicit target for persistent scoped state.
+ * Explicit target for persistent or runtime-owned scoped state.
  */
 public sealed interface ScopedStateTarget permits ScopedStateTarget.OwnerTarget,
+        ScopedStateTarget.AreaTarget,
         ScopedStateTarget.SharedTarget,
         ScopedStateTarget.GroupTarget,
         ScopedStateTarget.WorldTarget {
     static ScopedStateTarget owner(Entity entity) {
         return new OwnerTarget(entity);
+    }
+
+    static ScopedStateTarget area(AreaRef area) {
+        return new AreaTarget(area);
     }
 
     static ScopedStateTarget shared() {
@@ -30,6 +37,12 @@ public sealed interface ScopedStateTarget permits ScopedStateTarget.OwnerTarget,
     record OwnerTarget(Entity entity) implements ScopedStateTarget {
         public OwnerTarget {
             Objects.requireNonNull(entity, "entity");
+        }
+    }
+
+    record AreaTarget(AreaRef area) implements ScopedStateTarget {
+        public AreaTarget {
+            Objects.requireNonNull(area, "area");
         }
     }
 

@@ -3,6 +3,8 @@ package com.mine.geometry_node.core.engine.graph.value;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.GraphNumberNormalizer;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -14,12 +16,16 @@ import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.nbt.*;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -131,6 +137,29 @@ public final class GraphValueCodecRegistry {
         registerNative(String.class, GraphValueJsonCodecs.STRING, PortType.STRING, PortType.PATH);
         registerNative(List.class, GraphValueJsonCodecs.LIST, PortType.LIST);
         registerNative(Map.class, GraphValueJsonCodecs.MAP, PortType.DICT, PortType.SHOP);
+
+        // Runtime-only reference. It supports process snapshots but is deliberately
+        // not associated with a persistent PortType/JSON codec for the Data Library.
+        register(new GraphValueCodec<AreaRef>() {
+            @Override public String getTypeId() { return "area_ref"; }
+            @Override public Class<AreaRef> getTargetClass() { return AreaRef.class; }
+            @Override public Tag serialize(AreaRef value) {
+                CompoundTag tag = new CompoundTag();
+                tag.putString("dimension", value.address().dimension().identifier().toString());
+                tag.putString("id", value.address().id());
+                tag.putString("incarnation", value.incarnation().toString());
+                return tag;
+            }
+            @Override public AreaRef deserialize(Tag tag) {
+                CompoundTag encoded = requireCompound(tag, "area_ref");
+                Identifier dimensionId = Identifier.tryParse(encoded.getStringOr("dimension", ""));
+                if (dimensionId == null) throw new IllegalArgumentException("Invalid area_ref dimension");
+                ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, dimensionId);
+                return new AreaRef(
+                        new AreaAddress(dimension, encoded.getStringOr("id", "")),
+                        UUID.fromString(encoded.getStringOr("incarnation", "")));
+            }
+        });
 
         // UUID
         register(new GraphValueCodec<UUID>() {

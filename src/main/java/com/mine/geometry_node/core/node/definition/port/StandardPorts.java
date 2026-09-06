@@ -183,6 +183,9 @@ public enum StandardPorts {
     // Geometry
     GEOMETRY("geometry", PortType.GEOMETRY),
 
+    // Runtime Area reference
+    AREA("area", PortType.AREA),
+
     // Item
     ITEM("item", PortType.ITEM),
 

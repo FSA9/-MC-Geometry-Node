@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import java.util.Map;
 
 public final class BlackboardNodePorts {
-    private static final String[] OPTIONS = ScopedStateScope.optionIds(ScopedStateScope.ALL);
+    private static final String[] OPTIONS = ScopedStateScope.optionIds(ScopedStateScope.BEHAVIOR);
 
     private BlackboardNodePorts() {
     }

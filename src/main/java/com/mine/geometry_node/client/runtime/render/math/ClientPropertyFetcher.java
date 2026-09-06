@@ -32,9 +32,6 @@ public final class ClientPropertyFetcher {
             if (!(binding instanceof ExpressionBinding.EntityProperty entityBinding) || level == null) {
                 return Double.NaN;
             }
-            if (!entityBinding.dimensionId().equals(level.dimension().identifier().toString())) {
-                return Double.NaN;
-            }
             Entity entity = entity(entityBinding);
             return EntityExpressionValues.resolve(entityBinding, entity, partialTick);
         }

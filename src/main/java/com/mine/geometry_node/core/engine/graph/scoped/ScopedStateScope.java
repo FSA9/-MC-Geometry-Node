@@ -10,6 +10,7 @@ import java.util.Set;
 public enum ScopedStateScope {
     /** Behavior-tree-only, in-memory state owned by one running behavior instance. */
     INSTANCE(false),
+    AREA(false),
     OWNER(true),
     SHARED(true),
     GROUP(true),
@@ -17,6 +18,8 @@ public enum ScopedStateScope {
 
     public static final Set<ScopedStateScope> ALL = Set.of(values());
     public static final Set<ScopedStateScope> PERSISTENT = Set.of(OWNER, SHARED, GROUP, WORLD);
+    public static final Set<ScopedStateScope> GRAPH = Set.of(AREA, OWNER, SHARED, GROUP, WORLD);
+    public static final Set<ScopedStateScope> BEHAVIOR = Set.of(INSTANCE, OWNER, SHARED, GROUP, WORLD);
 
     private final boolean persistent;
 

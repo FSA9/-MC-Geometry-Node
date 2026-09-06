@@ -37,6 +37,7 @@ public class LevelGraphAttachment extends SavedData {
     public static LevelGraphAttachment get(ServerLevel level) {
         LevelGraphAttachment attachment = level.getDataStorage().computeIfAbsent(TYPE);
         attachment.level = level;
+        attachment.container.attachServer(level.getServer());
         return attachment;
     }
 
@@ -55,7 +56,9 @@ public class LevelGraphAttachment extends SavedData {
     public void removeProcess(String graphId) { container.removeProcess(graphId); }
     public void removeProcess(String graphId, BlueprintCloseMode closeMode) { container.removeProcess(graphId, closeMode); }
     public Collection<BlueprintProcess> getProcesses() { return container.getProcesses(); }
-    public BlueprintProcess getProcess(String graphId) { return container.getProcess(graphId); }
+    public BlueprintProcess getProcess(String graphId) {
+        return level != null ? container.getProcess(level.getServer(), graphId) : null;
+    }
     // --- 序列化层 ---
 
     private static Codec<LevelGraphAttachment> codec(ServerLevel level) {
@@ -77,6 +80,7 @@ public class LevelGraphAttachment extends SavedData {
         LevelGraphAttachment attachment = new LevelGraphAttachment();
         attachment.level = level;
         attachment.container.load(tag, provider);
+        if (level != null) attachment.container.attachServer(level.getServer());
         return attachment;
     }
 

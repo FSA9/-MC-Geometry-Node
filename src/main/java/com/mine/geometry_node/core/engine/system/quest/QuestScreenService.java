@@ -179,7 +179,8 @@ public final class QuestScreenService {
             boolean acceptEnabled,
             long updatedAt,
             @Nullable QuestInstance instance) {
-        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(taskKey);
+        BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(
+                player.level().getServer(), taskKey);
         if (index == null) return null;
         QuestDefinition definition = index.getQuestDefinition();
         return QuestScreenViewFactory.quest(

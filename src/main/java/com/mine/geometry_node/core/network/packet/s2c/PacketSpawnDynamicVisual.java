@@ -108,13 +108,12 @@ public record PacketSpawnDynamicVisual(
         return switch (buf.readByte()) {
             case 0 -> new ExpressionBinding.Constant(buf.readDouble());
             case 1 -> {
-                String dimensionId = buf.readUtf(128);
                 java.util.UUID entityUuid = buf.readUUID();
                 int runtimeId = buf.readVarInt();
                 ExpressionBinding.Property property = ExpressionBinding.Property.fromId(buf.readUtf(32));
                 if (property == null) throw new IllegalArgumentException("Unknown entity expression property");
                 yield new ExpressionBinding.EntityProperty(
-                        dimensionId, entityUuid, runtimeId, property, buf.readDouble());
+                        entityUuid, runtimeId, property, buf.readDouble());
             }
             default -> throw new IllegalArgumentException("Unknown expression binding type");
         };
@@ -128,7 +127,6 @@ public record PacketSpawnDynamicVisual(
             }
             case ExpressionBinding.EntityProperty entity -> {
                 buf.writeByte(1);
-                buf.writeUtf(entity.dimensionId(), 128);
                 buf.writeUUID(entity.entityUuid());
                 buf.writeVarInt(entity.runtimeEntityId());
                 buf.writeUtf(entity.property().id(), 32);

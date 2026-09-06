@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugAccess
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.scheduling.DueTickScheduler;
-import com.mine.geometry_node.core.engine.graph.storage.GraphAssetLifecycleIndex;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
@@ -43,7 +43,7 @@ public final class BehaviorTreeEngine {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(owner, "owner");
         String canonicalGraphId = GraphAssetId.require(graphId);
-        BehaviorTreePlan plan = resolvePlan(canonicalGraphId);
+        BehaviorTreePlan plan = resolvePlan(level.getServer(), canonicalGraphId);
         if (plan == null) throw new IllegalArgumentException("Behavior tree is unavailable: " + canonicalGraphId);
         return start(level, owner, plan, true, seed(owner.getUUID(), plan.assetId()));
     }
@@ -248,17 +248,10 @@ public final class BehaviorTreeEngine {
         if (entry != null) stopAndRemove(server, entry, reason);
     }
 
-    public void graphAssetsChanged(@Nullable MinecraftServer minecraftServer,
-                                   Set<String> assetIds) {
+    public void graphAssetsChanged(MinecraftServer minecraftServer, Set<String> assetIds) {
         if (assetIds == null || assetIds.isEmpty()) return;
-        if (minecraftServer != null) {
-            ServerState server = servers.get(minecraftServer);
-            if (server != null) server.enqueueAssetReloads(assetIds);
-            return;
-        }
-        for (ServerState server : List.copyOf(servers.values())) {
-            server.enqueueAssetReloads(assetIds);
-        }
+        ServerState server = servers.get(minecraftServer);
+        if (server != null) server.enqueueAssetReloads(assetIds);
     }
 
     public void shutdown(MinecraftServer minecraftServer) {
@@ -345,14 +338,15 @@ public final class BehaviorTreeEngine {
     }
 
     @Nullable
-    private static BehaviorTreePlan resolvePlan(String graphId) {
-        CompiledGraph graph = currentPlan(graphId);
+    private static BehaviorTreePlan resolvePlan(MinecraftServer server, String graphId) {
+        CompiledGraph graph = currentPlan(server, graphId);
         return graph instanceof BehaviorTreePlan plan ? plan : null;
     }
 
     @Nullable
-    private static CompiledGraph currentPlan(String graphId) {
-        return GraphAssetLifecycleIndex.INSTANCE.getArtifact(graphId, GraphKind.BEHAVIOR_TREE);
+    private static CompiledGraph currentPlan(MinecraftServer server, String graphId) {
+        return ServerGraphRepository.INSTANCE.getArtifact(
+                server, graphId, GraphKind.BEHAVIOR_TREE);
     }
 
     private ServerState state(MinecraftServer server) {
@@ -420,7 +414,8 @@ public final class BehaviorTreeEngine {
                 InstanceEntry entry = instances.get(instanceId);
                 if (entry != null && entry.managedAsset) {
                     try {
-                        service.replaceManagedInstance(this, entry, currentPlan(entry.instance.graphId()));
+                        service.replaceManagedInstance(
+                                this, entry, currentPlan(server, entry.instance.graphId()));
                     } catch (RuntimeException exception) {
                         com.mine.geometry_node.GeometryNode.LOGGER.error(
                                 "Unable to restart behavior asset {} for owner {}",

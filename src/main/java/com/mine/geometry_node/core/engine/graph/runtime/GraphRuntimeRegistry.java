@@ -1,46 +1,57 @@
 package com.mine.geometry_node.core.engine.graph.runtime;
 
 import com.mine.geometry_node.core.engine.graph.GraphKind;
+import com.mine.geometry_node.core.engine.graph.compile.GraphCompiler;
+import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.Collection;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * Registry for graph runtimes.
+ * Canonical registration point for a graph runtime and its compiler.
  */
 public final class GraphRuntimeRegistry {
     public static final GraphRuntimeRegistry INSTANCE = new GraphRuntimeRegistry();
 
-    private final Map<GraphKind, GraphRuntime> runtimes = new EnumMap<>(GraphKind.class);
+    private final Map<GraphKind, Registration> registrations = new EnumMap<>(GraphKind.class);
 
     private GraphRuntimeRegistry() {
     }
 
     public synchronized void register(GraphRuntime runtime) {
-        if (runtime == null || runtime.kind() == null || runtime.kind() == GraphKind.UNKNOWN) {
+        Objects.requireNonNull(runtime, "runtime");
+        GraphKind kind = Objects.requireNonNull(runtime.kind(), "runtime.kind()");
+        if (kind == GraphKind.UNKNOWN) {
+            throw new IllegalArgumentException("Cannot register a runtime for unknown graph kind");
+        }
+        GraphCompiler<? extends CompiledGraph> compiler =
+                Objects.requireNonNull(runtime.compiler(), "runtime.compiler()");
+        if (compiler.runtimeKind() != kind) {
+            throw new IllegalArgumentException("Graph runtime and compiler kinds do not match: " + kind.id());
+        }
+
+        Registration existing = registrations.get(kind);
+        if (existing != null && existing.runtime() == runtime && existing.compiler() == compiler) {
             return;
         }
-        GraphRuntime existing = runtimes.get(runtime.kind());
-        if (existing == runtime) {
-            return;
+        if (existing != null) {
+            throw new IllegalStateException("Duplicate graph runtime: " + kind.id());
         }
-        if (existing != null && existing != runtime) {
-            throw new IllegalStateException("Duplicate graph runtime: " + runtime.kind().id());
-        }
+
         ServerEngineRegistry.INSTANCE.register(runtime);
-        runtimes.put(runtime.kind(), runtime);
+        registrations.put(kind, new Registration(runtime, compiler));
     }
 
-    @Nullable
-    public synchronized GraphRuntime get(GraphKind kind) {
-        return runtimes.get(kind);
+    public synchronized GraphCompiler<? extends CompiledGraph> requireCompiler(GraphKind kind) {
+        Registration registration = registrations.get(Objects.requireNonNull(kind, "kind"));
+        if (registration == null) {
+            throw new IllegalStateException("Graph type is registered but not executable yet: " + kind.id());
+        }
+        return registration.compiler();
     }
 
-    public synchronized Collection<GraphRuntime> all() {
-        return List.copyOf(runtimes.values());
+    private record Registration(GraphRuntime runtime, GraphCompiler<? extends CompiledGraph> compiler) {
     }
 }
