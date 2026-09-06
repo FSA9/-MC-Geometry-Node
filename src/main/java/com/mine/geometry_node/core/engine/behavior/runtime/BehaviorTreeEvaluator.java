@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationR
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorActionFailure;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudgetExceededException;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
-import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
+import com.mine.geometry_node.core.engine.graph.data.CompiledGraphDataEvaluator;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
@@ -17,9 +17,7 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
-import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -219,68 +217,33 @@ public final class BehaviorTreeEvaluator {
 
     @Nullable
     Object resolveInput(BehaviorTreeProcess instance, int targetNodeIndex, String portName) {
-        CompiledDataIndex.DataConnectionSource source = instance.plan()
-                .findDataInput(targetNodeIndex, portName);
-        if (source == null) return instance.plan().getStaticInput(targetNodeIndex, portName);
-        return resolveConnectedInput(instance, targetNodeIndex, source);
-    }
-
-    @Nullable
-    private Object resolveConnectedInput(BehaviorTreeProcess instance, int targetNodeIndex,
-                                         CompiledDataIndex.DataConnectionSource source) {
-        Object value = instance.dataEvaluation().evaluate(source.sourceNodeId(), source.sourcePortKey(),
-                (sourceNode, outputPort) -> computeDataNode(instance, sourceNode, outputPort));
-        return PortConversionRegistry.convert(value, source.sourceType(), source.targetType(),
-                dataContext(instance, targetNodeIndex));
+        return instance.dataEvaluation().resolveInput(
+                targetNodeIndex, portName, requirePass(instance));
     }
 
     @Nullable
     <T> T resolveInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        String portName, Class<T> type) {
-        return TypeConverter.convert(resolveInput(instance, targetNodeIndex, portName),
-                type, dataContext(instance, targetNodeIndex));
+        return instance.dataEvaluation().resolveInput(
+                targetNodeIndex, portName, type, requirePass(instance));
     }
 
     @Nullable
     <T> T resolveInputFromList(BehaviorTreeProcess instance, int targetNodeIndex,
                                String portName, int index, Class<T> type) {
-        return TypeConverter.convertFromList(
-                resolveInput(instance, targetNodeIndex, portName), index, type,
-                dataContext(instance, targetNodeIndex));
+        return instance.dataEvaluation().resolveInputFromList(
+                targetNodeIndex, portName, index, type, requirePass(instance));
     }
 
     @Nullable
     <T> T convertInput(BehaviorTreeProcess instance, int targetNodeIndex,
                        Object value, Class<T> type) {
-        return TypeConverter.convert(value, type,
-                dataContext(instance, targetNodeIndex));
-    }
-
-    private Object computeDataNode(BehaviorTreeProcess instance, int nodeIndex, int outputPortKey) {
-        String outputPort = instance.plan().getPortName(outputPortKey);
-        if (outputPort == null) return null;
-        if (instance.plan().isDataPassthroughOutput(nodeIndex, outputPortKey)) {
-            CompiledDataIndex.DataConnectionSource source =
-                    instance.plan().findDataInput(nodeIndex, outputPortKey);
-            return source != null
-                    ? resolveConnectedInput(instance, nodeIndex, source)
-                    : instance.plan().getStaticInput(nodeIndex, outputPortKey);
-        }
-        BaseNode node = instance.plan().getNodeImplementation(nodeIndex);
-        if (node == null) {
-            throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
-                    "Data node implementation is unavailable: " + instance.plan().getNodeType(nodeIndex));
-        }
-        return node.compute(dataContext(instance, nodeIndex), outputPort);
+        return instance.dataEvaluation().convertValue(
+                targetNodeIndex, value, type, requirePass(instance));
     }
 
     private BehaviorDataContext dataContext(BehaviorTreeProcess instance, int nodeIndex) {
-        EvaluationPass pass = currentPass.get();
-        if (pass == null || pass.instance != instance) {
-            return new BehaviorDataContext(instance, nodeIndex);
-        }
-        return pass.dataContexts.computeIfAbsent(nodeIndex,
-                ignored -> new BehaviorDataContext(instance, nodeIndex));
+        return requirePass(instance).context(nodeIndex);
     }
 
     private void enterNode(BehaviorTreeProcess instance, int nodeIndex, BehaviorNodeExecutor executor,
@@ -523,7 +486,7 @@ public final class BehaviorTreeEvaluator {
         }
     }
 
-    private static final class EvaluationPass {
+    private final class EvaluationPass implements CompiledGraphDataEvaluator.RuntimeAdapter {
         private final BehaviorTreeProcess instance;
         private final Int2ObjectOpenHashMap<BehaviorDataContext> dataContexts =
                 new Int2ObjectOpenHashMap<>();
@@ -532,6 +495,27 @@ public final class BehaviorTreeEvaluator {
 
         private EvaluationPass(BehaviorTreeProcess instance) {
             this.instance = instance;
+        }
+
+        private BehaviorDataContext context(int nodeIndex) {
+            return dataContexts.computeIfAbsent(nodeIndex,
+                    ignored -> new BehaviorDataContext(instance, nodeIndex));
+        }
+
+        @Override
+        public GraphDataContext contextFor(int nodeId) {
+            return context(nodeId);
+        }
+
+        @Override
+        public Object computeNode(int nodeId, String outputPort,
+                                  @Nullable BaseNode implementation) {
+            if (implementation == null) {
+                throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
+                        "Data node implementation is unavailable: "
+                                + instance.plan().getNodeType(nodeId));
+            }
+            return implementation.compute(context(nodeId), outputPort);
         }
     }
 
@@ -591,13 +575,12 @@ public final class BehaviorTreeEvaluator {
         }
 
         @Override public Object getInputValue(String portName) {
-            CompiledDataIndex.DataConnectionSource source =
-                    instance.plan().findDataInput(nodeIndex, portName);
-            return source != null ? resolveConnectedInput(instance, nodeIndex, source) : null;
+            return instance.dataEvaluation().connectedInput(
+                    nodeIndex, portName, requirePass(instance));
         }
 
         @Override public boolean hasInputConnection(String portName) {
-            return instance.plan().findDataInput(nodeIndex, portName) != null;
+            return instance.dataEvaluation().hasInputConnection(nodeIndex, portName);
         }
 
         @Override public Object getStaticInput(String portName) {

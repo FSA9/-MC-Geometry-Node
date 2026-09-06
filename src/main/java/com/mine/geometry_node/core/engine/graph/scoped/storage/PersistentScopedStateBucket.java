@@ -124,7 +124,8 @@ final class PersistentScopedStateBucket {
         return serialized;
     }
 
-    boolean loadEntries(Iterable<Tag> serialized, int hardLimit, String locationPrefix) {
+    boolean loadEntries(Iterable<? extends Tag> serialized, int hardLimit,
+                        String locationPrefix) {
         boolean discarded = false;
         for (Tag raw : serialized) {
             if (!(raw instanceof CompoundTag tag)) {

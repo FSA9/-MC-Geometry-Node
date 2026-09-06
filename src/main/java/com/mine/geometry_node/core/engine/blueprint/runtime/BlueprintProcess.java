@@ -2,8 +2,8 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
-import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
-import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
+import com.mine.geometry_node.core.engine.graph.data.CompiledGraphDataEvaluator;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
@@ -16,7 +16,6 @@ import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolv
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
-import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.core.HolderLookup;
@@ -437,7 +436,8 @@ public class BlueprintProcess {
      * 代表一次独立的蓝图指令流。
      * 拥有私有的栈、私有的寄存器、私有的运算缓存，彻底杜绝重入污染。
      */
-    public class ExecutionThread implements ExecutionContext, BlueprintExecutionHandle {
+    public class ExecutionThread implements ExecutionContext, BlueprintExecutionHandle,
+            CompiledGraphDataEvaluator.RuntimeAdapter {
 
         public enum State { RUNNING, WAITING, EXTERNAL_WAITING, FINISHED, ERROR }
 
@@ -464,9 +464,8 @@ public class BlueprintProcess {
         final List<BlueprintPlan.IntFlowTarget> executionStack = new ArrayList<>();
         Object[] eventRegisters = new Object[BlueprintProcess.this.index.getRegisterCount() + 8];
         Map<String, Object> dynamicEventData = null;
-        private final GraphDataEvaluationSession dataEvaluation =
-                new GraphDataEvaluationSession(BlueprintProcess.this.index);
-        private final GraphDataEvaluationSession.NodeEvaluator dataNodeEvaluator = this::computeDataNode;
+        private final CompiledGraphDataEvaluator dataEvaluation =
+                new CompiledGraphDataEvaluator(BlueprintProcess.this.index);
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
 
@@ -898,28 +897,18 @@ public class BlueprintProcess {
         }
 
         private Object executeDataNode(int nodeId, int portKey) {
-            return dataEvaluation.evaluate(nodeId, portKey, dataNodeEvaluator);
+            return dataEvaluation.evaluateOutput(nodeId, portKey, this);
         }
 
-        private Object resolveConnectedInput(CompiledDataIndex.DataConnectionSource source) {
-            Object value = executeDataNode(source.sourceNodeId(), source.sourcePortKey());
-            return PortConversionRegistry.convert(value, source.sourceType(),
-                    source.targetType(), this);
+        @Override
+        public GraphDataContext contextFor(int nodeId) {
+            return this;
         }
 
-        private Object computeDataNode(int nodeId, int portKey) {
-            String portName = index.getPortName(portKey);
-            if (portName == null) return null;
+        @Override
+        public Object computeNode(int nodeId, String portName, @Nullable BaseNode logic) {
             int prevActive = this.activeNodeId;
             try {
-                if (index.isDataPassthroughOutput(nodeId, portKey)) {
-                    CompiledDataIndex.DataConnectionSource source =
-                            index.findDataInput(nodeId, portKey);
-                    return source != null
-                            ? resolveConnectedInput(source)
-                            : index.getStaticInput(nodeId, portKey);
-                }
-                BaseNode logic = index.getNodeImplementation(nodeId);
                 if (logic == null) {
                     if (RateLimitedLog.acquire(diagnosticKey("missing_data_node", nodeId, portName))) {
                         GeometryNode.LOGGER.error("Blueprint data node type is unavailable: graph={}, node={}, type={}, port={}",
@@ -1045,14 +1034,13 @@ public class BlueprintProcess {
         @Override
         public Object getInputValue(String portName) {
             if (activeNodeId == -1) return null;
-            CompiledDataIndex.DataConnectionSource src = index.findDataInput(activeNodeId, portName);
-            if (src == null) return null;
-            return resolveConnectedInput(src);
+            return dataEvaluation.connectedInput(activeNodeId, portName, this);
         }
 
         @Override
         public boolean hasInputConnection(String portName) {
-            return activeNodeId != -1 && index.findDataInput(activeNodeId, portName) != null;
+            return activeNodeId != -1
+                    && dataEvaluation.hasInputConnection(activeNodeId, portName);
         }
 
         @Override

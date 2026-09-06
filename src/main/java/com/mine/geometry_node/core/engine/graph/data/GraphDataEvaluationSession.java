@@ -6,27 +6,27 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 
 /** Owns one runtime instance's epoch cache and data-cycle guard. */
-public final class GraphDataEvaluationSession {
+final class GraphDataEvaluationSession {
     private final CompiledDataIndex index;
     private final GraphValueCache cache;
 
-    public GraphDataEvaluationSession(CompiledDataIndex index) {
+    GraphDataEvaluationSession(CompiledDataIndex index) {
         this.index = Objects.requireNonNull(index, "index");
         this.cache = new GraphValueCache(index.getNodeCount());
     }
 
     /** Starts a complete evaluation epoch, clearing values and cycle state. */
-    public void beginEpoch() {
+    void beginEpoch() {
         cache.beginEpoch();
     }
 
     /** Invalidates cached values without disturbing an in-progress cycle guard. */
-    public void clearValues() {
+    void clearValues() {
         cache.clearValues();
     }
 
     @Nullable
-    public Object evaluate(int nodeId, int portKey, NodeEvaluator evaluator) {
+    Object evaluate(int nodeId, int portKey, NodeEvaluator evaluator) {
         if (nodeId < 0 || nodeId >= index.getNodeCount()
                 || !index.hasPort(nodeId, portKey)
                 || cache.isRecursing(nodeId)) {
@@ -49,7 +49,7 @@ public final class GraphDataEvaluationSession {
     }
 
     @FunctionalInterface
-    public interface NodeEvaluator {
+    interface NodeEvaluator {
         @Nullable Object compute(int nodeId, int portKey);
     }
 }

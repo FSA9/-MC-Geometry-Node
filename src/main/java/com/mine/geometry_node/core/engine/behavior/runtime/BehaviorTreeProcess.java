@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.behavior.contract.BehaviorResult;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
 import com.mine.geometry_node.core.engine.behavior.plan.BehaviorTreePlan;
-import com.mine.geometry_node.core.engine.graph.data.GraphDataEvaluationSession;
+import com.mine.geometry_node.core.engine.graph.data.CompiledGraphDataEvaluator;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProviderResolver;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
@@ -38,7 +38,7 @@ public final class BehaviorTreeProcess {
     private final int[] resourceOwners;
     private final boolean[] resourcesAcquired;
     private final BehaviorBlackboard blackboard;
-    private final GraphDataEvaluationSession dataEvaluation;
+    private final CompiledGraphDataEvaluator dataEvaluation;
     private final Random random;
     @Nullable private TraceEvent[] history;
     private final int rootScheduleOffset;
@@ -75,7 +75,7 @@ public final class BehaviorTreeProcess {
         Arrays.fill(resourceOwners, -1);
         this.resourcesAcquired = new boolean[nodeCount];
         this.blackboard = newBlackboard();
-        this.dataEvaluation = new GraphDataEvaluationSession(plan);
+        this.dataEvaluation = new CompiledGraphDataEvaluator(plan);
         this.random = new Random(randomSeed);
         this.rootScheduleOffset = plan.rootSchedule().resolveOffset(host.identity(), plan.assetId());
     }
@@ -260,7 +260,7 @@ public final class BehaviorTreeProcess {
     }
 
     boolean isEvaluating() { return evaluating; }
-    GraphDataEvaluationSession dataEvaluation() { return dataEvaluation; }
+    CompiledGraphDataEvaluator dataEvaluation() { return dataEvaluation; }
     Random random() { return random; }
     BehaviorNodeState rawNodeState(int nodeIndex) { return nodeStates[nodeIndex]; }
     void setNodeState(int nodeIndex, BehaviorNodeState value) { nodeStates[nodeIndex] = value; }
