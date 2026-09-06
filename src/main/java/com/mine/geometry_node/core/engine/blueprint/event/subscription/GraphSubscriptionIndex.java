@@ -25,6 +25,7 @@ public final class GraphSubscriptionIndex {
     private final Map<String, CompiledGraphSubscriptions> templatesByGraphId = new HashMap<>();
     private final Map<String, CompiledGraphSubscriptions> registeredGlobalGraphs = new HashMap<>();
     private final Map<Entity, Map<String, CompiledGraphSubscriptions>> registeredEntityGraphs = new WeakHashMap<>();
+    private final Map<String, Set<Entity>> registeredEntitiesByGraph = new HashMap<>();
     private final Map<String, Map<Entity, Set<String>>> receiveSubscribers = new HashMap<>();
 
     public boolean isGlobalGraphRegistered(String graphId) {
@@ -32,25 +33,18 @@ public final class GraphSubscriptionIndex {
     }
 
     public Set<Entity> registeredEntitiesForGraph(String graphId) {
-        Set<Entity> result = new HashSet<>();
-        registeredEntityGraphs.forEach((entity, graphs) -> {
-            if (graphs.containsKey(graphId)) result.add(entity);
-        });
-        return Set.copyOf(result);
+        Set<Entity> entities = registeredEntitiesByGraph.get(graphId);
+        if (entities == null) return Set.of();
+        Set<Entity> snapshot = Set.copyOf(entities);
+        if (snapshot.isEmpty()) registeredEntitiesByGraph.remove(graphId);
+        return snapshot;
     }
 
     public Map<String, Set<Entity>> registeredEntitiesForGraphs(Set<String> graphIds) {
         Map<String, Set<Entity>> result = new LinkedHashMap<>();
         for (String graphId : graphIds) {
-            result.put(graphId, new HashSet<>());
+            result.put(graphId, registeredEntitiesForGraph(graphId));
         }
-        registeredEntityGraphs.forEach((entity, graphs) -> {
-            for (String graphId : graphs.keySet()) {
-                Set<Entity> entities = result.get(graphId);
-                if (entities != null) entities.add(entity);
-            }
-        });
-        result.replaceAll((graphId, entities) -> Set.copyOf(entities));
         return Map.copyOf(result);
     }
 
@@ -85,6 +79,8 @@ public final class GraphSubscriptionIndex {
         if (previous == template) return;
         if (previous != null) removeEntitySubscriptions(entity, graphId, previous);
         graphs.put(graphId, template);
+        registeredEntitiesByGraph.computeIfAbsent(
+                graphId, ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(entity);
         addEntitySubscriptions(entity, graphId, template);
     }
 
@@ -92,6 +88,7 @@ public final class GraphSubscriptionIndex {
         Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.get(entity);
         CompiledGraphSubscriptions registered = graphs != null ? graphs.remove(graphId) : null;
         if (graphs != null && graphs.isEmpty()) registeredEntityGraphs.remove(entity);
+        removeRegisteredEntity(graphId, entity);
 
         if (registered != null) {
             removeEntitySubscriptions(entity, graphId, registered);
@@ -116,7 +113,10 @@ public final class GraphSubscriptionIndex {
     public void unregisterEntity(Entity entity) {
         Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.remove(entity);
         if (graphs == null) return;
-        graphs.forEach((graphId, template) -> removeEntitySubscriptions(entity, graphId, template));
+        graphs.forEach((graphId, template) -> {
+            removeRegisteredEntity(graphId, entity);
+            removeEntitySubscriptions(entity, graphId, template);
+        });
     }
 
     public void discardTemplate(String graphId) {
@@ -217,6 +217,13 @@ public final class GraphSubscriptionIndex {
         if (graphs == null) return;
         graphs.remove(graphId);
         if (graphs.isEmpty()) entities.remove(entity);
+    }
+
+    private void removeRegisteredEntity(String graphId, Entity entity) {
+        Set<Entity> entities = registeredEntitiesByGraph.get(graphId);
+        if (entities == null) return;
+        entities.remove(entity);
+        if (entities.isEmpty()) registeredEntitiesByGraph.remove(graphId);
     }
 
     private CompiledGraphSubscriptions template(String graphId, BlueprintPlan plan) {

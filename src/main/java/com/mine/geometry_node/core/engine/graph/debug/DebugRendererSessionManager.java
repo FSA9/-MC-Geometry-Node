@@ -2,24 +2,19 @@ package com.mine.geometry_node.core.engine.graph.debug;
 
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
-import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Interaction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -45,18 +40,12 @@ public final class DebugRendererSessionManager {
     private static final int IDLE_CHECK_INTERVAL_TICKS = 20;
     private static final int PATHFINDING_REFRESH_INTERVAL_TICKS = 5;
     private static final int MAX_PATHFINDING_ENTITIES = 32;
-    private static final int MAX_PATH_NODES = 128;
     private static final int REQUESTED_TARGET_RETENTION_TICKS = 100;
     private static final int FOLLOW_TARGET_RETENTION_TICKS = 20;
-    private static final int PATH_COLOR = DebugRenderChannel.PATHFINDING.color();
-    private static final int NEXT_NODE_COLOR = 0xFFFFC247;
-    private static final int FINAL_TARGET_COLOR = 0xFF4FD17A;
-    private static final int REQUESTED_TARGET_COLOR = 0xFF4A8DFF;
-    private static final int FOLLOW_TARGET_COLOR = 0xFFE86DFF;
-    private static final int PATROL_COMPLETED_COLOR = 0xFF8A8A8A;
 
     private static final Map<MinecraftServer, DebugServerState> SERVERS = new IdentityHashMap<>();
     private static final List<Consumer<ServerPlayer>> SCHEMATIC_CHANNEL_HYDRATORS = new ArrayList<>();
+    private static final DebugSnapshotAssembler SNAPSHOT_ASSEMBLER = new DebugSnapshotAssembler();
     private static boolean registered;
 
     private DebugRendererSessionManager() {
@@ -111,11 +100,10 @@ public final class DebugRendererSessionManager {
         if (level == null) return;
         DebugServerState state = getState(level.getServer());
         if (state == null) return;
-        boolean changed = state.levelCaches.remove(level) != null;
+        boolean changed = state.sources.removeLevel(level);
+        changed |= state.observations.remove(level) != null;
         ResourceKey<Level> dimension = level.dimension();
-        changed |= state.requestedPathTargets.values().removeIf(target -> target.dimension().equals(dimension));
-        changed |= state.followTargets.values().removeIf(target -> target.dimension().equals(dimension));
-        changed |= state.patrolRoutes.values().removeIf(route -> route.dimension().equals(dimension));
+        changed |= state.pathState.removeDimension(dimension);
         if (changed) markDirty(state);
         discardStateIfEmpty(level.getServer(), state);
     }
@@ -263,17 +251,18 @@ public final class DebugRendererSessionManager {
         if (mob == null || position == null || !(mob.level() instanceof ServerLevel level)) return;
         DebugServerState state = getState(level.getServer());
         if (state == null || !hasPathfindingSessions(state)) return;
-        state.requestedPathTargets.put(mob.getUUID(), new RequestedPathTarget(
-                level.dimension(), position,
-                level.getGameTime() + REQUESTED_TARGET_RETENTION_TICKS
-        ));
+        state.pathState.recordRequested(mob, position,
+                level.getGameTime() + REQUESTED_TARGET_RETENTION_TICKS);
     }
 
     /** Clears the requested target written through the behavior-tree producer hook above. */
     public static void clearRequestedPathTarget(Mob mob) {
         if (mob == null || !(mob.level() instanceof ServerLevel level)) return;
         DebugServerState state = getState(level.getServer());
-        if (state != null && state.requestedPathTargets.remove(mob.getUUID()) != null) markDirty(state);
+        if (state != null && state.pathState.clearRequested(mob.getUUID())) {
+            invalidatePathfinding(state, level);
+            markDirty(state);
+        }
     }
 
     /** Behavior-tree producer hook for an active entity-to-entity Follow relationship. */
@@ -281,17 +270,18 @@ public final class DebugRendererSessionManager {
         if (follower == null || target == null || !(follower.level() instanceof ServerLevel level)) return;
         DebugServerState state = getState(level.getServer());
         if (state == null || !hasPathfindingSessions(state)) return;
-        state.followTargets.put(follower.getUUID(), new FollowTarget(
-                level.dimension(), target.getUUID(),
-                level.getGameTime() + FOLLOW_TARGET_RETENTION_TICKS
-        ));
+        state.pathState.recordFollow(follower, target,
+                level.getGameTime() + FOLLOW_TARGET_RETENTION_TICKS);
     }
 
     /** Removes the active Follow relationship immediately when its action exits. */
     public static void clearFollowTarget(Mob follower) {
         if (follower == null || !(follower.level() instanceof ServerLevel level)) return;
         DebugServerState state = getState(level.getServer());
-        if (state != null && state.followTargets.remove(follower.getUUID()) != null) markDirty(state);
+        if (state != null && state.pathState.clearFollow(follower.getUUID())) {
+            invalidatePathfinding(state, level);
+            markDirty(state);
+        }
     }
 
     /** Records the frozen waypoint route owned by an active Patrol action. */
@@ -299,18 +289,23 @@ public final class DebugRendererSessionManager {
                                          int completedCount, boolean loop) {
         if (mob == null || waypoints == null || waypoints.isEmpty()
                 || !(mob.level() instanceof ServerLevel level)) return;
-        DebugServerState state = state(level.getServer());
+        DebugServerState state = getState(level.getServer());
+        if (state == null || !hasPathfindingSessions(state)) return;
         int completed = Math.max(0, Math.min(completedCount, waypoints.size()));
-        state.patrolRoutes.put(mob.getUUID(), new PatrolRoute(level.dimension(),
-                List.copyOf(waypoints), completed, loop));
-        markDirty(state);
+        if (state.pathState.recordPatrol(mob, waypoints, completed, loop)) {
+            invalidatePathfinding(state, level);
+            markDirty(state);
+        }
     }
 
     /** Removes the frozen route when Patrol stops, fails, or is preempted. */
     public static void clearPatrolRoute(Mob mob) {
         if (mob == null || !(mob.level() instanceof ServerLevel level)) return;
         DebugServerState state = getState(level.getServer());
-        if (state != null && state.patrolRoutes.remove(mob.getUUID()) != null) markDirty(state);
+        if (state != null && state.pathState.clearPatrol(mob.getUUID())) {
+            invalidatePathfinding(state, level);
+            markDirty(state);
+        }
     }
 
     private static Session enableChannel(ServerPlayer player, double radius) {
@@ -348,9 +343,18 @@ public final class DebugRendererSessionManager {
         long tick = level.getGameTime();
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
         boolean pathfindingCadence = Math.floorMod(tick, PATHFINDING_REFRESH_INTERVAL_TICKS) == 0;
-        LevelCache levelCache = state.levelCaches.get(level);
-        boolean hasExpiredSources = levelCache != null
-                && levelCache.sources.values().stream().anyMatch(source -> source.isTransientExpired(tick));
+        boolean hasExpiredSources = state.sources.hasTransientExpired(level, tick);
+        if (hasExpiredSources && state.sources.pruneExpired(level, tick)) markDirty(state);
+
+        boolean hasInteractionObservers = hasObservers(state, level, true);
+        boolean hasPathObservers = hasObservers(state, level, false);
+        DebugLevelObservationCache observationCache = state.observations.get(level);
+        boolean pathfindingInvalidated = observationCache != null
+                && observationCache.needsPathfindingRefresh();
+        refreshObservations(state, level,
+                hasInteractionObservers,
+                hasPathObservers && (pathfindingCadence || pathfindingInvalidated),
+                false);
 
         for (ServerPlayer player : level.players()) {
             Session session = state.sessions.get(player.getUUID());
@@ -365,8 +369,8 @@ public final class DebugRendererSessionManager {
                     || session.pathfindingEnabled && pathfindingCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
-            MeshSnapshot snapshot = collectSnapshot(state, player, session);
-            if (snapshot.signature != session.lastSignature) {
+            DebugSnapshotAssembler.Snapshot snapshot = collectSnapshot(state, player, session);
+            if (snapshot.signature() != session.lastSignature) {
                 sendSnapshot(player, session, snapshot);
             }
             updateBaseline(state, player, session, snapshot);
@@ -456,27 +460,14 @@ public final class DebugRendererSessionManager {
                                             long seenTick,
                                             long expiresAt) {
         DebugServerState state = state(level.getServer());
-        LevelCache cache = state.levelCaches.computeIfAbsent(level, ignored -> new LevelCache());
-        SourceCache source = cache.sources.get(sourceId);
         long signature = sourceSignature(meshes);
-        if (source != null && source.lastSeenTick == seenTick
-                && source.signature == signature && source.expiresAt == expiresAt) {
-            return;
-        }
-        if (source != null && source.signature == signature && source.expiresAt == expiresAt) {
-            source.lastSeenTick = seenTick;
-            return;
-        }
-        cache.sources.put(sourceId, new SourceCache(List.copyOf(meshes), seenTick, signature, expiresAt));
-        markDirty(state);
+        if (state.sources.replace(level, sourceId, meshes, seenTick, expiresAt, signature)) markDirty(state);
     }
 
     private static void removeSource(ServerLevel level, DebugSourceId sourceId) {
         DebugServerState state = getState(level.getServer());
         if (state == null) return;
-        LevelCache cache = state.levelCaches.get(level);
-        if (cache != null && cache.sources.remove(sourceId) != null) {
-            if (cache.sources.isEmpty()) state.levelCaches.remove(level);
+        if (state.sources.remove(level, sourceId)) {
             markDirty(state);
             discardStateIfEmpty(level.getServer(), state);
         }
@@ -485,17 +476,7 @@ public final class DebugRendererSessionManager {
     private static void removeGraphResources(MinecraftServer server, GraphResourceRelease release) {
         DebugServerState state = getState(server);
         if (state == null) return;
-        boolean changed = false;
-        var levelIterator = state.levelCaches.entrySet().iterator();
-        while (levelIterator.hasNext()) {
-            Map.Entry<ServerLevel, LevelCache> levelEntry = levelIterator.next();
-            if (levelEntry.getKey().getServer() != server) continue;
-            changed |= levelEntry.getValue().sources.keySet().removeIf(sourceId ->
-                    sourceId.owner() instanceof DebugSourceId.Owner.Graph graph
-                            && release.matches(graph.resourceId()));
-            if (levelEntry.getValue().sources.isEmpty()) levelIterator.remove();
-        }
-        if (changed) markDirty(state);
+        if (state.sources.removeGraphResources(release)) markDirty(state);
         discardStateIfEmpty(server, state);
     }
 
@@ -527,331 +508,79 @@ public final class DebugRendererSessionManager {
         return false;
     }
 
+    private static boolean hasObservers(DebugServerState state, ServerLevel level, boolean interaction) {
+        for (ServerPlayer player : level.players()) {
+            Session session = state.sessions.get(player.getUUID());
+            if (session != null && (interaction ? session.interactionEnabled : session.pathfindingEnabled)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void refreshObservations(DebugServerState state,
+                                            ServerLevel level,
+                                            boolean refreshInteraction,
+                                            boolean refreshPathfinding,
+                                            boolean force) {
+        if (!refreshInteraction && !refreshPathfinding) return;
+        List<DebugObserverArea> interactionObservers = new ArrayList<>();
+        List<DebugObserverArea> pathObservers = new ArrayList<>();
+        for (ServerPlayer player : level.players()) {
+            Session session = state.sessions.get(player.getUUID());
+            if (session == null) continue;
+            if (session.interactionEnabled) {
+                interactionObservers.add(new DebugObserverArea(player.position(), session.radius));
+            }
+            if (session.pathfindingEnabled) {
+                pathObservers.add(new DebugObserverArea(player.position(), session.radius));
+            }
+        }
+        DebugLevelObservationCache cache = state.observations.computeIfAbsent(
+                level, ignored -> new DebugLevelObservationCache());
+        cache.refresh(level, interactionObservers, pathObservers, state.pathState,
+                refreshInteraction, refreshPathfinding, force, MAX_PATHFINDING_ENTITIES);
+    }
+
+    private static void invalidatePathfinding(DebugServerState state, ServerLevel level) {
+        DebugLevelObservationCache cache = state.observations.get(level);
+        if (cache != null) cache.invalidatePathfinding();
+    }
+
     private static void clearRequestedPathTargetsIfUnused(DebugServerState state) {
+        boolean interactionInUse = state.sessions.values().stream().anyMatch(session -> session.interactionEnabled);
+        if (!interactionInUse) {
+            state.observations.values().forEach(DebugLevelObservationCache::clearInteractions);
+        }
         if (!hasPathfindingSessions(state)) {
-            state.requestedPathTargets.clear();
-            state.followTargets.clear();
-            state.patrolRoutes.clear();
+            state.pathState.clear();
+            state.observations.values().forEach(DebugLevelObservationCache::clearPathfinding);
         }
     }
 
-    private static MeshSnapshot collectSnapshot(DebugServerState state, ServerPlayer player, Session session) {
-        if (!session.hasAnyChannel()) return new MeshSnapshot(List.of(), 1L);
-
+    private static DebugSnapshotAssembler.Snapshot collectSnapshot(DebugServerState state,
+                                                                    ServerPlayer player,
+                                                                    Session session) {
+        if (!session.hasAnyChannel()) return new DebugSnapshotAssembler.Snapshot(List.of(), 1L);
         ServerLevel level = player.level();
-        LevelCache cache = state.levelCaches.get(level);
-        long currentTick = level.getGameTime();
-        double radiusSqr = session.radius * session.radius;
-        Vec3 origin = player.position();
-        List<Candidate> candidates = new ArrayList<>();
-        boolean removedExpiredSource = false;
-
-        if (cache != null && !cache.sources.isEmpty()) {
-            var iterator = cache.sources.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<DebugSourceId, SourceCache> entry = iterator.next();
-                SourceCache source = entry.getValue();
-                if (source.isExpired(currentTick)) {
-                    iterator.remove();
-                    removedExpiredSource = true;
-                    continue;
-                }
-                if (!session.isSourceVisible(entry.getKey())) continue;
-                for (GeometryDebugElement mesh : source.meshes) {
-                    addCandidate(level, origin, radiusSqr, mesh, candidates);
-                }
-            }
-        }
-
-        if (session.interactionEnabled) {
-            collectInteractionCandidates(level, origin, session.radius, radiusSqr, candidates);
-        }
-        if (session.pathfindingEnabled) {
-            collectPathfindingCandidates(state, level, origin, session.radius, radiusSqr, candidates);
-        }
-        if (removedExpiredSource) {
-            if (cache != null && cache.sources.isEmpty()) state.levelCaches.remove(level);
-            markDirty(state);
-        }
-
-        candidates.sort((left, right) -> {
-            int distanceOrder = Double.compare(left.distanceSqr, right.distanceSqr);
-            if (distanceOrder != 0) return distanceOrder;
-            int idOrder = left.mesh.id().compareTo(right.mesh.id());
-            if (idOrder != 0) return idOrder;
-            return left.mesh.graphId().compareTo(right.mesh.graphId());
-        });
-
-        int count = Math.min(DEFAULT_MAX_MESHES, candidates.size());
-        List<PacketGeometryDebugSnapshot.Mesh> meshes = new ArrayList<>(count);
-        long signature = 1469598103934665603L;
-        for (int i = 0; i < count; i++) {
-            PacketGeometryDebugSnapshot.Mesh packetMesh = toPacketMesh(candidates.get(i).mesh);
-            meshes.add(packetMesh);
-            signature = mix(signature, packetMesh);
-        }
-        signature = signature * 31L + count;
-        signature = signature * 31L + Double.doubleToLongBits(session.radius);
-        return new MeshSnapshot(meshes, signature);
+        if (state.sources.pruneExpired(level, level.getGameTime())) markDirty(state);
+        return SNAPSHOT_ASSEMBLER.assemble(
+                level, player.position(), session.radius, session.channelMask(),
+                DEFAULT_MAX_MESHES, MAX_PATHFINDING_ENTITIES,
+                state.sources, state.observations.get(level));
     }
 
-    private static void addCandidate(ServerLevel level,
-                                     Vec3 origin,
-                                     double radiusSqr,
-                                     GeometryDebugElement mesh,
-                                     List<Candidate> candidates) {
-        if (!isCenterChunkLoaded(level, mesh.center())) return;
-        double distanceSqr = mesh.center().distanceToSqr(origin);
-        if (distanceSqr <= radiusSqr) {
-            candidates.add(new Candidate(mesh, distanceSqr));
-        }
-    }
-
-    private static void collectInteractionCandidates(ServerLevel level,
-                                                     Vec3 origin,
-                                                     double radius,
-                                                     double radiusSqr,
-                                                     List<Candidate> candidates) {
-        AABB queryBounds = AABB.ofSize(origin, radius * 2.0D, radius * 2.0D, radius * 2.0D);
-        for (Interaction interaction : level.getEntitiesOfClass(Interaction.class, queryBounds)) {
-            if (interaction.isRemoved()) continue;
-            AABB bounds = interaction.getBoundingBox();
-            Vec3 center = bounds.getCenter();
-            if (center.distanceToSqr(origin) > radiusSqr) continue;
-            DebugRenderShape shape = new DebugRenderShape(
-                    DebugRenderChannel.INTERACTION.id() + ":" + interaction.getStringUUID(),
-                    "interaction",
-                    "box",
-                    center,
-                    new Vec3(bounds.getXsize(), bounds.getYsize(), bounds.getZsize()),
-                    Vec3.ZERO,
-                    DebugRenderChannel.INTERACTION.color()
-            );
-            GeometryDebugElement mesh = GeometryDebugMeshFactory.buildShapeMesh(shape);
-            candidates.add(new Candidate(mesh, center.distanceToSqr(origin)));
-        }
-    }
-
-    private static void collectPathfindingCandidates(DebugServerState state,
-                                                      ServerLevel level,
-                                                      Vec3 origin,
-                                                      double radius,
-                                                      double radiusSqr,
-                                                      List<Candidate> candidates) {
-        AABB queryBounds = AABB.ofSize(origin, radius * 2.0D, radius * 2.0D, radius * 2.0D);
-        long currentTick = level.getGameTime();
-        state.requestedPathTargets.entrySet().removeIf(entry -> {
-            RequestedPathTarget target = entry.getValue();
-            return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
-        });
-        state.followTargets.entrySet().removeIf(entry -> {
-            FollowTarget target = entry.getValue();
-            return target.dimension().equals(level.dimension()) && target.expiresAt() < currentTick;
-        });
-        state.patrolRoutes.entrySet().removeIf(entry -> {
-            PatrolRoute route = entry.getValue();
-            return route.dimension().equals(level.dimension())
-                    && (level.getEntity(entry.getKey()) == null
-                    || level.getEntity(entry.getKey()).isRemoved());
-        });
-        List<Mob> mobs = level.getEntitiesOfClass(Mob.class, queryBounds, mob -> {
-            Path path = mob.getNavigation().getPath();
-            return !mob.isRemoved() && (path != null && !path.isDone()
-                    || requestedPathTarget(state, mob, level, currentTick) != null
-                    || followTarget(state, mob, level, currentTick) != null
-                    || patrolRoute(state, mob, level) != null);
-        });
-        mobs.sort((left, right) -> Double.compare(left.distanceToSqr(origin), right.distanceToSqr(origin)));
-
-        int entityCount = Math.min(MAX_PATHFINDING_ENTITIES, mobs.size());
-        for (int i = 0; i < entityCount; i++) {
-            Mob mob = mobs.get(i);
-            if (mob.distanceToSqr(origin) > radiusSqr) continue;
-            Path path = mob.getNavigation().getPath();
-            RequestedPathTarget requested = requestedPathTarget(state, mob, level, currentTick);
-            FollowTarget follow = followTarget(state, mob, level, currentTick);
-            PatrolRoute patrol = patrolRoute(state, mob, level);
-            if (follow != null) addFollowLine(level, mob, follow, candidates, origin);
-            if (patrol != null) addPatrolRoute(mob, patrol, candidates, origin);
-            if (path == null || path.isDone()) {
-                if (requested != null) {
-                    addPathMarker(mob, "requested", requested.position(),
-                            REQUESTED_TARGET_COLOR, candidates, origin);
-                }
-                continue;
-            }
-
-            BlockPos pathEndPos = path.getNodePos(path.getNodeCount() - 1);
-            addPathMesh(mob, path, candidates, origin);
-            addPathMarker(mob, "next", path.getNextNodePos(), NEXT_NODE_COLOR, candidates, origin);
-            if (requested != null) {
-                addPathMarker(mob, "requested", requested.position(),
-                        REQUESTED_TARGET_COLOR, candidates, origin);
-            }
-            if (requested == null || !pathEndPos.equals(BlockPos.containing(requested.position()))) {
-                addPathMarker(mob, "target", pathEndPos, FINAL_TARGET_COLOR, candidates, origin);
-            }
-        }
-    }
-
-    private static RequestedPathTarget requestedPathTarget(DebugServerState state, Mob mob,
-                                                           ServerLevel level, long currentTick) {
-        RequestedPathTarget target = state.requestedPathTargets.get(mob.getUUID());
-        return target != null && target.dimension().equals(level.dimension()) && target.expiresAt() >= currentTick
-                ? target : null;
-    }
-
-    private static FollowTarget followTarget(DebugServerState state, Mob mob,
-                                             ServerLevel level, long currentTick) {
-        FollowTarget target = state.followTargets.get(mob.getUUID());
-        return target != null && target.dimension().equals(level.dimension())
-                && target.expiresAt() >= currentTick ? target : null;
-    }
-
-    private static PatrolRoute patrolRoute(DebugServerState state, Mob mob, ServerLevel level) {
-        PatrolRoute route = state.patrolRoutes.get(mob.getUUID());
-        return route != null && route.dimension().equals(level.dimension()) ? route : null;
-    }
-
-    private static void addPatrolRoute(Mob mob, PatrolRoute route,
-                                       List<Candidate> candidates, Vec3 origin) {
-        List<Vec3> points = route.waypoints();
-        int pointCount = Math.min(points.size(), MAX_PATH_NODES);
-        for (int i = 0; i < pointCount; i++) {
-            int color = !route.loop() && i < route.completedCount()
-                    ? PATROL_COMPLETED_COLOR : REQUESTED_TARGET_COLOR;
-            addPathMarker(mob, "patrol-point-" + i, points.get(i), color, candidates, origin);
-        }
-        int segmentCount = route.loop() ? pointCount : Math.max(0, pointCount - 1);
-        for (int i = 0; i < segmentCount; i++) {
-            int end = (i + 1) % pointCount;
-            // A segment is completed only after both endpoint waypoints have been reached.
-            int color = !route.loop() && i < route.completedCount() - 1
-                    ? PATROL_COMPLETED_COLOR : REQUESTED_TARGET_COLOR;
-            addPatrolSegment(mob, points.get(i), points.get(end), i, color, candidates, origin);
-        }
-    }
-
-    private static void addPatrolSegment(Mob mob, Vec3 start, Vec3 end, int index,
-                                         int color, List<Candidate> candidates, Vec3 origin) {
-        Vec3 center = start.add(end).scale(0.5D);
-        float[] vertices = new float[]{
-                (float) (start.x - center.x), (float) (start.y - center.y), (float) (start.z - center.z),
-                (float) (end.x - center.x), (float) (end.y - center.y), (float) (end.z - center.z)
-        };
-        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID()
-                + ":patrol-segment-" + index;
-        GeometryDebugElement line = new GeometryDebugElement(id, "pathfinding",
-                GeometryDebugType.MESH, color, false, center, Vec3.ZERO, Vec3.ZERO,
-                vertices, new int[]{0, 1}, new int[0]);
-        candidates.add(new Candidate(line, center.distanceToSqr(origin)));
-    }
-
-    private static void addFollowLine(ServerLevel level,
-                                      Mob follower,
-                                      FollowTarget relation,
-                                      List<Candidate> candidates,
-                                      Vec3 origin) {
-        Entity target = level.getEntity(relation.targetId());
-        if (target == null || target.isRemoved()) return;
-        Vec3 start = follower.getBoundingBox().getCenter();
-        Vec3 end = target.getBoundingBox().getCenter();
-        Vec3 center = start.add(end).scale(0.5D);
-        float[] vertices = new float[]{
-                (float) (start.x - center.x), (float) (start.y - center.y),
-                (float) (start.z - center.z),
-                (float) (end.x - center.x), (float) (end.y - center.y),
-                (float) (end.z - center.z)
-        };
-        String id = DebugRenderChannel.PATHFINDING.id() + ":"
-                + follower.getStringUUID() + ":follow";
-        GeometryDebugElement line = new GeometryDebugElement(
-                id, "pathfinding", GeometryDebugType.MESH, FOLLOW_TARGET_COLOR, false,
-                center, Vec3.ZERO, Vec3.ZERO, vertices, new int[]{0, 1}, new int[0]
-        );
-        candidates.add(new Candidate(line, start.distanceToSqr(origin)));
-    }
-
-    private static void addPathMesh(Mob mob, Path path, List<Candidate> candidates, Vec3 origin) {
-        int firstNode = path.getNextNodeIndex();
-        int nodeCount = Math.min(path.getNodeCount() - firstNode, MAX_PATH_NODES);
-        if (nodeCount <= 0) return;
-
-        Vec3 center = Vec3.atCenterOf(mob.blockPosition());
-        float[] vertices = new float[(nodeCount + 1) * 3];
-        writeRelativeVertex(vertices, 0, center, center);
-        for (int i = 0; i < nodeCount; i++) {
-            writeRelativeVertex(vertices, i + 1,
-                    Vec3.atCenterOf(path.getNodePos(firstNode + i)), center);
-        }
-        int[] edges = new int[nodeCount * 2];
-        for (int i = 0; i < nodeCount; i++) {
-            edges[i * 2] = i;
-            edges[i * 2 + 1] = i + 1;
-        }
-
-        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID() + ":path";
-        GeometryDebugElement mesh = new GeometryDebugElement(
-                id, "pathfinding", GeometryDebugType.MESH, PATH_COLOR, true,
-                center, Vec3.ZERO, Vec3.ZERO, vertices, edges, new int[0]
-        );
-        candidates.add(new Candidate(mesh, center.distanceToSqr(origin)));
-    }
-
-    private static void addPathMarker(Mob mob,
-                                      String markerName,
-                                      BlockPos blockPos,
-                                      int color,
-                                      List<Candidate> candidates,
-                                      Vec3 origin) {
-        addPathMarker(mob, markerName, Vec3.atCenterOf(blockPos), color, candidates, origin);
-    }
-
-    private static void addPathMarker(Mob mob,
-                                      String markerName,
-                                      Vec3 position,
-                                      int color,
-                                      List<Candidate> candidates,
-                                      Vec3 origin) {
-        String id = DebugRenderChannel.PATHFINDING.id() + ":" + mob.getStringUUID() + ":" + markerName;
-        DebugRenderShape shape = new DebugRenderShape(
-                id, "pathfinding", "box", position, new Vec3(1.0D, 1.0D, 1.0D), Vec3.ZERO, color
-        );
-        candidates.add(new Candidate(GeometryDebugMeshFactory.buildShapeMesh(shape), position.distanceToSqr(origin)));
-    }
-
-    private static void writeRelativeVertex(float[] vertices, int index, Vec3 position, Vec3 center) {
-        int offset = index * 3;
-        vertices[offset] = (float) (position.x - center.x);
-        vertices[offset + 1] = (float) (position.y - center.y);
-        vertices[offset + 2] = (float) (position.z - center.z);
-    }
-
-    private static boolean isCenterChunkLoaded(ServerLevel level, Vec3 center) {
-        return level.isLoaded(BlockPos.containing(center));
-    }
-
-    private static PacketGeometryDebugSnapshot.Mesh toPacketMesh(GeometryDebugElement mesh) {
-        Vec3 center = mesh.center();
-        return new PacketGeometryDebugSnapshot.Mesh(
-                mesh.id(), mesh.graphId(), mesh.type(), mesh.color(), mesh.showPoints(),
-                center.x, center.y, center.z,
-                mesh.size().x, mesh.size().y, mesh.size().z,
-                mesh.rotation().x, mesh.rotation().y, mesh.rotation().z,
-                mesh.vertices(), mesh.edges(), mesh.faces()
-        );
-    }
-
-    private static void sendSnapshot(ServerPlayer player, Session session, MeshSnapshot snapshot) {
+    private static void sendSnapshot(ServerPlayer player, Session session, DebugSnapshotAssembler.Snapshot snapshot) {
         NetworkHandler.sendToPlayer(player, new PacketGeometryDebugSnapshot(
                 session.hasAnyChannel(), session.radius,
-                session.hasAnyChannel() ? snapshot.meshes : List.of()));
-        session.lastSignature = snapshot.signature;
+                session.hasAnyChannel() ? snapshot.meshes() : List.of()));
+        session.lastSignature = snapshot.signature();
     }
 
     private static void refreshPlayer(ServerPlayer player, Session session) {
         DebugServerState state = state(player.level().getServer());
-        MeshSnapshot snapshot = collectSnapshot(state, player, session);
+        refreshObservations(state, player.level(), true, true, true);
+        DebugSnapshotAssembler.Snapshot snapshot = collectSnapshot(state, player, session);
         sendSnapshot(player, session, snapshot);
         updateBaseline(state, player, session, snapshot);
     }
@@ -875,11 +604,11 @@ public final class DebugRendererSessionManager {
     }
 
     private static void updateBaseline(DebugServerState state, ServerPlayer player,
-                                       Session session, MeshSnapshot snapshot) {
+                                       Session session, DebugSnapshotAssembler.Snapshot snapshot) {
         session.lastPosition = player.position();
         session.lastDimension = player.level().dimension();
         session.lastDirtyVersion = state.dirtyVersion;
-        session.lastSignature = snapshot.signature;
+        session.lastSignature = snapshot.signature();
     }
 
     private static Session session(ServerPlayer player) {
@@ -927,27 +656,6 @@ public final class DebugRendererSessionManager {
         return signature * 31L + meshes.size();
     }
 
-    private static long mix(long signature, PacketGeometryDebugSnapshot.Mesh mesh) {
-        signature = mix(signature, mesh.id().hashCode());
-        signature = mix(signature, mesh.graphId().hashCode());
-        signature = mix(signature, mesh.geometryType().networkId());
-        signature = mix(signature, mesh.color());
-        signature = mix(signature, mesh.showPoints() ? 1L : 0L);
-        signature = mix(signature, Double.doubleToLongBits(mesh.centerX()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.centerY()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.centerZ()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.sizeX()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.sizeY()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.sizeZ()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.rotationX()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.rotationY()));
-        signature = mix(signature, Double.doubleToLongBits(mesh.rotationZ()));
-        for (float value : mesh.vertices()) signature = mix(signature, Float.floatToIntBits(value));
-        for (int value : mesh.edges()) signature = mix(signature, value);
-        for (int value : mesh.faces()) signature = mix(signature, value);
-        return signature;
-    }
-
     private static long mix(long signature, long value) {
         return (signature ^ value) * 1099511628211L;
     }
@@ -962,62 +670,15 @@ public final class DebugRendererSessionManager {
         return String.format(java.util.Locale.ROOT, "%.2f", radius);
     }
 
-    private record Candidate(GeometryDebugElement mesh, double distanceSqr) {
-    }
-
-    private record MeshSnapshot(List<PacketGeometryDebugSnapshot.Mesh> meshes, long signature) {
-    }
-
-    private record RequestedPathTarget(ResourceKey<Level> dimension, Vec3 position, long expiresAt) {
-    }
-
-    private record FollowTarget(ResourceKey<Level> dimension, UUID targetId, long expiresAt) {
-    }
-
-    private record PatrolRoute(ResourceKey<Level> dimension, List<Vec3> waypoints,
-                               int completedCount, boolean loop) {
-    }
-
     private static final class DebugServerState {
         private final Map<UUID, Session> sessions = new HashMap<>();
-        private final Map<UUID, RequestedPathTarget> requestedPathTargets = new HashMap<>();
-        private final Map<UUID, FollowTarget> followTargets = new HashMap<>();
-        private final Map<UUID, PatrolRoute> patrolRoutes = new HashMap<>();
-        private final Map<ServerLevel, LevelCache> levelCaches = new IdentityHashMap<>();
+        private final PathDebugStateStore pathState = new PathDebugStateStore();
+        private final DebugSourceStore sources = new DebugSourceStore(IDLE_CHECK_INTERVAL_TICKS);
+        private final Map<ServerLevel, DebugLevelObservationCache> observations = new IdentityHashMap<>();
         private long dirtyVersion;
 
         private boolean isEmpty() {
-            return sessions.isEmpty() && requestedPathTargets.isEmpty()
-                    && followTargets.isEmpty() && patrolRoutes.isEmpty()
-                    && levelCaches.isEmpty();
-        }
-    }
-
-    private static final class LevelCache {
-        private final Map<DebugSourceId, SourceCache> sources = new HashMap<>();
-    }
-
-    private static final class SourceCache {
-        private final List<GeometryDebugElement> meshes;
-        private long lastSeenTick;
-        private final long signature;
-        private final long expiresAt;
-
-        private SourceCache(List<GeometryDebugElement> meshes, long lastSeenTick, long signature, long expiresAt) {
-            this.meshes = meshes;
-            this.lastSeenTick = lastSeenTick;
-            this.signature = signature;
-            this.expiresAt = expiresAt;
-        }
-
-        private boolean isExpired(long currentTick) {
-            if (expiresAt == Long.MAX_VALUE) return false;
-            if (expiresAt > 0L) return currentTick >= expiresAt;
-            return currentTick - lastSeenTick > IDLE_CHECK_INTERVAL_TICKS;
-        }
-
-        private boolean isTransientExpired(long currentTick) {
-            return expiresAt > 0L && expiresAt != Long.MAX_VALUE && currentTick >= expiresAt;
+            return sessions.isEmpty() && pathState.isEmpty() && sources.isEmpty();
         }
     }
 
@@ -1037,14 +698,14 @@ public final class DebugRendererSessionManager {
             return areaEnabled || schematicEnabled || geometryEnabled || interactionEnabled || pathfindingEnabled;
         }
 
-        private boolean isSourceVisible(DebugSourceId sourceId) {
-            return switch (sourceId.channel()) {
-                case AREA -> areaEnabled;
-                case GEOMETRY -> geometryEnabled;
-                case SCHEMATIC -> schematicEnabled;
-                case PATHFINDING -> pathfindingEnabled;
-                case INTERACTION -> interactionEnabled;
-            };
+        private int channelMask() {
+            int mask = 0;
+            if (areaEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.AREA);
+            if (schematicEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.SCHEMATIC);
+            if (geometryEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.GEOMETRY);
+            if (interactionEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.INTERACTION);
+            if (pathfindingEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.PATHFINDING);
+            return mask;
         }
 
         private void forceRefresh() {

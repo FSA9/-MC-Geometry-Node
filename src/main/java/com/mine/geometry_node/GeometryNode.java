@@ -20,7 +20,7 @@ import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
-import com.mine.geometry_node.core.engine.graph.scoped.storage.ScopedStateStorage;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.ServerScopedStateSavedData;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
@@ -210,7 +210,7 @@ public class GeometryNode {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        int removedGroups = ScopedStateStorage.reconcileGroups(event.getServer());
+        int removedGroups = ServerScopedStateSavedData.reconcileGroups(event.getServer());
         if (removedGroups > 0) {
             LOGGER.info("[GeometryNode] Removed {} orphaned GROUP scoped-state buckets", removedGroups);
         }

@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateServerConfig;
+import com.mine.geometry_node.core.config.ScopedStateServerConfig;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;

@@ -6,7 +6,8 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateProvider;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateServerConfig;
+import com.mine.geometry_node.core.config.ScopedStateServerConfig;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateLimitNotifier;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -24,22 +25,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Persistent storage for named shared, scoreboard group, and dimension scoped state. */
-public final class ScopedStateStorage extends SavedData {
+public final class ServerScopedStateSavedData extends SavedData {
     private static final int VERSION = 4;
     private static final int MAX_BUCKETS = 4_096;
     private static final int HARD_MAX_RECORDS_PER_BUCKET = ScopedStateServerConfig.HARD_MAX_ENTRIES;
-    private static final Codec<ScopedStateStorage> CODEC = CompoundTag.CODEC.xmap(
-            ScopedStateStorage::load, storage -> storage.save(new CompoundTag()));
+    private static final Codec<ServerScopedStateSavedData> CODEC = CompoundTag.CODEC.xmap(
+            ServerScopedStateSavedData::load, storage -> storage.save(new CompoundTag()));
 
-    public static final SavedDataType<ScopedStateStorage> TYPE = new SavedDataType<>(
+    public static final SavedDataType<ServerScopedStateSavedData> TYPE = new SavedDataType<>(
             Identifier.fromNamespaceAndPath(GeometryNode.MODID, "scoped_state"),
-            ScopedStateStorage::new, CODEC);
+            ServerScopedStateSavedData::new, CODEC);
 
     private final Map<ScopeKey, PersistentScopedStateBucket> buckets = new LinkedHashMap<>();
     private boolean entriesValidated;
 
-    public static ScopedStateStorage get(ServerLevel level) {
-        ScopedStateStorage storage = level.getServer().getDataStorage().computeIfAbsent(TYPE);
+    public static ServerScopedStateSavedData get(ServerLevel level) {
+        ServerScopedStateSavedData storage = level.getServer().getDataStorage().computeIfAbsent(TYPE);
         storage.validateEntries(level.registryAccess());
         return storage;
     }
@@ -74,7 +75,7 @@ public final class ScopedStateStorage extends SavedData {
     /** Removes every namespace bucket owned by a scoreboard team that no longer exists. */
     public static boolean removeGroup(MinecraftServer server, String teamName) {
         String identity = "scoreboard:" + normalizeIdentity(teamName);
-        ScopedStateStorage storage = get(server.overworld());
+        ServerScopedStateSavedData storage = get(server.overworld());
         boolean removed = storage.buckets.keySet().removeIf(key ->
                 key.scope() == ScopedStateScope.GROUP && key.identity().equals(identity));
         if (removed) storage.setDirty();
@@ -86,7 +87,7 @@ public final class ScopedStateStorage extends SavedData {
         java.util.Set<String> activeIdentities = server.getScoreboard().getTeamNames().stream()
                 .map(name -> "scoreboard:" + name)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        ScopedStateStorage storage = get(server.overworld());
+        ServerScopedStateSavedData storage = get(server.overworld());
         int before = storage.buckets.size();
         storage.buckets.keySet().removeIf(key -> key.scope() == ScopedStateScope.GROUP
                 && !activeIdentities.contains(key.identity()));
@@ -95,8 +96,8 @@ public final class ScopedStateStorage extends SavedData {
         return removed;
     }
 
-    private static ScopedStateStorage load(CompoundTag root) {
-        ScopedStateStorage storage = new ScopedStateStorage();
+    private static ServerScopedStateSavedData load(CompoundTag root) {
+        ServerScopedStateSavedData storage = new ServerScopedStateSavedData();
         for (Tag rawBucket : root.getListOrEmpty("Buckets")) {
             if (!(rawBucket instanceof CompoundTag tag)) continue;
             ScopedStateScope scope;
@@ -200,7 +201,7 @@ public final class ScopedStateStorage extends SavedData {
             boolean changed;
             try {
                 changed = bucket.put(name, value, maxEntries, registries, locationPrefix(),
-                        this::notifyLimit, ScopedStateStorage.this::setDirty);
+                        this::notifyLimit, ServerScopedStateSavedData.this::setDirty);
             } catch (RuntimeException exception) {
                 if (bucket.isEmpty()) buckets.remove(storageKey);
                 throw exception;
@@ -248,7 +249,7 @@ public final class ScopedStateStorage extends SavedData {
         }
 
         private String locationPrefix() {
-            return ScopedStateStorage.locationPrefix(storageKey);
+            return ServerScopedStateSavedData.locationPrefix(storageKey);
         }
     }
 

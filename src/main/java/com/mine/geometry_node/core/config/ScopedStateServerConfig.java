@@ -1,5 +1,6 @@
-package com.mine.geometry_node.core.engine.graph.scoped;
+package com.mine.geometry_node.core.config;
 
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** Server-side capacity policy for each scoped-state namespace. */

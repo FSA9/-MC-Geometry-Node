@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.core.engine.graph.scoped.storage.ScopedStateStorage;
+import com.mine.geometry_node.core.engine.graph.scoped.storage.ServerScopedStateSavedData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerScoreboard;
 import net.minecraft.world.scores.PlayerTeam;
@@ -18,6 +18,6 @@ public abstract class ServerScoreboardMixin {
 
     @Inject(method = "onTeamRemoved", at = @At("TAIL"))
     private void geometryNode$removeGroupScopedState(PlayerTeam team, CallbackInfo callback) {
-        ScopedStateStorage.removeGroup(server, team.getName());
+        ServerScopedStateSavedData.removeGroup(server, team.getName());
     }
 }

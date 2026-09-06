@@ -1,8 +1,6 @@
-package com.mine.geometry_node.core.engine.graph.scoped.storage;
+package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
-import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -12,7 +10,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /** Emits one server-wide capacity warning per affected bucket and cooldown window. */
-final class ScopedStateLimitNotifier {
+public final class ScopedStateLimitNotifier {
     private static final long NOTIFICATION_COOLDOWN_MILLIS = 60_000L;
     private static final Map<MinecraftServer, Map<String, Long>> LAST_NOTIFICATIONS =
             new WeakHashMap<>();
@@ -20,8 +18,8 @@ final class ScopedStateLimitNotifier {
     private ScopedStateLimitNotifier() {
     }
 
-    static void notifyLimit(ServerLevel level, ScopedStateNamespace namespace,
-                            ScopedStateScope scope, String identity, int limit) {
+    public static void notifyLimit(ServerLevel level, ScopedStateNamespace namespace,
+                                   ScopedStateScope scope, String identity, int limit) {
         MinecraftServer server = level.getServer();
         String bucket = namespace.serializedName() + "/" + scope + "/" + identity;
         long now = System.currentTimeMillis();
