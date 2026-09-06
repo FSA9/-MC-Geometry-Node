@@ -6,6 +6,7 @@ import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
+import com.mine.geometry_node.core.engine.blueprint.event.subscription.EntityTickCapabilities;
 import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
 import com.mine.geometry_node.core.node.nodes.events.entity.*;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileShoot;
@@ -32,18 +33,6 @@ import net.neoforged.neoforge.event.tick.EntityTickEvent;
 public class EntityDispatcher {
 
     public static void register() {
-        // 实体加入世界加载
-        EntityEvent.ADD.register((entity, level) -> {
-            if (!level.isClientSide() && level instanceof ServerLevel serverLevel) {
-                BlueprintRuntime.INSTANCE.registerEntityListeners(entity);
-                GeometryNodeEvents.dispatch(serverLevel, entity, OnEntitySpawn.TYPE_ID, EventPayload.of(
-                        StandardPorts.ENTITY.getId(), entity,
-                        StandardPorts.XYZ.getId(), entity.position()
-                ));
-            }
-            return EventResult.pass();
-        });
-
         // 实体受伤与造成伤害
         EntityEvent.LIVING_HURT.register((entity, source, amount) -> {
             if (!entity.level().isClientSide()) {
@@ -112,21 +101,20 @@ public class EntityDispatcher {
             if (entity.level().isClientSide()) return;
 
             ServerLevel level = (ServerLevel) entity.level();
+            int tickCapabilities = BlueprintRuntime.INSTANCE.entityTickCapabilities(entity);
+            if (tickCapabilities == EntityTickCapabilities.NONE) return;
+
             EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
             if (attachment == null || attachment.getBoundGraphs().isEmpty()) {
                 return;
             }
-            long currentTick = level.getGameTime();
-            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnAreaEvent.TYPE_ID)) {
-                BlueprintRuntime.INSTANCE.tickEntityAreas(level, entity, attachment, currentTick);
+            if (EntityTickCapabilities.includes(tickCapabilities, EntityTickCapabilities.AREA_EVENT)) {
+                BlueprintRuntime.INSTANCE.queueEntityAreaTick(level, entity);
             }
-            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnEntityTick.TYPE_ID)) {
+            if (EntityTickCapabilities.includes(tickCapabilities, EntityTickCapabilities.ENTITY_TICK_EVENT)) {
                 BlueprintRuntime.INSTANCE.dispatchBoundEntityEvent(level, entity, OnEntityTick.TYPE_ID, EventPayload.of(
                         StandardPorts.ENTITY.getId(), entity
                 ).values());
-            }
-            if (BlueprintRuntime.INSTANCE.hasEntityEventSubscription(entity, OnEntityGainItem.TYPE_ID)) {
-                BlueprintRuntime.INSTANCE.tickEntityInventory(level, entity, true);
             }
         });
 

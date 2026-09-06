@@ -9,12 +9,22 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 
 public final class AreaEntityQuery {
     private static final double PROJECTILE_SWEEP_PADDING = 16.0D;
     private static final double EPSILON = 1.0E-7D;
+    private static final int[][] BOX_EDGES = {
+            {0, 1}, {0, 2}, {0, 4},
+            {1, 3}, {1, 5},
+            {2, 3}, {2, 6},
+            {3, 7},
+            {4, 5}, {4, 6},
+            {5, 7},
+            {6, 7}
+    };
 
     private AreaEntityQuery() {
     }
@@ -150,7 +160,8 @@ public final class AreaEntityQuery {
         Vec3 end = entity.position();
         Vec3 start = previousPosition(entity, end);
         Vec3 velocity = entity.getDeltaMovement();
-        boolean intersectsNow = intersects(entity.getBoundingBox(), center, inverseRotation, shape, halfX, halfY, halfZ);
+        boolean intersectsNow = intersects(entity.getBoundingBox(), center, areaRotation, inverseRotation,
+                shape, halfX, halfY, halfZ);
 
         if (entity instanceof Projectile) {
             if (intersectsNow && containsPoint(start, center, inverseRotation, shape, halfX, halfY, halfZ)) {
@@ -206,6 +217,7 @@ public final class AreaEntityQuery {
 
     private static boolean intersects(AABB aabb,
                                       Vec3 center,
+                                      Quaternionf areaRotation,
                                       Quaternionf inverseRotation,
                                       AreaShape shape,
                                       float halfX,
@@ -214,7 +226,7 @@ public final class AreaEntityQuery {
         return switch (shape) {
             case SPHERE -> intersectsSphere(aabb, center, Math.max(halfX, Math.max(halfY, halfZ)));
             case CYLINDER -> intersectsCylinder(aabb, center, inverseRotation, halfX, halfY, halfZ);
-            case BOX -> intersectsBox(aabb, center, inverseRotation, halfX, halfY, halfZ);
+            case BOX -> intersectsBox(aabb, center, areaRotation, halfX, halfY, halfZ);
         };
     }
 
@@ -341,36 +353,81 @@ public final class AreaEntityQuery {
                                               float halfX,
                                               float halfY,
                                               float halfZ) {
-        LocalBounds bounds = localBounds(aabb, center, inverseRotation);
-        if (bounds.maxY < -halfY || bounds.minY > halfY) {
+        // Clip the entity box to the cylinder height, then test its exact projected footprint.
+        List<Vec3> corners = localCorners(aabb, center, inverseRotation);
+        List<Vec3> clippedVertices = new ArrayList<>(16);
+        for (Vec3 corner : corners) {
+            if (corner.y >= -halfY - EPSILON && corner.y <= halfY + EPSILON) {
+                clippedVertices.add(corner);
+            }
+        }
+        for (int[] edge : BOX_EDGES) {
+            Vec3 start = corners.get(edge[0]);
+            Vec3 end = corners.get(edge[1]);
+            addPlaneIntersection(clippedVertices, start, end, -halfY);
+            addPlaneIntersection(clippedVertices, start, end, halfY);
+        }
+        if (clippedVertices.isEmpty()) {
             return false;
         }
 
-        double closestX = closestToZero(bounds.minX, bounds.maxX);
-        double closestZ = closestToZero(bounds.minZ, bounds.maxZ);
-        return square(closestX / halfX) + square(closestZ / halfZ) <= 1.0;
+        List<Point2> projected = new ArrayList<>(clippedVertices.size());
+        for (Vec3 vertex : clippedVertices) {
+            projected.add(new Point2(vertex.x / halfX, vertex.z / halfZ));
+        }
+        return convexHullIntersectsUnitCircle(projected);
     }
 
     private static boolean intersectsBox(AABB aabb,
                                          Vec3 center,
-                                         Quaternionf inverseRotation,
+                                         Quaternionf areaRotation,
                                          float halfX,
                                          float halfY,
                                          float halfZ) {
-        LocalBounds bounds = localBounds(aabb, center, inverseRotation);
-        return bounds.maxX >= -halfX && bounds.minX <= halfX
-                && bounds.maxY >= -halfY && bounds.minY <= halfY
-                && bounds.maxZ >= -halfZ && bounds.minZ <= halfZ;
+        Vec3 areaX = toWorldDirection(new Vec3(1, 0, 0), areaRotation);
+        Vec3 areaY = toWorldDirection(new Vec3(0, 1, 0), areaRotation);
+        Vec3 areaZ = toWorldDirection(new Vec3(0, 0, 1), areaRotation);
+        Vec3[] areaAxes = {areaX, areaY, areaZ};
+        Vec3[] worldAxes = {
+                new Vec3(1, 0, 0),
+                new Vec3(0, 1, 0),
+                new Vec3(0, 0, 1)
+        };
+
+        Vec3 entityCenter = aabb.getCenter();
+        Vec3 delta = entityCenter.subtract(center);
+        double entityHalfX = aabb.getXsize() * 0.5D;
+        double entityHalfY = aabb.getYsize() * 0.5D;
+        double entityHalfZ = aabb.getZsize() * 0.5D;
+
+        // OBB versus AABB separating-axis test: 3 face axes per box plus 9 edge cross products.
+        for (Vec3 axis : areaAxes) {
+            if (separatedOnAxis(axis, delta, areaAxes, halfX, halfY, halfZ,
+                    entityHalfX, entityHalfY, entityHalfZ)) {
+                return false;
+            }
+        }
+        for (Vec3 axis : worldAxes) {
+            if (separatedOnAxis(axis, delta, areaAxes, halfX, halfY, halfZ,
+                    entityHalfX, entityHalfY, entityHalfZ)) {
+                return false;
+            }
+        }
+        for (Vec3 areaAxis : areaAxes) {
+            for (Vec3 worldAxis : worldAxes) {
+                Vec3 axis = areaAxis.cross(worldAxis);
+                if (axis.lengthSqr() > EPSILON
+                        && separatedOnAxis(axis, delta, areaAxes, halfX, halfY, halfZ,
+                        entityHalfX, entityHalfY, entityHalfZ)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
-    private static LocalBounds localBounds(AABB aabb, Vec3 center, Quaternionf inverseRotation) {
-        float minX = Float.MAX_VALUE;
-        float minY = Float.MAX_VALUE;
-        float minZ = Float.MAX_VALUE;
-        float maxX = -Float.MAX_VALUE;
-        float maxY = -Float.MAX_VALUE;
-        float maxZ = -Float.MAX_VALUE;
-
+    private static List<Vec3> localCorners(AABB aabb, Vec3 center, Quaternionf inverseRotation) {
+        List<Vec3> corners = new ArrayList<>(8);
         for (int x = 0; x < 2; x++) {
             double cornerX = x == 0 ? aabb.minX : aabb.maxX;
             for (int y = 0; y < 2; y++) {
@@ -383,18 +440,122 @@ public final class AreaEntityQuery {
                             (float) (cornerZ - center.z)
                     );
                     local.rotate(inverseRotation);
-
-                    minX = Math.min(minX, local.x());
-                    minY = Math.min(minY, local.y());
-                    minZ = Math.min(minZ, local.z());
-                    maxX = Math.max(maxX, local.x());
-                    maxY = Math.max(maxY, local.y());
-                    maxZ = Math.max(maxZ, local.z());
+                    corners.add(new Vec3(local.x(), local.y(), local.z()));
                 }
             }
         }
+        return corners;
+    }
 
-        return new LocalBounds(minX, minY, minZ, maxX, maxY, maxZ);
+    private static boolean separatedOnAxis(Vec3 axis,
+                                           Vec3 centerDelta,
+                                           Vec3[] areaAxes,
+                                           double areaHalfX,
+                                           double areaHalfY,
+                                           double areaHalfZ,
+                                           double entityHalfX,
+                                           double entityHalfY,
+                                           double entityHalfZ) {
+        double centerDistance = Math.abs(centerDelta.dot(axis));
+        double areaRadius = areaHalfX * Math.abs(areaAxes[0].dot(axis))
+                + areaHalfY * Math.abs(areaAxes[1].dot(axis))
+                + areaHalfZ * Math.abs(areaAxes[2].dot(axis));
+        double entityRadius = entityHalfX * Math.abs(axis.x)
+                + entityHalfY * Math.abs(axis.y)
+                + entityHalfZ * Math.abs(axis.z);
+        return centerDistance > areaRadius + entityRadius + EPSILON;
+    }
+
+    private static void addPlaneIntersection(List<Vec3> vertices, Vec3 start, Vec3 end, double planeY) {
+        double startOffset = start.y - planeY;
+        double endOffset = end.y - planeY;
+        if (startOffset * endOffset > 0.0D || Math.abs(start.y - end.y) <= EPSILON) {
+            return;
+        }
+        double t = (planeY - start.y) / (end.y - start.y);
+        if (t >= -EPSILON && t <= 1.0D + EPSILON) {
+            vertices.add(start.add(end.subtract(start).scale(clamp(t, 0.0D, 1.0D))));
+        }
+    }
+
+    private static boolean convexHullIntersectsUnitCircle(List<Point2> points) {
+        List<Point2> hull = convexHull(points);
+        if (hull.isEmpty()) {
+            return false;
+        }
+        if (hull.size() == 1) {
+            return hull.getFirst().lengthSquared() <= 1.0D + EPSILON;
+        }
+        if (hull.size() == 2) {
+            return distanceSquaredToSegment(Point2.ORIGIN, hull.getFirst(), hull.getLast()) <= 1.0D + EPSILON;
+        }
+
+        for (int i = 0; i < hull.size(); i++) {
+            Point2 start = hull.get(i);
+            Point2 end = hull.get((i + 1) % hull.size());
+            if (distanceSquaredToSegment(Point2.ORIGIN, start, end) <= 1.0D + EPSILON) {
+                return true;
+            }
+        }
+        return containsOrigin(hull);
+    }
+
+    private static List<Point2> convexHull(List<Point2> points) {
+        List<Point2> sorted = new ArrayList<>(points);
+        sorted.sort(Comparator.comparingDouble(Point2::x).thenComparingDouble(Point2::y));
+        if (sorted.size() <= 1) {
+            return sorted;
+        }
+
+        List<Point2> hull = new ArrayList<>(sorted.size() * 2);
+        for (Point2 point : sorted) {
+            while (hull.size() >= 2
+                    && cross(hull.get(hull.size() - 2), hull.getLast(), point) <= EPSILON) {
+                hull.removeLast();
+            }
+            hull.add(point);
+        }
+        int lowerSize = hull.size();
+        for (int i = sorted.size() - 2; i >= 0; i--) {
+            Point2 point = sorted.get(i);
+            while (hull.size() > lowerSize
+                    && cross(hull.get(hull.size() - 2), hull.getLast(), point) <= EPSILON) {
+                hull.removeLast();
+            }
+            hull.add(point);
+        }
+        hull.removeLast();
+        return hull;
+    }
+
+    private static boolean containsOrigin(List<Point2> polygon) {
+        boolean positive = false;
+        boolean negative = false;
+        for (int i = 0; i < polygon.size(); i++) {
+            double side = cross(polygon.get(i), polygon.get((i + 1) % polygon.size()), Point2.ORIGIN);
+            positive |= side > EPSILON;
+            negative |= side < -EPSILON;
+            if (positive && negative) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static double distanceSquaredToSegment(Point2 point, Point2 start, Point2 end) {
+        double dx = end.x - start.x;
+        double dy = end.y - start.y;
+        double lengthSquared = square(dx) + square(dy);
+        if (lengthSquared <= EPSILON) {
+            return square(point.x - start.x) + square(point.y - start.y);
+        }
+        double t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared,
+                0.0D, 1.0D);
+        return square(point.x - (start.x + dx * t)) + square(point.y - (start.y + dy * t));
+    }
+
+    private static double cross(Point2 start, Point2 end, Point2 point) {
+        return (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x);
     }
 
     private static SlabHit slabHit(Vec3 start, Vec3 direction, float halfX, float halfY, float halfZ) {
@@ -544,18 +705,16 @@ public final class AreaEntityQuery {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static double closestToZero(double min, double max) {
-        if (min > 0.0) return min;
-        if (max < 0.0) return max;
-        return 0.0;
-    }
-
     private static double square(double value) {
         return value * value;
     }
 
-    private record LocalBounds(float minX, float minY, float minZ,
-                               float maxX, float maxY, float maxZ) {
+    private record Point2(double x, double y) {
+        private static final Point2 ORIGIN = new Point2(0.0D, 0.0D);
+
+        private double lengthSquared() {
+            return square(x) + square(y);
+        }
     }
 
     private record SegmentHit(Vec3 position, Vec3 normal) {

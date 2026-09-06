@@ -62,6 +62,7 @@ public final class BlueprintEventHandler {
     }
 
     public void tickLevel(ServerLevel level) {
+        areaTriggers.tickQueuedEntities(level);
         // 1. 驱动全局蓝图
         LevelGraphAttachment.get(level).tick(level);
         ForceFieldTickService.INSTANCE.tickLevel(level);
@@ -71,8 +72,8 @@ public final class BlueprintEventHandler {
         tickScheduledEntities(level);
     }
 
-    public void tickEntityAreas(ServerLevel level, Entity owner, EntityGraphAttachment attachment, long currentTick) {
-        areaTriggers.tickEntity(level, owner, attachment, currentTick);
+    public void queueEntityAreaTick(ServerLevel level, Entity owner) {
+        areaTriggers.queueEntity(level, owner);
     }
 
     public void shutdown(MinecraftServer server) {
@@ -84,6 +85,7 @@ public final class BlueprintEventHandler {
 
     public void forgetEntity(ServerLevel level, Entity entity) {
         if (level == null || entity == null) return;
+        areaTriggers.forgetEntity(level, entity);
         ServerSchedule schedule = servers.get(level.getServer());
         if (schedule == null) return;
         UUID entityId = entity.getUUID();
@@ -99,6 +101,7 @@ public final class BlueprintEventHandler {
 
     public void forgetLevel(ServerLevel level) {
         if (level == null) return;
+        areaTriggers.forgetLevel(level);
         ServerSchedule schedule = servers.get(level.getServer());
         if (schedule == null) return;
         ResourceKey<Level> dimension = level.dimension();

@@ -157,7 +157,7 @@ public final class CreateArea extends BaseNode {
             AreaAddress address = AreaAddress.tryCreate(areaLevel.dimension(), areaId);
             if (address != null) {
                 GraphResourceId resourceOwner = GraphResourceIds.forKey(context, stableId,
-                        GraphResourceTypeRegistry.AREA, address.id());
+                        GraphResourceTypeRegistry.AREA, address.id(), anchorId);
                 LiveValue<Vec3> liveCenter = captureXyz(CENTER_PORT, center,
                         getInputExpression(context, StandardPorts.CENTER.getId()));
                 LiveValue<Vec3> liveSize = captureXyz(SIZE_PORT, size,

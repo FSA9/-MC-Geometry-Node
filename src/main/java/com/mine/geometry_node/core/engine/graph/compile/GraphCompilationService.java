@@ -55,7 +55,7 @@ public final class GraphCompilationService {
         GraphType type = GraphDocumentType.require(document);
         GraphCompiler<? extends CompiledGraph> compiler =
                 GraphRuntimeRegistry.INSTANCE.requireCompiler(type.runtimeKind());
-        CompiledGraph result = compiler.compile(context, document.deepCopy());
+        CompiledGraph result = compiler.compile(context, document);
         if (!type.id().equals(result.graphTypeId()) || type.runtimeKind() != result.runtimeKind()) {
             throw new IllegalStateException("Compiler returned an artifact with mismatched graph identity: " + type.id());
         }

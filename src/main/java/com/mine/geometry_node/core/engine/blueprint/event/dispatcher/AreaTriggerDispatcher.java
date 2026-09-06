@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.event.dispatcher;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
@@ -24,7 +25,9 @@ import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -48,7 +51,7 @@ public final class AreaTriggerDispatcher {
     private static final int STALE_CLEANUP_INTERVAL = 20 * 10;
 
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
-    private final Map<BlueprintPlan, List<CompiledListener>> configCache =
+    private final Map<BlueprintPlan, List<ListenerGroup>> configCache =
             Collections.synchronizedMap(new WeakHashMap<>());
 
     public AreaTriggerDispatcher() {
@@ -57,40 +60,99 @@ public final class AreaTriggerDispatcher {
     }
 
     public void tickLevel(ServerLevel hostLevel) {
-        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
+        Set<String> graphIds = BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(
+                hostLevel, OnAreaEvent.TYPE_ID);
         long currentTick = hostLevel.getGameTime();
-        cleanupStaleStates(state, currentTick);
+        if (graphIds.isEmpty()) {
+            ServerState state = servers.get(hostLevel.getServer());
+            if (state != null) {
+                cleanupStaleStates(state, currentTick);
+                state.statesByScope.remove(scope(hostLevel));
+            }
+            return;
+        }
 
-        LevelGraphAttachment attachment = LevelGraphAttachment.get(hostLevel);
+        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
+        cleanupStaleStates(state, currentTick);
+        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
+        Map<SourceCacheKey, List<ResolvedAreaSource>> sourceCache = new HashMap<>();
+
         GraphResourceScope scope = scope(hostLevel);
+        LevelGraphAttachment attachment = LevelGraphAttachment.get(hostLevel);
         Map<StateKey, ListenerState> scopeStates =
                 state.statesByScope.computeIfAbsent(scope, ignored -> new HashMap<>());
         Set<StateKey> seenStates = new HashSet<>();
-        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
-        for (String graphId : BlueprintRuntime.INSTANCE.getGlobalGraphsForEvent(hostLevel, OnAreaEvent.TYPE_ID)) {
+        for (String graphId : graphIds) {
             tickGraph(scopeStates, hostLevel, null, graphId,
                     BlueprintRuntime.INSTANCE.getGraphIndex(hostLevel.getServer(), graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
-                    currentTick, seenStates, queryCache);
+                    currentTick, seenStates, sourceCache, queryCache);
         }
         pruneScope(state, scope, scopeStates, seenStates);
     }
 
-    public void tickEntity(ServerLevel hostLevel, Entity owner, EntityGraphAttachment attachment, long currentTick) {
-        if (owner == null || owner.isRemoved() || attachment == null || attachment.getBoundGraphs().isEmpty()) return;
-        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
+    public void tickQueuedEntities(ServerLevel hostLevel) {
+        ServerState state = servers.get(hostLevel.getServer());
+        if (state == null) return;
+        PendingEntityBatch pending = state.pendingEntities.remove(hostLevel.dimension());
+        long currentTick = hostLevel.getGameTime();
+        if (pending == null || pending.gameTime != currentTick || pending.entities.isEmpty()) return;
+
         cleanupStaleStates(state, currentTick);
+        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
+        Map<SourceCacheKey, List<ResolvedAreaSource>> sourceCache = new HashMap<>();
+        for (Entity owner : pending.entities.values()) {
+            tickEntity(state, hostLevel, owner, currentTick, sourceCache, queryCache);
+        }
+    }
+
+    public void queueEntity(ServerLevel hostLevel, Entity owner) {
+        if (hostLevel == null || owner == null || owner.isRemoved()) return;
+        ServerState state = servers.computeIfAbsent(hostLevel.getServer(), ignored -> new ServerState());
+        long gameTime = hostLevel.getGameTime();
+        PendingEntityBatch pending = state.pendingEntities.computeIfAbsent(
+                hostLevel.dimension(), ignored -> new PendingEntityBatch(gameTime));
+        if (pending.gameTime != gameTime) {
+            pending.entities.clear();
+            pending.gameTime = gameTime;
+        }
+        pending.entities.put(owner.getUUID(), owner);
+    }
+
+    public void forgetEntity(ServerLevel level, Entity entity) {
+        if (level == null || entity == null) return;
+        ServerState state = servers.get(level.getServer());
+        if (state == null) return;
+        PendingEntityBatch pending = state.pendingEntities.get(level.dimension());
+        if (pending == null) return;
+        pending.entities.remove(entity.getUUID());
+        if (pending.entities.isEmpty()) state.pendingEntities.remove(level.dimension(), pending);
+    }
+
+    public void forgetLevel(ServerLevel level) {
+        if (level == null) return;
+        ServerState state = servers.get(level.getServer());
+        if (state == null) return;
+        state.pendingEntities.remove(level.dimension());
+        state.statesByScope.remove(scope(level));
+    }
+
+    private void tickEntity(ServerState state, ServerLevel hostLevel, Entity owner, long currentTick,
+                            Map<SourceCacheKey, List<ResolvedAreaSource>> sourceCache,
+                            Map<QueryCacheKey, AreaQueryResult> queryCache) {
+        if (owner == null || owner.isRemoved() || owner.level() != hostLevel) return;
+        EntityGraphAttachment attachment = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+        if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
         GraphResourceScope scope = new GraphResourceScope.EntityScope(hostLevel.dimension(), owner.getUUID());
         Map<StateKey, ListenerState> scopeStates =
                 state.statesByScope.computeIfAbsent(scope, ignored -> new HashMap<>());
 
         Set<StateKey> seenStates = new HashSet<>();
-        Map<QueryCacheKey, AreaQueryResult> queryCache = new HashMap<>();
         for (String graphId : BlueprintRuntime.INSTANCE.getEntityGraphsForEvent(owner, OnAreaEvent.TYPE_ID)) {
             tickGraph(scopeStates, hostLevel, owner, graphId,
                     BlueprintRuntime.INSTANCE.getGraphIndex(hostLevel.getServer(), graphId),
                     attachment::getProcess, attachment::addProcess, stateResource(scope, graphId),
-                    currentTick, seenStates, queryCache);
+                    currentTick, seenStates, sourceCache, queryCache);
         }
         pruneScope(state, scope, scopeStates, seenStates);
     }
@@ -102,16 +164,11 @@ public final class AreaTriggerDispatcher {
                            Consumer<BlueprintProcess> mountAction,
                            GraphResourceId stateResource, long currentTick,
                            Set<StateKey> seenStates,
+                           Map<SourceCacheKey, List<ResolvedAreaSource>> sourceCache,
                            Map<QueryCacheKey, AreaQueryResult> queryCache) {
         if (plan == null) return;
 
-        Map<ListenerKey, ListenerGroup> groups = new LinkedHashMap<>();
-        for (CompiledListener listener : getCompiledListeners(plan)) {
-            ListenerGroup group = groups.computeIfAbsent(listener.key(), ListenerGroup::new);
-            group.nodes.computeIfAbsent(listener.phase(), ignored -> new ArrayList<>()).add(listener.nodeId());
-        }
-
-        for (ListenerGroup group : groups.values()) {
+        for (ListenerGroup group : getCompiledGroups(plan)) {
             StateKey stateKey = new StateKey(stateResource, plan, group.key);
             seenStates.add(stateKey);
             ListenerState listenerState = scopeStates.computeIfAbsent(stateKey,
@@ -125,8 +182,9 @@ public final class AreaTriggerDispatcher {
                 listenerState.reset();
                 continue;
             }
-            List<ResolvedAreaSource> sources = resolveSources(
-                    hostLevel.getServer(), areaLevel, group.key);
+            SourceCacheKey sourceKey = SourceCacheKey.of(areaLevel, group.key);
+            List<ResolvedAreaSource> sources = sourceCache.computeIfAbsent(sourceKey,
+                    ignored -> resolveSources(hostLevel.getServer(), areaLevel, group.key));
             if (sources.isEmpty()) {
                 listenerState.reset();
                 continue;
@@ -149,35 +207,38 @@ public final class AreaTriggerDispatcher {
                 Set<UUID> previous = sourceState.inside;
                 Set<UUID> current = result.hitsById().keySet();
                 boolean alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
-                        AreaPhase.ENTER, difference(current, previous), source, result,
+                        AreaPhase.ENTER, current, previous, source, result,
                         processFinder, mountAction);
                 if (alive) {
                     alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
-                            AreaPhase.STAY, intersection(current, previous), source, result,
+                            AreaPhase.STAY, current, previous, source, result,
                             processFinder, mountAction);
                 }
                 if (alive) {
                     alive = dispatchPhase(hostLevel, areaLevel, owner, graphId, plan, group,
-                            AreaPhase.EXIT, difference(previous, current), source, result,
+                            AreaPhase.EXIT, current, previous, source, result,
                             processFinder, mountAction);
                 }
-                if (alive) sourceState.inside = new LinkedHashSet<>(current);
-                else seenAreas.remove(areaRef);
+                if (alive) {
+                    if (!previous.equals(current)) sourceState.inside = new LinkedHashSet<>(current);
+                } else {
+                    seenAreas.remove(areaRef);
+                }
             }
             listenerState.areas.keySet().retainAll(seenAreas);
         }
     }
 
-    private List<CompiledListener> getCompiledListeners(BlueprintPlan plan) {
+    private List<ListenerGroup> getCompiledGroups(BlueprintPlan plan) {
         synchronized (configCache) {
-            return configCache.computeIfAbsent(plan, AreaTriggerDispatcher::compileListeners);
+            return configCache.computeIfAbsent(plan, AreaTriggerDispatcher::compileGroups);
         }
     }
 
-    private static List<CompiledListener> compileListeners(BlueprintPlan plan) {
+    private static List<ListenerGroup> compileGroups(BlueprintPlan plan) {
         List<Integer> nodeIds = plan.findNodesByType(OnAreaEvent.TYPE_ID);
         if (nodeIds.isEmpty()) return List.of();
-        List<CompiledListener> listeners = new ArrayList<>(nodeIds.size());
+        Map<ListenerKey, EnumMap<AreaPhase, List<Integer>>> groups = new LinkedHashMap<>();
         for (int nodeId : nodeIds) {
             String dimension = plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_DIMENSION_PORT, String.class,
                     RegistryDataManager.DEFAULT_DIMENSION);
@@ -202,28 +263,42 @@ public final class AreaTriggerDispatcher {
                     match, sourceId == null ? "" : sourceId.trim(), target, interval, offset);
             AreaPhase phase = AreaPhase.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
-            listeners.add(new CompiledListener(nodeId, key, phase));
+            groups.computeIfAbsent(key, ignored -> new EnumMap<>(AreaPhase.class))
+                    .computeIfAbsent(phase, ignored -> new ArrayList<>()).add(nodeId);
         }
-        return List.copyOf(listeners);
+        List<ListenerGroup> result = new ArrayList<>(groups.size());
+        groups.forEach((key, nodes) -> {
+            EnumMap<AreaPhase, List<Integer>> immutableNodes = new EnumMap<>(AreaPhase.class);
+            nodes.forEach((phase, ids) -> immutableNodes.put(phase, List.copyOf(ids)));
+            result.add(new ListenerGroup(key, Collections.unmodifiableMap(immutableNodes)));
+        });
+        return List.copyOf(result);
     }
 
     private boolean dispatchPhase(ServerLevel hostLevel, ServerLevel areaLevel, @Nullable Entity owner,
                                   String graphId, BlueprintPlan plan, ListenerGroup group, AreaPhase phase,
-                                  Set<UUID> entityIds, ResolvedAreaSource source, AreaQueryResult result,
+                                  Set<UUID> current, Set<UUID> previous,
+                                  ResolvedAreaSource source, AreaQueryResult result,
                                   Function<String, BlueprintProcess> processFinder,
                                   Consumer<BlueprintProcess> mountAction) {
         List<Integer> nodes = group.nodes.get(phase);
-        if (nodes == null || nodes.isEmpty() || entityIds.isEmpty()) return true;
+        if (nodes == null || nodes.isEmpty()) return true;
 
         AreaResource resource = result.resource();
         int insideCount = result.hitsById().size();
 
-        for (UUID entityId : entityIds) {
+        Set<UUID> candidates = phase == AreaPhase.EXIT ? previous : current;
+        for (UUID entityId : candidates) {
+            boolean wasInside = previous.contains(entityId);
+            boolean isInside = current.contains(entityId);
+            if (phase == AreaPhase.ENTER && wasInside) continue;
+            if (phase == AreaPhase.STAY && !wasInside) continue;
+            if (phase == AreaPhase.EXIT && isInside) continue;
             AreaEntityQuery.Hit hit = result.hitsById().get(entityId);
             Entity trigger = hit != null ? hit.entity()
                     : GraphEntityReferenceResolver.resolve(entityId, areaLevel);
             if (trigger == null || trigger.isRemoved()) continue;
-            if (AreaResourceStore.INSTANCE.get(hostLevel.getServer(), resource.reference()) == null) {
+            if (!isSourceAlive(hostLevel.getServer(), areaLevel, source)) {
                 return false;
             }
             Entity eventEntity = owner != null ? owner : trigger;
@@ -243,12 +318,23 @@ public final class AreaTriggerDispatcher {
                 // The process keeps its host level; the selected dimension only controls Area lookup and querying.
                 BlueprintRuntime.INSTANCE.executeEventNode(hostLevel, owner, graphId, plan, nodeId,
                         eventData, processFinder, mountAction);
-                if (AreaResourceStore.INSTANCE.get(hostLevel.getServer(), resource.reference()) == null) {
+                if (!isSourceAlive(hostLevel.getServer(), areaLevel, source)) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    private static boolean isSourceAlive(MinecraftServer server, ServerLevel areaLevel,
+                                         ResolvedAreaSource source) {
+        if (AreaResourceStore.INSTANCE.get(server, source.areaResource().reference()) == null) return false;
+        if (source.forceFieldId().isBlank()) return true;
+        ForceFieldAddress address = ForceFieldAddress.tryCreate(
+                areaLevel.dimension(), source.forceFieldId());
+        ForceFieldResource current = address != null
+                ? ForceFieldResourceStore.INSTANCE.get(server, address) : null;
+        return current != null && current.generation() == source.forceFieldGeneration();
     }
 
     private static AreaQueryResult findEntities(ServerLevel level, AreaResource resource,
@@ -307,18 +393,6 @@ public final class AreaTriggerDispatcher {
         return interval == 1 || Math.floorMod(tick, interval) == offset;
     }
 
-    private static Set<UUID> difference(Set<UUID> left, Set<UUID> right) {
-        Set<UUID> result = new LinkedHashSet<>(left);
-        result.removeAll(right);
-        return result;
-    }
-
-    private static Set<UUID> intersection(Set<UUID> left, Set<UUID> right) {
-        Set<UUID> result = new LinkedHashSet<>(left);
-        result.retainAll(right);
-        return result;
-    }
-
     private static GraphResourceId stateResource(GraphResourceScope scope, String graphId) {
         return new GraphResourceId(GraphResourceTypeRegistry.AREA_STATE, scope,
                 GraphBindingKey.blueprint(graphId), GraphResourceSelector.Graph.INSTANCE, null, null);
@@ -345,6 +419,11 @@ public final class AreaTriggerDispatcher {
     private void removeGraphResources(MinecraftServer server, GraphResourceRelease release) {
         ServerState state = servers.get(server);
         if (state == null) return;
+        if (release instanceof GraphResourceRelease.Entity entityRelease) {
+            state.statesByScope.remove(new GraphResourceScope.EntityScope(
+                    entityRelease.dimension(), entityRelease.entityId()));
+            return;
+        }
         state.statesByScope.values().forEach(states ->
                 states.keySet().removeIf(key -> release.matches(key.resourceId())));
         state.statesByScope.values().removeIf(Map::isEmpty);
@@ -402,9 +481,6 @@ public final class AreaTriggerDispatcher {
                                int interval, int offset) {
     }
 
-    private record CompiledListener(int nodeId, ListenerKey key, AreaPhase phase) {
-    }
-
     private record StateKey(GraphResourceId resourceId, BlueprintPlan plan, ListenerKey listener) {
     }
 
@@ -427,13 +503,15 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private static final class ListenerGroup {
-        private final ListenerKey key;
-        private final EnumMap<AreaPhase, List<Integer>> nodes = new EnumMap<>(AreaPhase.class);
-
-        private ListenerGroup(ListenerKey key) {
-            this.key = key;
+    private record SourceCacheKey(ResourceKey<Level> dimension, AreaSource source,
+                                  AreaMatch match, String sourceId) {
+        private static SourceCacheKey of(ServerLevel level, ListenerKey listener) {
+            return new SourceCacheKey(level.dimension(), listener.source(),
+                    listener.match(), listener.sourceId());
         }
+    }
+
+    private record ListenerGroup(ListenerKey key, Map<AreaPhase, List<Integer>> nodes) {
     }
 
     private static final class ListenerState {
@@ -453,6 +531,16 @@ public final class AreaTriggerDispatcher {
 
     private static final class ServerState {
         private final Map<GraphResourceScope, Map<StateKey, ListenerState>> statesByScope = new HashMap<>();
+        private final Map<ResourceKey<Level>, PendingEntityBatch> pendingEntities = new HashMap<>();
         private long lastCleanupTick = Long.MIN_VALUE;
+    }
+
+    private static final class PendingEntityBatch {
+        private long gameTime;
+        private final Map<UUID, Entity> entities = new LinkedHashMap<>();
+
+        private PendingEntityBatch(long gameTime) {
+            this.gameTime = gameTime;
+        }
     }
 }

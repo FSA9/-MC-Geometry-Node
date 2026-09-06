@@ -44,21 +44,23 @@ public class EntityGraphAttachment {
 
     // --- 实体独占绑定逻辑 ---
 
-    public void bindGraph(String graphId) {
-        bind(GraphBindingKey.blueprint(graphId));
+    boolean addBinding(GraphBindingKey binding) {
+        return boundGraphs.add(binding);
     }
 
-    public void bind(GraphBindingKey binding) {
-        this.boundGraphs.add(binding);
+    boolean removeBinding(GraphBindingKey binding) {
+        boolean removed = boundGraphs.remove(binding);
+        if (removed && binding.kind() == GraphKind.BEHAVIOR_TREE
+                && Objects.equals(selectedBehaviorTree, binding.graphId())) {
+            selectedBehaviorTree = null;
+        }
+        return removed;
     }
 
-    public void unbindGraph(String graphId) {
-        unbindGraph(graphId, BlueprintCloseMode.IMMEDIATE);
-    }
-
-    public void unbindGraph(String graphId, BlueprintCloseMode closeMode) {
-        this.boundGraphs.remove(GraphBindingKey.blueprint(graphId));
-        this.blueprints.removeProcess(graphId, closeMode);
+    boolean clearBindings(GraphKind kind) {
+        boolean removed = boundGraphs.clear(kind);
+        if (kind == GraphKind.BEHAVIOR_TREE) selectedBehaviorTree = null;
+        return removed;
     }
 
     public Set<String> getBoundGraphs() {
@@ -70,21 +72,6 @@ public class EntityGraphAttachment {
     }
 
     // Behavior-tree-only binding and active-tree selection API.
-    public boolean bindBehaviorTree(String graphId) {
-        return boundGraphs.add(GraphBindingKey.behaviorTree(graphId));
-    }
-
-    public boolean unbindBehaviorTree(String graphId) {
-        boolean removed = boundGraphs.remove(GraphBindingKey.behaviorTree(graphId));
-        if (removed && Objects.equals(selectedBehaviorTree, graphId)) selectedBehaviorTree = null;
-        return removed;
-    }
-
-    public boolean clearBehaviorTrees() {
-        selectedBehaviorTree = null;
-        return boundGraphs.clear(GraphKind.BEHAVIOR_TREE);
-    }
-
     public Set<String> getBoundBehaviorTrees() {
         return boundGraphs.graphIds(GraphKind.BEHAVIOR_TREE);
     }
@@ -105,8 +92,7 @@ public class EntityGraphAttachment {
         selectedBehaviorTree = null;
     }
 
-    public void clearGraphs() {
-        this.boundGraphs.clear(GraphKind.BLUEPRINT);
+    public void clearBlueprintProcesses() {
         this.blueprints.clear();
     }
 
@@ -121,6 +107,10 @@ public class EntityGraphAttachment {
     public long getNextScheduledTick() { return blueprints.nextScheduledTick(); }
     public BlueprintProcess getProcess(String graphId) { return blueprints.getProcess(graphId); }
     public OwnerScopedStateStore ownerScopedState() { return ownerScopedState; }
+
+    public void checkpointBlueprintExternalWaits(String reason) {
+        blueprints.checkpointExternalWaits(reason);
+    }
 
     // --- 序列化层 ---
 

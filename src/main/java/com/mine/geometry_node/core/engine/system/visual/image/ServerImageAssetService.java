@@ -147,6 +147,11 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
     }
 
     @Override
+    public String interruptionOutputPort(BlueprintExternalWaitRequest request) {
+        return request instanceof ImageVisualRequest ? ImageVisualRequest.NEXT_PORT : null;
+    }
+
+    @Override
     public void shutdown(MinecraftServer server) {
         synchronized (stoppedServers) {
             stoppedServers.add(server);

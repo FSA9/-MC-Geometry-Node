@@ -7,10 +7,12 @@ import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -63,24 +65,35 @@ public final class ServerGraphRepository implements ServerEngine {
         }
     }
 
-    /** Schedules an ordered background rebuild after an asset mutation. */
+    /**
+     * Marks repository paths dirty and waits for a snapshot containing this request.
+     * Concurrent requests are coalesced per server; a full refresh supersedes paths.
+     */
     public CompletableFuture<Void> refresh(MinecraftServer server, Set<String> affectedPaths,
                                            boolean directoryScope) {
         if (server == null) return CompletableFuture.completedFuture(null);
         Set<String> paths = affectedPaths == null ? Set.of() : Set.copyOf(affectedPaths);
-        CompletableFuture<Void> next;
+        CompletableFuture<Void> completion = new CompletableFuture<>();
+        boolean startDrain = false;
+        long generation = -1L;
         synchronized (stateLock) {
             ServerState state = states.get(server);
             if (state == null || !state.active) return CompletableFuture.completedFuture(null);
-            long generation = state.generation;
-            CompletableFuture<Void> previous = state.pending;
-            next = previous.handle((ignored, error) -> null)
-                    .thenComposeAsync(ignored -> rebuildAndPublish(
-                            server, paths, directoryScope, generation), buildExecutor);
-            state.pending = next;
+            mergeDirty(state, paths, directoryScope || paths.isEmpty());
+            state.pendingWaiters.add(completion);
+            state.outstandingWaiters.add(completion);
+            if (!state.drainRunning) {
+                state.drainRunning = true;
+                startDrain = true;
+                generation = state.generation;
+            }
         }
-        next.whenComplete((ignored, error) -> clearPending(server, next));
-        return next;
+        completion.whenComplete((ignored, error) -> removeWaiter(server, completion));
+        if (startDrain) {
+            long scheduledGeneration = generation;
+            buildExecutor.execute(() -> drain(server, scheduledGeneration));
+        }
+        return completion;
     }
 
     public CompletableFuture<Void> refreshAll(MinecraftServer server) {
@@ -130,9 +143,65 @@ public final class ServerGraphRepository implements ServerEngine {
             removed.active = false;
             removed.generation++;
         }
-        removed.pending.cancel(false);
+        for (CompletableFuture<Void> waiter : removed.outstandingWaiters) {
+            waiter.cancel(false);
+        }
         for (CompletableFuture<Void> publication : removed.publications) {
             publication.cancel(false);
+        }
+    }
+
+    private void drain(MinecraftServer server, long generation) {
+        RefreshBatch batch;
+        synchronized (stateLock) {
+            ServerState state = states.get(server);
+            if (state == null || !state.active || state.generation != generation) return;
+            if (state.pendingWaiters.isEmpty()) {
+                state.drainRunning = false;
+                return;
+            }
+            batch = new RefreshBatch(Set.copyOf(state.dirtyPaths), state.fullRefreshRequested,
+                    List.copyOf(state.pendingWaiters));
+            state.dirtyPaths.clear();
+            state.fullRefreshRequested = false;
+            state.pendingWaiters.clear();
+        }
+
+        rebuildAndPublish(server, batch.paths(), batch.fullRefresh(), generation)
+                .whenCompleteAsync((ignored, error) ->
+                        finishBatch(server, generation, batch, error), buildExecutor);
+    }
+
+    private void finishBatch(MinecraftServer server, long generation, RefreshBatch batch,
+                             @Nullable Throwable error) {
+        synchronized (stateLock) {
+            ServerState state = states.get(server);
+            if (error != null && state != null && state.active && state.generation == generation) {
+                mergeDirty(state, batch.paths(), batch.fullRefresh());
+            }
+        }
+
+        for (CompletableFuture<Void> waiter : batch.waiters()) {
+            if (error == null) waiter.complete(null);
+            else waiter.completeExceptionally(error);
+        }
+
+        boolean continueDrain;
+        synchronized (stateLock) {
+            ServerState state = states.get(server);
+            if (state == null || !state.active || state.generation != generation) return;
+            continueDrain = !state.pendingWaiters.isEmpty();
+            if (!continueDrain) state.drainRunning = false;
+        }
+        if (continueDrain) drain(server, generation);
+    }
+
+    private static void mergeDirty(ServerState state, Set<String> paths, boolean fullRefresh) {
+        if (fullRefresh) {
+            state.fullRefreshRequested = true;
+            state.dirtyPaths.clear();
+        } else if (!state.fullRefreshRequested) {
+            state.dirtyPaths.addAll(paths);
         }
     }
 
@@ -221,12 +290,10 @@ public final class ServerGraphRepository implements ServerEngine {
         }
     }
 
-    private void clearPending(MinecraftServer server, CompletableFuture<Void> pending) {
+    private void removeWaiter(MinecraftServer server, CompletableFuture<Void> waiter) {
         synchronized (stateLock) {
             ServerState state = states.get(server);
-            if (state != null && state.pending == pending) {
-                state.pending = CompletableFuture.completedFuture(null);
-            }
+            if (state != null) state.outstandingWaiters.remove(waiter);
         }
     }
 
@@ -309,7 +376,15 @@ public final class ServerGraphRepository implements ServerEngine {
         private GraphRepositorySnapshot snapshot = GraphRepositorySnapshot.EMPTY;
         private long generation;
         private boolean active;
-        private CompletableFuture<Void> pending = CompletableFuture.completedFuture(null);
+        private final Set<String> dirtyPaths = new HashSet<>();
+        private final List<CompletableFuture<Void>> pendingWaiters = new ArrayList<>();
+        private final Set<CompletableFuture<Void>> outstandingWaiters = new HashSet<>();
+        private boolean fullRefreshRequested;
+        private boolean drainRunning;
         private final Set<CompletableFuture<Void>> publications = new HashSet<>();
+    }
+
+    private record RefreshBatch(Set<String> paths, boolean fullRefresh,
+                                List<CompletableFuture<Void>> waiters) {
     }
 }

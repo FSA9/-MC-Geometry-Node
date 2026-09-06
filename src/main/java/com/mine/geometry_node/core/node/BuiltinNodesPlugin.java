@@ -465,7 +465,6 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("events/entity", new OnEntityGriefBlock());
         registry.register("events/entity", new OnEntityHeal());
         registry.register("events/entity", new OnEntityHurt());
-        registry.register("events/entity", new OnEntityGainItem());
         registry.register("events/entity", new OnEntityJump());
         registry.register("events/entity", new OnEntityMount());
         registry.register("events/entity", new OnEntityPickupItem());

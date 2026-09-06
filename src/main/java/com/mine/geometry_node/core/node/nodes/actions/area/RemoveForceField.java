@@ -1,7 +1,5 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
-import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
-
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
@@ -30,13 +28,11 @@ public final class RemoveForceField extends BaseNode {
                         .text("summary")
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
-                        .output(StandardPorts.BOOL, "bool")
                         .input(StandardPorts.FORCE_FIELD_ID, "force_field_id")
                         .input(StandardPorts.DIMENSION, "dimension")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.FORCE_FIELD_ID.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.DIMENSION.toInput(RegistryDataManager.DEFAULT_DIMENSION), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, RegistryDataManager.DIMENSION_REGISTRY_ID))
                 .build();
@@ -44,7 +40,6 @@ public final class RemoveForceField extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
-        boolean success = false;
         ServerLevel hostLevel = context.getLevel();
         ServerLevel fieldLevel = hostLevel != null
                 ? RegistryDataManager.resolveDimension(hostLevel.getServer(),
@@ -55,16 +50,8 @@ public final class RemoveForceField extends BaseNode {
             ForceFieldAddress address = ForceFieldAddress.tryCreate(fieldLevel.dimension(), fieldId);
             if (address != null) {
                 ForceFieldResourceStore.INSTANCE.remove(hostLevel.getServer(), address);
-                success = true;
             }
         }
-        context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
-
-    @Override
-    public Object compute(GraphDataContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
-    }
-
 }

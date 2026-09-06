@@ -4,7 +4,8 @@ import java.util.Set;
 
 /** Result of one remote repository mutation and the asset managers and paths it invalidated. */
 public record RemoteAssetOperationResult(int affectedEntries, Set<String> affectedTypeIds,
-                                         Set<String> affectedPaths, boolean directoryScope) {
+                                         Set<String> affectedPaths, boolean directoryScope,
+                                         Throwable refreshFailure) {
     public RemoteAssetOperationResult {
         affectedEntries = Math.max(0, affectedEntries);
         affectedTypeIds = affectedTypeIds == null ? Set.of() : Set.copyOf(affectedTypeIds);
@@ -12,6 +13,16 @@ public record RemoteAssetOperationResult(int affectedEntries, Set<String> affect
     }
 
     public RemoteAssetOperationResult(int affectedEntries, Set<String> affectedTypeIds) {
-        this(affectedEntries, affectedTypeIds, Set.of(), false);
+        this(affectedEntries, affectedTypeIds, Set.of(), false, null);
+    }
+
+    public RemoteAssetOperationResult(int affectedEntries, Set<String> affectedTypeIds,
+                                      Set<String> affectedPaths, boolean directoryScope) {
+        this(affectedEntries, affectedTypeIds, affectedPaths, directoryScope, null);
+    }
+
+    public RemoteAssetOperationResult withRefreshFailure(Throwable failure) {
+        return new RemoteAssetOperationResult(
+                affectedEntries, affectedTypeIds, affectedPaths, directoryScope, failure);
     }
 }

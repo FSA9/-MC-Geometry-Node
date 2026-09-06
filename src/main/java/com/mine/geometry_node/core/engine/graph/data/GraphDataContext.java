@@ -10,7 +10,8 @@ import java.util.UUID;
 
 /** Read-mostly capabilities required by graph data nodes, without control-flow APIs. */
 public interface GraphDataContext {
-    ServerLevel getLevel();
+    /** Returns the current execution level, or {@code null} while its environment is unavailable. */
+    @Nullable ServerLevel getLevel();
 
     @Nullable Entity getEntity();
 

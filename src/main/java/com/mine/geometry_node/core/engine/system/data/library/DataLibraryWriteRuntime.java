@@ -106,6 +106,11 @@ public final class DataLibraryWriteRuntime implements ServerEngine, BlueprintExt
     }
 
     @Override
+    public String interruptionOutputPort(BlueprintExternalWaitRequest request) {
+        return request instanceof DataLibraryWriteRequest ? FAILURE_PORT : null;
+    }
+
+    @Override
     public void shutdown(MinecraftServer server) {
         pendingWrites.forEach((handle, pending) -> {
             if (pending.server() == server && pendingWrites.remove(handle, pending)) {

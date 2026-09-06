@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.behavior;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.attachment.GraphBindingService;
 import com.mine.geometry_node.core.engine.behavior.compile.BehaviorTreeCompiler;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorRuntimeBudget;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
@@ -16,7 +17,6 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
-import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import net.minecraft.server.MinecraftServer;
@@ -72,9 +72,7 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
     public boolean bind(Mob owner, String graphId) {
         ServerLevel level = requireServerOwner(owner);
         String normalized = requireAvailable(level.getServer(), graphId);
-        boolean added = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).bindBehaviorTree(normalized);
-        if (added) GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
-        return added;
+        return GraphBindingService.INSTANCE.bind(owner, GraphBindingKey.behaviorTree(normalized));
     }
 
     public BehaviorTreeProcess startBound(Mob owner) {
@@ -109,9 +107,8 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         if (current != null && current.graphId().equals(normalized)) {
             engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
-        boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).unbindBehaviorTree(normalized);
+        boolean removed = GraphBindingService.INSTANCE.unbind(owner, GraphBindingKey.behaviorTree(normalized));
         if (removed) {
-            GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
             GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(),
                     new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID()),
                     GraphBindingKey.behaviorTree(normalized));
@@ -126,9 +123,8 @@ public final class BehaviorTreeRuntime implements GraphRuntime {
         if (current != null) {
             engine.stop(level.getServer(), current.instanceId(), BehaviorTerminationReason.UNBOUND);
         }
-        boolean removed = owner.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).clearBehaviorTrees();
+        boolean removed = GraphBindingService.INSTANCE.clear(owner, GraphKind.BEHAVIOR_TREE);
         if (removed) {
-            GraphBindingRuntimeIndex.INSTANCE.synchronize(owner);
             GraphResourceScope scope = new GraphResourceScope.EntityScope(level.dimension(), owner.getUUID());
             for (String graphId : bindings) {
                 GraphResourceLifecycleManager.INSTANCE.releaseBinding(level.getServer(), scope,

@@ -2,6 +2,9 @@ package com.mine.geometry_node.core.engine.blueprint.event.subscription;
 
 import com.mine.geometry_node.core.engine.blueprint.event.precheck.EventPrecheckRegistry;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
+import com.mine.geometry_node.core.node.definition.node.NodeDef;
+import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
+import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityTick;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,13 +17,16 @@ final class CompiledGraphSubscriptions {
     private final BlueprintPlan plan;
     private final Map<String, List<EventSubscription>> subscriptionsByEventType;
     private final Set<String> receiveFrequencies;
+    private final int entityTickCapabilities;
 
     private CompiledGraphSubscriptions(BlueprintPlan plan,
                                        Map<String, List<EventSubscription>> subscriptionsByEventType,
-                                       Set<String> receiveFrequencies) {
+                                       Set<String> receiveFrequencies,
+                                       int entityTickCapabilities) {
         this.plan = plan;
         this.subscriptionsByEventType = Map.copyOf(subscriptionsByEventType);
         this.receiveFrequencies = Set.copyOf(receiveFrequencies);
+        this.entityTickCapabilities = entityTickCapabilities;
     }
 
     static CompiledGraphSubscriptions compile(String graphId, BlueprintPlan plan) {
@@ -35,7 +41,15 @@ final class CompiledGraphSubscriptions {
             }
             subscriptions.put(eventType, List.copyOf(compiled));
         }
-        return new CompiledGraphSubscriptions(plan, subscriptions, plan.getReceiveBlueprintFrequencies());
+        int tickCapabilities = EntityTickCapabilities.NONE;
+        if (subscriptions.containsKey(NodeDef.canonicalTypeId(OnAreaEvent.TYPE_ID))) {
+            tickCapabilities |= EntityTickCapabilities.AREA_EVENT;
+        }
+        if (subscriptions.containsKey(NodeDef.canonicalTypeId(OnEntityTick.TYPE_ID))) {
+            tickCapabilities |= EntityTickCapabilities.ENTITY_TICK_EVENT;
+        }
+        return new CompiledGraphSubscriptions(
+                plan, subscriptions, plan.getReceiveBlueprintFrequencies(), tickCapabilities);
     }
 
     BlueprintPlan plan() {
@@ -48,5 +62,9 @@ final class CompiledGraphSubscriptions {
 
     Set<String> receiveFrequencies() {
         return receiveFrequencies;
+    }
+
+    int entityTickCapabilities() {
+        return entityTickCapabilities;
     }
 }

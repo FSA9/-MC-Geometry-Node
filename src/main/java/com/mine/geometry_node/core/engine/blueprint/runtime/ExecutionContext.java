@@ -21,9 +21,10 @@ import java.util.Map;
 public interface ExecutionContext extends GraphDataContext {
 
     /**
-     * 获取当前图所属的世界。
+     * 获取当前执行世界；进程环境暂时失效时返回 {@code null}。
      */
-    ServerLevel getLevel();
+    @Override
+    @Nullable ServerLevel getLevel();
 
     /**
      * Returns the entity in the current execution/event context. This may be

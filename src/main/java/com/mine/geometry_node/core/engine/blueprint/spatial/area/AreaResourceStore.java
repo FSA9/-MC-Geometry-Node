@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
+import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderChannel;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
@@ -36,18 +37,22 @@ public final class AreaResourceStore {
         GraphResourceLifecycleManager.INSTANCE.registerStore("blueprint_area", this::removeOwned);
     }
 
-    public synchronized AreaResource upsert(MinecraftServer server, AreaAddress address,
-                                            GraphResourceId owner, AreaShape shape,
-                                            long creationGameTime,
-                                            LiveValue<Vec3> center, LiveValue<Vec3> size,
-                                            LiveValue<Vec3> rotation, LiveValue<Float> radius,
-                                            LiveValue<Float> height,
-                                            @Nullable UUID anchorEntityId) {
-        ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
-        AreaResource resource = new AreaResource(address, owner, ++state.generation,
-                shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
-        state.entries.put(address, resource);
-        state.snapshotsByDimension.remove(address.dimension());
+    public AreaResource upsert(MinecraftServer server, AreaAddress address,
+                               GraphResourceId owner, AreaShape shape,
+                               long creationGameTime,
+                               LiveValue<Vec3> center, LiveValue<Vec3> size,
+                               LiveValue<Vec3> rotation, LiveValue<Float> radius,
+                               LiveValue<Float> height,
+                               @Nullable UUID anchorEntityId) {
+        AreaResource resource;
+        synchronized (this) {
+            ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
+            resource = new AreaResource(address, owner, ++state.generation,
+                    shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
+            state.entries.put(address, resource);
+            state.snapshotsByDimension.remove(address.dimension());
+        }
+        ForceFieldResourceStore.INSTANCE.updateAreaAnchor(server, address, anchorEntityId);
         return resource;
     }
 
@@ -101,8 +106,7 @@ public final class AreaResourceStore {
                 : Set.of();
         Map<GraphResourceId, List<DebugRenderShape>> shapesByOwner = new LinkedHashMap<>();
         if (state != null && DebugRendererSessionManager.hasAreaSessions(level.getServer())) {
-            for (AreaResource resource : state.entries.values()) {
-                if (!resource.address().dimension().equals(level.dimension())) continue;
+            for (AreaResource resource : snapshot(level)) {
                 AreaResource.Resolved resolved = resource.resolve(level);
                 if (resolved == null) continue;
                 DebugSourceId source = DebugSourceId.graph(DebugRenderChannel.AREA, resource.owner());

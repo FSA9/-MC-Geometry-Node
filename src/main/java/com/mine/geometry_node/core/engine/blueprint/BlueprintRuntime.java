@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint;
 
+import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntime;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
@@ -8,9 +10,10 @@ import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.blueprint.event.BlueprintEventHandler;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputStateManager;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
-import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintProcess;
+import com.mine.geometry_node.core.engine.blueprint.attachment.LevelGraphAttachment;
 import com.mine.geometry_node.core.node.nodes.events.player.OnPlayerKeyEvent;
+import com.mine.geometry_node.core.node.nodes.events.entity.OnEntitySpawn;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileHit;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
@@ -42,14 +45,12 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     private final BlueprintEventHandler eventHandler;
     private final PlayerInputStateManager playerInput;
-    private final EntityInventoryGainTracker inventoryGainTracker;
     private final BlueprintEngine engine;
 
     private BlueprintRuntime() {
         eventHandler = new BlueprintEventHandler();
         playerInput = new PlayerInputStateManager();
-        inventoryGainTracker = new EntityInventoryGainTracker();
-        engine = new BlueprintEngine(eventHandler::markActive, inventoryGainTracker);
+        engine = new BlueprintEngine(eventHandler::markActive);
     }
 
     @Override
@@ -86,19 +87,28 @@ public final class BlueprintRuntime implements GraphRuntime {
 
     @Override
     public void entityJoined(ServerLevel level, Entity entity) {
-        registerEntityListeners(entity);
+        engine.registerEntityListeners(entity);
+        syncPlayerInputInterception(entity);
         eventHandler.markActive(entity);
+        dispatchEvent(level, entity, OnEntitySpawn.TYPE_ID, EventPayload.of(
+                StandardPorts.ENTITY.getId(), entity,
+                StandardPorts.XYZ.getId(), entity.position()
+        ).values());
     }
 
     @Override
     public void entityLeft(ServerLevel level, Entity entity) {
+        EntityGraphAttachment attachment = entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT);
+        if (attachment != null) {
+            attachment.checkpointBlueprintExternalWaits("entity_unloaded");
+        }
         eventHandler.forgetEntity(level, entity);
         engine.unregisterEntityListeners(entity);
-        inventoryGainTracker.clear(level, entity);
     }
 
     @Override
     public void levelUnloaded(ServerLevel level) {
+        LevelGraphAttachment.get(level).checkpointExternalWaits("level_unloaded");
         eventHandler.forgetLevel(level);
     }
 
@@ -106,7 +116,6 @@ public final class BlueprintRuntime implements GraphRuntime {
     public void shutdown(MinecraftServer server) {
         eventHandler.shutdown(server);
         playerInput.shutdown(server);
-        inventoryGainTracker.shutdown(server);
         engine.shutdown(server);
     }
 
@@ -203,6 +212,10 @@ public final class BlueprintRuntime implements GraphRuntime {
         return engine.hasEntityEventSubscription(entity, eventType);
     }
 
+    public int entityTickCapabilities(Entity entity) {
+        return engine.entityTickCapabilities(entity);
+    }
+
     public void dispatchBoundEntityEvent(ServerLevel level, Entity target, String eventNodeId,
                                          @Nullable Map<String, Object> eventData) {
         engine.dispatchBoundEntityEvent(level, target, eventNodeId, eventData);
@@ -217,11 +230,6 @@ public final class BlueprintRuntime implements GraphRuntime {
         engine.dispatchMultiblockBuilt(level, target, structureId, eventData);
     }
 
-    public void registerEntityListeners(Entity entity) {
-        engine.registerEntityListeners(entity);
-        syncPlayerInputInterception(entity);
-    }
-
     public void executeEventNode(ServerLevel level, @Nullable Entity target, String graphId,
                                  BlueprintPlan index, int nodeId,
                                  @Nullable Map<String, Object> eventData,
@@ -234,9 +242,8 @@ public final class BlueprintRuntime implements GraphRuntime {
         eventHandler.markActive(entity);
     }
 
-    public void tickEntityAreas(ServerLevel level, Entity owner, EntityGraphAttachment attachment,
-                                long currentTick) {
-        eventHandler.tickEntityAreas(level, owner, attachment, currentTick);
+    public void queueEntityAreaTick(ServerLevel level, Entity owner) {
+        eventHandler.queueEntityAreaTick(level, owner);
     }
 
     public void handlePlayerInput(ServerPlayer player, String keyId, String action, Vec3 clientVelocity) {
@@ -284,10 +291,6 @@ public final class BlueprintRuntime implements GraphRuntime {
             }
         }
         return mask;
-    }
-
-    public void tickEntityInventory(ServerLevel level, Entity entity, boolean listening) {
-        inventoryGainTracker.tick(level, entity, listening);
     }
 
     public boolean shouldInterceptProjectileHit(ServerLevel level, Entity target,

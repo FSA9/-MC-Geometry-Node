@@ -6,7 +6,7 @@ import net.minecraft.world.level.Level;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Stable host scope of a graph-owned runtime resource. */
+/** Stable graph-host scope used for binding/process ownership, not spatial attachment. */
 public sealed interface GraphResourceScope permits GraphResourceScope.LevelScope, GraphResourceScope.EntityScope {
     ResourceKey<Level> dimension();
 

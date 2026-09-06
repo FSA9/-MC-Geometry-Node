@@ -29,6 +29,7 @@ import com.mine.geometry_node.core.engine.system.chunk_loading.EntityChunkLoadin
 import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.ServerAssetMetadataCache;
+import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -177,6 +178,7 @@ public class GeometryNode {
         ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerGraphRepository.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(RemoteAssetRepositoryService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerAssetMetadataCache.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BlueprintRuntime.INSTANCE);
         GraphRuntimeRegistry.INSTANCE.register(BehaviorTreeRuntime.INSTANCE);
@@ -219,6 +221,7 @@ public class GeometryNode {
     @SubscribeEvent
     public void onServerAboutToStart(ServerAboutToStartEvent event) {
         LOGGER.info("[GeometryNode] Server about to start, loading dynamic graphs...");
+        RemoteAssetRepositoryService.INSTANCE.start(event.getServer());
         ServerGraphRepository.INSTANCE.start(event.getServer());
     }
 

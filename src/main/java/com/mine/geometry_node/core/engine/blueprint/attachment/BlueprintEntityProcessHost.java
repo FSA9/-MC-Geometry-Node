@@ -72,6 +72,10 @@ public final class BlueprintEntityProcessHost {
         container.clear();
     }
 
+    public void checkpointExternalWaits(String reason) {
+        container.checkpointExternalWaits(reason);
+    }
+
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
         return container.save(tag, provider);
     }

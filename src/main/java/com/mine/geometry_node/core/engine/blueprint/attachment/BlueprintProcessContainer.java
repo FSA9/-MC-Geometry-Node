@@ -210,6 +210,16 @@ public class BlueprintProcessContainer {
         pendingLoadProvider = provider;
     }
 
+    public void checkpointExternalWaits(String reason) {
+        boolean changed = false;
+        for (BlueprintProcess process : this.processes.values()) {
+            if (!process.hasExternalWaitingThreadsForSerialization()) continue;
+            process.checkpointExternalWaits(reason);
+            changed = true;
+        }
+        if (changed) this.dirtyMarker.run();
+    }
+
     public void attachServer(MinecraftServer server) {
         if (server == null || pendingLoadTag == null || pendingLoadProvider == null) return;
         CompoundTag saved = pendingLoadTag;

@@ -59,6 +59,7 @@ public class LevelGraphAttachment extends SavedData {
     public BlueprintProcess getProcess(String graphId) {
         return level != null ? container.getProcess(level.getServer(), graphId) : null;
     }
+    public void checkpointExternalWaits(String reason) { container.checkpointExternalWaits(reason); }
     // --- 序列化层 ---
 
     private static Codec<LevelGraphAttachment> codec(ServerLevel level) {

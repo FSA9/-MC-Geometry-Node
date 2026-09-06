@@ -228,6 +228,14 @@ public class BlueprintProcess {
         return !sleepingThreads.isEmpty();
     }
 
+    public Iterable<ExecutionThread> getExternalWaitingThreadsForSerialization() {
+        return externalWaitingThreads;
+    }
+
+    public boolean hasExternalWaitingThreadsForSerialization() {
+        return !externalWaitingThreads.isEmpty();
+    }
+
     public void addSleepingThreadForSerialization(ExecutionThread thread) {
         activateThread(thread);
         sleepingThreads.add(thread);
@@ -279,6 +287,15 @@ public class BlueprintProcess {
 
     public void markNeedsTimeRebaseForSerialization() {
         needsTimeRebase = true;
+        notifyTickScheduleChanged();
+    }
+
+    /** Converts transient external waits into deterministic, serializable continuations. */
+    public void checkpointExternalWaits(String reason) {
+        if (externalWaitingThreads.isEmpty()) return;
+        for (ExecutionThread thread : new ArrayList<>(externalWaitingThreads)) {
+            thread.checkpointExternalWait(reason);
+        }
         notifyTickScheduleChanged();
     }
 
@@ -431,6 +448,8 @@ public class BlueprintProcess {
         private int externalWaitNodeId = -1;
         @Nullable
         private BlueprintExternalWaitHandler externalWaitHandler;
+        @Nullable
+        private BlueprintExternalWaitRequest externalWaitRequest;
         public long wakeUpTick = -1; // 仅在 WAITING 状态有效
         private int runDepth = 0;
         private ServerLevel threadLevel;
@@ -473,6 +492,7 @@ public class BlueprintProcess {
             this.activeNodeId = -1;
             this.externalWaitNodeId = -1;
             this.externalWaitHandler = null;
+            this.externalWaitRequest = null;
             this.wakeUpTick = -1;
             this.runDepth = 0;
             this.parentJoinId = null;
@@ -560,6 +580,52 @@ public class BlueprintProcess {
 
         public void setParentJoinIdForSerialization(@Nullable String parentJoinId) {
             this.parentJoinId = parentJoinId;
+        }
+
+        @Nullable
+        public BlueprintPlan.IntFlowTarget getExternalInterruptionTargetForSerialization() {
+            if (state != State.EXTERNAL_WAITING || externalWaitNodeId < 0
+                    || externalWaitHandler == null) {
+                return null;
+            }
+            String outputPort = externalWaitHandler.interruptionOutputPort(externalWaitRequest);
+            return outputPort != null && !outputPort.isBlank()
+                    ? index.findFlowTarget(externalWaitNodeId, outputPort)
+                    : null;
+        }
+
+        private void checkpointExternalWait(String reason) {
+            if (state != State.EXTERNAL_WAITING) return;
+            BlueprintExternalWaitHandler handler = externalWaitHandler;
+            BlueprintPlan.IntFlowTarget target = getExternalInterruptionTargetForSerialization();
+
+            externalWaitingThreads.remove(this);
+            externalWaitHandler = null;
+            externalWaitRequest = null;
+            externalWaitNodeId = -1;
+            executionStack.clear();
+
+            if (handler != null) {
+                try {
+                    handler.endExternalWait(this, reason);
+                } catch (RuntimeException exception) {
+                    GeometryNode.LOGGER.error("Blueprint external wait cleanup failed: graph={}, handler={}",
+                            graphId, handler.externalWaitId(), exception);
+                }
+            }
+
+            if (target == null && parentJoinId == null) {
+                currentFlowId = -1;
+                state = State.FINISHED;
+                recycleIfNeeded();
+                return;
+            }
+
+            currentFlowId = target != null ? target.targetNodeId() : -1;
+            currentEntryPort = target != null ? target.targetPortName() : "flow_in";
+            wakeUpTick = 0L;
+            state = State.WAITING;
+            sleepingThreads.add(this);
         }
 
         /**
@@ -701,6 +767,7 @@ public class BlueprintProcess {
 
                     this.externalWaitNodeId = this.currentFlowId;
                     this.externalWaitHandler = handler;
+                    this.externalWaitRequest = externalWait.request();
                     this.currentFlowId = -1;
                     this.state = State.EXTERNAL_WAITING;
                     BlueprintProcess.this.externalWaitingThreads.add(this);
@@ -741,6 +808,7 @@ public class BlueprintProcess {
             }
             this.externalWaitNodeId = -1;
             this.externalWaitHandler = null;
+            this.externalWaitRequest = null;
             this.wakeUpTick = -1;
 
             if (target == null) {
@@ -787,6 +855,7 @@ public class BlueprintProcess {
             BlueprintExternalWaitHandler handler = this.state == State.EXTERNAL_WAITING
                     ? this.externalWaitHandler : null;
             this.externalWaitHandler = null;
+            this.externalWaitRequest = null;
             BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.currentFlowId = -1;
@@ -816,6 +885,7 @@ public class BlueprintProcess {
             BlueprintProcess.this.externalWaitingThreads.remove(this);
             this.externalWaitNodeId = -1;
             this.externalWaitHandler = null;
+            this.externalWaitRequest = null;
             this.state = State.ERROR;
             this.executionStack.clear();
         }
@@ -885,6 +955,7 @@ public class BlueprintProcess {
         // ==========================================
 
         @Override
+        @Nullable
         public ServerLevel getLevel() {
             if (this.threadLevel != null) return this.threadLevel;
             if (this.threadDimensionId != null && BlueprintProcess.this.level != null) {
@@ -1186,6 +1257,7 @@ public class BlueprintProcess {
     // 5. 辅助与持久化 (NBT)
     // ================================
 
+    @Nullable
     public ServerLevel getLevel() { return this.level; }
 
     private String diagnosticKey(String kind, int nodeId, @Nullable String detail) {

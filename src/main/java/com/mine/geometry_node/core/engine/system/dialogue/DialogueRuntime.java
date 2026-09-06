@@ -144,6 +144,11 @@ public class DialogueRuntime implements ServerEngine, BlueprintExternalWaitHandl
         }
     }
 
+    @Override
+    public String interruptionOutputPort(BlueprintExternalWaitRequest request) {
+        return request instanceof DialogueWaitRequest ? "closed" : null;
+    }
+
     @Nullable
     public DialogueSession choose(ServerPlayer player, UUID sessionId, String choiceId) {
         DialogueSession session = sessionStore.find(sessionId);

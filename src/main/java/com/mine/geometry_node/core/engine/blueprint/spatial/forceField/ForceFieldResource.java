@@ -4,8 +4,10 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
+import java.util.UUID;
 
 /** A live force field whose center and finite support are supplied by an Area. */
 public final class ForceFieldResource {
@@ -15,16 +17,20 @@ public final class ForceFieldResource {
     private final AreaAddress area;
     private final long creationGameTime;
     private final LiveValue.State<Float> strength;
+    /** Mirrors the referenced Area's spatial anchor for entity-unload cleanup. */
+    @Nullable
+    private UUID anchorEntityId;
 
     public ForceFieldResource(ForceFieldAddress address, GraphResourceId owner, long generation,
                               AreaAddress area, long creationGameTime,
-                              LiveValue<Float> strength) {
+                              LiveValue<Float> strength, @Nullable UUID anchorEntityId) {
         this.address = Objects.requireNonNull(address, "address");
         this.owner = Objects.requireNonNull(owner, "owner");
         this.generation = generation;
         this.area = Objects.requireNonNull(area, "area");
         this.creationGameTime = creationGameTime;
         this.strength = Objects.requireNonNull(strength, "strength").newState();
+        this.anchorEntityId = anchorEntityId;
     }
 
     public ForceFieldAddress address() { return address; }
@@ -32,6 +38,11 @@ public final class ForceFieldResource {
     public long generation() { return generation; }
     public AreaAddress area() { return area; }
     public long creationGameTime() { return creationGameTime; }
+    @Nullable public UUID anchorEntityId() { return anchorEntityId; }
+
+    void setAnchorEntityId(@Nullable UUID anchorEntityId) {
+        this.anchorEntityId = anchorEntityId;
+    }
 
     public double evaluateStrength(ExpressionEvaluationContext context) {
         return strength.evaluate(context);

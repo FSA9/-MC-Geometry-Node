@@ -25,6 +25,7 @@ public final class GraphSubscriptionIndex {
     private final Map<String, CompiledGraphSubscriptions> templatesByGraphId = new HashMap<>();
     private final Map<String, CompiledGraphSubscriptions> registeredGlobalGraphs = new HashMap<>();
     private final Map<Entity, Map<String, CompiledGraphSubscriptions>> registeredEntityGraphs = new WeakHashMap<>();
+    private final Map<Entity, Integer> entityTickCapabilities = new WeakHashMap<>();
     private final Map<String, Set<Entity>> registeredEntitiesByGraph = new HashMap<>();
     private final Map<String, Map<Entity, Set<String>>> receiveSubscribers = new HashMap<>();
 
@@ -82,6 +83,7 @@ public final class GraphSubscriptionIndex {
         registeredEntitiesByGraph.computeIfAbsent(
                 graphId, ignored -> Collections.newSetFromMap(new WeakHashMap<>())).add(entity);
         addEntitySubscriptions(entity, graphId, template);
+        refreshEntityTickCapabilities(entity);
     }
 
     public void unregisterEntityGraph(Entity entity, String graphId, @Nullable BlueprintPlan plan) {
@@ -108,10 +110,12 @@ public final class GraphSubscriptionIndex {
                 return entities.isEmpty();
             });
         }
+        refreshEntityTickCapabilities(entity);
     }
 
     public void unregisterEntity(Entity entity) {
         Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.remove(entity);
+        entityTickCapabilities.remove(entity);
         if (graphs == null) return;
         graphs.forEach((graphId, template) -> {
             removeRegisteredEntity(graphId, entity);
@@ -153,6 +157,10 @@ public final class GraphSubscriptionIndex {
                 entitySubscriptions.get(canonicalEventType(eventType));
         Map<String, List<EventSubscription>> graphs = entities != null ? entities.get(entity) : null;
         return graphs != null && !graphs.isEmpty();
+    }
+
+    public int entityTickCapabilities(Entity entity) {
+        return entityTickCapabilities.getOrDefault(entity, EntityTickCapabilities.NONE);
     }
 
     public List<EventSubscription> globalSubscriptionsFor(String eventType) {
@@ -224,6 +232,23 @@ public final class GraphSubscriptionIndex {
         if (entities == null) return;
         entities.remove(entity);
         if (entities.isEmpty()) registeredEntitiesByGraph.remove(graphId);
+    }
+
+    private void refreshEntityTickCapabilities(Entity entity) {
+        Map<String, CompiledGraphSubscriptions> graphs = registeredEntityGraphs.get(entity);
+        if (graphs == null || graphs.isEmpty()) {
+            entityTickCapabilities.remove(entity);
+            return;
+        }
+        int capabilities = EntityTickCapabilities.NONE;
+        for (CompiledGraphSubscriptions template : graphs.values()) {
+            capabilities |= template.entityTickCapabilities();
+        }
+        if (capabilities == EntityTickCapabilities.NONE) {
+            entityTickCapabilities.remove(entity);
+        } else {
+            entityTickCapabilities.put(entity, capabilities);
+        }
     }
 
     private CompiledGraphSubscriptions template(String graphId, BlueprintPlan plan) {

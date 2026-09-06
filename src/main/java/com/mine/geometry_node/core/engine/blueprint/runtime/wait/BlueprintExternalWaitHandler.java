@@ -13,6 +13,15 @@ public interface BlueprintExternalWaitHandler {
 
     void endExternalWait(BlueprintExecutionHandle handle, @Nullable String reason);
 
+    /**
+     * Output used when a transient external operation cannot survive an entity,
+     * level, or server reload. Returning {@code null} terminates the waiting branch.
+     */
+    @Nullable
+    default String interruptionOutputPort(BlueprintExternalWaitRequest request) {
+        return null;
+    }
+
     enum Completion {
         RESUMED,
         NO_TARGET

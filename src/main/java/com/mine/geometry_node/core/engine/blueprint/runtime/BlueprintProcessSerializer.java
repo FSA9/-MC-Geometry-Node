@@ -40,65 +40,26 @@ public class BlueprintProcessSerializer {
             tag.putBoolean("Draining", true);
         }
 
-        // 保存休眠线程
-        if (process.hasSleepingThreadsForSerialization()) {
+        if (process.hasSleepingThreadsForSerialization()
+                || process.hasExternalWaitingThreadsForSerialization()) {
             ListTag threadsTag = new ListTag();
             for (BlueprintProcess.ExecutionThread thread : process.getSleepingThreadsForSerialization()) {
-                CompoundTag tTag = new CompoundTag();
-                // 注意这里需要 process.getLevel()，我们需要在 BlueprintProcess 中暴露一下，或者直接判断
                 long currentTime = (process.getLevel() != null) ? process.getLevel().getGameTime() : 0;
                 long remaining = (process.getLevel() != null) ? Math.max(0, thread.wakeUpTick - currentTime) : thread.wakeUpTick;
-                tTag.putLong("WaitRemaining", remaining);
-
-                String currentFlowNodeId = index.getNodeId(thread.getCurrentFlowIdForSerialization());
-                if (currentFlowNodeId != null) {
-                    tTag.putString("CurrentFlowId", currentFlowNodeId);
-                }
-                if (thread.getCurrentEntryPortForSerialization() != null) {
-                    tTag.putString("CurrentEntryPort", thread.getCurrentEntryPortForSerialization());
-                }
-                if (thread.getParentJoinIdForSerialization() != null) {
-                    tTag.putString("ParentJoinId", thread.getParentJoinIdForSerialization());
-                }
-                String eventSourceNodeId = index.getNodeId(thread.getEventSourceNodeIdForSerialization());
-                if (eventSourceNodeId != null) {
-                    tTag.putString("EventSourceNodeId", eventSourceNodeId);
-                }
-                String contextDimension = thread.getThreadDimensionId();
-                if (contextDimension != null) {
-                    tTag.putString("ContextDimension", contextDimension);
-                }
-                UUID contextEntity = thread.getThreadEntityUuid();
-                if (contextEntity != null) {
-                    tTag.putString("ContextEntity", contextEntity.toString());
-                }
-
-                ListTag execStackTag = new ListTag();
-                for (BlueprintPlan.IntFlowTarget frame : thread.getExecutionStackForSerialization()) {
-                    CompoundTag frameTag = new CompoundTag();
-                    frameTag.putString("TargetNodeId", index.getNodeId(frame.targetNodeId()));
-                    frameTag.putString("TargetPortName", frame.targetPortName());
-                    execStackTag.add(frameTag);
-                }
-                tTag.put("ExecutionStack", execStackTag);
-
-                // 存线程事件寄存器（索引化 + 动态键）
-                CompoundTag regTag = new CompoundTag();
-                saveRegistersToTag(regTag, thread.getEventRegistersForSerialization(), thread.getDynamicEventDataForSerialization(), index, provider);
-                tTag.put("Registers", regTag);
-
-                // 存临时黑板
-                CompoundTag tempTag = new CompoundTag();
-                for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
-                    if (entry.getValue() != null) {
-                        tempTag.put(entry.getKey(), GraphValueCodecRegistry.toTagStrict(entry.getValue(), provider));
-                    }
-                }
-                if (!tempTag.isEmpty()) tTag.put("TempData", tempTag);
-
-                threadsTag.add(tTag);
+                threadsTag.add(saveThread(thread, index, provider,
+                        thread.getCurrentFlowIdForSerialization(),
+                        thread.getCurrentEntryPortForSerialization(),
+                        thread.getExecutionStackForSerialization(), remaining));
             }
-            tag.put("SleepingThreads", threadsTag);
+            for (BlueprintProcess.ExecutionThread thread : process.getExternalWaitingThreadsForSerialization()) {
+                BlueprintPlan.IntFlowTarget target = thread.getExternalInterruptionTargetForSerialization();
+                if (target == null && thread.getParentJoinIdForSerialization() == null) continue;
+                threadsTag.add(saveThread(thread, index, provider,
+                        target != null ? target.targetNodeId() : -1,
+                        target != null ? target.targetPortName() : "flow_in",
+                        java.util.List.of(), 0L));
+            }
+            if (!threadsTag.isEmpty()) tag.put("SleepingThreads", threadsTag);
         }
         if (process.hasBranchJoinsForSerialization()) {
             ListTag joinsTag = new ListTag();
@@ -139,6 +100,54 @@ public class BlueprintProcessSerializer {
             }
             tag.put("BranchJoins", joinsTag);
         }
+        return tag;
+    }
+
+    private static CompoundTag saveThread(BlueprintProcess.ExecutionThread thread,
+                                          BlueprintPlan index,
+                                          HolderLookup.Provider provider,
+                                          int currentFlowId,
+                                          String currentEntryPort,
+                                          Iterable<BlueprintPlan.IntFlowTarget> executionStack,
+                                          long waitRemaining) {
+        CompoundTag tag = new CompoundTag();
+        tag.putLong("WaitRemaining", Math.max(0L, waitRemaining));
+        String currentFlowNodeId = index.getNodeId(currentFlowId);
+        if (currentFlowNodeId != null) tag.putString("CurrentFlowId", currentFlowNodeId);
+        if (currentEntryPort != null) tag.putString("CurrentEntryPort", currentEntryPort);
+        if (thread.getParentJoinIdForSerialization() != null) {
+            tag.putString("ParentJoinId", thread.getParentJoinIdForSerialization());
+        }
+        String eventSourceNodeId = index.getNodeId(thread.getEventSourceNodeIdForSerialization());
+        if (eventSourceNodeId != null) tag.putString("EventSourceNodeId", eventSourceNodeId);
+        String contextDimension = thread.getThreadDimensionId();
+        if (contextDimension != null) tag.putString("ContextDimension", contextDimension);
+        UUID contextEntity = thread.getThreadEntityUuid();
+        if (contextEntity != null) tag.putString("ContextEntity", contextEntity.toString());
+
+        ListTag stackTag = new ListTag();
+        for (BlueprintPlan.IntFlowTarget frame : executionStack) {
+            String targetNodeId = index.getNodeId(frame.targetNodeId());
+            if (targetNodeId == null) continue;
+            CompoundTag frameTag = new CompoundTag();
+            frameTag.putString("TargetNodeId", targetNodeId);
+            frameTag.putString("TargetPortName", frame.targetPortName());
+            stackTag.add(frameTag);
+        }
+        tag.put("ExecutionStack", stackTag);
+
+        CompoundTag registersTag = new CompoundTag();
+        saveRegistersToTag(registersTag, thread.getEventRegistersForSerialization(),
+                thread.getDynamicEventDataForSerialization(), index, provider);
+        tag.put("Registers", registersTag);
+
+        CompoundTag tempTag = new CompoundTag();
+        for (Map.Entry<String, Object> entry : thread.tempData.entrySet()) {
+            if (entry.getValue() != null) {
+                tempTag.put(entry.getKey(), GraphValueCodecRegistry.toTagStrict(entry.getValue(), provider));
+            }
+        }
+        if (!tempTag.isEmpty()) tag.put("TempData", tempTag);
         return tag;
     }
 
@@ -195,7 +204,8 @@ public class BlueprintProcessSerializer {
                     }
                 }
 
-                if (currentFlowId != -1 || !thread.getExecutionStackForSerialization().isEmpty()) {
+                if (currentFlowId != -1 || !thread.getExecutionStackForSerialization().isEmpty()
+                        || thread.getParentJoinIdForSerialization() != null) {
                     thread.wakeUpTick = tTag.getLongOr("WaitRemaining", 0L);
                     thread.state = BlueprintProcess.ExecutionThread.State.WAITING;
 

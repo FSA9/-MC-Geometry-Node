@@ -22,10 +22,15 @@ public final class GraphResourceIds {
 
     public static GraphResourceId forKey(GraphDataContext context, String stableNodeId,
                                          GraphResourceType type, String key) {
+        return forKey(context, stableNodeId, type, key, null);
+    }
+
+    public static GraphResourceId forKey(GraphDataContext context, String stableNodeId,
+                                         GraphResourceType type, String key, UUID targetEntityId) {
         GraphResourceSelector selector = key == null || key.isBlank()
                 ? new GraphResourceSelector.Node(stableNodeId)
                 : new GraphResourceSelector.Named(key);
-        return create(context, type, selector, null);
+        return create(context, type, selector, targetEntityId);
     }
 
     public static GraphResourceId create(GraphDataContext context, GraphResourceType type,

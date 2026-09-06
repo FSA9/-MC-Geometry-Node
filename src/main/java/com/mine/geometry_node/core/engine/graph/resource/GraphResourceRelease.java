@@ -55,10 +55,9 @@ public sealed interface GraphResourceRelease {
 
         @Override
         public boolean matches(GraphResourceId resourceId) {
+            // EntityScope identifies the graph host. Only an explicit target binds a world resource to this entity.
             return resourceId.scope().dimension().equals(dimension)
-                    && (resourceId.scope() instanceof GraphResourceScope.EntityScope entityScope
-                    && entityId.equals(entityScope.ownerId())
-                    || entityId.equals(resourceId.targetEntityId()));
+                    && entityId.equals(resourceId.targetEntityId());
         }
     }
 

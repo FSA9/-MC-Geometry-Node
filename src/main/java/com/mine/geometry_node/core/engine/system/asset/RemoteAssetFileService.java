@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 public final class RemoteAssetFileService {
     private RemoteAssetFileService() {
@@ -77,7 +76,7 @@ public final class RemoteAssetFileService {
         return root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
     }
 
-    public static CompletableFuture<UploadCommitResult> commitUpload(
+    static UploadCommitResult commitUpload(
             MinecraftServer server,
             String targetPath,
             Path stagingFile,
@@ -95,7 +94,7 @@ public final class RemoteAssetFileService {
         AtomicAssetCommitter.CommitResult commit =
                 AtomicAssetCommitter.commit(stagingFile, target, conflictPolicy);
         if (commit != AtomicAssetCommitter.CommitResult.COMMITTED) {
-            return CompletableFuture.completedFuture(new UploadCommitResult(commit, null, 0L, 0L));
+            return new UploadCommitResult(commit, null, 0L, 0L, Set.of(), Set.of(), false);
         }
         ServerAssetMetadataCache.INSTANCE.invalidate(server, target);
 
@@ -103,15 +102,13 @@ public final class RemoteAssetFileService {
         if (oldMetadata.isKnown()) affectedTypeIds.add(oldMetadata.typeId());
         if (newMetadata.isKnown()) affectedTypeIds.add(newMetadata.typeId());
         if (affectedTypeIds.isEmpty()) {
-            return CompletableFuture.completedFuture(new UploadCommitResult(
-                    commit, null, sourceSize, sourceLastModified));
+            return new UploadCommitResult(
+                    commit, null, sourceSize, sourceLastModified, Set.of(), Set.of(), false);
         }
 
         String committedPath = ServerAssetPaths.pathToId(root(server), target);
-        return AssetLifecycleDispatcher.INSTANCE.refresh(
-                        server, affectedTypeIds, Set.of(committedPath), false)
-                .handle((ignored, refreshFailure) -> new UploadCommitResult(
-                        commit, refreshFailure, sourceSize, sourceLastModified));
+        return new UploadCommitResult(commit, null, sourceSize, sourceLastModified,
+                affectedTypeIds, Set.of(committedPath), false);
     }
 
     public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
@@ -143,7 +140,7 @@ public final class RemoteAssetFileService {
         return files;
     }
 
-    public static RemoteAssetOperationResult deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
+    static RemoteAssetOperationResult deleteSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
         Set<String> affectedTypes = new HashSet<>();
         Set<String> affectedPaths = new HashSet<>();
         boolean directoryScope = false;
@@ -186,8 +183,8 @@ public final class RemoteAssetFileService {
         return new RemoteAssetOperationResult(deleted, affectedTypes, affectedPaths, directoryScope);
     }
 
-    public static RemoteAssetOperationResult copySelection(MinecraftServer server, List<String> sourcePaths,
-                                                           String targetDirectoryPath) throws IOException {
+    static RemoteAssetOperationResult copySelection(MinecraftServer server, List<String> sourcePaths,
+                                                    String targetDirectoryPath) throws IOException {
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -230,8 +227,8 @@ public final class RemoteAssetFileService {
         return new RemoteAssetOperationResult(copied, affectedTypes, affectedPaths, directoryScope);
     }
 
-    public static RemoteAssetOperationResult moveSelection(MinecraftServer server, List<String> sourcePaths,
-                                                           String targetDirectoryPath) throws IOException {
+    static RemoteAssetOperationResult moveSelection(MinecraftServer server, List<String> sourcePaths,
+                                                    String targetDirectoryPath) throws IOException {
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -283,7 +280,7 @@ public final class RemoteAssetFileService {
         return new RemoteAssetOperationResult(moved, affectedTypes, affectedPaths, directoryScope);
     }
 
-    public static RemoteAssetOperationResult createDirectory(MinecraftServer server, String directoryPath)
+    static RemoteAssetOperationResult createDirectory(MinecraftServer server, String directoryPath)
             throws IOException {
         String normalized = ServerAssetPaths.normalizeRelativePath(directoryPath, false);
         Path directory = ServerAssetPaths.resolveUnderRoot(root(server), normalized, false);
@@ -295,7 +292,7 @@ public final class RemoteAssetFileService {
         return new RemoteAssetOperationResult(1, Set.of(), Set.of(), true);
     }
 
-    public static RemoteAssetOperationResult rename(
+    static RemoteAssetOperationResult rename(
             MinecraftServer server,
             String sourcePath,
             String destinationPath
@@ -714,7 +711,19 @@ public final class RemoteAssetFileService {
     public record UploadCommitResult(AtomicAssetCommitter.CommitResult commit,
                                      Throwable refreshFailure,
                                      long sourceSize,
-                                     long sourceLastModified) {
+                                     long sourceLastModified,
+                                     Set<String> affectedTypeIds,
+                                     Set<String> affectedPaths,
+                                     boolean directoryScope) {
+        public UploadCommitResult {
+            affectedTypeIds = affectedTypeIds == null ? Set.of() : Set.copyOf(affectedTypeIds);
+            affectedPaths = affectedPaths == null ? Set.of() : Set.copyOf(affectedPaths);
+        }
+
+        UploadCommitResult withRefreshFailure(Throwable failure) {
+            return new UploadCommitResult(commit, failure, sourceSize, sourceLastModified,
+                    affectedTypeIds, affectedPaths, directoryScope);
+        }
     }
 
 }

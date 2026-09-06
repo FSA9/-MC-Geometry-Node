@@ -3,12 +3,12 @@ package com.mine.geometry_node.core.engine.blueprint.runtime;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.attachment.*;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
-import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.EntityInventoryGainTracker;
 import com.mine.geometry_node.core.engine.blueprint.attachment.GlobalGraphStorage;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.EventSubscription;
 import com.mine.geometry_node.core.engine.blueprint.event.subscription.GraphSubscriptionIndex;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
+import com.mine.geometry_node.core.engine.attachment.GraphBindingService;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
@@ -17,7 +17,6 @@ import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
-import com.mine.geometry_node.core.node.nodes.events.entity.OnEntityGainItem;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -43,11 +42,9 @@ public final class BlueprintEngine {
     private static final String MULTIBLOCK_BUILT_EVENT_TYPE = "on_multiblock_built";
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
     private final Consumer<Entity> activityMarker;
-    private final EntityInventoryGainTracker inventoryGainTracker;
 
-    public BlueprintEngine(Consumer<Entity> activityMarker, EntityInventoryGainTracker inventoryGainTracker) {
+    public BlueprintEngine(Consumer<Entity> activityMarker) {
         this.activityMarker = Objects.requireNonNull(activityMarker, "activityMarker");
-        this.inventoryGainTracker = Objects.requireNonNull(inventoryGainTracker, "inventoryGainTracker");
     }
 
     private ServerState state(MinecraftServer server) {
@@ -314,6 +311,10 @@ public final class BlueprintEngine {
         return state(entity).graphSubscriptions.hasEntitySubscriptions(entity, eventType);
     }
 
+    public int entityTickCapabilities(@NotNull Entity entity) {
+        return state(entity).graphSubscriptions.entityTickCapabilities(entity);
+    }
+
     public void dispatchBoundEntityEvent(@NotNull ServerLevel level,
                                                 @NotNull Entity target,
                                                 String eventNodeId,
@@ -387,8 +388,7 @@ public final class BlueprintEngine {
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
             attachment.attachOwner(entity);
-            attachment.bindGraph(graphId);
-            GraphBindingRuntimeIndex.INSTANCE.synchronize(entity);
+            GraphBindingService.INSTANCE.bind(entity, GraphBindingKey.blueprint(graphId));
 
             BlueprintProcess process = attachment.getProcess(graphId);
             if (process == null || process.isDraining()) {
@@ -396,9 +396,6 @@ public final class BlueprintEngine {
             }
 
             registerEntityForGraph(entity, graphId);
-            if (!index.findNodesByType(OnEntityGainItem.TYPE_ID).isEmpty()) {
-                inventoryGainTracker.beginTracking(entity);
-            }
             activityMarker.accept(entity);
             DebugRendererSessionManager.markDirty(entity.level().getServer());
         }
@@ -429,12 +426,9 @@ public final class BlueprintEngine {
         graphId = GraphAssetId.require(graphId);
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment != null) {
-            attachment.unbindGraph(graphId, closeMode);
-            GraphBindingRuntimeIndex.INSTANCE.synchronize(entity);
+            GraphBindingService.INSTANCE.unbind(entity, GraphBindingKey.blueprint(graphId));
+            attachment.removeProcess(graphId, closeMode);
             unregisterEntityForGraph(entity, graphId);
-            if (getEntityGraphsForEvent(entity, OnEntityGainItem.TYPE_ID).isEmpty()) {
-                inventoryGainTracker.clear(entity);
-            }
             DebugRendererSessionManager.markDirty(entity.level().getServer());
         }
     }
@@ -461,9 +455,8 @@ public final class BlueprintEngine {
             for (String graphId : attachment.getBoundGraphs()) {
                 unregisterEntityForGraph(entity, graphId);
             }
-            attachment.clearGraphs();
-            GraphBindingRuntimeIndex.INSTANCE.synchronize(entity);
-            inventoryGainTracker.clear(entity);
+            GraphBindingService.INSTANCE.clear(entity, GraphKind.BLUEPRINT);
+            attachment.clearBlueprintProcesses();
             DebugRendererSessionManager.markDirty(entity.level().getServer());
         }
     }
@@ -506,16 +499,12 @@ public final class BlueprintEngine {
     // ==========================================
 
     public void registerEntityListeners(Entity entity) {
-        GraphBindingRuntimeIndex.INSTANCE.synchronize(entity);
         EntityGraphAttachment attachment = getAttachment(entity);
         if (attachment == null || attachment.getBoundGraphs().isEmpty()) return;
         attachment.attachOwner(entity);
 
         for (String graphId : attachment.getBoundGraphs()) {
             registerEntityForGraph(entity, graphId);
-        }
-        if (state(entity).graphSubscriptions.hasEntitySubscriptions(entity, OnEntityGainItem.TYPE_ID)) {
-            inventoryGainTracker.beginTracking(entity);
         }
     }
 
@@ -595,7 +584,6 @@ public final class BlueprintEngine {
         GraphSubscriptionIndex graphSubscriptions = state.graphSubscriptions;
         Set<String> registeredGlobals = new HashSet<>();
         Map<String, Set<Entity>> registeredEntitiesByGraph = new LinkedHashMap<>(newIndexes.size());
-        Set<Entity> affectedEntities = new HashSet<>();
         Map<String, Set<Entity>> indexedEntitiesByGraph =
                 graphSubscriptions.registeredEntitiesForGraphs(newIndexes.keySet());
 
@@ -606,7 +594,6 @@ public final class BlueprintEngine {
             Set<Entity> registeredEntities = new HashSet<>(
                     indexedEntitiesByGraph.getOrDefault(graphId, Collections.emptySet()));
             registeredEntitiesByGraph.put(graphId, registeredEntities);
-            affectedEntities.addAll(registeredEntities);
 
             graphSubscriptions.unregisterGlobalGraph(graphId, null);
             for (Entity entity : registeredEntities) {
@@ -640,7 +627,6 @@ public final class BlueprintEngine {
                         .filter(Objects::nonNull)
                         .collect(Collectors.toUnmodifiableSet());
                 registeredEntities.addAll(boundEntities);
-                affectedEntities.addAll(boundEntities);
                 for (Entity entity : boundEntities) {
                     EntityGraphAttachment attachment = getAttachment(entity);
                     if (attachment != null) attachment.removeProcess(graphId);
@@ -660,13 +646,6 @@ public final class BlueprintEngine {
                 EntityGraphAttachment attachment = getAttachment(entity);
                 if (attachment == null || !attachment.getBoundGraphs().contains(graphId)) continue;
                 graphSubscriptions.registerEntityGraph(entity, graphId, newIndex);
-            }
-        }
-        for (Entity entity : affectedEntities) {
-            if (graphSubscriptions.hasEntitySubscriptions(entity, OnEntityGainItem.TYPE_ID)) {
-                inventoryGainTracker.beginTracking(entity);
-            } else {
-                inventoryGainTracker.clear(entity);
             }
         }
         DebugRendererSessionManager.markDirty(server);

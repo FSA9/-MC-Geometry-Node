@@ -5,12 +5,13 @@ import net.minecraft.resources.Identifier;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /** Registry of resource identity contracts. It never stores live business resources. */
 public final class GraphResourceTypeRegistry {
     public static final GraphResourceType AREA = type("area",
-            Set.of(GraphResourceSelector.Kind.NAMED), GraphResourceType.TargetEntityPolicy.NONE);
+            Set.of(GraphResourceSelector.Kind.NAMED), GraphResourceType.TargetEntityPolicy.OPTIONAL);
     public static final GraphResourceType AREA_STATE = type("area_state",
             Set.of(GraphResourceSelector.Kind.GRAPH), GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType AREA_QUERY = type("area_query",
@@ -26,7 +27,8 @@ public final class GraphResourceTypeRegistry {
 
     public static final GraphResourceTypeRegistry INSTANCE = new GraphResourceTypeRegistry();
 
-    private final Map<Identifier, GraphResourceType> types = new LinkedHashMap<>();
+    private final Map<Identifier, GraphResourceType> registrations = new LinkedHashMap<>();
+    private volatile Map<Identifier, GraphResourceType> snapshot = Map.of();
 
     private GraphResourceTypeRegistry() {
         registerBuiltin(AREA);
@@ -35,26 +37,39 @@ public final class GraphResourceTypeRegistry {
         registerBuiltin(FORCE_FIELD);
         registerBuiltin(GEOMETRY_DEBUG);
         registerBuiltin(SCHEMATIC_PROJECTION);
+        publishSnapshot();
     }
 
+    /** Registers one contract and atomically publishes a new immutable read snapshot. */
     public synchronized GraphResourceType register(GraphResourceType type) {
-        GraphResourceType previous = types.putIfAbsent(type.id(), type);
-        if (previous != null) throw new IllegalArgumentException("Duplicate graph resource type: " + type.id());
+        Objects.requireNonNull(type, "type");
+        GraphResourceType previous = registrations.putIfAbsent(type.id(), type);
+        if (previous != null) {
+            throw new IllegalArgumentException("Duplicate graph resource type: " + type.id());
+        }
+        publishSnapshot();
         return type;
     }
 
-    public synchronized GraphResourceType require(Identifier id) {
-        GraphResourceType type = types.get(id);
+    public GraphResourceType require(Identifier id) {
+        GraphResourceType type = snapshot.get(Objects.requireNonNull(id, "id"));
         if (type == null) throw new IllegalArgumentException("Unknown graph resource type: " + id);
         return type;
     }
 
-    public synchronized Map<Identifier, GraphResourceType> all() {
-        return Map.copyOf(types);
+    public Map<Identifier, GraphResourceType> all() {
+        return snapshot;
     }
 
     private void registerBuiltin(GraphResourceType type) {
-        types.put(type.id(), type);
+        GraphResourceType previous = registrations.putIfAbsent(type.id(), type);
+        if (previous != null) {
+            throw new IllegalStateException("Duplicate built-in graph resource type: " + type.id());
+        }
+    }
+
+    private void publishSnapshot() {
+        snapshot = Map.copyOf(registrations);
     }
 
     private static GraphResourceType type(String path, Set<GraphResourceSelector.Kind> selectors,
