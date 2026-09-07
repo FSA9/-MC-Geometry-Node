@@ -79,6 +79,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.14.2"
 
     jarJar(implementation("org.jetbrains.pty4j:pty4j:${pty4j_version}") {
         exclude group: "net.java.dev.jna"

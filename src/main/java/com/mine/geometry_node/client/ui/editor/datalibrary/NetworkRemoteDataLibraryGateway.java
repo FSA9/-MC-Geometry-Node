@@ -17,6 +17,7 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryRequest;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import com.mine.geometry_node.core.network.packet.data.library.RemoteDataLibraryOperation;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.HolderLookup;
 
 import java.nio.charset.StandardCharsets;

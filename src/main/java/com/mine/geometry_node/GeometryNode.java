@@ -34,6 +34,7 @@ import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttach
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicExecutionService;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
@@ -185,10 +186,12 @@ public class GeometryNode {
         ServerEngineRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerImageAssetService.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(SchematicExecutionService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphDebugEngine.INSTANCE);
         BlueprintExternalWaitRegistry.INSTANCE.register(DialogueRuntime.INSTANCE);
         BlueprintExternalWaitRegistry.INSTANCE.register(DataLibraryWriteRuntime.INSTANCE);
         BlueprintExternalWaitRegistry.INSTANCE.register(ServerImageAssetService.INSTANCE);
+        BlueprintExternalWaitRegistry.INSTANCE.register(SchematicExecutionService.INSTANCE);
 
         QuestService.INSTANCE.init();
         QuestScreenService.INSTANCE.init();

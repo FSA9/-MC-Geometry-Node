@@ -16,18 +16,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class SchematicReader {
-    private static final long MAX_NBT_BYTES = 256L * 1024L * 1024L;
-    private static final long MAX_SOURCE_BYTES = MAX_NBT_BYTES;
+    private static final long MAX_DECODED_NBT_BYTES = 256L * 1024L * 1024L;
 
     private SchematicReader() {
     }
 
-    public static SchematicData read(Path path) throws IOException {
-        return read(path, false);
-    }
-
-    public static SchematicData read(Path path, boolean includeAir) throws IOException {
-        CompoundTag root = readRoot(path);
+    public static SchematicData read(Path path, boolean includeAir, long maxFileBytes) throws IOException {
+        if (maxFileBytes <= 0L) {
+            throw new IllegalArgumentException("maxFileBytes must be positive");
+        }
+        CompoundTag root = readRoot(path, maxFileBytes);
         if (looksLikeSponge(root)) {
             return readSponge(root, includeAir);
         }
@@ -37,21 +35,21 @@ public final class SchematicReader {
         throw new IOException("Unsupported schematic format: " + path.getFileName());
     }
 
-    private static CompoundTag readRoot(Path path) throws IOException {
+    private static CompoundTag readRoot(Path path, long maxFileBytes) throws IOException {
         long sourceBytes = Files.size(path);
-        if (sourceBytes > MAX_SOURCE_BYTES) {
+        if (sourceBytes > maxFileBytes) {
             throw new IOException("Schematic source exceeds limit: " + sourceBytes + " bytes");
         }
 
         IOException compressedError = null;
         try {
-            return NbtIo.readCompressed(path, NbtAccounter.create(MAX_NBT_BYTES));
+            return NbtIo.readCompressed(path, NbtAccounter.create(MAX_DECODED_NBT_BYTES));
         } catch (IOException e) {
             compressedError = e;
         }
 
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
-            return NbtIo.read(input, NbtAccounter.create(MAX_NBT_BYTES));
+            return NbtIo.read(input, NbtAccounter.create(MAX_DECODED_NBT_BYTES));
         } catch (IOException e) {
             e.addSuppressed(compressedError);
             throw e;

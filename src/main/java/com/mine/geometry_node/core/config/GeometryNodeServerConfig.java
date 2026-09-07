@@ -13,6 +13,7 @@ public final class GeometryNodeServerConfig {
         AssetPreviewServerConfig.register(builder);
         RuntimeImageServerConfig.register(builder);
         ScopedStateServerConfig.register(builder);
+        SchematicServerConfig.register(builder);
         SPEC = builder.build();
     }
 

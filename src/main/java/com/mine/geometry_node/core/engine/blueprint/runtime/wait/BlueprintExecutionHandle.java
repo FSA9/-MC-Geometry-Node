@@ -14,5 +14,8 @@ public interface BlueprintExecutionHandle {
     @Nullable
     ServerLevel level();
 
+    /** Stores a result for the node currently suspended by this external wait. */
+    void setWaitingNodeResult(String portName, @Nullable Object value);
+
     void abort(String reason);
 }

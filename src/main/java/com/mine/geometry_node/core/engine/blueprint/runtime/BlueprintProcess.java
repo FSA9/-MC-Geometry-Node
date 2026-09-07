@@ -846,6 +846,16 @@ public class BlueprintProcess {
         }
 
         @Override
+        public void setWaitingNodeResult(String portName, @Nullable Object value) {
+            if (state != State.EXTERNAL_WAITING || externalWaitNodeId < 0) {
+                throw new IllegalStateException("No Blueprint node is waiting on an external operation");
+            }
+            tempData.put(ExecutionContext.nodeResultKey(externalWaitNodeId, portName),
+                    GraphValueSnapshot.snapshot(value));
+            dataEvaluation.clearValues();
+        }
+
+        @Override
         public boolean isActive() {
             return !BlueprintProcess.this.shutDown
                     && (this.state == State.RUNNING || this.state == State.WAITING || this.state == State.EXTERNAL_WAITING);

@@ -101,7 +101,8 @@ public final class ClientRequestTracker {
             PendingRequest<?> pending = REQUESTS.get(requestId);
             if (pending == null || pending.owner != this || !pending.accepts(response)) return false;
             if (!REQUESTS.remove(requestId, pending)) return false;
-            pending.complete(response, beforeCallback);
+            Runnable before = beforeCallback == null ? null : () -> beforeCallback.accept(response);
+            pending.complete(response, before);
             return true;
         }
 
@@ -158,11 +159,11 @@ public final class ClientRequestTracker {
             return responseType.isInstance(response);
         }
 
-        private void complete(Object response, Consumer<? super T> beforeCallback) {
+        private void complete(Object response, Runnable beforeCallback) {
             cancelTimeout();
             T accepted = responseType.cast(response);
             callbackExecutor.execute(() -> {
-                if (beforeCallback != null) beforeCallback.accept(accepted);
+                if (beforeCallback != null) beforeCallback.run();
                 callback.accept(accepted);
             });
         }

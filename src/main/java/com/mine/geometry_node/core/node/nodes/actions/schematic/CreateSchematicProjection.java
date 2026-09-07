@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.actions.schematic;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
-
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -24,13 +23,15 @@ import com.mine.geometry_node.core.schematic.SchematicData;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicExecutionRequest;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicExecutionService;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
 import com.mine.geometry_node.core.schematic.SchematicPaths;
-import com.mine.geometry_node.core.schematic.SchematicReader;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.BlockSnapshot;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.ChangedBlock;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.PlacedEntity;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
@@ -53,12 +54,12 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public class CreateSchematicProjection extends BaseNode {
     public static final String TYPE_ID = "create_schematic_projection";
@@ -159,23 +160,38 @@ public class CreateSchematicProjection extends BaseNode {
         configuredKey = configuredKey == null ? "" : configuredKey.trim();
 
         try {
-            Path path = SchematicPaths.resolveServerPath(level.getServer(), pathValue);
-            String actualKey;
+            String relativePath = SchematicPaths.normalizeSchematicPath(pathValue);
+            SchematicExecutionRequest request;
             if (debugMode) {
                 GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
                         GraphResourceTypeRegistry.SCHEMATIC_PROJECTION, configuredKey);
-                actualKey = GraphResourceIdCodec.encode(resourceId);
-                SchematicData data = SchematicReader.read(path, false);
-                createDebugProjection(context, level, data, originValue, resourceId);
+                int durationTicks = durationTicks(getInput(context, StandardPorts.TICK.getId(), Integer.class));
+                float alpha = clampFloat(getInput(context, StandardPorts.ALPHA.getId(), Float.class), DEFAULT_ALPHA, 0.05f, 1.0f);
+                float viewRange = clampFloat(getInput(context, StandardPorts.RADIUS.getId(), Float.class), DEFAULT_VIEW_RANGE, 1.0f, 4096.0f);
+                boolean onlySelfVisible = boolOrDefault(getInput(context, StandardPorts.ONLY_SELF_VISIBLE.getId(), Boolean.class), true);
+                ServerPlayer selfVisiblePlayer = resolveSelfVisiblePlayer(context);
+                UUID selfVisiblePlayerId = selfVisiblePlayer != null ? selfVisiblePlayer.getUUID() : null;
+                String graphId = context.getGraphId();
+                request = new SchematicExecutionRequest(relativePath, false, data ->
+                        new DebugProjectionTask(level, data, originValue, resourceId, graphId,
+                                durationTicks, alpha, viewRange, onlySelfVisible, selfVisiblePlayerId));
             } else {
                 String placementKey = configuredKey.isEmpty() ? defaultPlacementKey(context) : configuredKey;
                 boolean replaceAir = boolOrDefault(getInput(context, StandardPorts.REPLACE_AIR.getId(), Boolean.class), false);
+                boolean replaceBlocks = boolOrDefault(getInput(context, StandardPorts.REPLACE_BLOCKS.getId(), Boolean.class), true);
                 boolean uniqueIfExists = boolOrDefault(getInput(context, StandardPorts.UNIQUE_IF_EXISTS.getId(), Boolean.class), true);
-                actualKey = SchematicPlacementManager.resolveKey(level, placementKey, uniqueIfExists);
-                SchematicData data = SchematicReader.read(path, replaceAir);
-                actualKey = placeSchematic(context, level, data, originValue, actualKey, replaceAir);
+                String graphId = context.getGraphId();
+                Transform transform = Transform.from(1, 1,
+                        getInput(context, StandardPorts.ROTATION.getId(), Vec3.class),
+                        getInput(context, StandardPorts.MIRROR.getId(), Vec3.class));
+                request = new SchematicExecutionRequest(relativePath, replaceAir, data -> {
+                    SchematicExecutionService.PlacementKeyReservation reservation =
+                            SchematicExecutionService.INSTANCE.reservePlacementKey(level, placementKey, uniqueIfExists);
+                    return new PlacementTask(graphId, level, data, originValue, reservation,
+                            replaceAir, replaceBlocks, transform.withDimensions(data.width(), data.length()));
+                });
             }
-            context.setNodeResult(StandardPorts.RESULT_RESOURCE_ID.getId(), actualKey);
+            return ExecutionResult.externalWait(SchematicExecutionService.ID, request);
         } catch (Exception e) {
             if (RateLimitedLog.acquire(context,
                     "schematic_projection:" + pathValue + ':' + e.getClass().getName())) {
@@ -195,26 +211,26 @@ public class CreateSchematicProjection extends BaseNode {
         return null;
     }
 
-    private void createDebugProjection(ExecutionContext context,
-                                       ServerLevel level,
+    private void createDebugProjection(ServerLevel level,
                                        SchematicData data,
                                        Vec3 originValue,
-                                       GraphResourceId resourceId) {
+                                       GraphResourceId resourceId,
+                                       String graphId,
+                                       int durationTicks,
+                                       float alpha,
+                                       float viewRange,
+                                       boolean onlySelfVisible,
+                                       UUID selfVisiblePlayerId) {
         if (data.isEmpty()) {
             return;
         }
-
-        int durationTicks = durationTicks(getInput(context, StandardPorts.TICK.getId(), Integer.class));
-        float alpha = clampFloat(getInput(context, StandardPorts.ALPHA.getId(), Float.class), DEFAULT_ALPHA, 0.05f, 1.0f);
-        float viewRange = clampFloat(getInput(context, StandardPorts.RADIUS.getId(), Float.class), DEFAULT_VIEW_RANGE, 1.0f, 4096.0f);
-        boolean onlySelfVisible = boolOrDefault(getInput(context, StandardPorts.ONLY_SELF_VISIBLE.getId(), Boolean.class), true);
 
         BlockPos origin = BlockPos.containing(originValue);
         PacketPayloadData payloadData = toPacketPayload(data.blocks());
         PacketNbtPayloadData nbtPayloadData = toPacketNbtPayload(data.blockEntities(), data.entities());
         PacketSchematicProjection packet = new PacketSchematicProjection(
                 GraphResourceIdCodec.encode(resourceId),
-                context.getGraphId(),
+                graphId,
                 level.dimension().identifier().toString(),
                 origin.getX(),
                 origin.getY(),
@@ -231,7 +247,8 @@ public class CreateSchematicProjection extends BaseNode {
                 nbtPayloadData.entities()
         );
 
-        List<ServerPlayer> targets = projectionTargets(context, level, origin.getCenter(), viewRange, onlySelfVisible);
+        List<ServerPlayer> targets = projectionTargets(level, origin.getCenter(), viewRange,
+                onlySelfVisible, selfVisiblePlayerId);
         if (!SchematicProjectionService.INSTANCE.upsert(level.getServer(), resourceId, packet, targets,
                 level.getGameTime())) {
             GeometryNode.LOGGER.warn("[GeometryNode] Schematic projection '{}' was created but no target player was available.",
@@ -239,156 +256,21 @@ public class CreateSchematicProjection extends BaseNode {
         }
     }
 
-    private String placeSchematic(ExecutionContext context,
-                                  ServerLevel level,
-                                  SchematicData data,
-                                  Vec3 originValue,
-                                  String key,
-                                  boolean replaceAir) {
-        if (data.isEmpty()) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' read no blocks/entities; revert/repair will have nothing to target.", key);
-            return key;
-        }
-
-        boolean replaceBlocks = boolOrDefault(getInput(context, StandardPorts.REPLACE_BLOCKS.getId(), Boolean.class), true);
-        Transform transform = Transform.from(
-                data.width(),
-                data.length(),
-                getInput(context, StandardPorts.ROTATION.getId(), Vec3.class),
-                getInput(context, StandardPorts.MIRROR.getId(), Vec3.class)
-        );
-        BlockPos origin = BlockPos.containing(originValue);
-        LongOpenHashSet loadedChunks = new LongOpenHashSet();
-        LongOpenHashSet unloadedChunks = new LongOpenHashSet();
-        LongOpenHashSet placedBlocks = new LongOpenHashSet();
-        Map<Long, BlockSnapshot> beforeSnapshots = new HashMap<>();
-        Map<String, BlockState> stateCache = new HashMap<>();
-
-        for (SchematicData.Block block : data.blocks()) {
-            BlockState state = parseBlockState(block.state(), stateCache);
-            if (state == null) {
-                continue;
-            }
-
-            BlockPos worldPos = transform.blockPos(origin, block.x(), block.y(), block.z());
-            if (!isLoaded(level, worldPos, loadedChunks, unloadedChunks)) {
-                continue;
-            }
-
-            if (state.isAir()) {
-                if (!replaceAir) {
-                    continue;
-                }
-            } else {
-                state = transform.state(state);
-                if (!replaceBlocks && !level.isEmptyBlock(worldPos)) {
-                    continue;
-                }
-            }
-
-            BlockSnapshot before = SchematicPlacementManager.captureBlock(level, worldPos);
-            boolean sameState = before.state().equals(state);
-            if (level.setBlock(worldPos, state, DIRECT_SET_FLAGS) || sameState) {
-                long posKey = worldPos.asLong();
-                placedBlocks.add(posKey);
-                beforeSnapshots.put(posKey, before);
-            }
-        }
-
-        int failedBlockEntities = placeBlockEntities(level, data.blockEntities(), origin, transform, placedBlocks);
-        if (failedBlockEntities > 0) {
-            GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' failed to apply {} block entities.",
-                    key, failedBlockEntities);
-        }
-        List<PlacedEntity> spawnedEntities = placeEntities(level, data.entities(), origin, transform);
-        SchematicPlacementManager.SchematicPlacementRecord record = recordPlacement(
-                context, level, data, origin, transform, key, placedBlocks, beforeSnapshots, spawnedEntities);
-        if (record != null) {
-            SchematicPlacementDebugSync.syncRecord(level, record.key(), record);
-            GeometryNode.LOGGER.info("[GeometryNode] Schematic placement '{}' recorded {} blocks and {} entities at {} in dimension '{}'.",
-                    record.key(), record.changedBlocks().size(), record.spawnedEntities().size(),
-                    formatPos(record.origin()), level.dimension().identifier());
-            return record.key();
-        }
-        GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' created no placement record; revert/repair will have nothing to target.", key);
-        return key;
-    }
-
-    private static int placeBlockEntities(ServerLevel level,
-                                           List<SchematicData.BlockEntity> blockEntities,
-                                           BlockPos origin,
-                                           Transform transform,
-                                           LongOpenHashSet placedBlocks) {
-        int failed = 0;
-        for (SchematicData.BlockEntity blockEntityData : blockEntities) {
-            BlockPos worldPos = transform.blockPos(origin, blockEntityData.x(), blockEntityData.y(), blockEntityData.z());
-            if (!placedBlocks.contains(worldPos.asLong())) {
-                continue;
-            }
-
-            BlockState state = level.getBlockState(worldPos);
-            if (!state.hasBlockEntity()) {
-                continue;
-            }
-
-            if (SchematicBlockEntityUtils.setBlockEntity(level, worldPos, state, blockEntityData.tag())) {
-                level.sendBlockUpdated(worldPos, state, state, DIRECT_SET_FLAGS);
-            } else {
-                failed++;
-            }
-        }
-        return failed;
-    }
-
-    private static List<PlacedEntity> placeEntities(ServerLevel level,
-                                                    List<SchematicData.Entity> entities,
-                                                    BlockPos origin,
-                                                    Transform transform) {
-        List<PlacedEntity> spawnedEntities = new ArrayList<>();
-        for (SchematicData.Entity entityData : entities) {
-            Vec3 worldPos = transform.entityPos(origin, entityData.x(), entityData.y(), entityData.z());
-            try {
-                CompoundTag tag = absoluteEntityTag(entityData.tag(), worldPos);
-                Entity entity = EntityType.loadEntityRecursive(tag, level, EntitySpawnReason.COMMAND, EntityProcessor.NOP);
-                if (entity != null) {
-                    entity.snapTo(worldPos.x, worldPos.y, worldPos.z,
-                            transform.yaw(entity.getYRot()),
-                            entity.getXRot());
-                    if (level.tryAddFreshEntityWithPassengers(entity)) {
-                        spawnedEntities.add(new PlacedEntity(entity.getUUID(), tag));
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return spawnedEntities;
-    }
-
-    private static SchematicPlacementManager.SchematicPlacementRecord recordPlacement(ExecutionContext context,
+    private static SchematicPlacementManager.SchematicPlacementRecord recordPlacement(String graphId,
                                                                                      ServerLevel level,
                                                                                      SchematicData data,
                                                                                      BlockPos origin,
                                                                                      Transform transform,
                                                                                      String key,
-                                                                                     LongOpenHashSet placedBlocks,
-                                                                                     Map<Long, BlockSnapshot> beforeSnapshots,
+                                                                                     List<ChangedBlock> changedBlocks,
                                                                                      List<PlacedEntity> spawnedEntities) {
-        if (placedBlocks.isEmpty() && spawnedEntities.isEmpty()) {
+        if (changedBlocks.isEmpty() && spawnedEntities.isEmpty()) {
             return null;
-        }
-
-        List<ChangedBlock> changedBlocks = new ArrayList<>(placedBlocks.size());
-        for (long posLong : placedBlocks) {
-            BlockSnapshot before = beforeSnapshots.get(posLong);
-            if (before == null) {
-                continue;
-            }
-            changedBlocks.add(new ChangedBlock(before, SchematicPlacementManager.captureBlock(level, BlockPos.of(posLong))));
         }
 
         SchematicPlacementManager.SchematicPlacementRecord record = new SchematicPlacementManager.SchematicPlacementRecord(
                 key,
-                context.getGraphId(),
+                graphId,
                 level.dimension(),
                 origin,
                 transform.boundsMin(origin, data.height()),
@@ -402,6 +284,232 @@ public class CreateSchematicProjection extends BaseNode {
                 level.getGameTime()
         );
         return SchematicPlacementManager.put(level, record);
+    }
+
+    private final class DebugProjectionTask implements SchematicExecutionRequest.TickTask {
+        private final ServerLevel level;
+        private final SchematicData data;
+        private final Vec3 origin;
+        private final GraphResourceId resourceId;
+        private final String graphId;
+        private final int durationTicks;
+        private final float alpha;
+        private final float viewRange;
+        private final boolean onlySelfVisible;
+        private final UUID selfVisiblePlayerId;
+
+        private DebugProjectionTask(ServerLevel level, SchematicData data, Vec3 origin,
+                                    GraphResourceId resourceId, String graphId, int durationTicks,
+                                    float alpha, float viewRange, boolean onlySelfVisible,
+                                    UUID selfVisiblePlayerId) {
+            this.level = level;
+            this.data = data;
+            this.origin = origin;
+            this.resourceId = resourceId;
+            this.graphId = graphId;
+            this.durationTicks = durationTicks;
+            this.alpha = alpha;
+            this.viewRange = viewRange;
+            this.onlySelfVisible = onlySelfVisible;
+            this.selfVisiblePlayerId = selfVisiblePlayerId;
+        }
+
+        @Override
+        public SchematicExecutionRequest.TickResult tick(int operationBudget) {
+            createDebugProjection(level, data, origin, resourceId, graphId, durationTicks, alpha,
+                    viewRange, onlySelfVisible, selfVisiblePlayerId);
+            return new SchematicExecutionRequest.TickResult(1, true);
+        }
+
+        @Override
+        public void complete(SchematicExecutionRequest.BlueprintResultSink sink) {
+            sink.set(StandardPorts.RESULT_RESOURCE_ID.getId(), GraphResourceIdCodec.encode(resourceId));
+        }
+    }
+
+    private static final class PlacementTask implements SchematicExecutionRequest.TickTask {
+        private final String graphId;
+        private final ServerLevel level;
+        private final SchematicData data;
+        private final String key;
+        private final SchematicExecutionService.PlacementKeyReservation keyReservation;
+        private final boolean replaceAir;
+        private final boolean replaceBlocks;
+        private final Transform transform;
+        private final BlockPos origin;
+        private final LongOpenHashSet loadedChunks = new LongOpenHashSet();
+        private final LongOpenHashSet unloadedChunks = new LongOpenHashSet();
+        private final LongOpenHashSet placedBlocks = new LongOpenHashSet();
+        private final Map<Long, BlockSnapshot> beforeSnapshots = new HashMap<>();
+        private final Map<String, BlockState> stateCache = new HashMap<>();
+        private final List<PlacedEntity> spawnedEntities = new ArrayList<>();
+        private final List<ChangedBlock> changedBlocks = new ArrayList<>();
+        private int blockIndex;
+        private int blockEntityIndex;
+        private int entityIndex;
+        private int failedBlockEntities;
+        private LongIterator snapshotIterator;
+        private Stage stage = Stage.BLOCKS;
+        private boolean finalized;
+
+        private PlacementTask(String graphId, ServerLevel level, SchematicData data, Vec3 originValue,
+                              SchematicExecutionService.PlacementKeyReservation keyReservation,
+                              boolean replaceAir, boolean replaceBlocks, Transform transform) {
+            this.graphId = graphId;
+            this.level = level;
+            this.data = data;
+            this.origin = BlockPos.containing(originValue);
+            this.keyReservation = keyReservation;
+            this.key = keyReservation.key();
+            this.replaceAir = replaceAir;
+            this.replaceBlocks = replaceBlocks;
+            this.transform = transform;
+        }
+
+        @Override
+        public SchematicExecutionRequest.TickResult tick(int operationBudget) {
+            int operations = 0;
+            while (operations < operationBudget && stage != Stage.COMPLETE) {
+                switch (stage) {
+                    case BLOCKS -> processBlock();
+                    case BLOCK_ENTITIES -> processBlockEntity();
+                    case ENTITIES -> processEntity();
+                    case SNAPSHOTS -> processSnapshot();
+                    case COMPLETE -> { }
+                }
+                operations++;
+            }
+            if (stage == Stage.COMPLETE) finalizeRecord(false);
+            return new SchematicExecutionRequest.TickResult(operations, stage == Stage.COMPLETE);
+        }
+
+        private void processBlock() {
+            if (blockIndex >= data.blocks().size()) {
+                stage = Stage.BLOCK_ENTITIES;
+                return;
+            }
+            SchematicData.Block block = data.blocks().get(blockIndex++);
+            BlockState state = parseBlockState(block.state(), stateCache);
+            if (state == null) return;
+            BlockPos worldPos = transform.blockPos(origin, block.x(), block.y(), block.z());
+            if (!isLoaded(level, worldPos, loadedChunks, unloadedChunks)) return;
+            if (state.isAir()) {
+                if (!replaceAir) return;
+            } else {
+                state = transform.state(state);
+                if (!replaceBlocks && !level.isEmptyBlock(worldPos)) return;
+            }
+            BlockSnapshot before = SchematicPlacementManager.captureBlock(level, worldPos);
+            if (level.setBlock(worldPos, state, DIRECT_SET_FLAGS) || before.state().equals(state)) {
+                long posKey = worldPos.asLong();
+                placedBlocks.add(posKey);
+                beforeSnapshots.put(posKey, before);
+            }
+        }
+
+        private void processBlockEntity() {
+            if (blockEntityIndex >= data.blockEntities().size()) {
+                stage = Stage.ENTITIES;
+                return;
+            }
+            SchematicData.BlockEntity value = data.blockEntities().get(blockEntityIndex++);
+            BlockPos worldPos = transform.blockPos(origin, value.x(), value.y(), value.z());
+            if (!placedBlocks.contains(worldPos.asLong())) return;
+            BlockState state = level.getBlockState(worldPos);
+            if (!state.hasBlockEntity()) return;
+            if (SchematicBlockEntityUtils.setBlockEntity(level, worldPos, state, value.tag())) {
+                level.sendBlockUpdated(worldPos, state, state, DIRECT_SET_FLAGS);
+            } else {
+                failedBlockEntities++;
+            }
+        }
+
+        private void processEntity() {
+            if (entityIndex >= data.entities().size()) {
+                snapshotIterator = placedBlocks.iterator();
+                stage = Stage.SNAPSHOTS;
+                return;
+            }
+            SchematicData.Entity value = data.entities().get(entityIndex++);
+            Vec3 worldPos = transform.entityPos(origin, value.x(), value.y(), value.z());
+            try {
+                CompoundTag tag = absoluteEntityTag(value.tag(), worldPos);
+                Entity entity = EntityType.loadEntityRecursive(tag, level, EntitySpawnReason.COMMAND, EntityProcessor.NOP);
+                if (entity == null) return;
+                entity.snapTo(worldPos.x, worldPos.y, worldPos.z,
+                        transform.yaw(entity.getYRot()), entity.getXRot());
+                if (level.tryAddFreshEntityWithPassengers(entity)) {
+                    spawnedEntities.add(new PlacedEntity(entity.getUUID(), tag));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        private void processSnapshot() {
+            if (snapshotIterator == null || !snapshotIterator.hasNext()) {
+                stage = Stage.COMPLETE;
+                return;
+            }
+            long posLong = snapshotIterator.nextLong();
+            BlockSnapshot before = beforeSnapshots.get(posLong);
+            if (before != null) {
+                changedBlocks.add(new ChangedBlock(before,
+                        SchematicPlacementManager.captureBlock(level, BlockPos.of(posLong))));
+            }
+        }
+
+        private void finalizeRecord(boolean partial) {
+            if (finalized) return;
+            finalized = true;
+            try {
+                if (partial && stage == Stage.SNAPSHOTS && snapshotIterator != null) {
+                    while (snapshotIterator.hasNext()) {
+                        long posLong = snapshotIterator.nextLong();
+                        BlockSnapshot before = beforeSnapshots.get(posLong);
+                        if (before != null) {
+                            changedBlocks.add(new ChangedBlock(before,
+                                    SchematicPlacementManager.captureBlock(level, BlockPos.of(posLong))));
+                        }
+                    }
+                } else if (partial && stage != Stage.COMPLETE) {
+                    for (long posLong : placedBlocks) {
+                        BlockSnapshot before = beforeSnapshots.get(posLong);
+                        if (before != null) {
+                            changedBlocks.add(new ChangedBlock(before,
+                                    SchematicPlacementManager.captureBlock(level, BlockPos.of(posLong))));
+                        }
+                    }
+                }
+                SchematicPlacementManager.SchematicPlacementRecord record = recordPlacement(
+                        graphId, level, data, origin, transform, key, changedBlocks, spawnedEntities);
+                if (record == null) {
+                    GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' created no placement record; revert/repair will have nothing to target.", key);
+                    return;
+                }
+                SchematicPlacementDebugSync.syncRecord(level, record.key(), record);
+                GeometryNode.LOGGER.info("[GeometryNode] {}schematic placement '{}' recorded {} blocks and {} entities at {} in dimension '{}'.",
+                        partial ? "Partial " : "", record.key(), record.changedBlocks().size(),
+                        record.spawnedEntities().size(), formatPos(record.origin()), level.dimension().identifier());
+                if (failedBlockEntities > 0) {
+                    GeometryNode.LOGGER.warn("[GeometryNode] Schematic placement '{}' failed to apply {} block entities.",
+                            key, failedBlockEntities);
+                }
+            } finally {
+                keyReservation.close();
+            }
+        }
+
+        @Override
+        public void cancel() {
+            finalizeRecord(true);
+        }
+
+        @Override
+        public void complete(SchematicExecutionRequest.BlueprintResultSink sink) {
+            sink.set(StandardPorts.RESULT_RESOURCE_ID.getId(), key);
+        }
+
+        private enum Stage { BLOCKS, BLOCK_ENTITIES, ENTITIES, SNAPSHOTS, COMPLETE }
     }
 
     private static PacketPayloadData toPacketPayload(List<SchematicData.Block> blocks) {
@@ -469,13 +577,13 @@ public class CreateSchematicProjection extends BaseNode {
         return new PacketNbtPayloadData(packetBlockEntities, packetEntities, truncated);
     }
 
-    private static List<ServerPlayer> projectionTargets(ExecutionContext context,
-                                                        ServerLevel level,
+    private static List<ServerPlayer> projectionTargets(ServerLevel level,
                                                         Vec3 origin,
                                                         float viewRange,
-                                                        boolean onlySelfVisible) {
+                                                        boolean onlySelfVisible,
+                                                        UUID selfVisiblePlayerId) {
         if (onlySelfVisible) {
-            ServerPlayer player = resolveSelfVisiblePlayer(context);
+            ServerPlayer player = selfVisiblePlayerId != null ? level.getServer().getPlayerList().getPlayer(selfVisiblePlayerId) : null;
             if (player != null && player.level() == level) {
                 return List.of(player);
             }
@@ -652,6 +760,10 @@ public class CreateSchematicProjection extends BaseNode {
             boolean mirrorX = mirror != null && mirror.x < 0.0D;
             boolean mirrorZ = mirror != null && mirror.z < 0.0D;
             return new Transform(Math.max(1, width), Math.max(1, length), mirrorX, mirrorZ, steps);
+        }
+
+        private Transform withDimensions(int width, int length) {
+            return new Transform(Math.max(1, width), Math.max(1, length), mirrorX, mirrorZ, rotationSteps);
         }
 
         private BlockPos blockPos(BlockPos origin, int x, int y, int z) {
