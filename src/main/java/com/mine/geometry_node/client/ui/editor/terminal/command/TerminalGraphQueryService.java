@@ -41,11 +41,24 @@ final class TerminalGraphQueryService {
     private static final int DETAILS_COLLECTION_LIMIT = 200;
     private static final int VALUE_TEXT_LIMIT = 4096;
 
-    private final NodeGraph graph;
+    private final GraphReadSnapshot snapshot;
+    private final RegistryAccess registryAccess;
 
     TerminalGraphQueryService(NodeGraph graph) {
-        this.graph = graph;
+        this.snapshot = GraphReadSnapshot.capture(graph);
+        this.registryAccess = currentRegistryAccess();
     }
+
+    static TerminalGraphQueryService forSnapshot(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
+        return new TerminalGraphQueryService(new PreparedInputs(snapshot, registryAccess));
+    }
+
+    private TerminalGraphQueryService(PreparedInputs inputs) {
+        this.snapshot = java.util.Objects.requireNonNull(inputs.snapshot(), "snapshot");
+        this.registryAccess = inputs.registryAccess();
+    }
+
+    private record PreparedInputs(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {}
 
     CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
         String normalizedPath;
@@ -435,7 +448,7 @@ final class TerminalGraphQueryService {
     }
 
     private GraphReadSnapshot snapshot() {
-        return GraphReadSnapshot.capture(graph);
+        return snapshot;
     }
 
     private static boolean matchesNode(String nodeId, NodeData node, NodeDef definition, String query) {
@@ -715,7 +728,7 @@ final class TerminalGraphQueryService {
         return result;
     }
 
-    private static JsonObject nodeTypePortDetails(NodeDef definition, PortRow row, PortDef port, String direction) {
+    private JsonObject nodeTypePortDetails(NodeDef definition, PortRow row, PortDef port, String direction) {
         boolean input = "input".equals(direction);
         PortOptionResolver.Resolution resolution = input && row.uiHint() == UIHint.SELECT
                 ? resolveOptions(row)
@@ -760,8 +773,8 @@ final class TerminalGraphQueryService {
                 && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
     }
 
-    private static PortOptionResolver.Resolution resolveOptions(PortRow row) {
-        return PortOptionResolver.resolve(row, registryAccess(), key -> Component.translatable(key).getString());
+    private PortOptionResolver.Resolution resolveOptions(PortRow row) {
+        return PortOptionResolver.resolve(row, registryAccess, key -> Component.translatable(key).getString());
     }
 
     private static void addOptionalInt(JsonObject target, String name, Integer value) {
@@ -885,7 +898,7 @@ final class TerminalGraphQueryService {
 
     private static double finite(float value) { return Float.isFinite(value) ? value : 0.0; }
 
-    private static RegistryAccess registryAccess() {
+    static RegistryAccess currentRegistryAccess() {
         Minecraft minecraft = Minecraft.getInstance();
         return minecraft.level == null ? null : minecraft.level.registryAccess();
     }

@@ -23,6 +23,9 @@ import java.util.Set;
 
 /** Immutable connection indexes for one read-only view of the current graph. */
 final class GraphReadSnapshot {
+    /** Serialized while the editor model is owned by the UI thread, then consumed only by query workers. */
+    record CapturedDocument(String json) {}
+
     record Edge(String kind, String outputNodeId, String outputPortId, String inputNodeId, String inputPortId) {
         static final Comparator<Edge> ORDER = Comparator.comparing(Edge::outputNodeId)
                 .thenComparing(Edge::outputPortId).thenComparing(Edge::inputNodeId)
@@ -53,7 +56,16 @@ final class GraphReadSnapshot {
     }
 
     static GraphReadSnapshot capture(NodeGraph graph) {
-        NodeGraph source = graph == null ? null : GraphJsonIO.fromJson(GraphJsonIO.toJson(graph));
+        return build(captureDocument(graph));
+    }
+
+    static CapturedDocument captureDocument(NodeGraph graph) {
+        return new CapturedDocument(graph == null ? "" : GraphJsonIO.toJson(graph));
+    }
+
+    static GraphReadSnapshot build(CapturedDocument document) {
+        NodeGraph source = document == null || document.json().isEmpty()
+                ? null : GraphJsonIO.fromJson(document.json());
         Map<String, NodeData> nodes = new LinkedHashMap<>();
         if (source != null && source.nodes != null) {
             source.nodes.entrySet().stream().filter(entry -> entry.getKey() != null)

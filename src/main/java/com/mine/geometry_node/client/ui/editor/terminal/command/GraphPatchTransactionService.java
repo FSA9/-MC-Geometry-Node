@@ -90,49 +90,44 @@ public final class GraphPatchTransactionService {
     }
 
     public CommandResult apply(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
-        synchronized (idempotencyStore) {
-            return applySerialized(patch, cancellation);
-        }
-    }
-
-    private CommandResult applySerialized(GraphPatch patch, CommandInvocationContext.CancellationToken cancellation) {
         if (Minecraft.getInstance().isSameThread() || Core.isOnUiThread()) {
             return CommandResult.failure("THREAD_VIOLATION", "GraphPatch 事务预检不能阻塞客户端或 UI 线程");
         }
         cancellation = cancellation == null ? CommandInvocationContext.CancellationToken.NONE : cancellation;
+        String requestedHash = sha256(GraphPatchCodec.toJson(patch));
+        GraphPatchIdempotencyStore.Reservation reservation = idempotencyStore.reserve(
+                patch.idempotencyKey(), requestedHash);
+        if (reservation.limitReached()) {
+            return CommandResult.failure("IDEMPOTENCY_LIMIT_REACHED",
+                    "当前 PowerShell Run 的 GraphPatch 幂等键已达到上限，请重启 Run");
+        }
+        if (!reservation.hashMatches()) {
+            return CommandResult.failure("IDEMPOTENCY_CONFLICT", "idempotency_key 已用于不同 GraphPatch");
+        }
+        GraphPatchIdempotencyStore.Entry transaction = reservation.entry();
+        if (!reservation.owner()) return awaitExisting(transaction, cancellation);
+
+        transaction.beginPlanning();
         try {
-            String requestedHash = sha256(GraphPatchCodec.toJson(patch));
-            GraphPatchIdempotencyStore.CompletedPatch previous = idempotencyStore.get(patch.idempotencyKey());
-            if (previous != null) {
-                return previous.patchHash().equals(requestedHash)
-                        ? previous.result()
-                        : CommandResult.failure("IDEMPOTENCY_CONFLICT", "idempotency_key 已用于不同 GraphPatch");
+            PlanSnapshot snapshot = awaitPlanningUi(onUi(() -> capturePlanSnapshot(patch)), cancellation);
+            PlannedPatch plan = plan(patch, requestedHash, snapshot, cancellation);
+            if (cancellation.isCancelled()) {
+                return complete(transaction, CommandResult.failure("CANCELLED", "GraphPatch 在提交前已取消"));
             }
-            if (idempotencyStore.size() >= GraphPatchIdempotencyStore.MAX_KEYS) {
-                return CommandResult.failure("IDEMPOTENCY_LIMIT_REACHED",
-                        "当前 PowerShell Run 的 GraphPatch 幂等键已达到上限，请重启 Run");
-            }
-            PlanSnapshot snapshot = awaitUi(onUi(() -> capturePlanSnapshot(patch)), cancellation);
-            PlannedPatch plan = plan(patch, requestedHash, snapshot);
-            if (cancellation.isCancelled()) return CommandResult.failure("CANCELLED", "GraphPatch 在提交前已取消");
-            CommandInvocationContext.CancellationToken commitCancellation = cancellation;
-            CommandResult result = awaitUi(onUi(() -> commit(plan, commitCancellation)), cancellation);
-            if (result.ok()) {
-                idempotencyStore.put(patch.idempotencyKey(), plan.patchHash, result);
-            }
-            return result;
+            transaction.beginCommit();
+            UiHandoff<CommandResult> commit = onUi(() -> commit(plan));
+            commit.future.whenComplete((result, failure) -> idempotencyStore.complete(transaction,
+                    failure == null ? result : executionFailure(failure)));
+            return awaitCommit(transaction, cancellation);
         } catch (PatchFailure failure) {
-            return CommandResult.failure(failure.code, failure.getMessage());
+            return complete(transaction, CommandResult.failure(failure.code, failure.getMessage()));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            return CommandResult.failure("CANCELLED", "GraphPatch 调用被中断");
+            return complete(transaction, CommandResult.failure("CANCELLED", "GraphPatch 调用被中断"));
         } catch (ExecutionException failure) {
-            Throwable cause = failure.getCause();
-            if (cause instanceof PatchFailure patchFailure) {
-                return CommandResult.failure(patchFailure.code, patchFailure.getMessage());
-            }
-            GeometryNode.LOGGER.error("GraphPatch execution failed", cause == null ? failure : cause);
-            return CommandResult.failure("GRAPH_PATCH_INTERNAL_ERROR", "GraphPatch 执行失败");
+            return complete(transaction, executionFailure(failure));
+        } catch (RuntimeException failure) {
+            return complete(transaction, executionFailure(failure));
         }
     }
 
@@ -142,7 +137,8 @@ public final class GraphPatchTransactionService {
         return new PlanSnapshot(canonicalGraphJson(session.editorContext.getGraph()), registryAccess());
     }
 
-    private PlannedPatch plan(GraphPatch patch, String patchHash, PlanSnapshot snapshot) {
+    private PlannedPatch plan(GraphPatch patch, String patchHash, PlanSnapshot snapshot,
+                              CommandInvocationContext.CancellationToken cancellation) {
         List<GraphPatchContractValidator.Diagnostic> contract = GraphPatchContractValidator.validate(patch);
         if (!contract.isEmpty()) throw fail(contract.getFirst().code(), contract.getFirst().message());
 
@@ -158,6 +154,7 @@ public final class GraphPatchTransactionService {
         Map<String, ResolvedPort> portAliases = new LinkedHashMap<>();
         Map<String, ResolvedBranch> branchAliases = new LinkedHashMap<>();
         for (int index = 0; index < patch.operations().size(); index++) {
+            if (cancellation.isCancelled()) throw fail("CANCELLED", "GraphPatch 预检已取消");
             try {
                 applyOperation(patch, index, patch.operations().get(index), trialContext, trialScope,
                         aliases, frameAliases, portAliases, branchAliases, snapshot.registryAccess);
@@ -169,6 +166,7 @@ public final class GraphPatchTransactionService {
         }
         String afterJson = canonicalGraphJson(trialRoot);
         if (beforeJson.equals(afterJson)) throw fail("PATCH_NO_CHANGES", "GraphPatch 没有产生任何变化");
+        if (cancellation.isCancelled()) throw fail("CANCELLED", "GraphPatch 预检已取消");
         try {
             GraphCompilationService.INSTANCE.compile(afterJson);
         } catch (RuntimeException failure) {
@@ -544,7 +542,7 @@ public final class GraphPatchTransactionService {
                 || graph.frames.values().stream().anyMatch(frame -> frameId.equals(frame.parentFrame));
     }
 
-    private CommandResult commit(PlannedPatch plan, CommandInvocationContext.CancellationToken cancellation) {
+    private CommandResult commit(PlannedPatch plan) {
         Core.checkUiThread();
         requireOpenAndBound(plan.patch);
         if (!sha256(GraphPatchCodec.toJson(plan.patch)).equals(plan.patchHash)) {
@@ -553,7 +551,6 @@ public final class GraphPatchTransactionService {
         if (!canonicalGraphJson(session.editorContext.getGraph()).equals(plan.beforeJson)) {
             throw fail("REVISION_CONFLICT", "事务执行期间蓝图内容已变化，请重新读取并规划");
         }
-        if (cancellation.isCancelled()) throw fail("CANCELLED", "GraphPatch 在提交前被取消");
         String changeId = UUID.randomUUID().toString();
         boolean executed = session.editorContext.getCommandManager().executeAsNewBaseline(new CmdReplaceGraphState(
                 session.editorContext, plan.beforeJson, plan.afterJson, changeId));
@@ -983,22 +980,92 @@ public final class GraphPatchTransactionService {
         return handoff;
     }
 
-    private static <T> T awaitUi(UiHandoff<T> handoff,
-                                 CommandInvocationContext.CancellationToken cancellation)
+    private static <T> T awaitPlanningUi(UiHandoff<T> handoff,
+                                         CommandInvocationContext.CancellationToken cancellation)
             throws InterruptedException, ExecutionException {
         long deadline = System.nanoTime() + UI_HANDOFF_TIMEOUT.toNanos();
         while (true) {
-            if (cancellation.isCancelled() && handoff.cancelPending()) {
+            if (cancellation.isCancelled()) {
+                handoff.cancelPending();
                 throw fail("CANCELLED", "GraphPatch 等待编辑器 UI 时已取消");
             }
             try {
                 return handoff.future.get(100, TimeUnit.MILLISECONDS);
             } catch (TimeoutException ignored) {
             }
-            if (System.nanoTime() >= deadline && handoff.cancelPending()) {
+            if (System.nanoTime() >= deadline) {
+                handoff.cancelPending();
                 throw fail("UI_UNAVAILABLE", "编辑器 UI 响应超时");
             }
         }
+    }
+
+    private CommandResult awaitExisting(GraphPatchIdempotencyStore.Entry transaction,
+                                        CommandInvocationContext.CancellationToken cancellation) {
+        return awaitTransaction(transaction, cancellation, false);
+    }
+
+    private CommandResult awaitCommit(GraphPatchIdempotencyStore.Entry transaction,
+                                      CommandInvocationContext.CancellationToken cancellation) {
+        return awaitTransaction(transaction, cancellation, true);
+    }
+
+    private CommandResult awaitTransaction(GraphPatchIdempotencyStore.Entry transaction,
+                                           CommandInvocationContext.CancellationToken cancellation,
+                                           boolean commitKnown) {
+        long deadline = System.nanoTime() + UI_HANDOFF_TIMEOUT.toNanos();
+        while (true) {
+            try {
+                return transaction.result().get(100, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException ignored) {
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return uncertainOrCancelled(transaction, commitKnown, "GraphPatch 调用被中断");
+            } catch (ExecutionException failure) {
+                return executionFailure(failure);
+            }
+            if (cancellation.isCancelled()) {
+                return uncertainOrCancelled(transaction, commitKnown, "GraphPatch 调用已取消");
+            }
+            if (System.nanoTime() >= deadline) {
+                return uncertainOrCancelled(transaction, commitKnown, "GraphPatch 等待最终结果超时");
+            }
+        }
+    }
+
+    private static CommandResult uncertainOrCancelled(GraphPatchIdempotencyStore.Entry transaction,
+                                                       boolean commitKnown, String reason) {
+        CommandResult completed = transaction.result().getNow(null);
+        if (completed != null) return completed;
+        GraphPatchIdempotencyStore.State state = transaction.state();
+        boolean mayHaveCommitted = commitKnown || state == GraphPatchIdempotencyStore.State.COMMITTING
+                || state == GraphPatchIdempotencyStore.State.UNKNOWN;
+        if (!mayHaveCommitted) return CommandResult.failure("CANCELLED", reason);
+        transaction.markUnknown();
+        JsonObject data = new JsonObject();
+        data.addProperty("transaction_state", "UNKNOWN");
+        data.addProperty("retry_with_same_idempotency_key", true);
+        return new CommandResult(false, "GRAPH_PATCH_STATUS_UNKNOWN",
+                reason + "；提交可能仍在完成，请使用相同 idempotency_key 重试以获取最终结果",
+                data, List.of(), null, null, CommandResult.ClientAction.NONE);
+    }
+
+    private CommandResult complete(GraphPatchIdempotencyStore.Entry transaction, CommandResult result) {
+        idempotencyStore.complete(transaction, result);
+        return result;
+    }
+
+    private static CommandResult executionFailure(Throwable failure) {
+        Throwable cause = failure;
+        while ((cause instanceof ExecutionException || cause instanceof java.util.concurrent.CompletionException)
+                && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        if (cause instanceof PatchFailure patchFailure) {
+            return CommandResult.failure(patchFailure.code, patchFailure.getMessage());
+        }
+        GeometryNode.LOGGER.error("GraphPatch execution failed", cause);
+        return CommandResult.failure("GRAPH_PATCH_INTERNAL_ERROR", "GraphPatch 执行失败");
     }
 
     private static RegistryAccess registryAccess() {

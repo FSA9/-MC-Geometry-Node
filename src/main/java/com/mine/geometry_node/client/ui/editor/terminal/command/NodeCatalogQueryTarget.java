@@ -10,12 +10,13 @@ import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
+import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.List;
 
 /** Graph-independent node catalog target available even when no viewport is open. */
 final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget {
-    private final TerminalGraphQueryService queries = new TerminalGraphQueryService(null);
+    private final TerminalGraphQueryService queries = new TerminalGraphQueryService((NodeGraph) null);
 
     @Override public boolean hasGraph() { return false; }
     @Override public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {

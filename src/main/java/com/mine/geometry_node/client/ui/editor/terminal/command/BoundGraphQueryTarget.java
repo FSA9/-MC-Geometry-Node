@@ -102,6 +102,15 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
     public long revision() { return session.revision(); }
     public boolean isTargetCurrent() { return targetValidator.getAsBoolean(); }
 
+    PreparedGraphQueryTarget prepareRead(GraphReadSnapshotCache cache) {
+        NodeGraph graph = resolve();
+        if (graph == null) throw new IllegalStateException("bound graph scope is closed");
+        long capturedRevision = revision();
+        GraphReadSnapshotCache.Key key = new GraphReadSnapshotCache.Key(sessionId(), scopeId(), capturedRevision);
+        return new PreparedGraphQueryTarget(cache.capture(key, graph), sessionId(), scopeId(), surfaceRef,
+                capturedRevision, TerminalGraphQueryService.currentRegistryAccess());
+    }
+
     private NodeGraph resolve() { return scope.resolve(session.editorContext.getGraph()); }
     private TerminalGraphQueryService queries() {
         NodeGraph graph = resolve();

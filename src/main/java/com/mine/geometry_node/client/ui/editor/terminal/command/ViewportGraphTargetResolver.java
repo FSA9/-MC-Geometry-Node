@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
+import icyllis.modernui.core.Core;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +21,7 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
     public ViewportGraphTargetResolver() {}
 
     public Resolution resolve(String surfaceRef, String sessionId) {
+        requireUiThread();
         List<UiSurfaceRegistry.Lease<ViewportSurface>> candidates = UiSurfaceRegistry.INSTANCE
                 .leases(UiSurfaceType.VIEWPORT, ViewportSurface.class).stream()
                 .filter(lease -> lease.visible() && !lease.owner().openGraphSessions().isEmpty())
@@ -87,7 +89,14 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
 
     @Override
     public void close() {
+        requireUiThread();
         targets.clear();
+    }
+
+    private static void requireUiThread() {
+        if (!Core.isOnUiThread()) {
+            throw new IllegalStateException("Viewport graph targets must be accessed on the ModernUI thread");
+        }
     }
 
     private record TargetKey(UiSurfaceId id, long generation, String sessionId, String scopeId) {}
