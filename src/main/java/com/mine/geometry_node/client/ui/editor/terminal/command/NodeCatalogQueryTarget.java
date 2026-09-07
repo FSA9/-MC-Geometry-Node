@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
-import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
+import com.mine.geometry_node.client.ui.workspace.surface.ViewportGraphContextService;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.List;
@@ -17,6 +17,7 @@ import java.util.List;
 /** Graph-independent node catalog target available even when no viewport is open. */
 final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget {
     private final TerminalGraphQueryService queries = new TerminalGraphQueryService((NodeGraph) null);
+    private final ViewportGraphContextService graphContexts = ViewportGraphContextService.INSTANCE;
 
     @Override public boolean hasGraph() { return false; }
     @Override public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
@@ -51,54 +52,40 @@ final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTa
 
     @Override
     public CommandResult getUiContext() {
+        ViewportGraphContextService.UiContext context = graphContexts.captureUiContext();
         JsonArray surfaces = new JsonArray();
-        for (UiSurfaceRegistry.Snapshot snapshot : UiSurfaceRegistry.INSTANCE.snapshots()) {
+        for (UiSurfaceRegistry.Snapshot snapshot : context.surfaces()) {
             surfaces.add(surfaceData(snapshot.id(), snapshot.visible()));
         }
-        List<UiSurfaceRegistry.Lease<ViewportSurface>> viewports = UiSurfaceRegistry.INSTANCE
-                .leases(UiSurfaceType.VIEWPORT, ViewportSurface.class).stream()
-                .filter(lease -> lease.visible() && !lease.owner().openGraphSessions().isEmpty()).toList();
-        String defaultViewport = viewports.stream().filter(lease -> lease.interactionSerial() > 0)
-                .max(java.util.Comparator.comparingLong(UiSurfaceRegistry.Lease::interactionSerial))
-                .or(() -> viewports.size() == 1 ? java.util.Optional.of(viewports.getFirst())
-                        : java.util.Optional.empty())
-                .map(lease -> lease.id().ref()).orElse("");
         JsonObject data = new JsonObject();
-        data.addProperty("default_viewport", defaultViewport);
+        data.addProperty("default_viewport", context.defaultViewport());
         data.add("surfaces", surfaces);
         return CommandResult.success("UI_CONTEXT", "已读取 GeometryNode 界面上下文", data);
     }
 
     @Override
     public CommandResult getSurfaceContext(String surfaceRef) {
-        UiSurfaceId id;
-        try {
-            id = UiSurfaceId.parse(surfaceRef);
-        } catch (IllegalArgumentException failure) {
-            return CommandResult.failure("SURFACE_REF_INVALID", "无效的界面引用: " + surfaceRef);
+        ViewportGraphContextService.SurfaceResolution resolution = graphContexts.resolveSurface(surfaceRef);
+        if (!resolution.ok()) {
+            return CommandResult.failure(resolution.failure().code(), resolution.failure().message());
         }
-        UiSurfaceRegistry.Snapshot snapshot = UiSurfaceRegistry.INSTANCE.snapshot(id).orElse(null);
-        if (snapshot == null) return CommandResult.failure("SURFACE_NOT_FOUND", "界面不存在: " + id.ref());
+        ViewportGraphContextService.SurfaceContext context = resolution.context();
+        UiSurfaceId id = context.snapshot().id();
+        UiSurfaceRegistry.Snapshot snapshot = context.snapshot();
         JsonObject data = surfaceData(id, snapshot.visible());
         if (id.type() == UiSurfaceType.VIEWPORT) {
-            UiSurfaceRegistry.Lease<ViewportSurface> lease = UiSurfaceRegistry.INSTANCE
-                    .lease(id, ViewportSurface.class).orElse(null);
-            ViewportSurface viewport = lease == null ? null : lease.owner();
-            GraphSession session = viewport == null ? null : viewport.currentGraphSession();
+            GraphSession session = context.currentSession();
             data.addProperty("has_graph", session != null);
             JsonArray tabs = new JsonArray();
-            if (viewport != null) {
-                for (GraphSession openSession : viewport.openGraphSessions()) {
-                    if (openSession == null || openSession.fileReference().isDeleted()) continue;
-                    BoundGraphScope openScope = BoundGraphScope.capture(openSession.editorContext);
-                    JsonObject tab = new JsonObject();
-                    tab.addProperty("tab_name", openSession.tabName);
-                    tab.addProperty("session_id", openSession.sessionId().toString());
-                    tab.addProperty("scope_id", openScope.id());
-                    tab.addProperty("revision", openSession.revision());
-                    tab.addProperty("current", openSession == session);
-                    tabs.add(tab);
-                }
+            for (GraphSession openSession : context.sessions()) {
+                BoundGraphScope openScope = BoundGraphScope.capture(openSession.editorContext);
+                JsonObject tab = new JsonObject();
+                tab.addProperty("tab_name", openSession.tabName);
+                tab.addProperty("session_id", openSession.sessionId().toString());
+                tab.addProperty("scope_id", openScope.id());
+                tab.addProperty("revision", openSession.revision());
+                tab.addProperty("current", openSession == session);
+                tabs.add(tab);
             }
             data.add("tabs", tabs);
             if (session != null) {

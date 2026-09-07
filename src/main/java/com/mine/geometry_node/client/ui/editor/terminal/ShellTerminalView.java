@@ -39,6 +39,10 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -51,6 +55,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private static final long SELECTION_STALE_MILLIS = 5_000;
     private static final long SELECTION_HOLD_MILLIS = 10_000;
     private static final int WHEEL_LINES = 3;
+    private static final int RENDER_WORKERS = 2;
+    private static final int MAX_PENDING_RENDERS = 32;
+    private static final ThreadPoolExecutor RENDER_EXECUTOR = createRenderExecutor();
 
     private final ShellTerminalCoordinator coordinator;
     private final TerminalScrollView scrollView;
@@ -66,6 +73,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private final AtomicBoolean dirty = new AtomicBoolean();
     private final AtomicBoolean renderInFlight = new AtomicBoolean();
     private final AtomicLong startupGeneration = new AtomicLong();
+    private final AtomicLong activationGeneration = new AtomicLong();
     private final Runnable refreshTask = this::drainRefresh;
     private final Runnable resizeTask = this::applyPendingResize;
     private final Runnable selectionReleaseTask = this::releaseStaleSelection;
@@ -88,6 +96,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private String displayedActionText = "";
     private int displayedStatusColor;
     private volatile boolean startRequested;
+    private volatile boolean active;
     private volatile boolean disposed;
     private final ShellStartAction shellStartAction;
 
@@ -213,16 +222,37 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     public void requestInputFocus() {
-        if (disposed) return;
+        if (disposed || !active) return;
         inputSink.requestFocus();
         inputSink.post(() -> {
             if (!disposed) inputSink.requestFocus();
         });
     }
 
+    /** Enables UI rendering for this tab without changing the PTY lifecycle. */
+    public void activate() {
+        if (disposed || active) return;
+        active = true;
+        activationGeneration.incrementAndGet();
+        requestRefresh();
+    }
+
+    /** Suspends UI rendering while the PTY continues to consume output. */
+    public void deactivate() {
+        if (disposed || !active) return;
+        active = false;
+        activationGeneration.incrementAndGet();
+        removeCallbacks(refreshTask);
+        removeCallbacks(resizeTask);
+        refreshQueued.set(false);
+        releaseUiInteraction();
+    }
+
     public void dispose() {
         if (disposed) return;
         disposed = true;
+        active = false;
+        activationGeneration.incrementAndGet();
         startupGeneration.incrementAndGet();
         removeCallbacks(refreshTask);
         removeCallbacks(resizeTask);
@@ -243,7 +273,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         if (screenView.getText() instanceof Spannable text) Selection.removeSelection(text);
         screenView.clearFocus();
         inputSink.clearFocus();
-        if (!disposed) requestRefresh();
+        if (!disposed && active) requestRefresh();
     }
 
     @Override
@@ -304,11 +334,15 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private void requestRefresh() {
         if (disposed) return;
         dirty.set(true);
+        if (!active) return;
         if (refreshQueued.compareAndSet(false, true)) postDelayed(refreshTask, RENDER_INTERVAL_MILLIS);
     }
 
     private void drainRefresh() {
-        if (disposed) return;
+        if (disposed || !active) {
+            refreshQueued.set(false);
+            return;
+        }
         dirty.set(false);
         try {
             TerminalSize targetSize = pendingSize;
@@ -326,13 +360,13 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     private void scheduleSettledResize() {
-        if (disposed) return;
+        if (disposed || !active) return;
         removeCallbacks(resizeTask);
         postDelayed(resizeTask, RESIZE_SETTLE_MILLIS);
     }
 
     private void applyPendingResize() {
-        if (disposed) return;
+        if (disposed || !active) return;
         applyTerminalSize(pendingSize);
         requestRefresh();
     }
@@ -345,20 +379,28 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private void scheduleBackgroundRender(long requestedRevision) {
         if (!renderInFlight.compareAndSet(false, true)) return;
-        Thread.ofVirtual().name("geometry-node-terminal-render").start(() -> {
+        long requestedActivation = activationGeneration.get();
+        Runnable renderTask = () -> {
             try {
                 RenderedSnapshot rendered = buildRenderedSnapshot(coordinator.snapshot());
-                post(() -> finishBackgroundRender(rendered, null, requestedRevision));
+                post(() -> finishBackgroundRender(rendered, null, requestedRevision, requestedActivation));
             } catch (RuntimeException failure) {
-                post(() -> finishBackgroundRender(null, failure, requestedRevision));
+                post(() -> finishBackgroundRender(null, failure, requestedRevision, requestedActivation));
             }
-        });
+        };
+        try {
+            RENDER_EXECUTOR.execute(renderTask);
+        } catch (RejectedExecutionException rejected) {
+            renderInFlight.set(false);
+            dirty.set(true);
+        }
     }
 
     private void finishBackgroundRender(RenderedSnapshot rendered, RuntimeException failure,
-                                        long requestedRevision) {
+                                        long requestedRevision, long requestedActivation) {
         try {
             if (disposed) return;
+            if (!active || activationGeneration.get() != requestedActivation) return;
             if (failure != null) {
                 GeometryNode.LOGGER.error("Failed to render terminal snapshot", failure);
                 pendingError = "终端画面渲染失败";
@@ -373,10 +415,22 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         } finally {
             renderInFlight.set(false);
             long revision = coordinator.screenRevision();
-            if (!disposed && revision != lastRenderedRevision && revision != failedRenderRevision) {
+            if (!disposed && active && revision != lastRenderedRevision && revision != failedRenderRevision) {
                 requestRefresh();
             }
         }
+    }
+
+    private static ThreadPoolExecutor createRenderExecutor() {
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                RENDER_WORKERS, RENDER_WORKERS, 30L, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(MAX_PENDING_RENDERS), task -> {
+                    Thread thread = new Thread(task, "geometry-node-terminal-render");
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.AbortPolicy());
+        executor.allowCoreThreadTimeOut(true);
+        return executor;
     }
 
     private static RenderedSnapshot buildRenderedSnapshot(TerminalSnapshot snapshot) {

@@ -39,6 +39,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private final EditorSessionState.TerminalState mSessionState;
     private final Runnable mSessionChanged;
     private boolean mInitializing;
+    private boolean mWindowActive;
 
     public TerminalWindow(Context context) {
         this(context, new EditorSessionState.TerminalState(), null);
@@ -94,6 +95,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     private void switchToTab(int index) {
         if (index < 0 || index >= mTabs.size()) return;
+        for (TerminalTab tab : mTabs) tab.shellView.deactivate();
         mCurrentIndex = index;
         mContainer.removeAllViews();
 
@@ -109,8 +111,11 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         }
         mTabBar.rebuildTabs(titles, mCurrentIndex);
 
+        if (activeTab.session.mode() == TerminalMode.SHELL) {
+            if (mWindowActive) activeTab.shellView.activate();
+            activeTab.shellView.ensureStarted();
+        }
         activeTab.requestInputFocus();
-        if (activeTab.session.mode() == TerminalMode.SHELL) activeTab.shellView.ensureStarted();
         updateModeBar(activeTab.session.mode());
         captureSessionState();
     }
@@ -160,18 +165,25 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     @Override public View getView() { return this; }
     @Override
     public void onShow() {
-        if (mCurrentIndex >= 0) mTabs.get(mCurrentIndex).requestInputFocus();
+        mWindowActive = true;
+        if (mCurrentIndex >= 0) {
+            TerminalTab activeTab = mTabs.get(mCurrentIndex);
+            if (activeTab.session.mode() == TerminalMode.SHELL) activeTab.shellView.activate();
+            activeTab.requestInputFocus();
+        }
     }
     @Override
     public void onHide() {
+        mWindowActive = false;
         captureSessionState();
         if (mCurrentIndex >= 0 && mCurrentIndex < mTabs.size()) {
-            mTabs.get(mCurrentIndex).shellView.releaseUiInteraction();
+            mTabs.get(mCurrentIndex).shellView.deactivate();
         }
     }
 
     @Override
     public void onDispose() {
+        mWindowActive = false;
         captureSessionState();
         for (TerminalTab tab : mTabs) {
             tab.close();

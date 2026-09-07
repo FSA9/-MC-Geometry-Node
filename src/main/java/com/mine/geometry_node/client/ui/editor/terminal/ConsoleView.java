@@ -17,12 +17,19 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import icyllis.modernui.view.View;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.LogCallback {
     private static final int MAX_VISIBLE_SUGGESTIONS = 8;
     private static final int VIEW_FOCUS_DOWN = 130;
+    private static final int MAX_COMMAND_HISTORY = 200;
+    private static final int MAX_LOG_ENTRIES = 1_000;
+    private static final int MAX_LOG_CHARACTERS = 200_000;
+    private static final int MAX_LOG_ENTRY_CHARACTERS = 50_000;
+    private static final int LOG_TRIM_BATCH = 32;
 
     private final LinearLayout mLogContainer;
     private final EditText mInputBox;
@@ -34,6 +41,8 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
     private final TextView mMoreSuggestionsView;
     private final List<CommandRegistry.Suggestion> mCurrentSuggestions = new ArrayList<>();
     private boolean mLogScrollQueued;
+    private final Deque<LogEntry> mLogEntries = new ArrayDeque<>();
+    private int mLogCharacterCount;
     private int mSuggestionIndex = -1;
 
     // 历史记录状态
@@ -69,7 +78,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         mInputBox.setTextSize(TypedValue.COMPLEX_UNIT_PX, UIUtils.dp2px(14f));
         mInputBox.setBackground(null);
         mInputBox.setSingleLine(true);
-        inputLayout.addView(mInputBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(32f)));
+        inputLayout.addView(mInputBox, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(32f), 1f));
 
         mainLayout.addView(inputLayout, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mainLayout, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -229,6 +238,9 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
         if (mCommandHistory.isEmpty() || !mCommandHistory.get(mCommandHistory.size() - 1).equals(line)) {
             mCommandHistory.add(line);
+            if (mCommandHistory.size() > MAX_COMMAND_HISTORY) {
+                mCommandHistory.subList(0, mCommandHistory.size() - MAX_COMMAND_HISTORY).clear();
+            }
         }
         mHistoryIndex = mCommandHistory.size();
 
@@ -240,14 +252,18 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     @Override
     public void onLog(String text, int color) {
+        String renderedText = boundedLogText(text);
         TextView tv = new TextView(getContext());
-        tv.setText(text);
+        tv.setText(renderedText);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, UIUtils.dp2px(13f));
         tv.setTextColor(color);
         tv.setPadding(0, UIUtils.dp2pxInt(2), 0, UIUtils.dp2pxInt(2));
         tv.setTextIsSelectable(true);
 
         mLogContainer.addView(tv);
+        mLogEntries.addLast(new LogEntry(renderedText.length()));
+        mLogCharacterCount += renderedText.length();
+        trimLogsIfNeeded();
         if (!mLogScrollQueued) {
             mLogScrollQueued = true;
             mScrollView.post(() -> {
@@ -260,6 +276,29 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
     @Override
     public void onClear() {
         mLogContainer.removeAllViews();
+        mLogEntries.clear();
+        mLogCharacterCount = 0;
+    }
+
+    private void trimLogsIfNeeded() {
+        if (mLogEntries.size() <= MAX_LOG_ENTRIES && mLogCharacterCount <= MAX_LOG_CHARACTERS) return;
+        int removeCount = Math.min(LOG_TRIM_BATCH, mLogEntries.size());
+        int removedViews = 0;
+        while (removeCount-- > 0 || mLogEntries.size() > MAX_LOG_ENTRIES
+                || mLogCharacterCount > MAX_LOG_CHARACTERS) {
+            LogEntry removed = mLogEntries.pollFirst();
+            if (removed == null) break;
+            mLogCharacterCount -= removed.characters();
+            removedViews++;
+        }
+        if (removedViews > 0) mLogContainer.removeViews(0, removedViews);
+    }
+
+    private static String boundedLogText(String text) {
+        String value = text == null ? "" : text;
+        if (value.length() <= MAX_LOG_ENTRY_CHARACTERS) return value;
+        String prefix = "[earlier output truncated]\n";
+        return prefix + value.substring(value.length() - (MAX_LOG_ENTRY_CHARACTERS - prefix.length()));
     }
 
     public void requestInputFocus() {
@@ -270,5 +309,8 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(color);
         return drawable;
+    }
+
+    private record LogEntry(int characters) {
     }
 }

@@ -466,6 +466,8 @@ public class BlueprintProcess {
         Map<String, Object> dynamicEventData = null;
         private final CompiledGraphDataEvaluator dataEvaluation =
                 new CompiledGraphDataEvaluator(BlueprintProcess.this.index);
+        private final GraphDataContext[] dataContexts =
+                new GraphDataContext[BlueprintProcess.this.index.getNodeCount()];
         // ✨ 新增：线程私有的临时黑板
         public final Map<String, Object> tempData = new HashMap<>();
 
@@ -902,25 +904,73 @@ public class BlueprintProcess {
 
         @Override
         public GraphDataContext contextFor(int nodeId) {
-            return this;
+            if (nodeId < 0 || nodeId >= dataContexts.length) {
+                throw new IllegalArgumentException("Invalid Blueprint data node index: " + nodeId);
+            }
+            GraphDataContext context = dataContexts[nodeId];
+            if (context == null) {
+                context = new BlueprintDataContext(nodeId);
+                dataContexts[nodeId] = context;
+            }
+            return context;
         }
 
         @Override
         public Object computeNode(int nodeId, String portName, @Nullable BaseNode logic) {
-            int prevActive = this.activeNodeId;
-            try {
-                if (logic == null) {
-                    if (RateLimitedLog.acquire(diagnosticKey("missing_data_node", nodeId, portName))) {
-                        GeometryNode.LOGGER.error("Blueprint data node type is unavailable: graph={}, node={}, type={}, port={}",
-                                graphId, index.getNodeId(nodeId), index.getNodeType(nodeId), portName);
-                    }
-                    return null;
+            if (logic == null) {
+                if (RateLimitedLog.acquire(diagnosticKey("missing_data_node", nodeId, portName))) {
+                    GeometryNode.LOGGER.error("Blueprint data node type is unavailable: graph={}, node={}, type={}, port={}",
+                            graphId, index.getNodeId(nodeId), index.getNodeType(nodeId), portName);
                 }
+                return null;
+            }
+            return logic.compute(contextFor(nodeId), portName);
+        }
 
-                this.activeNodeId = nodeId;
-                return logic.compute((GraphDataContext) this, portName);
-            } finally {
-                this.activeNodeId = prevActive;
+        private final class BlueprintDataContext implements GraphDataContext {
+            private final int nodeId;
+
+            private BlueprintDataContext(int nodeId) {
+                this.nodeId = nodeId;
+            }
+
+            @Override public ServerLevel getLevel() { return ExecutionThread.this.getLevel(); }
+            @Override public Entity getEntity() { return ExecutionThread.this.getEntity(); }
+            @Override public Entity getGraphOwnerEntity() { return ExecutionThread.this.getGraphOwnerEntity(); }
+            @Override public String getGraphId() { return ExecutionThread.this.getGraphId(); }
+            @Override public GraphBindingKey getGraphBindingKey() { return ExecutionThread.this.getGraphBindingKey(); }
+            @Override public String getCurrentNodeStableId() { return index.getNodeId(nodeId); }
+
+            @Override
+            public Object getInputValue(String portName) {
+                return dataEvaluation.connectedInput(nodeId, portName, ExecutionThread.this);
+            }
+
+            @Override
+            public boolean hasInputConnection(String portName) {
+                return dataEvaluation.hasInputConnection(nodeId, portName);
+            }
+
+            @Override
+            public Object getStaticInput(String portName) {
+                return index.getStaticInput(nodeId, portName);
+            }
+
+            @Override public Object getEventData(String key) { return ExecutionThread.this.getEventData(key); }
+
+            @Override
+            public Object getNodeResult(String portName) {
+                Object value = tempData.get(ExecutionContext.nodeResultKey(nodeId, portName));
+                return GraphValueSnapshot.requiresReadCopy(value)
+                        ? GraphValueSnapshot.snapshot(value) : value;
+            }
+
+            @Override public boolean isCurrentEventSourceNode() { return nodeId == eventSourceNodeId; }
+            @Override public boolean hasPort(String portName) { return index.hasPort(nodeId, portName); }
+
+            @Override
+            public Object getScopedState(ScopedStateTarget target, String name) {
+                return ExecutionThread.this.getScopedState(target, name);
             }
         }
 
