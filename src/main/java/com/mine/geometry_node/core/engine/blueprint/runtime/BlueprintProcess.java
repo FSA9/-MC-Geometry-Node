@@ -676,9 +676,14 @@ public class BlueprintProcess {
                         int previousActive = this.activeNodeId;
                         this.activeNodeId = currentFlowId;
 
-                        ExecutionResult result = logic.execute(this);
+                        ExecutionResult result;
+                        try {
+                            result = logic.execute(this);
+                        } finally {
+                            this.activeNodeId = previousActive;
+                            dataEvaluation.beginEpoch();
+                        }
 
-                        this.activeNodeId = previousActive;
                         if (BlueprintProcess.this.shutDown) {
                             this.currentFlowId = -1;
                             this.executionStack.clear();

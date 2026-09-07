@@ -221,23 +221,13 @@ public final class ServerAssetTransferService {
     private synchronized boolean completeRequest(MinecraftServer server, RequestKey key) {
         RequestRegistry registry = requestRegistries.get(server);
         if (registry == null || !registry.active.remove(key)) return false;
-        boolean cancelled = registry.cancelled.remove(key);
         registry.completed.put(key, Boolean.TRUE);
         while (registry.completed.size() > COMPLETED_REQUEST_HISTORY) {
             Iterator<RequestKey> oldest = registry.completed.keySet().iterator();
             oldest.next();
             oldest.remove();
         }
-        return !cancelled;
-    }
-
-    public synchronized void cancel(ServerPlayer player, UUID transferId) {
-        if (player == null || transferId == null) return;
-        MinecraftServer server = player.level().getServer();
-        RequestRegistry registry = requestRegistries.get(server);
-        if (registry == null) return;
-        RequestKey key = new RequestKey(player.getUUID(), transferId);
-        if (registry.active.contains(key)) registry.cancelled.add(key);
+        return true;
     }
 
     private static void sendFailure(ServerPlayer player, UUID transferId, AssetTransferErrorCode code,
@@ -283,7 +273,6 @@ public final class ServerAssetTransferService {
 
     private static final class RequestRegistry {
         private final Set<RequestKey> active = new HashSet<>();
-        private final Set<RequestKey> cancelled = new HashSet<>();
         private final LinkedHashMap<RequestKey, Boolean> completed = new LinkedHashMap<>();
     }
 

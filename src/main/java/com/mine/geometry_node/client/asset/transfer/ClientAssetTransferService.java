@@ -13,7 +13,6 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferSnapshot;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileCancel;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileDownloadRequest;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileUpload;
@@ -132,29 +131,6 @@ public final class ClientAssetTransferService implements AutoCloseable {
         observers.add(observer);
         publishSnapshotTo(List.of(observer), snapshot());
         return () -> observers.remove(observer);
-    }
-
-    public synchronized boolean cancelTransfer(UUID transferId) {
-        ClientFile file = filesByTransferId.get(transferId);
-        if (file == null || file.state.isTerminal()) return false;
-        if (file == activeFile) sendCancellation(file.transferId);
-        finish(file, AssetTransferState.FAILED, cancelledFailure());
-        publish();
-        pump();
-        return true;
-    }
-
-    public synchronized boolean cancelJob(UUID jobId) {
-        ClientJob job = jobs.get(jobId);
-        if (job == null || job.isTerminal()) return false;
-        for (ClientFile file : List.copyOf(job.files)) {
-            if (file.state.isTerminal()) continue;
-            if (file == activeFile) sendCancellation(file.transferId);
-            finish(file, AssetTransferState.FAILED, cancelledFailure());
-        }
-        publish();
-        pump();
-        return true;
     }
 
     public synchronized AssetTransferSnapshot snapshot() {
@@ -373,11 +349,6 @@ public final class ClientAssetTransferService implements AutoCloseable {
         return packet.errorCode() == AssetTransferErrorCode.NONE ? null : failure(packet);
     }
 
-    private static AssetTransferFailure cancelledFailure() {
-        return new AssetTransferFailure(AssetTransferErrorCode.CANCELLED,
-                "geometry_node.asset_transfer.error.cancelled", List.of(), "");
-    }
-
     private static void trimHistory(Deque<?> history) {
         while (history.size() > HISTORY_LIMIT) history.removeLast();
     }
@@ -428,7 +399,6 @@ public final class ClientAssetTransferService implements AutoCloseable {
     private synchronized void timeout(ClientFile file, long generation) {
         if (file != activeFile || file.state != AssetTransferState.TRANSFERRING
                 || file.deadlineGeneration != generation) return;
-        sendCancellation(file.transferId);
         finish(file, AssetTransferState.FAILED, new AssetTransferFailure(
                 AssetTransferErrorCode.TIMEOUT,
                 "geometry_node.asset_transfer.error.timeout", List.of(), ""));
@@ -441,14 +411,6 @@ public final class ClientAssetTransferService implements AutoCloseable {
         ScheduledFuture<?> deadline = file.deadline;
         file.deadline = null;
         if (deadline != null) deadline.cancel(false);
-    }
-
-    private static void sendCancellation(UUID transferId) {
-        try {
-            NetworkHandler.sendToServer(new PacketAssetFileCancel(transferId));
-        } catch (RuntimeException ignored) {
-            // Cancellation is best-effort when the connection is closing.
-        }
     }
 
     private static void post(Runnable task) {

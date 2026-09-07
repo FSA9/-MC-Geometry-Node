@@ -11,7 +11,6 @@ import com.mine.geometry_node.core.engine.system.asset.RemoteAssetRepositoryServ
 import com.mine.geometry_node.core.engine.system.asset.transfer.service.ServerAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.preview.ServerAssetPreviewService;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileDownloadRequest;
-import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileCancel;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileUpload;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanRequest;
 import com.mine.geometry_node.core.engine.system.quest.QuestScreenService;
@@ -80,12 +79,6 @@ public class NetworkHandler {
                 PacketAssetFileUpload.STREAM_CODEC, (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player) {
                         ServerAssetTransferService.INSTANCE.handleUpload(player, payload);
-                    }
-                }));
-        NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetFileCancel.TYPE,
-                PacketAssetFileCancel.STREAM_CODEC, (payload, context) -> context.queue(() -> {
-                    if (context.getPlayer() instanceof ServerPlayer player) {
-                        ServerAssetTransferService.INSTANCE.cancel(player, payload.transferId());
                     }
                 }));
         NetworkManager.registerReceiver(NetworkManager.Side.C2S, PacketAssetTransferPlanRequest.TYPE,

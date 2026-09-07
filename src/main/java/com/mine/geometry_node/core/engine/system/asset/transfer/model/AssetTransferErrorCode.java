@@ -9,7 +9,6 @@ public enum AssetTransferErrorCode {
     STALE_OBJECT(false),
     IO_FAILURE(true),
     TIMEOUT(true),
-    CANCELLED(false),
     DISCONNECTED(true),
     GRAPH_RELOAD_FAILED(true),
     UNKNOWN(true);
