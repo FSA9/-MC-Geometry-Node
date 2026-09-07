@@ -123,10 +123,17 @@ public class TerminalTabBar extends LinearLayout {
                     }
                     break;
                 case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
                     if (isDragging[0]) {
                         calculateAndMoveTab(event.getRawX(), currentIndex);
                     }
+                    isDragging[0] = false;
+                    tabLayout.setAlpha(1.0f);
+                    mIndicatorX = -1;
+                    invalidate();
+                    requestDisallowInterceptTouchEvent(false);
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    isDragging[0] = false;
                     tabLayout.setAlpha(1.0f);
                     mIndicatorX = -1;
                     invalidate();

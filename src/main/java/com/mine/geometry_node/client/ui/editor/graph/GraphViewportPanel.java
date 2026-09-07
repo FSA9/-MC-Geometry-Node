@@ -70,6 +70,7 @@ public class GraphViewportPanel extends LinearLayout {
     private long mObservedOpenSessionSerial = -1L;
     private boolean mManualSessionSelection;
     private boolean mCallbacksRegistered;
+    private boolean mDisposed;
     private Consumer<GraphSession> mSessionChangedListener;
     private Consumer<GraphSession> mBeforeSessionSaveListener;
     private GraphSession mLastNotifiedSession;
@@ -119,6 +120,9 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     public void activatePanel() {
+        if (mDisposed) {
+            return;
+        }
         if (sFocusedPanel == null) {
             sFocusedPanel = this;
         }
@@ -133,6 +137,20 @@ public class GraphViewportPanel extends LinearLayout {
         }
         unregisterCallbacks();
         mViewport.deactivateLifecycle();
+    }
+
+    public void dispose() {
+        if (mDisposed) {
+            return;
+        }
+        mDisposed = true;
+        deactivatePanel();
+        mSessionChangedListener = null;
+        mBeforeSessionSaveListener = null;
+        mInteractionListener = null;
+        mLastNotifiedSession = null;
+        mSelectedSession = null;
+        mViewport.getController().dispose();
     }
 
     public void setSessionChangedListener(Consumer<GraphSession> listener) {
@@ -259,6 +277,9 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     private void refreshTabs() {
+        if (mDisposed) {
+            return;
+        }
         mTabBar.removeAllViews();
         DocumentManager docMgr = DocumentManager.INSTANCE;
         applyOpenedSession(docMgr);
@@ -356,10 +377,17 @@ public class GraphViewportPanel extends LinearLayout {
                     break;
 
                 case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
                     if (isDragging[0]) {
                         calculateAndMoveTab(event.getRawX(), index);
                     }
+                    isDragging[0] = false;
+                    tabLayout.setAlpha(1.0f);
+                    mTabBar.hideIndicator();
+                    mTabScrollView.requestDisallowInterceptTouchEvent(false);
+                    break;
+
+                case MotionEvent.ACTION_CANCEL:
+                    isDragging[0] = false;
                     tabLayout.setAlpha(1.0f);
                     mTabBar.hideIndicator();
                     mTabScrollView.requestDisallowInterceptTouchEvent(false);

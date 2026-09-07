@@ -120,6 +120,19 @@ public class GraphEditorWindow extends LinearLayout
     }
 
     @Override
+    public void onDispose() {
+        try {
+            mPropertiesPanel.bind(null);
+        } finally {
+            try {
+                onHide();
+            } finally {
+                mGraphViewportPanel.dispose();
+            }
+        }
+    }
+
+    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             KeyBinding saveBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SAVE));

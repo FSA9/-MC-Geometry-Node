@@ -190,6 +190,13 @@ public class ViewportController implements EditorContext.EditorListener,
         }
     }
 
+    public void dispose() {
+        saveCurrentSessionState();
+        setEditorContext(null);
+        mCurrentSession = null;
+        mSessionStates.clear();
+    }
+
     public void executeEnterGroup(String nodeId) {
         if (mEditorContext == null || nodeId == null) return;
         NodeData node = mEditorContext.getCurrentGraph().getNode(nodeId);
