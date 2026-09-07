@@ -96,7 +96,7 @@ public class NodeLayoutEngine {
         float height = UIConstants.Node.ROW_HEIGHT;
         if (row.uiHint() == null) return height;
         if (!nodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "")) {
-            UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
+            UIHintRenderer renderer = HintRendererFactory.getRenderer(row);
             float extraRows = renderer != null ? renderer.getRequiredExtraRows(row) : 0.0f;
             height = UIConstants.Node.ROW_HEIGHT * (row.leftPort() != null || row.rightPort() != null ? 1.0f + extraRows : Math.max(1.0f, extraRows));
         }

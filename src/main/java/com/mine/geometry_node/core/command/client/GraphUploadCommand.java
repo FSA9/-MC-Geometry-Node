@@ -53,7 +53,11 @@ public class GraphUploadCommand {
     private static void submit(List<ClientAssetTransferRequest> requests, String action) {
         UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
         ClientCommandUtils.sendClientMsg("§a已将 " + requests.size() + " 个图加入" + action + "队列。");
-        ClientAssetTransferService.INSTANCE.completion(jobId).thenAccept(result -> {
+        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> {
+            if (error != null) {
+                ClientCommandUtils.sendClientMsg("§c" + action + "失败: " + error.getMessage());
+                return;
+            }
             long completed = result.completedFileCount();
             long failed = result.files().size() - completed;
             String color = failed == 0 ? "§a" : "§e";

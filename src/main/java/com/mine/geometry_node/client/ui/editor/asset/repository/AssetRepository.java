@@ -9,5 +9,6 @@ public interface AssetRepository {
 
     boolean supports(AssetRepositoryOperation operation);
 
+    /** Delivers results on the Minecraft client thread. */
     AssetRequest browse(AssetBrowseRequest request, Consumer<AssetListing> onResult);
 }

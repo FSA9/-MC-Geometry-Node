@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.UICommand.commands;
 import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.document.Connection;
+import com.mine.geometry_node.core.node.document.NodeData;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +15,7 @@ public class CmdDisconnect implements ICommand {
     private final String outPortId;
     private final String inNodeId;
     private final String inPortId;
+    private final boolean mFlowConnection;
     private final List<ExternalConnectionBackup> mExternalConnections = new ArrayList<>();
 
     private record ExternalConnectionBackup(String boundaryNodeId, GraphController.ScopedConnectionSnapshot snapshot) {}
@@ -23,10 +26,18 @@ public class CmdDisconnect implements ICommand {
         this.outPortId = outPortId;
         this.inNodeId = inNodeId;
         this.inPortId = inPortId;
+        this.mFlowConnection = detectFlowConnection();
         backupExternalConnections();
     }
 
-    private boolean isFlowConnection() {
+    private boolean detectFlowConnection() {
+        NodeData outNode = mController.getCurrentGraph().getNode(outNodeId);
+        Connection storedExecution = outNode != null ? outNode.execOutputs.get(outPortId) : null;
+        if (storedExecution != null
+                && inNodeId.equals(storedExecution.targetNodeId())
+                && inPortId.equals(storedExecution.targetPortName())) {
+            return true;
+        }
         if (outPortId.startsWith("flow_") || inPortId.startsWith("flow_")) return true;
         PortType outType = mController.getResolvedPortType(outNodeId, outPortId, false);
         PortType inType = mController.getResolvedPortType(inNodeId, inPortId, true);
@@ -46,7 +57,7 @@ public class CmdDisconnect implements ICommand {
 
     @Override
     public void execute() {
-        if (isFlowConnection()) {
+        if (mFlowConnection) {
             mController.removeExecutionConnection(outNodeId, outPortId);
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
@@ -56,7 +67,7 @@ public class CmdDisconnect implements ICommand {
     @Override
     public void undo() {
         // 撤销时：恢复连线
-        if (isFlowConnection()) {
+        if (mFlowConnection) {
             mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
         } else {
             mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);

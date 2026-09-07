@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.input.KeyBindings;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerStore;
-import com.mine.geometry_node.core.network.ClientNetworkReceiverRegistry;
+import com.mine.geometry_node.client.network.ClientNetworkReceiverRegistry;
 import com.mine.geometry_node.client.runtime.marker.MarkerHudRenderer;
 import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;

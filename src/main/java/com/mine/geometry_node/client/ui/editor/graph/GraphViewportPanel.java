@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
@@ -215,28 +216,29 @@ public class GraphViewportPanel extends LinearLayout {
                     UUID.randomUUID() + ".json");
             UUID jobId = ClientAssetTransferService.INSTANCE.submit(java.util.List.of(
                     ClientAssetTransferRequest.download(entry.path(), temporary, AssetTransferConflictPolicy.OVERWRITE)));
-            ClientAssetTransferService.INSTANCE.completion(jobId).thenCompose(job -> {
-                if (job.completedFileCount() != job.files().size()) {
-                    return CompletableFuture.failedFuture(new IllegalStateException("remote asset download failed"));
-                }
-                return CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return Files.readString(temporary);
-                    } catch (Exception exception) {
-                        throw new java.util.concurrent.CompletionException(exception);
-                    } finally {
-                        try { Files.deleteIfExists(temporary); } catch (Exception ignored) { }
+            ClientAssetTransferService.INSTANCE.onCompletion(jobId, (job, transferError) -> {
+                CompletableFuture<String> content = transferError == null
+                        && job.completedFileCount() == job.files().size()
+                        ? CompletableFuture.supplyAsync(() -> {
+                            try {
+                                return Files.readString(temporary);
+                            } catch (Exception exception) {
+                                throw new java.util.concurrent.CompletionException(exception);
+                            } finally {
+                                try { Files.deleteIfExists(temporary); } catch (Exception ignored) { }
+                            }
+                        }) : CompletableFuture.failedFuture(transferError != null
+                                ? transferError : new IllegalStateException("remote asset download failed"));
+                content.whenCompleteAsync((json, throwable) -> {
+                    if (throwable != null) {
+                        System.err.println("[GraphViewportPanel] Remote graph import failed: " + throwable.getMessage());
+                        return;
                     }
-                });
-            }).whenComplete((json, throwable) -> post(() -> {
-                if (throwable != null) {
-                    System.err.println("[GraphViewportPanel] Remote graph import failed: " + throwable.getMessage());
-                    return;
-                }
-                if (isReadyForImport(targetSession)) {
-                    mViewport.getController().executeImportGraphJson(json, viewportX, viewportY);
-                }
-            }));
+                    if (isReadyForImport(targetSession)) {
+                        mViewport.getController().executeImportGraphJson(json, viewportX, viewportY);
+                    }
+                }, ClientAssetCallbacks.executor());
+            });
             return true;
         }
         return false;

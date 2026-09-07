@@ -62,7 +62,17 @@ public class NodeLayer extends FrameLayout {
     }
 
     public void addNodeVisual(String nodeId, NodeVisualAdapter node) {
-        mNodeVisuals.put(nodeId, node);
+        NodeVisualAdapter oldNode = mNodeVisuals.put(nodeId, node);
+        if (oldNode != null) {
+            mNodeOrder.remove(oldNode);
+            if (oldNode != node) {
+                View oldOverlayHost = oldNode.getOverlayHostView();
+                if (oldOverlayHost != null && oldOverlayHost.getParent() == this) {
+                    removeView(oldOverlayHost);
+                }
+                oldNode.releaseOverlayViews();
+            }
+        }
         mNodeOrder.add(node);
         syncOverlayHost(node);
         invalidate();

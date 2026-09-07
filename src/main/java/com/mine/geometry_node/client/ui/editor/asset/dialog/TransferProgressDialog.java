@@ -50,6 +50,10 @@ public class TransferProgressDialog extends AssetDialogBase {
         mStatus.setText(tr("geometry_node.common.cancelled")); mStatus.setTextColor(0xFFFFB86C);
         mProgress.setText(""); mCancelButton.setText(tr("geometry_node.common.close"));
     }
+    public void closeSilently() {
+        mFinished = true; mCommitting = false;
+        requestClose();
+    }
     @Override protected void onCloseRequested() { if (mFinished) requestClose(); else if (!mCommitting && mOnCancel != null) mOnCancel.run(); }
     @Override public boolean onEscapePressed() { onCloseRequested(); return true; }
     private static String tr(String key) { return Component.translatable(key).getString(); }

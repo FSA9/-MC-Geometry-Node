@@ -39,18 +39,4 @@ public record ClientAssetTransferRequest(
         return new ClientAssetTransferRequest(AssetTransferDirection.DOWNLOAD, target, remotePath, conflictPolicy);
     }
 
-    public static ClientAssetTransferRequest dataLibraryUpload(Path source, AssetTransferPurpose purpose) {
-        if (purpose != AssetTransferPurpose.DATA_LIBRARY_CREATE
-                && purpose != AssetTransferPurpose.DATA_LIBRARY_UPDATE) {
-            throw new IllegalArgumentException("Invalid Data Library upload purpose: " + purpose);
-        }
-        return new ClientAssetTransferRequest(AssetTransferDirection.UPLOAD, source, "data-library",
-                AssetTransferConflictPolicy.OVERWRITE, purpose);
-    }
-
-    public static ClientAssetTransferRequest dataLibraryDownload(Path target) {
-        return new ClientAssetTransferRequest(AssetTransferDirection.DOWNLOAD, target, "data-library",
-                AssetTransferConflictPolicy.OVERWRITE, AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD);
-    }
-
 }

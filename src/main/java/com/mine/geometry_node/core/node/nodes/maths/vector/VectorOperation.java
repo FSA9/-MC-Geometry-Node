@@ -50,7 +50,7 @@ public class VectorOperation extends BaseNode {
         NodeDef.Builder b = NodeDef.builder(TYPE_ID, NodeType.MATH,
                 Component.translatable("geometry_node.node.vector_operation"));
         if (vectorToDirection) {
-            b.addRow(new PortRow(null, StandardPorts.RESULT_VECTOR.toOutput(), UIHint.VECTOR, null, null));
+            b.addRow(new PortRow(null, StandardPorts.RESULT_VECTOR.toOutput(), UIHint.DEFAULT, null, null));
             b.addRow(new PortRow(null, StandardPorts.LENGTH.toOutput(), UIHint.DEFAULT, null, null));
         } else {
             b.addRow(new PortRow(null, (scalar ? StandardPorts.FLOAT_VALUE : StandardPorts.RESULT_VECTOR).toOutput(), UIHint.DEFAULT, null, null));

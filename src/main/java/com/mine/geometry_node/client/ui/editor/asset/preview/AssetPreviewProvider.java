@@ -5,6 +5,8 @@ import java.io.File;
 
 public interface AssetPreviewProvider {
     boolean supports(AssetEntry entry);
+
+    /** Delivers listener callbacks on the Minecraft client thread. */
     Subscription subscribe(AssetEntry entry, Listener listener);
 
     interface Listener {

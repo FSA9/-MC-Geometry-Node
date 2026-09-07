@@ -44,7 +44,7 @@ public final class ServerAssetPreviewStore {
         atomicCopy(verifiedSource, artifact);
         writeMetadata(metadataPath(root, descriptor.revision().cacheKey()), descriptor);
         AssetPreviewCacheMaintenance.enforceLimit(root,
-                AssetPreviewServerConfig.cacheMaxBytes(), artifact);
+                AssetPreviewServerConfig.cacheMaxBytes(), artifact, METADATA_MAGIC);
         return new StoredPreview(descriptor, artifact);
     }
 

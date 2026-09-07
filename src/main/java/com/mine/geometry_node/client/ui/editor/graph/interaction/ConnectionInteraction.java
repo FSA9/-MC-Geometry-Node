@@ -76,6 +76,11 @@ final class ConnectionInteraction {
         mDraftStartPort = null;
     }
 
+    void cancel() {
+        mDraftStartPort = null;
+        clearCut();
+    }
+
     private ConnectionCandidate resolveConnectionCandidate(Viewport.PortInfo start, Viewport.PortInfo end) {
         ConnectionCandidate direct = createCandidateIfValid(start, end);
         if (direct != null) return direct;

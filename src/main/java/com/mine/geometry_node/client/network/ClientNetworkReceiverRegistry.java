@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.network;
+package com.mine.geometry_node.client.network;
 
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
@@ -35,6 +35,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
 public final class ClientNetworkReceiverRegistry {

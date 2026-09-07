@@ -248,14 +248,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 System.err.println("[AssetBrowser] Failed to submit generated graph: " + exception.getMessage());
                 return;
             }
-            ClientAssetTransferService.INSTANCE.completion(jobId).thenAccept(result -> {
+            ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> {
                 try {
                     Files.deleteIfExists(temporary);
                 } catch (java.io.IOException exception) {
                     System.err.println("[AssetBrowser] Failed to remove generated graph temporary file: "
                             + temporary);
                 }
-                if (result.completedFileCount() == result.files().size()) {
+                if (error == null && result.completedFileCount() == result.files().size()) {
                     post(() -> {
                         if (mBrowserPanel != null) mBrowserPanel.refreshFileList(onSuccess);
                     });
@@ -355,7 +355,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 }
                 restorePendingRemoteLocation();
             });
-        });
+        }, () -> finishRemoteRequest(requestId));
         NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
     }
 
@@ -485,7 +485,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                     }
                 }).show(this);
             });
-        });
+        }, () -> mTransferPlanRequestIds.remove(requestHolder[0]));
         requestHolder[0] = requestId;
         mTransferPlanRequestIds.add(requestId);
     }
@@ -501,8 +501,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 file.sourcePath(), file.targetPath(), overwrite || overwriteSet.contains(file.targetPath())
                         ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS)).toList();
         java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.completion(jobId).thenRun(() -> post(() -> {
-            if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> post(() -> {
+            if (error == null && mBrowserPanel != null) mBrowserPanel.refreshFileList();
         }));
     }
 
@@ -519,7 +519,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 }
                 finishDownload(response.files(), targetDirectory);
             });
-        });
+        }, () -> mTransferPlanRequestIds.remove(requestHolder[0]));
         requestHolder[0] = requestId;
         mTransferPlanRequestIds.add(requestId);
     }
@@ -569,10 +569,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }
         if (requests.isEmpty()) return;
         java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.completion(jobId).thenRun(() -> post(() -> {
-            DocumentManager.INSTANCE.refreshFileReferences();
-            ImageThumbnailView.clearCache();
-            if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> post(() -> {
+            if (error == null) {
+                DocumentManager.INSTANCE.refreshFileReferences();
+                ImageThumbnailView.clearCache();
+                if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+            }
         }));
     }
 

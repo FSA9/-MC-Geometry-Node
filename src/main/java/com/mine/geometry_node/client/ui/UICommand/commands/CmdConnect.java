@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +22,12 @@ public class CmdConnect implements ICommand {
     private String mDisplacedInboundNodeId;
     private String mDisplacedInboundPortId;
     private Connection mDisplacedExecutionOutput;
+    private final List<ExternalConnectionBackup> mDisplacedExternalConnections = new ArrayList<>();
+
+    private record ExternalConnectionBackup(
+            String boundaryNodeId,
+            GraphController.ScopedConnectionSnapshot snapshot
+    ) {}
 
     public CmdConnect(GraphController controller, NodeGraph graph, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;
@@ -72,6 +79,7 @@ public class CmdConnect implements ICommand {
                     && (!existingOutput.targetNodeId().equals(inNodeId)
                     || !existingOutput.targetPortName().equals(inPortId))) {
                 mDisplacedExecutionOutput = existingOutput;
+                backupExternalConnections(existingOutput.targetNodeId(), existingOutput.targetPortName());
             }
             if (isRerouteInput(inNodeId, inPortId)) return;
         }
@@ -84,6 +92,7 @@ public class CmdConnect implements ICommand {
                         if (link.targetNodeId().equals(inNodeId) && link.targetPortName().equals(inPortId)) {
                             mDisplacedInboundNodeId = node.id;
                             mDisplacedInboundPortId = entry.getKey();
+                            backupExternalConnections(node.id, entry.getKey());
                             return;
                         }
                     }
@@ -95,12 +104,20 @@ public class CmdConnect implements ICommand {
                             if (link.targetNodeId().equals(inNodeId) && link.targetPortName().equals(inPortId)) {
                                 mDisplacedInboundNodeId = node.id;
                                 mDisplacedInboundPortId = entry.getKey();
+                                backupExternalConnections(node.id, entry.getKey());
                                 return;
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private void backupExternalConnections(String boundaryNodeId, String portId) {
+        for (GraphController.ScopedConnectionSnapshot snapshot
+                : mController.getBoundaryPortExternalConnectionSnapshots(boundaryNodeId, portId)) {
+            mDisplacedExternalConnections.add(new ExternalConnectionBackup(boundaryNodeId, snapshot));
         }
     }
 
@@ -137,7 +154,9 @@ public class CmdConnect implements ICommand {
     public void undo() {
         // 1. 撤销新连线
         if (isFlowConnection()) {
-            mController.removeExecutionConnection(outNodeId, outPortId);
+            if (mDisplacedExecutionOutput == null) {
+                mController.removeExecutionConnection(outNodeId, outPortId);
+            }
         } else {
             mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
         }
@@ -161,6 +180,9 @@ public class CmdConnect implements ICommand {
                 mController.addConnection(
                         mDisplacedInboundNodeId, mDisplacedInboundPortId, inNodeId, inPortId);
             }
+        }
+        for (ExternalConnectionBackup backup : mDisplacedExternalConnections) {
+            mController.restoreGroupVirtualPortConnection(backup.boundaryNodeId(), backup.snapshot());
         }
     }
 }

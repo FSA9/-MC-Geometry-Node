@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.repository;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetType;
@@ -17,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public final class LocalAssetRepository implements AssetRepository {
@@ -44,6 +46,7 @@ public final class LocalAssetRepository implements AssetRepository {
             throw new IllegalArgumentException("local repository requires a local location");
         }
         Consumer<AssetListing> callback = onResult != null ? onResult : ignored -> {};
+        AtomicBoolean cancelled = new AtomicBoolean();
         Future<?> future = LOAD_EXECUTOR.submit(() -> {
             AssetListing result;
             try {
@@ -52,9 +55,17 @@ public final class LocalAssetRepository implements AssetRepository {
                 e.printStackTrace();
                 result = AssetListing.failure(location);
             }
-            if (!Thread.currentThread().isInterrupted()) callback.accept(result);
+            if (!Thread.currentThread().isInterrupted()) {
+                AssetListing completed = result;
+                ClientAssetCallbacks.execute(() -> {
+                    if (!cancelled.get()) callback.accept(completed);
+                });
+            }
         });
-        return () -> future.cancel(true);
+        return () -> {
+            cancelled.set(true);
+            future.cancel(true);
+        };
     }
 
     private AssetListing load(AssetLocation.Local location, AssetQuery query) {

@@ -1497,6 +1497,8 @@
     "geometry_node.asset_transfer.error.commit_failed":  "The file could not be saved to its destination.",
     "geometry_node.asset_transfer.error.invalid_download_size":  "The downloaded file size did not match the server response.",
     "geometry_node.asset_transfer.error.disconnected":  "The transfer stopped because the connection closed.",
+    "geometry_node.asset_transfer.error.timeout": "The transfer timed out while waiting for the server.",
+    "geometry_node.asset_transfer.error.cancelled": "The transfer was cancelled.",
     "geometry_node.asset_transfer.panel.title":  "Asset Transfers",
     "geometry_node.asset_transfer.panel.active":  "Active and Queued",
     "geometry_node.asset_transfer.panel.total":  "Total Progress",

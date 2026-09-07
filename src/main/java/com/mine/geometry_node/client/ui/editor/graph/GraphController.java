@@ -131,11 +131,7 @@ public class GraphController {
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         if (outNode != null) {
             outNode.removeDataConnection(outPortId, inNodeId, inPortId);
-
-            NodeData inNode = mContext.getCurrentGraph().getNode(inNodeId);
-            if (inNode != null) {
-                inNode.setInputConnected(inPortId, false);
-            }
+            refreshInputConnectedState(mContext.getCurrentGraph().nodes, inNodeId, inPortId);
 
             refreshVirtualGroupPortTypeAfterRemoval(outNodeId, outPortId, inNodeId, inPortId);
             refreshRerouteTypes(outNodeId, inNodeId);
@@ -148,7 +144,17 @@ public class GraphController {
 
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         if (outNode != null) {
+            Connection existing = outNode.execOutputs.get(outPortId);
+            if (matchesConnection(existing, inNodeId, inPortId)) return;
+            if (existing != null) {
+                removeExecutionConnection(outNodeId, outPortId, true);
+            }
+
             outNode.addExecutionConnection(outPortId, inNodeId, inPortId);
+            NodeData inNode = mContext.getCurrentGraph().getNode(inNodeId);
+            if (inNode != null) {
+                inNode.setInputConnected(inPortId, true);
+            }
             updateVirtualGroupPortTypeAfterExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
             refreshRerouteTypes(outNodeId, inNodeId);
             mContext.notifyExecutionConnectionAdded(outNodeId, outPortId, inNodeId, inPortId);
@@ -156,12 +162,27 @@ public class GraphController {
     }
 
     public void removeExecutionConnection(String outNodeId, String outPortId) {
+        removeExecutionConnection(outNodeId, outPortId, false);
+    }
+
+    private void removeExecutionConnection(String outNodeId, String outPortId, boolean replacingOutput) {
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         if (outNode != null) {
             Connection c = outNode.execOutputs.get(outPortId);
             if (c != null) {
                 outNode.removeExecutionConnection(outPortId);
-                refreshVirtualGroupPortTypeAfterRemoval(outNodeId, outPortId, c.targetNodeId(), c.targetPortName());
+                refreshInputConnectedState(
+                        mContext.getCurrentGraph().nodes,
+                        c.targetNodeId(),
+                        c.targetPortName()
+                );
+                refreshVirtualGroupPortTypeAfterRemoval(
+                        outNodeId,
+                        outPortId,
+                        c.targetNodeId(),
+                        c.targetPortName(),
+                        !replacingOutput
+                );
                 refreshRerouteTypes(outNodeId, c.targetNodeId());
                 mContext.notifyExecutionConnectionRemoved(outNodeId, outPortId, c.targetNodeId(), c.targetPortName());
             }
@@ -512,6 +533,48 @@ public class GraphController {
         }
     }
 
+    private static void refreshInputConnectedState(
+            Map<String, NodeData> scopeNodes,
+            String targetNodeId,
+            String targetPortId
+    ) {
+        if (scopeNodes == null || targetNodeId == null || targetPortId == null) return;
+        NodeData target = scopeNodes.get(targetNodeId);
+        if (target == null) return;
+
+        target.setInputConnected(targetPortId, hasIncomingConnection(scopeNodes, targetNodeId, targetPortId));
+    }
+
+    private static boolean hasIncomingConnection(
+            Map<String, NodeData> scopeNodes,
+            String targetNodeId,
+            String targetPortId
+    ) {
+        for (NodeData source : scopeNodes.values()) {
+            if (source == null) continue;
+            if (source.outputs != null) {
+                for (List<Connection> connections : source.outputs.values()) {
+                    if (connections == null) continue;
+                    for (Connection connection : connections) {
+                        if (matchesConnection(connection, targetNodeId, targetPortId)) return true;
+                    }
+                }
+            }
+            if (source.execOutputs != null) {
+                for (Connection connection : source.execOutputs.values()) {
+                    if (matchesConnection(connection, targetNodeId, targetPortId)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesConnection(Connection connection, String targetNodeId, String targetPortId) {
+        return connection != null
+                && targetNodeId.equals(connection.targetNodeId())
+                && targetPortId.equals(connection.targetPortName());
+    }
+
     private record DynamicPortPlan(Map<String, Integer> indices,
                                    Map<String, String> renames,
                                    int removeIndex) {
@@ -589,10 +652,20 @@ public class GraphController {
     }
 
     private void refreshVirtualGroupPortTypeAfterRemoval(String outNodeId, String outPortId, String inNodeId, String inPortId) {
+        refreshVirtualGroupPortTypeAfterRemoval(outNodeId, outPortId, inNodeId, inPortId, true);
+    }
+
+    private void refreshVirtualGroupPortTypeAfterRemoval(
+            String outNodeId,
+            String outPortId,
+            String inNodeId,
+            String inPortId,
+            boolean refreshSourceBoundary
+    ) {
         NodeData outNode = mContext.getCurrentGraph().getNode(outNodeId);
         NodeData inNode = mContext.getCurrentGraph().getNode(inNodeId);
 
-        if (outNode != null && outNode.isGroupInputNode()) {
+        if (refreshSourceBoundary && outNode != null && outNode.isGroupInputNode()) {
             refreshGroupInputPortType(outNode, outPortId);
         }
         if (inNode != null && inNode.isGroupOutputNode()) {
@@ -894,7 +967,21 @@ public class GraphController {
         if (outNode == null) return;
 
         if (snapshot.channel() == ConnectionChannel.EXECUTION) {
+            Connection existing = outNode.execOutputs.get(snapshot.outPortId());
+            if (matchesConnection(existing, snapshot.inNodeId(), snapshot.inPortId())) return;
+            if (existing != null) {
+                outNode.removeExecutionConnection(snapshot.outPortId());
+                refreshInputConnectedState(
+                        scopeNodes,
+                        existing.targetNodeId(),
+                        existing.targetPortName()
+                );
+            }
             outNode.addExecutionConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
+            NodeData inNode = scopeNodes.get(snapshot.inNodeId());
+            if (inNode != null) {
+                inNode.setInputConnected(snapshot.inPortId(), true);
+            }
             return;
         }
         outNode.addDataConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
@@ -911,14 +998,15 @@ public class GraphController {
         if (outNode == null) return;
 
         if (snapshot.channel() == ConnectionChannel.EXECUTION) {
-            outNode.removeExecutionConnection(snapshot.outPortId());
+            Connection existing = outNode.execOutputs.get(snapshot.outPortId());
+            if (matchesConnection(existing, snapshot.inNodeId(), snapshot.inPortId())) {
+                outNode.removeExecutionConnection(snapshot.outPortId());
+                refreshInputConnectedState(scopeNodes, snapshot.inNodeId(), snapshot.inPortId());
+            }
             return;
         }
         outNode.removeDataConnection(snapshot.outPortId(), snapshot.inNodeId(), snapshot.inPortId());
-        NodeData inNode = scopeNodes.get(snapshot.inNodeId());
-        if (inNode != null) {
-            inNode.setInputConnected(snapshot.inPortId(), false);
-        }
+        refreshInputConnectedState(scopeNodes, snapshot.inNodeId(), snapshot.inPortId());
     }
 
     private boolean isBoundaryVisualInput(NodeData boundaryNode) {

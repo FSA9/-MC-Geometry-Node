@@ -1,10 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.network.request.ClientRequestTracker;
-import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferFileSnapshot;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferJobSnapshot;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
@@ -18,7 +17,6 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryRequest;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
 import com.mine.geometry_node.core.network.packet.data.library.RemoteDataLibraryOperation;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.HolderLookup;
 
 import java.nio.charset.StandardCharsets;
@@ -37,7 +35,8 @@ import java.util.function.LongConsumer;
 /** Remote Data Library control plane; document bytes use the shared file transfer service. */
 public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryGateway {
     public static final NetworkRemoteDataLibraryGateway INSTANCE = new NetworkRemoteDataLibraryGateway();
-    private static final ClientRequestTracker.Group REQUESTS = ClientRequestTracker.group("remote-data-library");
+    private static final ClientRequestTracker.Group REQUESTS =
+            ClientRequestTracker.group("remote-data-library", ClientAssetCallbacks::execute);
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(Snapshot.EMPTY);
     private final Deque<Runnable> mutations = new ArrayDeque<>();
     private boolean mutationRunning;
@@ -278,8 +277,8 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             return;
         }
         UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
-                ClientAssetTransferRequest.dataLibraryUpload(source, purpose)));
-        ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
+                DataLibraryTransferRequests.upload(source, purpose)));
+        ClientAssetTransferService.INSTANCE.onCompletion(job, (result, error) -> {
             deleteQuietly(source);
             if (!isGenerationActive(generation)) return;
             if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
@@ -314,8 +313,8 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             return;
         }
         UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
-                ClientAssetTransferRequest.dataLibraryDownload(target)));
-        ClientAssetTransferService.INSTANCE.completion(job).whenComplete((result, error) -> {
+                DataLibraryTransferRequests.download(target)));
+        ClientAssetTransferService.INSTANCE.onCompletion(job, (result, error) -> {
             try {
                 if (!isGenerationActive(generation)) return;
                 if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
@@ -350,35 +349,30 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     private static void control(RemoteDataLibraryOperation operation, Set<DataLibraryObjectKey> keys,
                                 Consumer<PacketRemoteDataLibraryResponse> completion) {
         int requestId = REQUESTS.nextRequestId();
-        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion, () -> {
-            Runnable fail = () -> completion.accept(new PacketRemoteDataLibraryResponse(
-                    requestId, false, "Data Library request timed out", ""));
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft != null) minecraft.execute(fail); else fail.run();
-        });
+        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion,
+                () -> completion.accept(new PacketRemoteDataLibraryResponse(
+                        requestId, false, "Data Library request timed out", "")));
         try {
             NetworkHandler.sendToServer(new PacketRemoteDataLibraryRequest(requestId, operation, keys));
         } catch (RuntimeException exception) {
             REQUESTS.cancel(requestId);
-            completion.accept(new PacketRemoteDataLibraryResponse(
-                    requestId, false, exception.getMessage(), ""));
+            ClientAssetCallbacks.execute(() -> completion.accept(new PacketRemoteDataLibraryResponse(
+                    requestId, false, exception.getMessage(), "")));
         }
     }
 
     private static void control(PacketRemoteDataLibraryRequest request,
                                 Consumer<PacketRemoteDataLibraryResponse> completion) {
         int requestId = request.requestId();
-        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion, () -> {
-            Runnable fail = () -> completion.accept(new PacketRemoteDataLibraryResponse(
-                    requestId, false, "Data Library request timed out", ""));
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft != null) minecraft.execute(fail); else fail.run();
-        });
+        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion,
+                () -> completion.accept(new PacketRemoteDataLibraryResponse(
+                        requestId, false, "Data Library request timed out", "")));
         try {
             NetworkHandler.sendToServer(request);
         } catch (RuntimeException exception) {
             REQUESTS.cancel(requestId);
-            completion.accept(new PacketRemoteDataLibraryResponse(requestId, false, exception.getMessage(), ""));
+            ClientAssetCallbacks.execute(() -> completion.accept(
+                    new PacketRemoteDataLibraryResponse(requestId, false, exception.getMessage(), "")));
         }
     }
 

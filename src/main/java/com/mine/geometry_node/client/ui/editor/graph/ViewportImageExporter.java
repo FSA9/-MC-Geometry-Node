@@ -31,8 +31,8 @@ import java.util.concurrent.Executors;
 final class ViewportImageExporter {
     private static final float PIXELS_PER_DP = 2.0f;
     private static final float PADDING_DP = 32.0f;
-    private static final int MAX_SIDE_PX = 8192;
-    private static final long MAX_PIXEL_COUNT = 64L * 1024L * 1024L;
+    private static final int MAX_SIDE_PX = 4096;
+    private static final long MAX_PIXEL_COUNT = 4096L * 4096L;
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS");
     private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "GeometryNode-ViewportImageExporter");

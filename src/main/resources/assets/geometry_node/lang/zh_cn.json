@@ -1497,6 +1497,8 @@
     "geometry_node.asset_transfer.error.commit_failed":  "无法将文件保存到目标位置。",
     "geometry_node.asset_transfer.error.invalid_download_size":  "下载文件大小与服务端响应不一致。",
     "geometry_node.asset_transfer.error.disconnected":  "连接已关闭，传输随之停止。",
+    "geometry_node.asset_transfer.error.timeout": "等待服务器响应超时，传输已停止。",
+    "geometry_node.asset_transfer.error.cancelled": "传输已取消。",
     "geometry_node.asset_transfer.panel.title":  "资产传输",
     "geometry_node.asset_transfer.panel.active":  "活动与排队",
     "geometry_node.asset_transfer.panel.total":  "总进度",

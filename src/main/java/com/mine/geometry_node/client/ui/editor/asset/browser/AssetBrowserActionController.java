@@ -13,6 +13,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.asset.remote.RemoteGraphPathIndex;
 import com.mine.geometry_node.client.asset.file.AssetSystemFileBrowser;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
@@ -501,7 +502,7 @@ final class AssetBrowserActionController {
         }
 
         if (menu.hasItems()) {
-            menu.showAt(localX, localY, mPanel.bodyFrame());
+            mPanel.showMenu(menu, localX, localY);
         }
     }
 
@@ -709,6 +710,7 @@ final class AssetBrowserActionController {
                 if (operation == PacketRemoteAssetFileOperationRequest.Operation.MOVE) {
                     mClipboard.clearRemote();
                 }
+                RemoteGraphPathIndex.INSTANCE.invalidateMutation(operation, paths, destinationPath);
                 mPanel.clearSelection();
                 if (onSuccess != null) {
                     onSuccess.run();
@@ -720,6 +722,9 @@ final class AssetBrowserActionController {
                     }
                 });
             });
+        }, () -> {
+            mRemoteRequestIds.remove(requestId);
+            mPanel.post(progress::closeSilently);
         });
         NetworkHandler.sendToServer(new PacketRemoteAssetFileOperationRequest(requestId, operation, destinationPath, paths));
     }

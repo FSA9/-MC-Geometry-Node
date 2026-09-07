@@ -78,6 +78,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     private GraphPropertiesTarget mTarget;
     private GraphPropertiesSnapshot mLoaded;
     private int mGeneration;
+    private long mLoadRequestId;
     private boolean mUpdating;
 
     public GraphPropertiesPanel(Context context) {
@@ -260,6 +261,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 tags,
                 questDefinition);
         int generation = mGeneration;
+        mLoadRequestId++;
         mLoaded = pending;
         hideSaveError();
         target.save(graphTypeId, comment, tags, questDefinition).whenComplete((ignored, error) -> post(() -> {
@@ -308,6 +310,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
 
     private void reloadTarget() {
         GraphPropertiesTarget target = mTarget;
+        long requestId = ++mLoadRequestId;
         if (target == null) {
             hideContent();
             return;
@@ -316,7 +319,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         int generation = mGeneration;
         if (mLoaded == null) hideContent();
         target.load().whenComplete((snapshot, error) -> post(() -> {
-            if (target != mTarget || generation != mGeneration) return;
+            if (target != mTarget || generation != mGeneration || requestId != mLoadRequestId) return;
             if (error != null) {
                 mLoaded = null;
                 clearTransientUi();

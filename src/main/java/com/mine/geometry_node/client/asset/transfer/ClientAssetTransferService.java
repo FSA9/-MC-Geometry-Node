@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.asset.transfer;
 
+import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
@@ -11,10 +13,10 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferSnapshot;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferState;
 import com.mine.geometry_node.core.network.NetworkHandler;
+import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileCancel;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileDownloadRequest;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileUpload;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 import java.io.IOException;
@@ -32,17 +34,36 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /** Client-side file queue. Each request is one complete Minecraft/NeoForge payload. */
 public final class ClientAssetTransferService implements AutoCloseable {
     public static final ClientAssetTransferService INSTANCE = new ClientAssetTransferService();
     private static final int HISTORY_LIMIT = 50;
+    private static final long RESPONSE_TIMEOUT_SECONDS = 10L;
 
     private final AssetTransferIoExecutor io =
             new AssetTransferIoExecutor("GeometryNode-AssetTransfer-ClientIO", 1, 64);
+    private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor(task -> {
+        Thread thread = new Thread(task, "GeometryNode-AssetTransfer-Deadline");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final ExecutorService notifications = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "GeometryNode-AssetTransfer-Notifications");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final Map<UUID, ClientJob> jobs = new LinkedHashMap<>();
+    private final Map<UUID, CompletableFuture<AssetTransferJobSnapshot>> terminalCompletions = new LinkedHashMap<>();
     private final Map<UUID, ClientFile> filesByTransferId = new LinkedHashMap<>();
     private final Map<UUID, ClientAssetTransferRequest> retryRequestsByTransferId = new LinkedHashMap<>();
     private final Deque<ClientJob> pendingJobs = new ArrayDeque<>();
@@ -70,12 +91,22 @@ public final class ClientAssetTransferService implements AutoCloseable {
         return job.jobId;
     }
 
-    public synchronized CompletableFuture<AssetTransferJobSnapshot> completion(UUID jobId) {
-        ClientJob job = jobs.get(jobId);
-        if (job == null) {
-            return CompletableFuture.failedFuture(new IllegalArgumentException("Unknown asset transfer job: " + jobId));
+    /** Delivers a transfer's terminal result on the Minecraft client thread. */
+    public void onCompletion(
+            UUID jobId,
+            BiConsumer<? super AssetTransferJobSnapshot, ? super Throwable> callback
+    ) {
+        Objects.requireNonNull(callback, "callback");
+        CompletableFuture<AssetTransferJobSnapshot> completion;
+        synchronized (this) {
+            ClientJob job = jobs.get(jobId);
+            completion = job != null ? job.completion : terminalCompletions.get(jobId);
+            if (completion == null) {
+                completion = CompletableFuture.failedFuture(
+                        new IllegalArgumentException("Unknown asset transfer job: " + jobId));
+            }
         }
-        return job.completion;
+        completion.whenCompleteAsync(callback, ClientAssetCallbacks.executor());
     }
 
     public synchronized UUID retry(UUID transferId) {
@@ -99,8 +130,31 @@ public final class ClientAssetTransferService implements AutoCloseable {
     public synchronized Subscription subscribe(Consumer<AssetTransferSnapshot> observer) {
         if (observer == null) return () -> { };
         observers.add(observer);
-        observer.accept(snapshot());
+        publishSnapshotTo(List.of(observer), snapshot());
         return () -> observers.remove(observer);
+    }
+
+    public synchronized boolean cancelTransfer(UUID transferId) {
+        ClientFile file = filesByTransferId.get(transferId);
+        if (file == null || file.state.isTerminal()) return false;
+        if (file == activeFile) sendCancellation(file.transferId);
+        finish(file, AssetTransferState.FAILED, cancelledFailure());
+        publish();
+        pump();
+        return true;
+    }
+
+    public synchronized boolean cancelJob(UUID jobId) {
+        ClientJob job = jobs.get(jobId);
+        if (job == null || job.isTerminal()) return false;
+        for (ClientFile file : List.copyOf(job.files)) {
+            if (file.state.isTerminal()) continue;
+            if (file == activeFile) sendCancellation(file.transferId);
+            finish(file, AssetTransferState.FAILED, cancelledFailure());
+        }
+        publish();
+        pump();
+        return true;
     }
 
     public synchronized AssetTransferSnapshot snapshot() {
@@ -137,6 +191,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
                 pump();
                 return;
             }
+            cancelDeadline(file);
             if (packet.sourceSize() != packet.content().length) {
                 failLocal(file, AssetTransferErrorCode.IO_FAILURE, "invalid_download_size", "");
                 return;
@@ -151,6 +206,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
         for (ClientJob job : List.copyOf(jobs.values())) {
             for (ClientFile file : job.files) {
                 if (!file.state.isTerminal()) {
+                    cancelDeadline(file);
                     file.state = AssetTransferState.FAILED;
                     file.failure = new AssetTransferFailure(AssetTransferErrorCode.DISCONNECTED,
                             "geometry_node.asset_transfer.error.disconnected", List.of(), "");
@@ -159,6 +215,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
             if (!job.completion.isDone()) job.completion.complete(job.snapshot());
         }
         jobs.clear();
+        terminalCompletions.clear();
         filesByTransferId.clear();
         retryRequestsByTransferId.clear();
         pendingJobs.clear();
@@ -177,6 +234,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
             if (file == null) continue;
             activeFile = file;
             file.state = AssetTransferState.TRANSFERRING;
+            scheduleDeadline(file);
             if (job.hasQueuedFiles()) pendingJobs.addLast(job);
             publish();
             start(file);
@@ -277,6 +335,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
     }
 
     private void finish(ClientFile file, AssetTransferState state, AssetTransferFailure failure) {
+        cancelDeadline(file);
         file.state = state;
         file.failure = failure;
         if (activeFile == file) activeFile = null;
@@ -291,8 +350,12 @@ public final class ClientAssetTransferService implements AutoCloseable {
         }
         if (file.job.isTerminal()) {
             AssetTransferJobSnapshot result = file.job.snapshot();
-            file.job.completion.complete(result);
             jobs.remove(file.job.jobId, file.job);
+            terminalCompletions.put(file.job.jobId, file.job.completion);
+            while (terminalCompletions.size() > HISTORY_LIMIT) {
+                terminalCompletions.remove(terminalCompletions.keySet().iterator().next());
+            }
+            file.job.completion.complete(result);
             pendingJobs.remove(file.job);
             for (ClientFile completed : file.job.files) filesByTransferId.remove(completed.transferId, completed);
         }
@@ -308,6 +371,11 @@ public final class ClientAssetTransferService implements AutoCloseable {
 
     private static AssetTransferFailure warning(PacketAssetFileResponse packet) {
         return packet.errorCode() == AssetTransferErrorCode.NONE ? null : failure(packet);
+    }
+
+    private static AssetTransferFailure cancelledFailure() {
+        return new AssetTransferFailure(AssetTransferErrorCode.CANCELLED,
+                "geometry_node.asset_transfer.error.cancelled", List.of(), "");
     }
 
     private static void trimHistory(Deque<?> history) {
@@ -327,11 +395,64 @@ public final class ClientAssetTransferService implements AutoCloseable {
     }
 
     private void publishSnapshot(AssetTransferSnapshot snapshot) {
-        for (Consumer<AssetTransferSnapshot> observer : observers) observer.accept(snapshot);
+        publishSnapshotTo(List.copyOf(observers), snapshot);
+    }
+
+    private void publishSnapshotTo(List<Consumer<AssetTransferSnapshot>> targets, AssetTransferSnapshot snapshot) {
+        try {
+            notifications.execute(() -> post(() -> {
+                for (Consumer<AssetTransferSnapshot> observer : targets) {
+                    if (!observers.contains(observer)) continue;
+                    try {
+                        observer.accept(snapshot);
+                    } catch (RuntimeException exception) {
+                        observers.remove(observer);
+                        GeometryNode.LOGGER.warn("Asset transfer observer failed and was unsubscribed", exception);
+                    }
+                }
+            }));
+        } catch (RejectedExecutionException ignored) {
+            // UI observers do not outlive the client service.
+        }
+    }
+
+    private void scheduleDeadline(ClientFile file) {
+        cancelDeadline(file);
+        long generation = ++file.deadlineGeneration;
+        file.deadline = deadlines.schedule(
+                () -> post(() -> timeout(file, generation)),
+                RESPONSE_TIMEOUT_SECONDS,
+                TimeUnit.SECONDS);
+    }
+
+    private synchronized void timeout(ClientFile file, long generation) {
+        if (file != activeFile || file.state != AssetTransferState.TRANSFERRING
+                || file.deadlineGeneration != generation) return;
+        sendCancellation(file.transferId);
+        finish(file, AssetTransferState.FAILED, new AssetTransferFailure(
+                AssetTransferErrorCode.TIMEOUT,
+                "geometry_node.asset_transfer.error.timeout", List.of(), ""));
+        publish();
+        pump();
+    }
+
+    private static void cancelDeadline(ClientFile file) {
+        file.deadlineGeneration++;
+        ScheduledFuture<?> deadline = file.deadline;
+        file.deadline = null;
+        if (deadline != null) deadline.cancel(false);
+    }
+
+    private static void sendCancellation(UUID transferId) {
+        try {
+            NetworkHandler.sendToServer(new PacketAssetFileCancel(transferId));
+        } catch (RuntimeException ignored) {
+            // Cancellation is best-effort when the connection is closing.
+        }
     }
 
     private static void post(Runnable task) {
-        Minecraft.getInstance().execute(task);
+        ClientAssetCallbacks.execute(task);
     }
 
     private static String rootMessage(Throwable throwable) {
@@ -345,6 +466,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
     public void close() {
         resetConnection();
         io.close();
+        deadlines.shutdownNow();
+        notifications.shutdownNow();
     }
 
     @FunctionalInterface
@@ -389,6 +512,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
         private final AssetTransferDirection direction;
         private AssetTransferState state = AssetTransferState.QUEUED;
         private AssetTransferFailure failure;
+        private long deadlineGeneration;
+        private ScheduledFuture<?> deadline;
 
         private ClientFile(ClientJob job, ClientAssetTransferRequest request) {
             this.job = job;

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.asset.transfer;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.network.request.ClientRequestTracker;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;
@@ -11,7 +12,7 @@ import java.util.function.Consumer;
 
 public final class ClientAssetTransferPlanState {
     private static final ClientRequestTracker.Group REQUESTS =
-            ClientRequestTracker.group("asset-transfer-plan");
+            ClientRequestTracker.group("asset-transfer-plan", ClientAssetCallbacks::execute);
 
     private ClientAssetTransferPlanState() {
     }
@@ -19,9 +20,11 @@ public final class ClientAssetTransferPlanState {
     public static int request(
             AssetTransferPlanKind kind,
             List<String> paths,
-        Consumer<PacketAssetTransferPlanResponse> callback
+            Consumer<PacketAssetTransferPlanResponse> callback,
+            Runnable onTimeout
     ) {
-        int requestId = REQUESTS.register(PacketAssetTransferPlanResponse.class, callback);
+        int requestId = REQUESTS.nextRequestId();
+        REQUESTS.register(requestId, PacketAssetTransferPlanResponse.class, callback, onTimeout);
         try {
             NetworkHandler.sendToServer(new PacketAssetTransferPlanRequest(requestId, kind, paths));
             return requestId;

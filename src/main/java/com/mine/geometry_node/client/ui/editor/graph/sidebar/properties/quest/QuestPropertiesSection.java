@@ -153,8 +153,8 @@ public final class QuestPropertiesSection extends LinearLayout {
         mTitleInput.setText(title.plain());
         mDescriptionInput.setText(description.plain());
         mConditionOverview.setOverview(conditionOverview);
-        mObjectivesEditor.setObjectives(value.objectives());
-        mRewardsEditor.setRewards(value.rewards());
+        mObjectivesEditor.setObjectivesPreservingFocusedEdit(value.objectives());
+        mRewardsEditor.setRewardsPreservingFocusedEdit(value.rewards());
         mHasDefinition = true;
         mUpdating = false;
     }

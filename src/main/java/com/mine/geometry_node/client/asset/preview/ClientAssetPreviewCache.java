@@ -19,13 +19,34 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Persistent immutable client artifacts isolated by stable server identity. */
 public final class ClientAssetPreviewCache {
     private static final int METADATA_MAGIC = 0x474E5043;
+    private final ConcurrentMap<String, AtomicLong> serverGenerations = new ConcurrentHashMap<>();
+    private final AtomicLong globalGeneration = new AtomicLong();
 
-    public synchronized Optional<CachedPreview> find(String serverIdentity, AssetPreviewRevision revision)
+    Generation generation(String serverIdentity) {
+        return new Generation(serverIdentity, globalGeneration.get(), serverGeneration(serverIdentity).get());
+    }
+
+    void invalidate(String serverIdentity) {
+        serverGeneration(serverIdentity).incrementAndGet();
+    }
+
+    void invalidateAll() {
+        globalGeneration.incrementAndGet();
+        serverGenerations.clear();
+    }
+
+    synchronized Optional<CachedPreview> find(String serverIdentity,
+                                              Generation generation,
+                                              AssetPreviewRevision revision)
             throws IOException {
+        if (!isCurrent(serverIdentity, generation)) return Optional.empty();
         Path root = ClientAssetPreviewPaths.serverRoot(serverIdentity);
         Path metadata = metadataPath(root, revision.cacheKey());
         if (!Files.isRegularFile(metadata) || Files.isSymbolicLink(metadata)) return Optional.empty();
@@ -42,8 +63,12 @@ public final class ClientAssetPreviewCache {
         return Optional.of(new CachedPreview(descriptor, artifact));
     }
 
-    public synchronized CachedPreview store(String serverIdentity, AssetPreviewDescriptor descriptor, byte[] content)
+    synchronized Optional<CachedPreview> store(String serverIdentity,
+                                               Generation generation,
+                                               AssetPreviewDescriptor descriptor,
+                                               byte[] content)
             throws IOException {
+        if (!isCurrent(serverIdentity, generation)) return Optional.empty();
         if (content == null || content.length != descriptor.encodedBytes()
                 || !AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(content))
                 .equals(descriptor.sha256())) {
@@ -55,8 +80,9 @@ public final class ClientAssetPreviewCache {
         Files.createDirectories(artifact.getParent());
         writeAtomically(artifact, content);
         writeMetadata(metadataPath(root, descriptor.revision().cacheKey()), descriptor);
-        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), artifact);
-        return new CachedPreview(descriptor, artifact);
+        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), artifact,
+                METADATA_MAGIC);
+        return Optional.of(new CachedPreview(descriptor, artifact));
     }
 
     public synchronized void clear(String serverIdentity) throws IOException {
@@ -82,11 +108,23 @@ public final class ClientAssetPreviewCache {
     }
 
     public synchronized void enforceConfiguredLimit() throws IOException {
-        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), null);
+        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), null,
+                METADATA_MAGIC);
     }
 
     private static long maximumBytes() {
         return ConfigManager.INSTANCE.getConfig().previewCache.maxSizeMiB * 1024L * 1024L;
+    }
+
+    private boolean isCurrent(String serverIdentity, Generation generation) {
+        return generation != null
+                && serverIdentity.equals(generation.serverIdentity())
+                && generation.global() == globalGeneration.get()
+                && generation.server() == serverGeneration(serverIdentity).get();
+    }
+
+    private AtomicLong serverGeneration(String serverIdentity) {
+        return serverGenerations.computeIfAbsent(serverIdentity, ignored -> new AtomicLong());
     }
 
     private static Path metadataPath(Path root, String cacheKey) {
@@ -152,5 +190,8 @@ public final class ClientAssetPreviewCache {
     }
 
     public record CachedPreview(AssetPreviewDescriptor descriptor, Path path) {
+    }
+
+    record Generation(String serverIdentity, long global, long server) {
     }
 }

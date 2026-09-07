@@ -39,6 +39,24 @@ public class ViewportEventDispatcher {
     public float getLastMouseScreenX() { return mLastMouseScreenX; }
     public float getLastMouseScreenY() { return mLastMouseScreenY; }
 
+    public void cancelTransientInteraction() {
+        MotionEvent cancelEvent = MotionEvent.obtain(
+                System.nanoTime(), MotionEvent.ACTION_CANCEL,
+                mLastMouseScreenX, mLastMouseScreenY, 0);
+        try {
+            if (mCapturedHintView != null) {
+                dispatchTransformedEvent(cancelEvent, mCapturedHintView,
+                        mHintCaptureUsesLogical, !mHintCaptureUsesLogical);
+            }
+            updateHoveredHint(cancelEvent, null);
+        } finally {
+            mCapturedHintView = null;
+            mHintCaptureUsesLogical = false;
+            mHoveredHint = null;
+            cancelEvent.recycle();
+        }
+    }
+
     /**
      * 处理主要的触摸事件
      * @return 如果事件被拦截器消化了，返回 true；如果需要 Viewport 继续跑 super 逻辑，返回 false。

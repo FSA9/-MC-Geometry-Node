@@ -261,7 +261,7 @@ final class NodeOverlayController {
     private void addHintView(Context context, int rowIndex, PortRow row, float currentY) {
         if (!hasHintOverlay(row)) return;
 
-        UIHintRenderer renderer = HintRendererFactory.getRenderer(row.uiHint());
+        UIHintRenderer renderer = HintRendererFactory.getRenderer(row);
         if (renderer == null) return;
 
         View hintView = renderer.createView(context, mNodeData, row, mEditorContext);
@@ -516,7 +516,7 @@ final class NodeOverlayController {
     private boolean hasHintOverlay(PortRow row) {
         return row.uiHint() != null
                 && !isInputConnected(row)
-                && HintRendererFactory.getRenderer(row.uiHint()) != null;
+                && HintRendererFactory.getRenderer(row) != null;
     }
 
     private boolean hasDynamicRemoveButton(PortRow row) {

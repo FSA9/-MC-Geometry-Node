@@ -50,10 +50,19 @@ public final class LocalAssetService {
         try {
             AssetFileTransactionManager.INSTANCE.mutate(
                     AssetFileTransactionManager.deletes(
-                            plans.stream().map(DeletePlan::sourcePath).toList()), () -> {
-                commitDeletes(plans);
-                return null;
-            });
+                            plans.stream().map(DeletePlan::sourcePath).toList()),
+                    new AssetFileTransactionManager.FileMutation<>() {
+                        @Override
+                        public Void commit() throws IOException {
+                            commitDeletes(plans);
+                            return null;
+                        }
+
+                        @Override
+                        public void rollback() throws IOException {
+                            rollbackDeletes(plans);
+                        }
+                    });
         } catch (Exception e) {
             e.printStackTrace();
             for (DeletePlan plan : plans) failedPaths.add(pathLabel(plan.source()));
@@ -188,10 +197,19 @@ public final class LocalAssetService {
         for (MovePlan plan : plans) pathChanges.put(plan.sourcePath(), plan.destinationPath());
         try {
             AssetFileTransactionManager.INSTANCE.mutate(
-                    AssetFileTransactionManager.moves(pathChanges), () -> {
-                commitMoves(plans);
-                return null;
-            });
+                    AssetFileTransactionManager.moves(pathChanges),
+                    new AssetFileTransactionManager.FileMutation<>() {
+                        @Override
+                        public Void commit() throws IOException {
+                            commitMoves(plans);
+                            return null;
+                        }
+
+                        @Override
+                        public void rollback() throws IOException {
+                            rollbackMoves(plans);
+                        }
+                    });
         } catch (Exception e) {
             e.printStackTrace();
             for (MovePlan plan : plans) cleanupQuietly(plan.temporaryPath());
@@ -270,10 +288,22 @@ public final class LocalAssetService {
 
         context.enterCommitPhase();
         AssetFileTransactionManager.INSTANCE.mutate(
-                AssetFileTransactionManager.moves(Map.of(sourcePath, destinationPath)), () -> {
-            AssetFileOperations.moveNew(sourcePath, destinationPath);
-            return null;
-        });
+                AssetFileTransactionManager.moves(Map.of(sourcePath, destinationPath)),
+                new AssetFileTransactionManager.FileMutation<>() {
+                    @Override
+                    public Void commit() throws IOException {
+                        AssetFileOperations.moveNew(sourcePath, destinationPath);
+                        return null;
+                    }
+
+                    @Override
+                    public void rollback() throws IOException {
+                        if (Files.exists(destinationPath, LinkOption.NOFOLLOW_LINKS)
+                                && !Files.exists(sourcePath, LinkOption.NOFOLLOW_LINKS)) {
+                            AssetFileOperations.moveNew(destinationPath, sourcePath);
+                        }
+                    }
+                });
         context.progress("重命名完成", 1, 1);
         return new RenameResult(source, destinationPath.toFile(), true);
     }
@@ -368,6 +398,22 @@ public final class LocalAssetService {
         }
     }
 
+    private static void rollbackDeletes(List<DeletePlan> plans) throws IOException {
+        IOException failure = null;
+        for (int i = plans.size() - 1; i >= 0; i--) {
+            DeletePlan plan = plans.get(i);
+            try {
+                if (Files.exists(plan.trashPath(), LinkOption.NOFOLLOW_LINKS)
+                        && !Files.exists(plan.sourcePath(), LinkOption.NOFOLLOW_LINKS)) {
+                    AssetFileOperations.moveNew(plan.trashPath(), plan.sourcePath());
+                }
+            } catch (IOException e) {
+                failure = collectFailure(failure, e);
+            }
+        }
+        if (failure != null) throw failure;
+    }
+
     private static void commitMoves(List<MovePlan> plans) throws IOException {
         List<MovePlan> committed = new ArrayList<>();
         try {
@@ -409,6 +455,39 @@ public final class LocalAssetService {
             }
             throw e;
         }
+    }
+
+    private static void rollbackMoves(List<MovePlan> plans) throws IOException {
+        IOException failure = null;
+        for (int i = plans.size() - 1; i >= 0; i--) {
+            MovePlan plan = plans.get(i);
+            try {
+                if (plan.direct()) {
+                    if (Files.exists(plan.destinationPath(), LinkOption.NOFOLLOW_LINKS)
+                            && !Files.exists(plan.sourcePath(), LinkOption.NOFOLLOW_LINKS)) {
+                        AssetFileOperations.moveNew(plan.destinationPath(), plan.sourcePath());
+                    }
+                } else {
+                    if (Files.exists(plan.destinationPath(), LinkOption.NOFOLLOW_LINKS)
+                            && !Files.exists(plan.temporaryPath(), LinkOption.NOFOLLOW_LINKS)) {
+                        AssetFileOperations.moveNew(plan.destinationPath(), plan.temporaryPath());
+                    }
+                    if (Files.exists(plan.trashPath(), LinkOption.NOFOLLOW_LINKS)
+                            && !Files.exists(plan.sourcePath(), LinkOption.NOFOLLOW_LINKS)) {
+                        AssetFileOperations.moveNew(plan.trashPath(), plan.sourcePath());
+                    }
+                }
+            } catch (IOException e) {
+                failure = collectFailure(failure, e);
+            }
+        }
+        if (failure != null) throw failure;
+    }
+
+    private static IOException collectFailure(IOException failure, IOException next) {
+        if (failure == null) return next;
+        failure.addSuppressed(next);
+        return failure;
     }
 
     private static void copyRecursively(Path source, Path destination, AssetTaskContext context)

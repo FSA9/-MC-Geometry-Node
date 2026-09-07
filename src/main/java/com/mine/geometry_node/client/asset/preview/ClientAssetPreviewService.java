@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.asset.preview;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
-import icyllis.modernui.mc.MuiModApi;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 
 import java.nio.file.Path;
@@ -22,6 +22,8 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     private final ClientAssetPreviewCache cache = new ClientAssetPreviewCache();
     private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ClientIO", 2, 64);
     private final Map<CacheKey, Entry> entries = new LinkedHashMap<>();
+    private final Map<String, CompletableFuture<Void>> serverClearBarriers = new LinkedHashMap<>();
+    private CompletableFuture<Void> globalClearBarrier = CompletableFuture.completedFuture(null);
 
     private ClientAssetPreviewService() {
         ConfigManager.INSTANCE.addChangeListener(config -> enforceCacheLimit());
@@ -32,7 +34,8 @@ public final class ClientAssetPreviewService implements AutoCloseable {
         if (listener == null) throw new IllegalArgumentException("listener cannot be null");
         String serverIdentity = ClientAssetPreviewServerIdentity.current();
         CacheKey key = new CacheKey(serverIdentity, revision);
-        Entry entry = entries.computeIfAbsent(key, ignored -> new Entry(key));
+        Entry entry = entries.computeIfAbsent(key,
+                ignored -> new Entry(key, cache.generation(serverIdentity)));
         UUID subscriberId = UUID.randomUUID();
         entry.listeners.put(subscriberId, listener);
         if (!entry.started) {
@@ -49,18 +52,22 @@ public final class ClientAssetPreviewService implements AutoCloseable {
 
     public CompletableFuture<Void> clearCurrentServerCache() {
         String serverIdentity = ClientAssetPreviewServerIdentity.current();
-        cancelServerEntries(serverIdentity);
-        return io.run(() -> cache.clear(serverIdentity));
+        synchronized (this) {
+            cache.invalidate(serverIdentity);
+            cancelServerEntries(serverIdentity);
+            return appendServerCacheClear(serverIdentity, () -> cache.clear(serverIdentity));
+        }
     }
 
     public CompletableFuture<Void> clearAllCaches() {
         synchronized (this) {
+            cache.invalidateAll();
             for (Entry entry : entries.values()) {
                 if (entry.requestId != null) ClientAssetPreviewProtocol.cancel(entry.requestId);
             }
             entries.clear();
+            return appendGlobalCacheClear(cache::clearAll);
         }
-        return io.run(cache::clearAll);
     }
 
     public CompletableFuture<Long> cacheSizeBytes() {
@@ -76,7 +83,19 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     private void resolveCached(Entry entry) {
-        io.submit(() -> cache.find(entry.key.serverIdentity, entry.key.revision))
+        CompletableFuture<Void> barrier;
+        synchronized (this) {
+            barrier = cacheBarrier(entry.key.serverIdentity);
+        }
+        barrier.handle((ignored, error) -> null)
+                .thenRun(() -> resolveCachedAfterClear(entry));
+    }
+
+    private void resolveCachedAfterClear(Entry entry) {
+        synchronized (this) {
+            if (entries.get(entry.key) != entry || entry.listeners.isEmpty()) return;
+        }
+        io.submit(() -> cache.find(entry.key.serverIdentity, entry.generation, entry.key.revision))
                 .whenComplete((cached, error) -> post(() -> handleCacheLookup(entry, cached, error)));
     }
 
@@ -103,11 +122,42 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     private void persistDownloaded(Entry entry, AssetPreviewDescriptor descriptor, byte[] encoded) {
-        io.submit(() -> cache.store(entry.key.serverIdentity, descriptor, encoded))
+        io.submit(() -> cache.store(entry.key.serverIdentity, entry.generation, descriptor, encoded))
                 .whenComplete((cached, error) -> post(() -> {
                     if (error != null) fail(entry, AssetPreviewResultCode.IO_FAILURE, "cache_write_failed");
-                    else complete(entry, cached);
+                    else if (cached != null && cached.isPresent()) complete(entry, cached.get());
                 }));
+    }
+
+    private CompletableFuture<Void> appendServerCacheClear(String serverIdentity, IoOperation operation) {
+        CompletableFuture<Void> previous = cacheBarrier(serverIdentity);
+        CompletableFuture<Void> next = previous.handle((ignored, error) -> null)
+                .thenCompose(ignored -> io.run(operation::run));
+        serverClearBarriers.put(serverIdentity, next);
+        next.whenComplete((ignored, error) -> removeServerBarrier(serverIdentity, next));
+        return next;
+    }
+
+    private CompletableFuture<Void> appendGlobalCacheClear(IoOperation operation) {
+        CompletableFuture<?>[] pending = new CompletableFuture<?>[serverClearBarriers.size() + 1];
+        pending[0] = globalClearBarrier;
+        int index = 1;
+        for (CompletableFuture<Void> barrier : serverClearBarriers.values()) pending[index++] = barrier;
+        globalClearBarrier = CompletableFuture.allOf(pending).handle((ignored, error) -> null)
+                .thenCompose(ignored -> io.run(operation::run));
+        serverClearBarriers.clear();
+        return globalClearBarrier;
+    }
+
+    private CompletableFuture<Void> cacheBarrier(String serverIdentity) {
+        CompletableFuture<Void> serverBarrier = serverClearBarriers.get(serverIdentity);
+        return serverBarrier == null
+                ? globalClearBarrier
+                : CompletableFuture.allOf(globalClearBarrier, serverBarrier);
+    }
+
+    private synchronized void removeServerBarrier(String serverIdentity, CompletableFuture<Void> completed) {
+        serverClearBarriers.remove(serverIdentity, completed);
     }
 
     private synchronized void complete(Entry entry, ClientAssetPreviewCache.CachedPreview cached) {
@@ -145,7 +195,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     private static void post(Runnable task) {
-        MuiModApi.postToUiThread(task);
+        ClientAssetCallbacks.execute(task);
     }
 
     @Override
@@ -171,12 +221,19 @@ public final class ClientAssetPreviewService implements AutoCloseable {
 
     private static final class Entry {
         private final CacheKey key;
+        private final ClientAssetPreviewCache.Generation generation;
         private final Map<UUID, Listener> listeners = new LinkedHashMap<>();
         private boolean started;
         private UUID requestId;
 
-        private Entry(CacheKey key) {
+        private Entry(CacheKey key, ClientAssetPreviewCache.Generation generation) {
             this.key = key;
+            this.generation = generation;
         }
+    }
+
+    @FunctionalInterface
+    private interface IoOperation {
+        void run() throws Exception;
     }
 }

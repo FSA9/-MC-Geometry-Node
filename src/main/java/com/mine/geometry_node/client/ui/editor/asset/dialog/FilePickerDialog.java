@@ -206,6 +206,8 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
                 mPendingRemoteInitialDirectory = null;
                 mBrowser.navigateToRemote(target);
             }
+        }), () -> post(() -> {
+            if (mCapabilityRequestId == requestId) mCapabilityRequestId = 0;
         }));
         NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
     }

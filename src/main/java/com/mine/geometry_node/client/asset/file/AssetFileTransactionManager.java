@@ -35,19 +35,20 @@ public final class AssetFileTransactionManager {
         }
     }
 
-    public <T> T mutate(MutationPlan plan, IOCallable<T> action) throws IOException {
+    public <T> T mutate(MutationPlan plan, FileMutation<T> fileMutation) throws IOException {
         MutationPlan resolvedPlan = plan != null ? plan : MutationPlan.empty();
-        if (resolvedPlan.isEmpty()) return mutateStructure(action);
         Lock lock = mStructureLock.writeLock();
         lock.lock();
         List<PreparedMutation> prepared = new ArrayList<>();
+        boolean fileCommitAttempted = false;
         try {
             try {
                 for (MutationParticipant participant : mParticipants) {
                     PreparedMutation mutation = participant.prepare(resolvedPlan);
                     if (mutation != null) prepared.add(mutation);
                 }
-                T result = action.call();
+                fileCommitAttempted = true;
+                T result = fileMutation.commit();
                 for (PreparedMutation mutation : prepared) mutation.commit();
                 return result;
             } catch (IOException | RuntimeException e) {
@@ -55,6 +56,13 @@ public final class AssetFileTransactionManager {
                     try {
                         prepared.get(i).rollback();
                     } catch (RuntimeException rollbackError) {
+                        e.addSuppressed(rollbackError);
+                    }
+                }
+                if (fileCommitAttempted) {
+                    try {
+                        fileMutation.rollback();
+                    } catch (IOException | RuntimeException rollbackError) {
                         e.addSuppressed(rollbackError);
                     }
                 }
@@ -128,6 +136,16 @@ public final class AssetFileTransactionManager {
         void commit();
 
         void rollback();
+    }
+
+    /**
+     * A filesystem change that remains reversible until every participant has committed.
+     * Rollback may follow either a successful commit or a partially failed commit and must be idempotent.
+     */
+    public interface FileMutation<T> {
+        T commit() throws IOException;
+
+        void rollback() throws IOException;
     }
 
     @FunctionalInterface

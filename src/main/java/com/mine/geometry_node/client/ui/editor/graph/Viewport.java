@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOv
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorOverlay;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.InteractiveHintTarget;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeLayer;
+import com.mine.geometry_node.client.ui.editor.graph.node.UINode;
 import com.mine.geometry_node.client.ui.components.nativepreview.ViewportNativePreviewLayer;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionSink;
 import com.mine.geometry_node.client.ui.editor.graph.menu.ViewportMenu;
@@ -145,6 +146,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     }
 
     public void deactivateLifecycle() {
+        cancelTransientUi();
         if (mLifecycleRegistered) {
             ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
             mKeyManager.dispose();
@@ -154,6 +156,22 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
             mLifecycleRegistered = false;
         }
         mController.saveCurrentSessionState();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (!hasWindowFocus) {
+            cancelTransientUi();
+        }
+    }
+
+    public void cancelTransientUi() {
+        mEventDispatcher.cancelTransientInteraction();
+        mInteractionManager.cancelTransientInteraction();
+        closeMenu(false);
+        UINode.closeOpenCommentPopup();
+        if (mToolbar != null) mToolbar.hideTooltip();
     }
 
 
@@ -548,10 +566,14 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
 
     @Override
     public void closeMenu() {
+        closeMenu(true);
+    }
+
+    private void closeMenu(boolean restoreFocus) {
         if (mActiveMenu != null) {
             if (mActiveMenu.getParent() == this) removeView(mActiveMenu);
             mActiveMenu = null;
-            requestViewportFocus();
+            if (restoreFocus) requestViewportFocus();
         }
     }
 
@@ -579,6 +601,10 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     }
 
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()));
+            return mInteractionManager.onTouchEvent(ev);
+        }
         if (hasBlockingOverlay()) {
             super.dispatchTouchEvent(ev);
             return true;

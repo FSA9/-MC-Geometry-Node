@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.command.client;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.asset.remote.RemoteGraphPathIndex;
 import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
@@ -24,7 +24,7 @@ public final class GraphDownloadCommand {
                 .then(RequiredArgumentBuilder.<S, String>argument("graph_id", StringArgumentType.greedyString())
                         .suggests((context, builder) -> {
                             String remaining = builder.getRemaining().toLowerCase(Locale.ROOT);
-                            for (String graphPath : RemoteAssetClient.knownGraphPaths()) {
+                            for (String graphPath : RemoteGraphPathIndex.INSTANCE.paths()) {
                                 if (graphPath.toLowerCase(Locale.ROOT).startsWith(remaining)) {
                                     builder.suggest(graphPath);
                                 }
@@ -39,8 +39,8 @@ public final class GraphDownloadCommand {
                                             LocalDraftManager.resolveDraftPath(graphId),
                                             AssetTransferConflictPolicy.OVERWRITE)));
                             ClientCommandUtils.sendClientMsg("§a已加入下载队列: " + graphId);
-                            ClientAssetTransferService.INSTANCE.completion(jobId).thenAccept(result -> {
-                                if (result.completedFileCount() == 1) {
+                            ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> {
+                                if (error == null && result.completedFileCount() == 1) {
                                     ClientCommandUtils.sendClientMsg("§a下载完成: " + graphId);
                                 } else {
                                     ClientCommandUtils.sendClientMsg("§c下载失败: " + graphId);

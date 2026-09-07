@@ -87,6 +87,12 @@ public final class QuestObjectivesEditor extends LinearLayout {
         updating = false;
     }
 
+    public void setObjectivesPreservingFocusedEdit(List<QuestObjectiveDefinition> objectives) {
+        FocusedEdit focusedEdit = captureFocusedEdit();
+        setObjectives(objectives);
+        restoreFocusedEdit(focusedEdit);
+    }
+
     public List<QuestObjectiveDefinition> objectives() {
         List<QuestObjectiveDefinition> result = new ArrayList<>(editors.size());
         for (ObjectiveRow editor : editors) result.add(editor.definition());
@@ -142,6 +148,36 @@ public final class QuestObjectivesEditor extends LinearLayout {
             }
         }
     }
+
+    private FocusedEdit captureFocusedEdit() {
+        for (ObjectiveRow editor : editors) {
+            FocusedEdit focusedEdit = editor.captureFocusedEdit();
+            if (focusedEdit != null) return focusedEdit;
+        }
+        return null;
+    }
+
+    private void restoreFocusedEdit(FocusedEdit focusedEdit) {
+        if (focusedEdit == null) return;
+        for (ObjectiveRow editor : editors) {
+            if (editor.entryId.equals(focusedEdit.entryId())) {
+                editor.restoreFocusedEdit(focusedEdit);
+                return;
+            }
+        }
+    }
+
+    private enum EditField {
+        CONTENT, COUNTER_KEY, TARGET
+    }
+
+    private record FocusedEdit(
+            String entryId,
+            EditField field,
+            String text,
+            int selectionStart,
+            int selectionEnd
+    ) {}
 
     private final class ObjectiveRow {
         private final String entryId;
@@ -326,6 +362,36 @@ public final class QuestObjectivesEditor extends LinearLayout {
                     parseNonNegativeDouble(targetInput.getText().toString(), 1.0),
                     hintType,
                     hintType == QuestHintType.NONE ? "" : hintValue);
+        }
+
+        private FocusedEdit captureFocusedEdit() {
+            if (contentInput.hasFocus()) return focusedEdit(EditField.CONTENT, contentInput);
+            if (counterKeyInput.hasFocus()) return focusedEdit(EditField.COUNTER_KEY, counterKeyInput);
+            if (targetInput.hasFocus()) return focusedEdit(EditField.TARGET, targetInput);
+            return null;
+        }
+
+        private FocusedEdit focusedEdit(EditField field, EditText input) {
+            return new FocusedEdit(
+                    entryId,
+                    field,
+                    input.getText().toString(),
+                    input.getSelectionStart(),
+                    input.getSelectionEnd());
+        }
+
+        private void restoreFocusedEdit(FocusedEdit focusedEdit) {
+            EditText input = switch (focusedEdit.field()) {
+                case CONTENT -> contentInput;
+                case COUNTER_KEY -> counterKeyInput;
+                case TARGET -> targetInput;
+            };
+            input.setText(focusedEdit.text());
+            int length = focusedEdit.text().length();
+            int start = Math.clamp(focusedEdit.selectionStart(), 0, length);
+            int end = Math.clamp(focusedEdit.selectionEnd(), start, length);
+            input.requestFocus();
+            input.setSelection(start, end);
         }
 
         private void openRichEditor(View anchor) {

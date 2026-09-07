@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.preview;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
@@ -13,8 +14,10 @@ final class LocalAssetPreviewProvider implements AssetPreviewProvider {
 
     @Override
     public Subscription subscribe(AssetEntry entry, Listener listener) {
-        if (!supports(entry) || !entry.localFile().isFile()) listener.unavailable();
-        else listener.available(entry.localFile());
+        ClientAssetCallbacks.execute(() -> {
+            if (!supports(entry) || !entry.localFile().isFile()) listener.unavailable();
+            else listener.available(entry.localFile());
+        });
         return Subscription.NONE;
     }
 }

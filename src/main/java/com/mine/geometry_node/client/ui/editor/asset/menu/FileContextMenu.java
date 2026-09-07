@@ -23,6 +23,8 @@ public class FileContextMenu extends FrameLayout {
     private FileContextMenu mChildMenu;
     private View mOpenSubMenuItem;
     private ViewGroup mHostParent;
+    private Runnable mOnDismissListener;
+    private boolean mDismissed;
 
     public FileContextMenu(Context context) {
         super(context);
@@ -149,9 +151,14 @@ public class FileContextMenu extends FrameLayout {
     }
 
     public void showAt(float x, float y, ViewGroup parent) {
+        mDismissed = false;
         mHostParent = parent;
         parent.addView(this);
         layoutPanel(mContentLayout, x, y, parent);
+    }
+
+    public void setOnDismissListener(Runnable listener) {
+        mOnDismissListener = listener;
     }
 
     private void dismissRoot() {
@@ -159,11 +166,19 @@ public class FileContextMenu extends FrameLayout {
     }
 
     public void dismiss() {
+        if (mDismissed) return;
+        mDismissed = true;
         dismissChildMenu();
         if (getParent() != null) {
             ((ViewGroup) getParent()).removeView(this);
         } else if (mContentLayout.getParent() instanceof ViewGroup) {
             ((ViewGroup) mContentLayout.getParent()).removeView(mContentLayout);
+        }
+        mHostParent = null;
+        if (mOnDismissListener != null) {
+            Runnable listener = mOnDismissListener;
+            mOnDismissListener = null;
+            listener.run();
         }
     }
 

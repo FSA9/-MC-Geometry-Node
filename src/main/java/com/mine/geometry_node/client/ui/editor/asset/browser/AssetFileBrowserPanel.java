@@ -75,6 +75,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final ScopedKeyManager<AssetLibraryActionId, AssetFileBrowserPanel> mKeyManager;
     private final AssetTaskController mIoTasks;
     private final AssetBrowserActionController mActionController;
+    private FileContextMenu mActiveMenu;
 
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
@@ -370,10 +371,18 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void deactivatePanel() {
-        hideToolbarTooltip();
+        dismissTransientUi();
         mKeyManager.dispose();
         cancelBrowseRequest();
         mActionController.cancelRemoteRequests();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (!hasWindowFocus) {
+            dismissTransientUi();
+        }
     }
 
     @Override
@@ -669,7 +678,29 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             subMenu.addMenuItem(viewModeMenuText(AssetViewMode.ICON_MEDIUM), () -> setViewMode(AssetViewMode.ICON_MEDIUM));
             subMenu.addMenuItem(viewModeMenuText(AssetViewMode.ICON_LARGE), () -> setViewMode(AssetViewMode.ICON_LARGE));
         });
+        showMenu(menu, localX, localY);
+    }
+
+    void showMenu(FileContextMenu menu, float localX, float localY) {
+        dismissActiveMenu();
+        if (menu == null || !menu.hasItems()) return;
+
+        mActiveMenu = menu;
+        menu.setOnDismissListener(() -> {
+            if (mActiveMenu == menu) mActiveMenu = null;
+        });
         menu.showAt(localX, localY, mBodyFrame);
+    }
+
+    private void dismissTransientUi() {
+        hideToolbarTooltip();
+        dismissActiveMenu();
+    }
+
+    private void dismissActiveMenu() {
+        FileContextMenu menu = mActiveMenu;
+        mActiveMenu = null;
+        if (menu != null) menu.dismiss();
     }
 
     private String viewModeMenuText(AssetViewMode mode) {

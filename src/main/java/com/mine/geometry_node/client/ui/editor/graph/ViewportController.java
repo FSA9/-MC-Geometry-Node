@@ -686,8 +686,8 @@ public class ViewportController implements EditorContext.EditorListener,
         mViewport.updateTransform();
         mViewport.invalidate();
     }
-    @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
-    @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { rebuildVisualConnections(); }
+    @Override public void onExecutionConnectionAdded(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }
+    @Override public void onExecutionConnectionRemoved(String outN, String outP, String inN, String inP) { mViewport.notifyNodeLayoutUpdate(outN); mViewport.notifyNodeLayoutUpdate(inN); rebuildVisualConnections(); }
     @Override public void onSelectionChanged(List<String> selectedNodeIds) {
         mViewport.updateSelectionState(selectedNodeIds);
         syncSelectionToCurrentState();

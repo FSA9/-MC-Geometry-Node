@@ -91,10 +91,17 @@ public final class GraphFileReference {
         mState = State.DELETED;
     }
 
-    void rollbackMutation() {
-        if (mState == State.MUTATING) {
-            mState = State.ACTIVE;
-        }
+    synchronized MutationSnapshot mutationSnapshot() {
+        return new MutationSnapshot(mPath, mState, mDocumentClaimed);
+    }
+
+    synchronized void restoreMutation(MutationSnapshot snapshot) {
+        mPath = snapshot.path();
+        mState = snapshot.state();
+        mDocumentClaimed = snapshot.documentClaimed();
+    }
+
+    record MutationSnapshot(Path path, State state, boolean documentClaimed) {
     }
 
     static Path normalize(Path path) {

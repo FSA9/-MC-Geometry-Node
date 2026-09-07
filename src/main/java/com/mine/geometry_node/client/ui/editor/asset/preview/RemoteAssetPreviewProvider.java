@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.preview;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -23,7 +24,7 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
     @Override
     public Subscription subscribe(AssetEntry entry, Listener listener) {
         if (!supports(entry)) {
-            listener.unavailable();
+            ClientAssetCallbacks.execute(listener::unavailable);
             return Subscription.NONE;
         }
         AssetPreviewRevision revision = AssetPreviewRevision.current(

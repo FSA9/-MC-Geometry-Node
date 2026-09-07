@@ -1,11 +1,24 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.*;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.Map;
 
 public class HintRendererFactory {
+    private static final EnumSet<UIHint> INPUT_VALUE_HINTS = EnumSet.of(
+            UIHint.SLIDER,
+            UIHint.CHECKBOX,
+            UIHint.INPUT,
+            UIHint.PATH,
+            UIHint.SELECT,
+            UIHint.VECTOR,
+            UIHint.ITEM_SLOT,
+            UIHint.ENTITY_TEMPLATE,
+            UIHint.SLOT_REF);
     private static final Map<UIHint, UIHintRenderer> RENDERERS = new EnumMap<>(UIHint.class);
 
     static {
@@ -23,5 +36,11 @@ public class HintRendererFactory {
 
     public static UIHintRenderer getRenderer(UIHint hint) {
         return RENDERERS.get(hint);
+    }
+
+    public static UIHintRenderer getRenderer(PortRow row) {
+        if (row == null || row.uiHint() == null) return null;
+        if (INPUT_VALUE_HINTS.contains(row.uiHint()) && row.leftPort() == null) return null;
+        return getRenderer(row.uiHint());
     }
 }

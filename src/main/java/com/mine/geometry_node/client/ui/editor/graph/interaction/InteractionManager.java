@@ -65,6 +65,8 @@ public class InteractionManager {
     private float mSelectionStartUiX, mSelectionStartUiY;
     private boolean mBoxSelectionIncludesFrames;
     private final RectF mSelectionRectUi = new RectF();
+    private final List<String> mSelectionBeforeBoxNodeIds = new ArrayList<>();
+    private final List<String> mSelectionBeforeBoxFrameIds = new ArrayList<>();
 
     private final Paint mSelectionFillPaint = new Paint();
     private final Paint mSelectionBorderPaint = new Paint();
@@ -100,10 +102,14 @@ public class InteractionManager {
     }
 
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+            cancelTransientInteraction();
+            return true;
+        }
         if (!mContext.isReady()) return false;
         float x = event.getX();
         float y = event.getY();
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: handleActionDown(event, x, y); return true;
             case MotionEvent.ACTION_MOVE: handleActionMove(x, y); return true;
             case MotionEvent.ACTION_UP: handleActionUp(event, x, y); return true;
@@ -274,7 +280,7 @@ public class InteractionManager {
         switch (mCurrentMode) {
             case MODE_DRAGGING_NODES: finalizeSelectionMove(uiX, uiY); break;
             case MODE_CONNECTING: mConnectionInteraction.finalizeConnection(uiX, uiY); break;
-            case MODE_SELECTING: mSelectionRectUi.setEmpty(); break;
+            case MODE_SELECTING: clearBoxSelectionSnapshot(); break;
             case MODE_DRAGGING_FRAME: finalizeFrameDragging(uiX, uiY); break;
             case MODE_CUTTING: mConnectionInteraction.clearCut(); break;
         }
@@ -337,17 +343,65 @@ public class InteractionManager {
     }
 
     private void cancelKeyboardMove() {
-        mContext.resetSelectedElementsPreview();
-        mCurrentMode = MODE_NONE;
-        mContext.invalidate();
+        cancelTransientInteraction();
     }
 
     private void enterSelectingMode(float uiX, float uiY) {
         mCurrentMode = MODE_SELECTING;
+        snapshotSelectionBeforeBox();
         mContext.clearSelection();
         mBoxSelectionIncludesFrames = mContext.getSmallestContainingFrame(uiX, uiY) == null;
         mSelectionStartUiX = uiX; mSelectionStartUiY = uiY;
         mSelectionRectUi.set(uiX, uiY, uiX, uiY);
+    }
+
+    public void cancelTransientInteraction() {
+        int cancelledMode = mCurrentMode;
+        if (cancelledMode == MODE_DRAGGING_NODES
+                || cancelledMode == MODE_DRAGGING_FRAME
+                || cancelledMode == MODE_KEYBOARD_MOVE) {
+            mContext.resetSelectedElementsPreview();
+        } else if (cancelledMode == MODE_SELECTING) {
+            restoreSelectionBeforeBox();
+        }
+
+        mConnectionInteraction.cancel();
+        mSelectionRectUi.setEmpty();
+        clearBoxSelectionSnapshot();
+        mDraggedFrame = null;
+        mCurrentMode = MODE_NONE;
+        mHasMovedSignificantly = false;
+        mAppliedDragUiDx = 0.0f;
+        mAppliedDragUiDy = 0.0f;
+        resetDoubleClickTracking();
+        if (cancelledMode != MODE_NONE) {
+            mContext.invalidate();
+        }
+    }
+
+    private void snapshotSelectionBeforeBox() {
+        mSelectionBeforeBoxNodeIds.clear();
+        mSelectionBeforeBoxNodeIds.addAll(getSelectedNodeIds());
+        mSelectionBeforeBoxFrameIds.clear();
+        mSelectionBeforeBoxFrameIds.addAll(getSelectedFrameIds());
+    }
+
+    private void restoreSelectionBeforeBox() {
+        mContext.clearSelection();
+        for (String nodeId : mSelectionBeforeBoxNodeIds) {
+            NodeVisualAdapter node = findNodeVisual(nodeId);
+            if (node != null) mContext.addToSelection(node);
+        }
+        for (String frameId : mSelectionBeforeBoxFrameIds) {
+            FrameVisualAdapter frame = findFrameVisual(frameId);
+            if (frame != null) mContext.addToSelection(frame);
+        }
+    }
+
+    private void clearBoxSelectionSnapshot() {
+        mSelectionRectUi.setEmpty();
+        mSelectionBeforeBoxNodeIds.clear();
+        mSelectionBeforeBoxFrameIds.clear();
     }
 
     private void updateBoxSelection(float currentUiX, float currentUiY) {

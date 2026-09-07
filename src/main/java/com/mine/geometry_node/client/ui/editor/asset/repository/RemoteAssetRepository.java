@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.repository;
 
+import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
@@ -37,7 +38,7 @@ public final class RemoteAssetRepository implements AssetRepository {
         }
         Consumer<AssetListing> callback = onResult != null ? onResult : ignored -> {};
         if (!supports(AssetRepositoryOperation.BROWSE)) {
-            callback.accept(AssetListing.failure(location));
+            ClientAssetCallbacks.execute(() -> callback.accept(AssetListing.failure(location)));
             return AssetRequest.NONE;
         }
 
@@ -51,9 +52,18 @@ public final class RemoteAssetRepository implements AssetRepository {
             }
             AssetLocation.Remote responseLocation = new AssetLocation.Remote(response.directory(), false);
             callback.accept(toListing(responseLocation, response.entries(), request.query()));
+        }, () -> {
+            if (!cancelled.get()) callback.accept(AssetListing.failure(location));
         });
-        NetworkHandler.sendToServer(new PacketRemoteAssetListRequest(
-                requestId, location.directory(), location.createIfMissing()));
+        try {
+            NetworkHandler.sendToServer(new PacketRemoteAssetListRequest(
+                    requestId, location.directory(), location.createIfMissing()));
+        } catch (RuntimeException exception) {
+            RemoteAssetClient.cancel(requestId);
+            ClientAssetCallbacks.execute(() -> {
+                if (!cancelled.get()) callback.accept(AssetListing.failure(location));
+            });
+        }
         return () -> {
             if (cancelled.compareAndSet(false, true)) RemoteAssetClient.cancel(requestId);
         };
