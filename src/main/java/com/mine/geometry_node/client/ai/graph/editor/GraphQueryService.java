@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Implements P2 queries against read-only registry and graph snapshots. */
-final class TerminalGraphQueryService {
+final class GraphQueryService {
     private static final Gson GSON = new Gson();
     private static final int DETAILS_COLLECTION_LIMIT = 200;
     private static final int VALUE_TEXT_LIMIT = 4096;
@@ -44,16 +44,16 @@ final class TerminalGraphQueryService {
     private final GraphReadSnapshot snapshot;
     private final RegistryAccess registryAccess;
 
-    TerminalGraphQueryService(NodeGraph graph) {
+    GraphQueryService(NodeGraph graph) {
         this.snapshot = GraphReadSnapshot.capture(graph);
         this.registryAccess = currentRegistryAccess();
     }
 
-    static TerminalGraphQueryService forSnapshot(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
-        return new TerminalGraphQueryService(new PreparedInputs(snapshot, registryAccess));
+    static GraphQueryService forSnapshot(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
+        return new GraphQueryService(new PreparedInputs(snapshot, registryAccess));
     }
 
-    private TerminalGraphQueryService(PreparedInputs inputs) {
+    private GraphQueryService(PreparedInputs inputs) {
         this.snapshot = java.util.Objects.requireNonNull(inputs.snapshot(), "snapshot");
         this.registryAccess = inputs.registryAccess();
     }

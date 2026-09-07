@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 /** Adapts the editor document to the runtime-neutral graph command target. */
-public record TerminalCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget {
+public record GraphEditorCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget {
     @Override public boolean hasGraph() { return session != null; }
 
     @Override
@@ -156,7 +156,7 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
 
     @Override
     public CommandResult getGraphMetadata(List<String> select) {
-        return new TerminalGraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select);
+        return new GraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select);
     }
 
     @Override
@@ -180,8 +180,8 @@ public record TerminalCommandTarget(GraphSession session) implements GraphComman
         return queries().getPortOptions(nodeId, portId, query, offset, limit);
     }
 
-    private TerminalGraphQueryService queries() {
-        return new TerminalGraphQueryService(session.editorContext.getCurrentGraph());
+    private GraphQueryService queries() {
+        return new GraphQueryService(session.editorContext.getCurrentGraph());
     }
 
     private static CommandResult graphRequired() {

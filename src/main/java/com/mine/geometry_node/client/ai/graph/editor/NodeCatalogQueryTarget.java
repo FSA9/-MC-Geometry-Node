@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.GraphQueryTarget;
@@ -9,14 +9,13 @@ import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
-import com.mine.geometry_node.client.ui.workspace.surface.ViewportGraphContextService;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 
 import java.util.List;
 
 /** Graph-independent node catalog target available even when no viewport is open. */
-final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget {
-    private final TerminalGraphQueryService queries = new TerminalGraphQueryService((NodeGraph) null);
+public final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget {
+    private final GraphQueryService queries = new GraphQueryService((NodeGraph) null);
     private final ViewportGraphContextService graphContexts = ViewportGraphContextService.INSTANCE;
 
     @Override public boolean hasGraph() { return false; }

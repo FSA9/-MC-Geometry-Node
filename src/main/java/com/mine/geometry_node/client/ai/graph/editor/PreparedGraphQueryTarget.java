@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.ai.command.CommandResult;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** Read-only graph target containing no references to mutable editor state. */
-final class PreparedGraphQueryTarget implements GraphQueryTarget {
+public final class PreparedGraphQueryTarget implements GraphQueryTarget {
     private final GraphReadSnapshotCache.Handle snapshot;
     private final String sessionId;
     private final String scopeId;
@@ -76,11 +76,11 @@ final class PreparedGraphQueryTarget implements GraphQueryTarget {
         return withScope(queries().getPortOptions(nodeId, portId, query, offset, limit));
     }
 
-    private TerminalGraphQueryService queries() {
-        return TerminalGraphQueryService.forSnapshot(snapshot.resolve(), registryAccess);
+    private GraphQueryService queries() {
+        return GraphQueryService.forSnapshot(snapshot.resolve(), registryAccess);
     }
 
-    long revision() {
+    public long revision() {
         return revision;
     }
 

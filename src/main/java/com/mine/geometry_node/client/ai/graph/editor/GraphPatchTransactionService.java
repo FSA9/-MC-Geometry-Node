@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;

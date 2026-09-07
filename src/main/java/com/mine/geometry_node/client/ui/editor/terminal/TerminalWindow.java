@@ -11,10 +11,11 @@ import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
-import com.mine.geometry_node.client.ui.editor.terminal.command.MinecraftClientMcpGateway;
+import com.mine.geometry_node.client.ai.mcp.client.MinecraftClientMcpGateway;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -27,7 +28,9 @@ import java.util.UUID;
 
 public class TerminalWindow extends LinearLayout implements AreaEditorWindow, TerminalTabBar.TabListener {
     private static final int MAX_SESSION_TABS = 32;
+    private static final float TAB_SCROLL_MULTIPLIER = 80.0f;
 
+    private final HorizontalScrollView mTabScrollView;
     private final TerminalTabBar mTabBar;
     private final LinearLayout mModeBar;
     private final TextView mCommandMode;
@@ -55,9 +58,24 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mInitializing = true;
         setOrientation(VERTICAL);
 
+        mTabScrollView = new HorizontalScrollView(context);
+        mTabScrollView.setFillViewport(true);
+        mTabScrollView.setHorizontalScrollBarEnabled(false);
+        mTabScrollView.setBackground(colorDrawable(0xFF252526));
+        mTabScrollView.setOnGenericMotionListener((view, event) -> {
+            if (event.getAction() != MotionEvent.ACTION_SCROLL) return false;
+            float verticalScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+            if (verticalScroll == 0f) return false;
+            mTabScrollView.scrollBy((int) (-verticalScroll * TAB_SCROLL_MULTIPLIER), 0);
+            return true;
+        });
+
         mTabBar = new TerminalTabBar(context);
         mTabBar.setListener(this);
-        addView(mTabBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28f)));
+        mTabScrollView.addView(mTabBar, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        addView(mTabScrollView, new LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28f)));
 
         mModeBar = new LinearLayout(context);
         mModeBar.setOrientation(HORIZONTAL);
@@ -110,6 +128,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
             titles.add(tab.session.title());
         }
         mTabBar.rebuildTabs(titles, mCurrentIndex);
+        mTabScrollView.post(this::scrollActiveTabIntoView);
 
         if (activeTab.session.mode() == TerminalMode.SHELL) {
             if (mWindowActive) activeTab.shellView.activate();
@@ -118,6 +137,26 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         activeTab.requestInputFocus();
         updateModeBar(activeTab.session.mode());
         captureSessionState();
+    }
+
+    private void scrollActiveTabIntoView() {
+        View activeTab = mTabBar.getTabView(mCurrentIndex);
+        if (activeTab == null || mTabScrollView.getWidth() <= 0) return;
+
+        int visibleLeft = mTabScrollView.getScrollX();
+        int visibleRight = visibleLeft + mTabScrollView.getWidth();
+        int targetLeft = activeTab.getLeft();
+        int targetRight = activeTab.getRight();
+        if (mCurrentIndex == mTabs.size() - 1) {
+            View addButton = mTabBar.getAddButtonView();
+            if (addButton != null) targetRight = addButton.getRight();
+        }
+
+        if (targetLeft < visibleLeft) {
+            mTabScrollView.scrollTo(targetLeft, 0);
+        } else if (targetRight > visibleRight) {
+            mTabScrollView.scrollTo(targetRight - mTabScrollView.getWidth(), 0);
+        }
     }
 
     @Override public void onTabSelected(int index) { switchToTab(index); }

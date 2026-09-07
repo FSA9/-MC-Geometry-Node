@@ -1,6 +1,10 @@
-package com.mine.geometry_node.client.ui.workspace.surface;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
+import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
+import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import icyllis.modernui.core.Core;
 
 import java.util.Comparator;

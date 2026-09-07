@@ -1,15 +1,16 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ai.command.CliCommandParser;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandResult;
+import com.mine.geometry_node.client.ai.graph.editor.GraphEditorCommandTarget;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 
 import java.util.List;
 import java.util.Objects;
 
-/** Converts CLI text and structured results to the legacy terminal presentation API. */
+/** Converts CLI text and structured results to the terminal presentation API. */
 public final class ConsoleCommandAdapter {
     private static final int SUCCESS_COLOR = 0xFF00AAFF;
     private static final int ERROR_COLOR = 0xFFFF4444;
@@ -57,6 +58,6 @@ public final class ConsoleCommandAdapter {
 
     private static CommandInvocationContext context(GraphSession session) {
         return new CommandInvocationContext(CommandInvocationContext.CommandOrigin.CLI,
-                new TerminalCommandTarget(session), CommandInvocationContext.CancellationToken.NONE);
+                new GraphEditorCommandTarget(session), CommandInvocationContext.CancellationToken.NONE);
     }
 }

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.google.gson.JsonObject;
 
@@ -14,24 +14,24 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import java.util.Objects;
 
 /** Graph target pinned for one resolved viewport/document/scope context. */
-public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatchCommandTarget {
+public final class BoundGraphTarget implements GraphQueryTarget, GraphPatchCommandTarget {
     private final GraphSession session;
     private final BoundGraphScope scope;
     private final GraphPatchTransactionService transactions;
     private final String surfaceRef;
     private final java.util.function.BooleanSupplier targetValidator;
 
-    public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope) {
+    public BoundGraphTarget(GraphSession session, BoundGraphScope scope) {
         this(session, scope, "", () -> true);
     }
 
-    public BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
+    public BoundGraphTarget(GraphSession session, BoundGraphScope scope,
                                  String surfaceRef,
                                  java.util.function.BooleanSupplier targetValidator) {
         this(session, scope, surfaceRef, targetValidator, new GraphPatchIdempotencyStore());
     }
 
-    BoundGraphQueryTarget(GraphSession session, BoundGraphScope scope,
+    BoundGraphTarget(GraphSession session, BoundGraphScope scope,
                           String surfaceRef,
                           java.util.function.BooleanSupplier targetValidator,
                           GraphPatchIdempotencyStore idempotencyStore) {
@@ -73,7 +73,7 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
         return withScope(queries().getGraphStats(typeId, category, groupBy, offset, limit));
     }
     @Override public CommandResult getGraphMetadata(java.util.List<String> select) {
-        return withScope(new TerminalGraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select));
+        return withScope(new GraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select));
     }
     @Override public CommandResult queryGraphFrames(java.util.List<String> frameIds, String query,
                                                     java.util.List<String> tags, String parentFrame,
@@ -102,19 +102,19 @@ public final class BoundGraphQueryTarget implements GraphQueryTarget, GraphPatch
     public long revision() { return session.revision(); }
     public boolean isTargetCurrent() { return targetValidator.getAsBoolean(); }
 
-    PreparedGraphQueryTarget prepareRead(GraphReadSnapshotCache cache) {
+    public PreparedGraphQueryTarget prepareRead(GraphReadSnapshotCache cache) {
         NodeGraph graph = resolve();
         if (graph == null) throw new IllegalStateException("bound graph scope is closed");
         long capturedRevision = revision();
         GraphReadSnapshotCache.Key key = new GraphReadSnapshotCache.Key(sessionId(), scopeId(), capturedRevision);
         return new PreparedGraphQueryTarget(cache.capture(key, graph), sessionId(), scopeId(), surfaceRef,
-                capturedRevision, TerminalGraphQueryService.currentRegistryAccess());
+                capturedRevision, GraphQueryService.currentRegistryAccess());
     }
 
     private NodeGraph resolve() { return scope.resolve(session.editorContext.getGraph()); }
-    private TerminalGraphQueryService queries() {
+    private GraphQueryService queries() {
         NodeGraph graph = resolve();
         if (graph == null) throw new IllegalStateException("bound graph scope is closed");
-        return new TerminalGraphQueryService(graph);
+        return new GraphQueryService(graph);
     }
 }

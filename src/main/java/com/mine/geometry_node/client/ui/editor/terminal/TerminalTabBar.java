@@ -48,6 +48,14 @@ public class TerminalTabBar extends LinearLayout {
 
     public void setListener(TabListener listener) { mListener = listener; }
 
+    View getTabView(int index) {
+        return index >= 0 && index < mTabs.size() ? getChildAt(index) : null;
+    }
+
+    View getAddButtonView() {
+        return getChildCount() > mTabs.size() ? getChildAt(mTabs.size()) : null;
+    }
+
     public void rebuildTabs(List<String> titles, int selectedIndex) {
         removeAllViews();
         mTabs.clear();
@@ -100,6 +108,7 @@ public class TerminalTabBar extends LinearLayout {
                 case MotionEvent.ACTION_DOWN:
                     startX[0] = event.getRawX();
                     isDragging[0] = false;
+                    requestDisallowInterceptTouchEvent(true);
                     return true;
                 case MotionEvent.ACTION_MOVE:
                     float dx = event.getRawX() - startX[0];
@@ -121,6 +130,7 @@ public class TerminalTabBar extends LinearLayout {
                     tabLayout.setAlpha(1.0f);
                     mIndicatorX = -1;
                     invalidate();
+                    requestDisallowInterceptTouchEvent(false);
                     break;
             }
             return true;

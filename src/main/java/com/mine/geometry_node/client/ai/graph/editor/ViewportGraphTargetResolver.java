@@ -1,10 +1,9 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
-import com.mine.geometry_node.client.ui.workspace.surface.ViewportGraphContextService;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import icyllis.modernui.core.Core;
 
@@ -13,7 +12,7 @@ import java.util.Map;
 
 /** Resolves a viewport for one MCP call and caches fixed transaction targets for the run. */
 public final class ViewportGraphTargetResolver implements AutoCloseable {
-    private final Map<TargetKey, BoundGraphQueryTarget> targets = new HashMap<>();
+    private final Map<TargetKey, BoundGraphTarget> targets = new HashMap<>();
     private final GraphPatchIdempotencyStore idempotencyStore = new GraphPatchIdempotencyStore();
     private final ViewportGraphContextService graphContexts = ViewportGraphContextService.INSTANCE;
 
@@ -32,7 +31,7 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
         TargetKey key = new TargetKey(selected.id(), selected.generation(), session.sessionId().toString(), scope.id());
         UiSurfaceRegistry.Lease<ViewportSurface> fixedLease = selected;
         String fixedSurfaceRef = selected.id().ref();
-        BoundGraphQueryTarget target = targets.computeIfAbsent(key, ignored -> new BoundGraphQueryTarget(
+        BoundGraphTarget target = targets.computeIfAbsent(key, ignored -> new BoundGraphTarget(
                 session, scope, fixedSurfaceRef,
                 () -> fixedLease.isCurrent()
                         && fixedLease.owner().openGraphSessions().contains(session)
@@ -55,8 +54,8 @@ public final class ViewportGraphTargetResolver implements AutoCloseable {
 
     private record TargetKey(UiSurfaceId id, long generation, String sessionId, String scopeId) {}
 
-    public record Resolution(BoundGraphQueryTarget target, CommandResult failure) {
-        static Resolution success(BoundGraphQueryTarget target) { return new Resolution(target, null); }
+    public record Resolution(BoundGraphTarget target, CommandResult failure) {
+        static Resolution success(BoundGraphTarget target) { return new Resolution(target, null); }
         static Resolution failure(String code, String message) {
             return new Resolution(null, CommandResult.failure(code, message));
         }

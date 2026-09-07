@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.graph.editor;
 
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Core;
@@ -13,7 +13,7 @@ import java.util.concurrent.CompletionException;
  * Bounded revision cache for MCP graph reads. The editor thread captures serialized documents;
  * query workers materialize immutable indexes on demand.
  */
-final class GraphReadSnapshotCache implements AutoCloseable {
+public final class GraphReadSnapshotCache implements AutoCloseable {
     private static final int MAX_REVISIONS = 16;
 
     record Key(String sessionId, String scopeId, long revision) {

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.terminal.command;
+package com.mine.geometry_node.client.ai.mcp.client;
 
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.GeometryNode;
@@ -7,6 +7,11 @@ import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.command.CommandSpec;
+import com.mine.geometry_node.client.ai.graph.editor.BoundGraphTarget;
+import com.mine.geometry_node.client.ai.graph.editor.GraphReadSnapshotCache;
+import com.mine.geometry_node.client.ai.graph.editor.NodeCatalogQueryTarget;
+import com.mine.geometry_node.client.ai.graph.editor.PreparedGraphQueryTarget;
+import com.mine.geometry_node.client.ai.graph.editor.ViewportGraphTargetResolver;
 import icyllis.modernui.core.Core;
 
 import java.util.Objects;
@@ -83,7 +88,7 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                     result.complete(resolution.failure());
                     return;
                 }
-                BoundGraphQueryTarget target = resolution.target();
+                BoundGraphTarget target = resolution.target();
                 if (command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE) {
                     Thread.ofVirtual().name("geometry-node-graph-patch").start(
                             () -> {
@@ -151,7 +156,7 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
 
     private void executeRead(CommandSpec command, JsonObject arguments,
                              CommandInvocationContext.CancellationToken cancellation,
-                             BoundGraphQueryTarget liveTarget, PreparedGraphQueryTarget readTarget,
+                             BoundGraphTarget liveTarget, PreparedGraphQueryTarget readTarget,
                              CompletableFuture<CommandResult> result) {
         pendingReads.add(result);
         result.whenComplete((ignored, failure) -> pendingReads.remove(result));
@@ -176,7 +181,7 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
 
     private void completeReadOnUi(CommandResult commandResult,
                                   CommandInvocationContext.CancellationToken cancellation,
-                                  BoundGraphQueryTarget liveTarget,
+                                  BoundGraphTarget liveTarget,
                                   long capturedRevision,
                                   CompletableFuture<CommandResult> result) {
         Runnable completion = () -> {
