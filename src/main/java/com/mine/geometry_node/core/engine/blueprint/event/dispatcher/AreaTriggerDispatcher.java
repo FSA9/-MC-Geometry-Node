@@ -21,7 +21,6 @@ import com.mine.geometry_node.core.engine.graph.resource.GraphResourceScope;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceSelector;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.nodes.events.area.OnAreaEvent;
-import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -176,12 +175,7 @@ public final class AreaTriggerDispatcher {
             listenerState.lastSeenTick = currentTick;
             if (!shouldTick(currentTick, group.key.interval(), group.key.offset())) continue;
 
-            ServerLevel areaLevel = RegistryDataManager.resolveDimension(hostLevel.getServer(),
-                    group.key.dimensionId());
-            if (areaLevel == null) {
-                listenerState.reset();
-                continue;
-            }
+            ServerLevel areaLevel = hostLevel;
             SourceCacheKey sourceKey = SourceCacheKey.of(areaLevel, group.key);
             List<ResolvedAreaSource> sources = sourceCache.computeIfAbsent(sourceKey,
                     ignored -> resolveSources(hostLevel.getServer(), areaLevel, group.key));
@@ -240,27 +234,15 @@ public final class AreaTriggerDispatcher {
         if (nodeIds.isEmpty()) return List.of();
         Map<ListenerKey, EnumMap<AreaPhase, List<Integer>>> groups = new LinkedHashMap<>();
         for (int nodeId : nodeIds) {
-            String dimension = plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_DIMENSION_PORT, String.class,
-                    RegistryDataManager.DEFAULT_DIMENSION);
             AreaSource source = AreaSource.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.SUBSCRIPTION_SOURCE_PORT, String.class, OnAreaEvent.SOURCE_AREA));
-            AreaMatch match = source == AreaSource.AREA
-                    ? AreaMatch.fromId(plan.getStaticInput(nodeId,
-                            OnAreaEvent.SUBSCRIPTION_MATCH_PORT, String.class,
-                            OnAreaEvent.MATCH_EXACT))
-                    : AreaMatch.EXACT;
-            String sourceId = source == AreaSource.FORCE_FIELD
-                    ? plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_FORCE_FIELD_ID_PORT, String.class, "")
-                    : match == AreaMatch.ALL ? ""
-                    : plan.getStaticInput(nodeId, OnAreaEvent.SUBSCRIPTION_AREA_ID_PORT, String.class, "");
             AreaTargetType target = AreaTargetType.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.TARGET_PORT, String.class, AreaTargetType.ALL.id()));
             int interval = Math.max(1, plan.getStaticInput(nodeId,
                     OnAreaEvent.INTERVAL_TICK_PORT, Integer.class, 1));
             int offset = Math.floorMod(plan.getStaticInput(nodeId,
                     OnAreaEvent.OFFSET_TICK_PORT, Integer.class, 0), interval);
-            ListenerKey key = new ListenerKey(dimension == null ? "" : dimension.trim(), source,
-                    match, sourceId == null ? "" : sourceId.trim(), target, interval, offset);
+            ListenerKey key = new ListenerKey(source, target, interval, offset);
             AreaPhase phase = AreaPhase.fromId(plan.getStaticInput(nodeId,
                     OnAreaEvent.PHASE_PORT, String.class, OnAreaEvent.PHASE_ENTER));
             groups.computeIfAbsent(key, ignored -> new EnumMap<>(AreaPhase.class))
@@ -315,7 +297,6 @@ public final class AreaTriggerDispatcher {
                     OnAreaEvent.TARGET_PORT, group.key.targetType().id()
             ).values();
             for (int nodeId : nodes) {
-                // The process keeps its host level; the selected dimension only controls Area lookup and querying.
                 BlueprintRuntime.INSTANCE.executeEventNode(hostLevel, owner, graphId, plan, nodeId,
                         eventData, processFinder, mountAction);
                 if (!isSourceAlive(hostLevel.getServer(), areaLevel, source)) {
@@ -355,38 +336,27 @@ public final class AreaTriggerDispatcher {
 
     private static List<ResolvedAreaSource> resolveSources(MinecraftServer server, ServerLevel areaLevel,
                                                            ListenerKey key) {
-        ForceFieldResource forceField = null;
-        AreaAddress areaAddress;
         if (key.source() == AreaSource.FORCE_FIELD) {
-            if (key.sourceId().isBlank()) return List.of();
-            ForceFieldAddress forceAddress = ForceFieldAddress.tryCreate(
-                    areaLevel.dimension(), key.sourceId());
-            if (forceAddress == null) return List.of();
-            forceField = ForceFieldResourceStore.INSTANCE.get(server, forceAddress);
-            if (forceField == null) return List.of();
-            areaAddress = forceField.area();
-        } else {
-            if (key.match() == AreaMatch.ALL) {
-                List<ResolvedAreaSource> result = new ArrayList<>();
-                for (AreaResource resource : AreaResourceStore.INSTANCE.snapshot(areaLevel)) {
-                    AreaResource.Resolved area = resource.resolve(areaLevel);
-                    if (area != null) {
-                        result.add(new ResolvedAreaSource(resource, area, "",
-                                Long.MIN_VALUE, null));
-                    }
+            List<ResolvedAreaSource> result = new ArrayList<>();
+            for (ForceFieldResource forceField : ForceFieldResourceStore.INSTANCE.snapshot(areaLevel)) {
+                AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, forceField.area());
+                AreaResource.Resolved area = areaResource != null ? areaResource.resolve(areaLevel) : null;
+                if (areaResource != null && area != null) {
+                    result.add(new ResolvedAreaSource(areaResource, area,
+                            forceField.address().id(), forceField.generation(),
+                            areaResource.anchorEntityId()));
                 }
-                return List.copyOf(result);
             }
-            areaAddress = AreaAddress.tryCreate(areaLevel.dimension(), key.sourceId());
+            return List.copyOf(result);
         }
-        if (areaAddress == null) return List.of();
-        AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, areaAddress);
-        AreaResource.Resolved area = areaResource != null ? areaResource.resolve(areaLevel) : null;
-        if (areaResource == null || area == null) return List.of();
-        return List.of(new ResolvedAreaSource(areaResource, area,
-                forceField != null ? forceField.address().id() : "",
-                forceField != null ? forceField.generation() : Long.MIN_VALUE,
-                forceField != null ? areaResource.anchorEntityId() : null));
+        List<ResolvedAreaSource> result = new ArrayList<>();
+        for (AreaResource resource : AreaResourceStore.INSTANCE.snapshot(areaLevel)) {
+            AreaResource.Resolved area = resource.resolve(areaLevel);
+            if (area != null) {
+                result.add(new ResolvedAreaSource(resource, area, "", Long.MIN_VALUE, null));
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static boolean shouldTick(long tick, int interval, int offset) {
@@ -467,17 +437,7 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private enum AreaMatch {
-        EXACT,
-        ALL;
-
-        private static AreaMatch fromId(@Nullable String id) {
-            return OnAreaEvent.MATCH_ALL.equals(id) ? ALL : EXACT;
-        }
-    }
-
-    private record ListenerKey(String dimensionId, AreaSource source, AreaMatch match, String sourceId,
-                               AreaTargetType targetType,
+    private record ListenerKey(AreaSource source, AreaTargetType targetType,
                                int interval, int offset) {
     }
 
@@ -503,11 +463,9 @@ public final class AreaTriggerDispatcher {
         }
     }
 
-    private record SourceCacheKey(ResourceKey<Level> dimension, AreaSource source,
-                                  AreaMatch match, String sourceId) {
+    private record SourceCacheKey(ResourceKey<Level> dimension, AreaSource source) {
         private static SourceCacheKey of(ServerLevel level, ListenerKey listener) {
-            return new SourceCacheKey(level.dimension(), listener.source(),
-                    listener.match(), listener.sourceId());
+            return new SourceCacheKey(level.dimension(), listener.source());
         }
     }
 

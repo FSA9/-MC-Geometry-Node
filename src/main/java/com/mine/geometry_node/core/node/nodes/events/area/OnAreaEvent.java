@@ -1,8 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.events.area;
 
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
-import com.mine.geometry_node.core.node.RegistryDataManager;
-import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -17,16 +15,12 @@ import net.minecraft.network.chat.Component;
 
 import java.util.Map;
 
-/** Listens to one Area, every Area in a dimension, or an Area referenced by a Force Field. */
+/** Listens to live Area resources in the graph's current level. */
 public final class OnAreaEvent extends BaseEventNode {
     public static final String TYPE_ID = "on_area_event";
     public static final String PHASE_PORT = "area_phase";
     public static final String SOURCE_PORT = "area_source";
     public static final String SUBSCRIPTION_SOURCE_PORT = "subscription_area_source";
-    public static final String SUBSCRIPTION_MATCH_PORT = "subscription_area_match";
-    public static final String SUBSCRIPTION_AREA_ID_PORT = "subscription_area_id";
-    public static final String SUBSCRIPTION_FORCE_FIELD_ID_PORT = "subscription_force_field_id";
-    public static final String SUBSCRIPTION_DIMENSION_PORT = "subscription_dimension";
     public static final String TARGET_PORT = "area_target";
     public static final String INSIDE_COUNT_PORT = "inside_count";
     public static final String INTERVAL_TICK_PORT = StandardPorts.TICK.getId();
@@ -39,25 +33,9 @@ public final class OnAreaEvent extends BaseEventNode {
     public static final String SOURCE_AREA = "area";
     public static final String SOURCE_FORCE_FIELD = "force_field";
     public static final String[] SOURCE_OPTIONS = {SOURCE_AREA, SOURCE_FORCE_FIELD};
-    public static final String MATCH_EXACT = "exact";
-    public static final String MATCH_ALL = "all";
-    public static final String[] MATCH_OPTIONS = {MATCH_EXACT, MATCH_ALL};
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return buildDefinition(SOURCE_AREA, MATCH_EXACT);
-    }
-
-    @Override
-    public NodeDef getDefinition(NodeData instanceData) {
-        Object value = instanceData != null ? instanceData.inputs.get(SUBSCRIPTION_SOURCE_PORT) : null;
-        String source = SOURCE_FORCE_FIELD.equals(value) ? SOURCE_FORCE_FIELD : SOURCE_AREA;
-        Object matchValue = instanceData != null ? instanceData.inputs.get(SUBSCRIPTION_MATCH_PORT) : null;
-        String match = MATCH_ALL.equals(matchValue) ? MATCH_ALL : MATCH_EXACT;
-        return buildDefinition(source, match);
-    }
-
-    private NodeDef buildDefinition(String source, String match) {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
@@ -71,23 +49,10 @@ public final class OnAreaEvent extends BaseEventNode {
                         .output(SOURCE_PORT, "source")
                         .output(INSIDE_COUNT_PORT, "inside_count")
                         .input(SUBSCRIPTION_SOURCE_PORT, "source")
-                        .input(SUBSCRIPTION_DIMENSION_PORT, "dimension")
                         .input(PHASE_PORT, "phase")
                         .input(TARGET_PORT, "target")
                         .input(INTERVAL_TICK_PORT, "interval")
                         .input(OFFSET_TICK_PORT, "offset");
-        if (SOURCE_FORCE_FIELD.equals(source)) {
-            comment.input(SUBSCRIPTION_FORCE_FIELD_ID_PORT, "force_field_id");
-        } else {
-            comment.input(SUBSCRIPTION_MATCH_PORT, "match");
-            if (MATCH_EXACT.equals(match)) comment.input(SUBSCRIPTION_AREA_ID_PORT, "area_id");
-        }
-
-        PortDef idPort = SOURCE_FORCE_FIELD.equals(source)
-                ? PortDef.create(SUBSCRIPTION_FORCE_FIELD_ID_PORT,
-                        "geometry_node.port.force_field_id", PortType.STRING, "")
-                : PortDef.create(SUBSCRIPTION_AREA_ID_PORT,
-                        "geometry_node.port.area_id", PortType.STRING, "");
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.EVENT,
                         Component.translatable("geometry_node.node." + TYPE_ID))
                 .comment(comment.build())
@@ -109,25 +74,7 @@ public final class OnAreaEvent extends BaseEventNode {
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.area.source.area",
                                         "geometry_node.area.source.force_field"
-                                }))
-                .addStaticInput(PortDef.create(SUBSCRIPTION_DIMENSION_PORT,
-                                "geometry_node.port.dimension", PortType.STRING,
-                                RegistryDataManager.DEFAULT_DIMENSION),
-                        UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID,
-                                RegistryDataManager.DIMENSION_REGISTRY_ID));
-        if (SOURCE_FORCE_FIELD.equals(source)) {
-            builder.addStaticInput(idPort, UIHint.INPUT);
-        } else {
-            builder.addStaticInput(PortDef.create(SUBSCRIPTION_MATCH_PORT,
-                            "geometry_node.port.area_match", PortType.STRING, MATCH_EXACT),
-                    UIHint.SELECT, null, Map.of(
-                            PortMetaKeys.OPTIONS, MATCH_OPTIONS,
-                            PortMetaKeys.OPTION_LABELS, new String[]{
-                                    "geometry_node.area.match.exact",
-                                    "geometry_node.area.match.all"
-                            }));
-            if (MATCH_EXACT.equals(match)) builder.addStaticInput(idPort, UIHint.INPUT);
-        }
+                                }));
         return builder
                 .addStaticInput(PortDef.create(PHASE_PORT, "geometry_node.port.area_phase", PortType.STRING,
                                 PHASE_ENTER), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, PHASE_OPTIONS))

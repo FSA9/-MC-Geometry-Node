@@ -59,7 +59,8 @@ public final class RuntimeImageServerConfig {
     }
 
     public static long cacheMaxBytes() {
-        return requireRegistered(cacheMaxSizeMiB).getAsLong() * MEBIBYTE;
+        return Math.multiplyExact(
+                (long) requireRegistered(cacheMaxSizeMiB).getAsInt(), MEBIBYTE);
     }
 
     private static <T extends ModConfigSpec.ConfigValue<?>> T requireRegistered(T value) {

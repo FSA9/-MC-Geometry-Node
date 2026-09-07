@@ -161,8 +161,6 @@ public final class GraphValueCodecRegistry {
         registerNative(List.class, GraphValueJsonCodecs.LIST, PortType.LIST);
         registerNative(Map.class, GraphValueJsonCodecs.MAP, PortType.DICT, PortType.SHOP);
 
-        // Runtime-only reference. It supports process snapshots but is deliberately
-        // not associated with a persistent PortType/JSON codec for the Data Library.
         register(new GraphValueCodec<AreaRef>() {
             @Override public String getTypeId() { return "area_ref"; }
             @Override public Class<AreaRef> getTargetClass() { return AreaRef.class; }
@@ -182,7 +180,7 @@ public final class GraphValueCodecRegistry {
                         new AreaAddress(dimension, encoded.getStringOr("id", "")),
                         UUID.fromString(encoded.getStringOr("incarnation", "")));
             }
-        });
+        }, GraphValueJsonCodecs.AREA, PortType.AREA);
 
         // UUID
         register(new GraphValueCodec<UUID>() {

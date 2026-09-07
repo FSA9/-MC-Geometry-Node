@@ -26,6 +26,7 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -544,6 +545,21 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             card.addView(content, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             card.addView(check, checkLp);
+        } else if (entry.type() == PortType.AREA) {
+            LinearLayout row = new LinearLayout(getContext());
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(name, new LayoutParams(0, px(26), 0.42f));
+            TextView summary = label(getContext(), areaSummary(entry.value()), 10.5f, MUTED);
+            summary.setSingleLine(true);
+            summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            LayoutParams summaryLp = new LayoutParams(0, px(26), 0.58f);
+            summaryLp.leftMargin = px(3);
+            row.addView(summary, summaryLp);
+            LayoutParams areaCheckLp = new LayoutParams(px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
+            areaCheckLp.leftMargin = px(3);
+            row.addView(check, areaCheckLp);
+            card.addView(row, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         } else if (isSummaryType(entry.type())) {
             LinearLayout row = new LinearLayout(getContext());
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -955,6 +971,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return Component.translatable(key, size).getString();
     }
 
+    private static String areaSummary(Object value) {
+        if (!(value instanceof AreaRef area)) {
+            return tr("geometry_node.data_library.reference_unavailable");
+        }
+        return area.address().dimension().identifier() + " / " + area.address().id();
+    }
+
     private View createBooleanValueEditor(DataLibraryUiRepository.Entry entry,
                                           AtomicReference<DataLibraryUiRepository.Entry> current) {
         FrameLayout host = new FrameLayout(getContext());
@@ -988,7 +1011,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private static int cardHeightDp(PortType type) {
-        if (isInlineValueType(type) || isSummaryType(type)) return 36;
+        if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 36;
         if (type == PortType.XYZ) return 94;
         return isPreviewType(type) ? 94 : 70;
     }

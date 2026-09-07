@@ -6,6 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
+import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -16,13 +18,16 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -59,6 +64,9 @@ final class GraphValueJsonCodecs {
     static final GraphValueJsonCodec ENTITY = codec(
             (value, registries) -> encodeEntity(value),
             (value, registries) -> decodeEntity(value.getAsJsonObject()));
+    static final GraphValueJsonCodec AREA = codec(
+            (value, registries) -> encodeArea((AreaRef) value),
+            (value, registries) -> decodeArea(value.getAsJsonObject()));
     static final GraphValueJsonCodec ENTITY_TEMPLATE = codec(
             (value, registries) -> encodeEntityTemplate(EntityTemplateValue.from(value)),
             (value, registries) -> decodeEntityTemplate(value.getAsJsonObject()));
@@ -117,6 +125,23 @@ final class GraphValueJsonCodecs {
 
     private static UUID decodeEntity(JsonObject value) {
         return UUID.fromString(value.get("uuid").getAsString());
+    }
+
+    private static JsonObject encodeArea(AreaRef value) {
+        JsonObject json = new JsonObject();
+        json.addProperty("dimension", value.address().dimension().identifier().toString());
+        json.addProperty("id", value.address().id());
+        json.addProperty("incarnation", value.incarnation().toString());
+        return json;
+    }
+
+    private static AreaRef decodeArea(JsonObject value) {
+        Identifier dimensionId = Identifier.tryParse(value.get("dimension").getAsString());
+        if (dimensionId == null) throw new IllegalArgumentException("Invalid Area dimension");
+        ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION, dimensionId);
+        return new AreaRef(
+                new AreaAddress(dimension, value.get("id").getAsString()),
+                UUID.fromString(value.get("incarnation").getAsString()));
     }
 
     private static JsonObject encodeEntityTemplate(EntityTemplateValue value) {
