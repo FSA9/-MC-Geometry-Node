@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.behavior.runtime;
 
+import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -67,16 +68,39 @@ public final class BehaviorNativeAiController {
             clearControlledMemories(newlyControlledMemories);
             return true;
         } catch (RuntimeException exception) {
-            if (brainLeasesAdded) removeBrainLeases(owner, acquiredBrainResources);
-            releaseGoalFlags(acquiredFlags);
+            RuntimeException failure = exception;
+            if (brainLeasesAdded) {
+                try {
+                    removeBrainLeases(owner, acquiredBrainResources);
+                } catch (RuntimeException cleanupFailure) {
+                    failure = mergeFailure(failure, cleanupFailure);
+                }
+            }
+            try {
+                releaseGoalFlags(acquiredFlags);
+            } catch (RuntimeException cleanupFailure) {
+                failure = mergeFailure(failure, cleanupFailure);
+            }
+            GeometryNode.LOGGER.error(
+                    "Unable to acquire native AI resources; rollback was attempted", failure);
             return false;
         }
     }
 
     void release(Set<BehaviorExecutableNode.Resource> resources) {
         EnumSet<BehaviorExecutableNode.Resource> normalized = normalizedResources(resources);
-        removeBrainLeases(owner, normalized);
-        releaseGoalFlags(goalFlags(normalized));
+        RuntimeException failure = null;
+        try {
+            removeBrainLeases(owner, normalized);
+        } catch (RuntimeException exception) {
+            failure = exception;
+        }
+        try {
+            releaseGoalFlags(goalFlags(normalized));
+        } catch (RuntimeException exception) {
+            failure = mergeFailure(failure, exception);
+        }
+        if (failure != null) throw failure;
     }
 
     @Nullable
@@ -141,14 +165,25 @@ public final class BehaviorNativeAiController {
 
     void releasePersistentControls() {
         if (!targetAssignmentActive) return;
+        RuntimeException failure = null;
         try {
             writeAttackTarget(null);
-        } finally {
-            assignedTarget = null;
-            targetAssignmentActive = false;
-            unregisterTargetAssignment();
-            release(Set.of(BehaviorExecutableNode.Resource.TARGET));
+        } catch (RuntimeException exception) {
+            failure = exception;
         }
+        assignedTarget = null;
+        targetAssignmentActive = false;
+        try {
+            unregisterTargetAssignment();
+        } catch (RuntimeException exception) {
+            failure = mergeFailure(failure, exception);
+        }
+        try {
+            release(Set.of(BehaviorExecutableNode.Resource.TARGET));
+        } catch (RuntimeException exception) {
+            failure = mergeFailure(failure, exception);
+        }
+        if (failure != null) throw failure;
     }
 
     @Nullable
@@ -196,12 +231,18 @@ public final class BehaviorNativeAiController {
     }
 
     private void releaseGoalFlags(Set<Goal.Flag> flags) {
+        RuntimeException firstFailure = null;
         for (Goal.Flag flag : flags) {
             GoalLease lease = goalLeases.get(flag);
             if (lease == null || --lease.references > 0) continue;
             goalLeases.remove(flag);
-            lease.close(goalLeases.keySet());
+            try {
+                lease.close(goalLeases.keySet());
+            } catch (RuntimeException exception) {
+                firstFailure = mergeFailure(firstFailure, exception);
+            }
         }
+        if (firstFailure != null) throw firstFailure;
     }
 
     private void stopConflictingBrainBehaviors(Set<MemoryModuleType<?>> memories) {
@@ -379,6 +420,13 @@ public final class BehaviorNativeAiController {
         return result;
     }
 
+    private static RuntimeException mergeFailure(@Nullable RuntimeException first,
+                                                 RuntimeException next) {
+        if (first == null) return next;
+        if (first != next) first.addSuppressed(next);
+        return first;
+    }
+
     private static EnumSet<Goal.Flag> goalFlags(Set<BehaviorExecutableNode.Resource> resources) {
         EnumSet<Goal.Flag> result = EnumSet.noneOf(Goal.Flag.class);
         for (BehaviorExecutableNode.Resource resource : resources) {
@@ -449,14 +497,28 @@ public final class BehaviorNativeAiController {
                 this.targets = targets;
                 this.targets.acquire(flag);
             } catch (RuntimeException exception) {
-                this.goals.release(flag, alreadyActive);
+                try {
+                    this.goals.release(flag, alreadyActive);
+                } catch (RuntimeException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
                 throw exception;
             }
         }
 
         private void close(Set<Goal.Flag> stillActive) {
-            targets.release(flag, stillActive);
-            goals.release(flag, stillActive);
+            RuntimeException failure = null;
+            try {
+                targets.release(flag, stillActive);
+            } catch (RuntimeException exception) {
+                failure = exception;
+            }
+            try {
+                goals.release(flag, stillActive);
+            } catch (RuntimeException exception) {
+                failure = mergeFailure(failure, exception);
+            }
+            if (failure != null) throw failure;
         }
     }
 
@@ -487,27 +549,46 @@ public final class BehaviorNativeAiController {
                 selector.addGoal(Integer.MIN_VALUE, blocker);
                 blockers.put(flag, blocker);
             } catch (RuntimeException exception) {
-                selector.removeGoal(blocker);
-                for (SavedGoal saved : added) {
-                    if (!containsAvailable(saved.goal())) {
-                        selector.addGoal(saved.priority(), saved.goal());
-                    }
-                    displaced.remove(saved);
+                RuntimeException failure = exception;
+                try {
+                    selector.removeGoal(blocker);
+                } catch (RuntimeException cleanupFailure) {
+                    failure = mergeFailure(failure, cleanupFailure);
                 }
-                throw exception;
+                for (SavedGoal saved : added) {
+                    try {
+                        if (!containsAvailable(saved.goal())) {
+                            selector.addGoal(saved.priority(), saved.goal());
+                        }
+                        displaced.remove(saved);
+                    } catch (RuntimeException cleanupFailure) {
+                        failure = mergeFailure(failure, cleanupFailure);
+                    }
+                }
+                throw failure;
             }
         }
 
         private void release(Goal.Flag flag, Set<Goal.Flag> stillActive) {
             Goal blocker = blockers.remove(flag);
-            selector.removeGoal(blocker);
+            RuntimeException failure = null;
+            try {
+                selector.removeGoal(blocker);
+            } catch (RuntimeException exception) {
+                failure = exception;
+            }
             var iterator = displaced.iterator();
             while (iterator.hasNext()) {
                 SavedGoal saved = iterator.next();
                 if (!java.util.Collections.disjoint(saved.goal().getFlags(), stillActive)) continue;
-                selector.addGoal(saved.priority(), saved.goal());
-                iterator.remove();
+                try {
+                    selector.addGoal(saved.priority(), saved.goal());
+                    iterator.remove();
+                } catch (RuntimeException exception) {
+                    failure = mergeFailure(failure, exception);
+                }
             }
+            if (failure != null) throw failure;
         }
 
         private boolean containsDisplaced(Goal goal) {

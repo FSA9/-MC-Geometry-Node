@@ -67,9 +67,11 @@ public final class BehaviorTreeEvaluator {
         } catch (EvaluationFault fault) {
             long elapsedNanos = elapsed(instance, started);
             instance.recordEvaluationMetrics(elapsedNanos, pass.visits);
-            instance.releaseAllResources();
-            instance.host().releasePersistentControls();
-            instance.failEvaluation(fault.reason);
+            try {
+                cleanupRuntimeState(instance, null);
+            } finally {
+                instance.failEvaluation(fault.reason);
+            }
             return EvaluationOutcome.failed(fault.reason, fault.getMessage(), pass.visits, elapsedNanos);
         } finally {
             currentPass.remove();
@@ -79,21 +81,52 @@ public final class BehaviorTreeEvaluator {
     public void stop(BehaviorTreeProcess instance, BehaviorTerminationReason reason) {
         Objects.requireNonNull(instance, "instance");
         Objects.requireNonNull(reason, "reason");
-        int root = instance.plan().getRootNode();
-        if (root >= 0) abortSubtree(instance, root, reason);
-        instance.releaseAllResources();
-        instance.host().releasePersistentControls();
-        instance.markStopped(reason);
+        try {
+            cleanupRuntimeState(instance, reason);
+        } finally {
+            instance.markStopped(reason);
+        }
     }
 
     /** Exits the active branch while retaining the instance for a later root restart. */
     public void suspend(BehaviorTreeProcess instance) {
         Objects.requireNonNull(instance, "instance");
-        int root = instance.plan().getRootNode();
-        if (root >= 0) abortSubtree(instance, root, BehaviorTerminationReason.TREE_SUSPENDED);
-        instance.releaseAllResources();
-        instance.host().releasePersistentControls();
-        instance.markSuspended();
+        try {
+            cleanupRuntimeState(instance, BehaviorTerminationReason.TREE_SUSPENDED);
+        } finally {
+            instance.markSuspended();
+        }
+    }
+
+    private void cleanupRuntimeState(BehaviorTreeProcess instance,
+                                     @Nullable BehaviorTerminationReason abortReason) {
+        if (abortReason != null) {
+            runCleanupStep(instance, "abort active subtree", () -> {
+                int root = instance.plan().getRootNode();
+                if (root < 0) return;
+                EvaluationFault failure = abortSubtree(instance, root, abortReason);
+                if (failure != null) {
+                    GeometryNode.LOGGER.warn(
+                            "Behavior subtree cleanup reported a fault: asset={}, instance={}, reason={}, detail={}",
+                            instance.graphId(), instance.instanceId(), failure.reason,
+                            failure.getMessage());
+                }
+            });
+        }
+        runCleanupStep(instance, "release node resources", instance::releaseAllResources);
+        runCleanupStep(instance, "release persistent controls",
+                instance.host()::releasePersistentControls);
+    }
+
+    private static void runCleanupStep(BehaviorTreeProcess instance, String phase,
+                                       Runnable cleanup) {
+        try {
+            cleanup.run();
+        } catch (RuntimeException exception) {
+            GeometryNode.LOGGER.error(
+                    "Behavior cleanup failed: asset={}, instance={}, phase={}",
+                    instance.graphId(), instance.instanceId(), phase, exception);
+        }
     }
 
     BehaviorResult evaluateNode(BehaviorTreeProcess instance, int nodeIndex, int depth, long epochTick) {
@@ -127,7 +160,12 @@ public final class BehaviorTreeEvaluator {
                         "Node cannot be evaluated from state " + state);
             }
 
-            BehaviorResult result = executor.update(context);
+            BehaviorResult result;
+            try {
+                result = executor.update(context);
+            } finally {
+                instance.dataEvaluation().beginEpoch();
+            }
             if (result == null) {
                 throw new EvaluationFault(BehaviorTerminationReason.INVALID_DATA,
                         "Behavior executor returned no result");
@@ -266,7 +304,13 @@ public final class BehaviorTreeEvaluator {
                     "Behavior resources are already owned by another active node");
         }
         transition(instance, nodeIndex, BehaviorNodeState.ENTERING);
-        executor.enter(context);
+        // Resource takeover and enter callbacks may both change world-backed data.
+        instance.dataEvaluation().beginEpoch();
+        try {
+            executor.enter(context);
+        } finally {
+            instance.dataEvaluation().beginEpoch();
+        }
     }
 
     @Nullable
@@ -353,6 +397,7 @@ public final class BehaviorTreeEvaluator {
             logNodeException(instance, nodeIndex, exception);
             exitFailure = new EvaluationFault(finalReason, finalDetail);
         }
+        instance.dataEvaluation().beginEpoch();
         transition(instance, nodeIndex, BehaviorLifecycleContract.terminalState(finalReason));
         instance.recordTermination(nodeIndex, finalReason, elapsedNanos,
                 finalFailureCode, finalDetail);

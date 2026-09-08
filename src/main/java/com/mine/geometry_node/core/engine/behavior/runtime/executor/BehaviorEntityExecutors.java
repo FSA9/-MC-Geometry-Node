@@ -37,7 +37,9 @@ public final class BehaviorEntityExecutors {
     private static final int MAX_TARGET_CANDIDATES = 4_096;
     private static final int WANDER_ATTEMPTS = 10;
     private static final double WANDER_ARRIVAL_DISTANCE = 1.0D;
-    private static final long MOVE_REPATH_INTERVAL = 10L;
+    private static final long MOVE_REPATH_MIN_INTERVAL = 10L;
+    private static final long MOVE_REPATH_FORCE_INTERVAL = 40L;
+    private static final double MOVE_REPATH_DISTANCE_SQR = 1.0D;
     private static final long FOLLOW_IDLE_CHECK_INTERVAL = 5L;
     private static final long NAVIGATION_PROBE_CACHE_TICKS = 5L;
 
@@ -209,7 +211,8 @@ public final class BehaviorEntityExecutors {
             }
             context.requestWakeupAfter(1);
             return BehaviorActionStep.running(new MoveState(target, speed, arrival,
-                    safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+                    position, safeAdd(context.gameTick(), MOVE_REPATH_MIN_INTERVAL),
+                    safeAdd(context.gameTick(), MOVE_REPATH_FORCE_INTERVAL)));
         }
 
         @Override
@@ -226,18 +229,26 @@ public final class BehaviorEntityExecutors {
                 DebugRendererSessionManager.clearRequestedPathTarget(owner);
                 return BehaviorActionStep.success(state);
             }
-            if (owner.getNavigation().isDone()) {
+            MoveState next = state;
+            long tick = context.gameTick();
+            boolean dynamicTarget = state.target() instanceof Entity;
+            boolean targetMoved = dynamicTarget
+                    && movedForRepath(state.plannedTargetPosition(), position);
+            boolean repathDue = dynamicTarget
+                    && tick >= state.nextAllowedRepathTick()
+                    && (targetMoved || tick >= state.forcedRepathTick());
+            if (owner.getNavigation().isDone() && !repathDue) {
                 return failure(state, BehaviorActionFailure.PATH_INTERRUPTED,
                         "Navigation ended before the target was reached");
             }
-            MoveState next = state;
-            if (state.target() instanceof Entity && context.gameTick() >= state.nextRepathTick()) {
+            if (repathDue) {
                 if (!startNavigation(owner, state.target(), state.speed())) {
                     return failure(state, BehaviorActionFailure.REPATH_FAILED,
                             "Dynamic target path could not be refreshed");
                 }
                 next = new MoveState(state.target(), state.speed(), state.arrivalDistance(),
-                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL));
+                        position, safeAdd(tick, MOVE_REPATH_MIN_INTERVAL),
+                        safeAdd(tick, MOVE_REPATH_FORCE_INTERVAL));
             }
             context.requestWakeupAfter(1);
             return BehaviorActionStep.running(next);
@@ -287,7 +298,7 @@ public final class BehaviorEntityExecutors {
                 context.requestWakeupAfter(FOLLOW_IDLE_CHECK_INTERVAL);
                 return BehaviorActionStep.running(new FollowState(target, speed,
                         minimumDistance, maximumDistance, false,
-                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+                        target.position(), context.gameTick(), context.gameTick()));
             }
             DebugRendererSessionManager.recordRequestedPathTarget(owner, target.position());
             if (!startNavigation(owner, target, speed)) {
@@ -297,7 +308,9 @@ public final class BehaviorEntityExecutors {
             context.requestWakeupAfter(1);
             return BehaviorActionStep.running(new FollowState(target, speed,
                     minimumDistance, maximumDistance, true,
-                    safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+                    target.position(),
+                    safeAdd(context.gameTick(), MOVE_REPATH_MIN_INTERVAL),
+                    safeAdd(context.gameTick(), MOVE_REPATH_FORCE_INTERVAL)));
         }
 
         @Override
@@ -321,13 +334,20 @@ public final class BehaviorEntityExecutors {
                 DebugRendererSessionManager.clearRequestedPathTarget(owner);
                 context.requestWakeupAfter(FOLLOW_IDLE_CHECK_INTERVAL);
                 return BehaviorActionStep.running(state.withNavigation(false,
-                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL)));
+                        target.position(), context.gameTick(), context.gameTick()));
             }
 
-            DebugRendererSessionManager.recordRequestedPathTarget(owner, target.position());
-            boolean mustRepath = !state.navigating()
-                    || owner.getNavigation().isDone()
-                    || context.gameTick() >= state.nextRepathTick();
+            Vec3 targetPosition = target.position();
+            DebugRendererSessionManager.recordRequestedPathTarget(owner, targetPosition);
+            long tick = context.gameTick();
+            boolean navigationUnavailable = !state.navigating()
+                    || owner.getNavigation().isDone();
+            boolean repathAllowed = !state.navigating()
+                    || tick >= state.nextAllowedRepathTick();
+            boolean mustRepath = repathAllowed
+                    && (navigationUnavailable
+                    || movedForRepath(state.plannedTargetPosition(), targetPosition)
+                    || tick >= state.forcedRepathTick());
             FollowState next = state;
             if (mustRepath) {
                 if (!startNavigation(owner, target, state.speed())) {
@@ -335,9 +355,14 @@ public final class BehaviorEntityExecutors {
                             "Follow target path could not be refreshed");
                 }
                 next = state.withNavigation(true,
-                        safeAdd(context.gameTick(), MOVE_REPATH_INTERVAL));
+                        targetPosition, safeAdd(tick, MOVE_REPATH_MIN_INTERVAL),
+                        safeAdd(tick, MOVE_REPATH_FORCE_INTERVAL));
             }
-            context.requestWakeupAfter(1);
+            if (navigationUnavailable && !repathAllowed) {
+                context.requestWakeupAt(state.nextAllowedRepathTick());
+            } else {
+                context.requestWakeupAfter(1);
+            }
             return BehaviorActionStep.running(next);
         }
 
@@ -552,6 +577,10 @@ public final class BehaviorEntityExecutors {
         return entity.position().distanceToSqr(target) <= distance * distance;
     }
 
+    private static boolean movedForRepath(Vec3 plannedPosition, Vec3 currentPosition) {
+        return plannedPosition.distanceToSqr(currentPosition) >= MOVE_REPATH_DISTANCE_SQR;
+    }
+
     private static PathNavigation isolatedNavigation(Mob owner) {
         PathNavigation live = owner.getNavigation();
         PathNavigation probe = ((MobNavigationInvoker) (Object) owner)
@@ -635,16 +664,22 @@ public final class BehaviorEntityExecutors {
     }
 
     private record MoveState(Object target, double speed, double arrivalDistance,
-                             long nextRepathTick) {
+                             Vec3 plannedTargetPosition, long nextAllowedRepathTick,
+                             long forcedRepathTick) {
     }
 
     private record FollowState(Entity target, double speed, double minimumDistance,
                                double maximumDistance, boolean navigating,
-                               long nextRepathTick) {
-        private FollowState withNavigation(boolean value, long repathTick) {
-            if (navigating == value && nextRepathTick == repathTick) return this;
+                               Vec3 plannedTargetPosition, long nextAllowedRepathTick,
+                               long forcedRepathTick) {
+        private FollowState withNavigation(boolean value, Vec3 plannedPosition,
+                                           long nextAllowedTick, long forcedTick) {
+            if (navigating == value
+                    && plannedTargetPosition.equals(plannedPosition)
+                    && nextAllowedRepathTick == nextAllowedTick
+                    && forcedRepathTick == forcedTick) return this;
             return new FollowState(target, speed, minimumDistance, maximumDistance,
-                    value, repathTick);
+                    value, plannedPosition, nextAllowedTick, forcedTick);
         }
     }
 

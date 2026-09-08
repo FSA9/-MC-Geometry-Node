@@ -342,11 +342,18 @@ public final class BehaviorTreeProcess {
     }
 
     void releaseAllResources() {
+        RuntimeException firstFailure = null;
         for (int nodeIndex = 0; nodeIndex < resourcesAcquired.length; nodeIndex++) {
             if (resourcesAcquired[nodeIndex]) {
-                releaseResources(nodeIndex, plan.getNodeResources(nodeIndex));
+                try {
+                    releaseResources(nodeIndex, plan.getNodeResources(nodeIndex));
+                } catch (RuntimeException exception) {
+                    if (firstFailure == null) firstFailure = exception;
+                    else firstFailure.addSuppressed(exception);
+                }
             }
         }
+        if (firstFailure != null) throw firstFailure;
     }
 
     private boolean validNode(int nodeIndex) {

@@ -258,7 +258,7 @@ public final class BehaviorTreeEngine {
         ServerState server = servers.remove(minecraftServer);
         if (server == null) return;
         for (InstanceEntry entry : List.copyOf(server.instances.values())) {
-            evaluator.stop(entry.instance, BehaviorTerminationReason.SERVER_STOPPING);
+            stopAndRemove(server, entry, BehaviorTerminationReason.SERVER_STOPPING);
         }
         server.clear();
     }
@@ -272,8 +272,7 @@ public final class BehaviorTreeEngine {
                                         @Nullable CompiledGraph newArtifact) {
         BehaviorTreePlan newPlan = newArtifact instanceof BehaviorTreePlan plan ? plan : null;
         Entity owner = oldEntry.instance.host().owner();
-        evaluator.stop(oldEntry.instance, BehaviorTerminationReason.ASSET_REPLACED);
-        removeIndexes(server, oldEntry);
+        stopAndRemove(server, oldEntry, BehaviorTerminationReason.ASSET_REPLACED);
         if (!(owner instanceof Mob mob) || newPlan == null || !(mob.level() instanceof ServerLevel level)
                 || mob.isRemoved() || !mob.isAlive()) return;
         start(level, mob, newPlan, true, seed(mob.getUUID(), newPlan.assetId()));
@@ -281,27 +280,19 @@ public final class BehaviorTreeEngine {
 
     private void stopAndRemove(ServerState server, InstanceEntry entry,
                                BehaviorTerminationReason reason) {
-        evaluator.stop(entry.instance, reason);
-        removeIndexes(server, entry);
+        try {
+            evaluator.stop(entry.instance, reason);
+        } catch (RuntimeException exception) {
+            GeometryNode.LOGGER.error(
+                    "Unable to fully stop behavior instance {}; indexes will still be removed",
+                    entry.instance.instanceId(), exception);
+        } finally {
+            removeIndexes(server, entry);
+        }
     }
 
     private void removeIndexes(ServerState server, InstanceEntry entry) {
         UUID instanceId = entry.instance.instanceId();
-        GraphResourceLifecycleManager.INSTANCE.releaseProcess(server.server, instanceId);
-        if (!entry.instance.state().isActive()) {
-            server.retainStopReason(entry.ownerId, entry.instance.stopReason());
-            if (entry.instance.debugTracingEnabled()) {
-                try {
-                    entry.refreshOwnerAccess();
-                    server.retainTerminalSnapshot(entry.ownerId,
-                            BehaviorTreeDebugSnapshot.capture(entry.instance), entry.access(false));
-                } catch (RuntimeException exception) {
-                    GeometryNode.LOGGER.warn(
-                            "[BehaviorRuntime] Failed to capture terminal snapshot for {}; indexes will still be removed",
-                            instanceId, exception);
-                }
-            }
-        }
         server.instances.remove(instanceId, entry);
         server.ownerInstances.remove(entry.ownerId, instanceId);
         Set<UUID> assetInstanceIds = server.assetInstances.get(entry.instance.graphId());
@@ -315,6 +306,27 @@ public final class BehaviorTreeEngine {
         if (world != null) {
             world.scheduler.cancel(instanceId);
             if (world.scheduler.isEmpty()) server.worlds.remove(entry.levelKey(), world);
+        }
+
+        try {
+            GraphResourceLifecycleManager.INSTANCE.releaseProcess(server.server, instanceId);
+        } catch (RuntimeException exception) {
+            GeometryNode.LOGGER.error(
+                    "Unable to release graph resources for behavior instance {}", instanceId, exception);
+        }
+        try {
+            if (!entry.instance.state().isActive()) {
+                server.retainStopReason(entry.ownerId, entry.instance.stopReason());
+                if (entry.instance.debugTracingEnabled()) {
+                    entry.refreshOwnerAccess();
+                    server.retainTerminalSnapshot(entry.ownerId,
+                            BehaviorTreeDebugSnapshot.capture(entry.instance), entry.access(false));
+                }
+            }
+        } catch (RuntimeException exception) {
+            GeometryNode.LOGGER.warn(
+                    "[BehaviorRuntime] Failed to retain terminal state for {}; indexes were removed",
+                    instanceId, exception);
         }
     }
 
