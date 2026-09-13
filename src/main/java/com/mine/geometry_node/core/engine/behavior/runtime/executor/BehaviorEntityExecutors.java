@@ -9,39 +9,33 @@ import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorAction
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorBudgetExceededException;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.BehaviorContractViolation;
 import com.mine.geometry_node.core.engine.behavior.runtime.action.InstantBehaviorActionExecutor;
+import com.mine.geometry_node.core.engine.behavior.runtime.navigation.BehaviorNavigationService;
+import com.mine.geometry_node.core.engine.behavior.runtime.navigation.WanderCandidateProviders;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.behavior.entity.BehaviorMoveToNode;
-import com.mine.geometry_node.mixin.MobNavigationInvoker;
-import com.mine.geometry_node.mixin.PathNavigationAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
-import net.minecraft.world.entity.ai.navigation.PathNavigation;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.pathfinder.Path;
-import net.minecraft.world.level.pathfinder.NodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.WeakHashMap;
 
 /** Server-side executors for entity target, navigation, and look actions. */
 public final class BehaviorEntityExecutors {
     private static final int MAX_TARGET_CANDIDATES = 4_096;
-    private static final int WANDER_ATTEMPTS = 10;
+    private static final int WANDER_ATTEMPTS = 3;
     private static final double WANDER_ARRIVAL_DISTANCE = 1.0D;
     private static final long MOVE_REPATH_MIN_INTERVAL = 10L;
     private static final long MOVE_REPATH_FORCE_INTERVAL = 40L;
     private static final double MOVE_REPATH_DISTANCE_SQR = 1.0D;
     private static final long FOLLOW_IDLE_CHECK_INTERVAL = 5L;
-    private static final long NAVIGATION_PROBE_CACHE_TICKS = 5L;
 
     private BehaviorEntityExecutors() {
     }
@@ -144,8 +138,6 @@ public final class BehaviorEntityExecutors {
     }
 
     private static final class CanNavigateToExecutor extends InstantBehaviorActionExecutor {
-        private final Map<Mob, NavigationProbe> probes = new WeakHashMap<>();
-
         @Override
         protected BehaviorActionStep<Void> execute(BehaviorNodeContext context) {
             Mob owner = requireOwner(context);
@@ -161,25 +153,17 @@ public final class BehaviorEntityExecutors {
                 return failure(BehaviorActionFailure.INVALID_TARGET,
                         "Navigation target is dead, removed, or in another world");
             }
-            long tick = context.gameTick();
-            BlockPos ownerPosition = owner.blockPosition();
-            BlockPos targetPosition = target.blockPosition();
-            NavigationProbe cached = probes.get(owner);
-            boolean reachable;
-            if (cached != null && cached.matches(owner.level(), target.getUUID(),
-                    ownerPosition, targetPosition, tick)) {
-                reachable = cached.reachable();
-            } else {
-                PathNavigation probe = isolatedNavigation(owner);
-                Path path = probe.createPath(target, 1);
-                reachable = path != null && path.canReach();
-                probes.put(owner, new NavigationProbe(owner.level(), target.getUUID(),
-                        ownerPosition, targetPosition, tick, reachable));
-            }
-            return reachable
-                    ? BehaviorActionStep.success()
-                    : failure(BehaviorActionFailure.NO_PATH,
-                    "No complete path can be created to the target");
+            BehaviorNavigationService.ProbeResult result = BehaviorNavigationService.INSTANCE
+                    .probeReachability(owner, target, context.gameTick());
+            return switch (result.status()) {
+                case REACHABLE -> BehaviorActionStep.success();
+                case UNREACHABLE -> failure(BehaviorActionFailure.NO_PATH,
+                        "No complete path can be created to the target");
+                case UNSUPPORTED -> failure(BehaviorActionFailure.NAVIGATION_PROBE_UNSUPPORTED,
+                        "The active navigation type cannot be probed without mutation");
+                case DEFERRED -> throw new IllegalStateException(
+                        "Deferred navigation probes require a schedulable condition executor");
+            };
         }
     }
 
@@ -388,41 +372,32 @@ public final class BehaviorEntityExecutors {
                         "Wander range exceeds 128 horizontal / 64 vertical");
             }
             double speed = positiveFloat(context, StandardPorts.SPEED.getId());
-            PathNavigation probe = isolatedNavigation(owner);
-            BlockPos origin = owner.blockPosition();
-            for (int attempt = 0; attempt < WANDER_ATTEMPTS; attempt++) {
-                BlockPos candidate = origin.offset(
-                        context.random().nextInt(horizontal * 2 + 1) - horizontal,
-                        context.random().nextInt(vertical * 2 + 1) - vertical,
-                        context.random().nextInt(horizontal * 2 + 1) - horizontal);
-                if (candidate.equals(origin)) continue;
-                Path path = probe.createPath(candidate, 1);
-                if (path == null || !path.canReach()
-                        || !owner.getNavigation().moveTo(path, speed)) continue;
-                Vec3 destination = path.getEntityPosAtNode(
-                        owner, path.getNodeCount() - 1);
-                context.requestWakeupAfter(1);
-                return BehaviorActionStep.running(new WanderState(owner, destination,
-                        Math.max(WANDER_ARRIVAL_DISTANCE, owner.getBbWidth())));
-            }
-            return failure(BehaviorActionFailure.NO_DESTINATION,
-                    "No reachable wander destination was found");
+            owner.getNavigation().stop();
+            return BehaviorActionStep.running(new WanderState(owner, speed, horizontal, vertical,
+                    0, Long.MIN_VALUE, null,
+                    Math.max(WANDER_ARRIVAL_DISTANCE, owner.getBbWidth())));
         }
 
         @Override
         protected BehaviorActionStep<WanderState> tick(BehaviorNodeContext context,
                                                        WanderState state) {
             Mob owner = requireOwner(context);
-            if (state.navigator().isRemoved()
-                    || state.navigator().level() != owner.level()) {
+            if (state.owner() != owner || owner.isRemoved()) {
                 return failure(state, BehaviorActionFailure.PATH_INTERRUPTED,
                         "Wander navigation owner became unavailable");
             }
-            if (withinDistance(state.navigator(), state.destination(), state.arrivalDistance())) {
-                state.navigator().getNavigation().stop();
+            if (!state.navigating()) {
+                return findDestination(context, owner, state);
+            }
+            Vec3 destination = state.destination();
+            if (destination == null) {
+                throw new BehaviorContractViolation("Wander navigation destination is missing");
+            }
+            if (withinDistance(owner, destination, state.arrivalDistance())) {
+                owner.getNavigation().stop();
                 return BehaviorActionStep.success(state);
             }
-            if (state.navigator().getNavigation().isDone()) {
+            if (owner.getNavigation().isDone()) {
                 return failure(state, BehaviorActionFailure.PATH_INTERRUPTED,
                         "Wander path ended before its destination was reached");
             }
@@ -434,8 +409,51 @@ public final class BehaviorEntityExecutors {
         protected void stop(BehaviorNodeContext context, @Nullable WanderState state,
                             BehaviorTerminationReason reason) {
             Mob owner = owner(context);
-            if (state != null) state.navigator().getNavigation().stop();
-            else if (owner != null) owner.getNavigation().stop();
+            if (state != null) state.owner().getNavigation().stop();
+            if (owner != null && (state == null || state.owner() != owner)) {
+                owner.getNavigation().stop();
+            }
+        }
+
+        private BehaviorActionStep<WanderState> findDestination(BehaviorNodeContext context,
+                                                                 Mob owner,
+                                                                 WanderState state) {
+            long tick = context.gameTick();
+            if (state.lastAttemptTick() == tick) {
+                context.requestWakeupAfter(1);
+                return BehaviorActionStep.running(state);
+            }
+
+            Vec3 candidate = WanderCandidateProviders.findCandidate(owner,
+                    state.horizontalRange(), state.verticalRange(), context.random());
+            if (candidate != null) {
+                BehaviorNavigationService.LivePathResult request =
+                        BehaviorNavigationService.INSTANCE.requestLivePath(
+                        owner, BlockPos.containing(candidate), 1);
+                if (request.status() == BehaviorNavigationService.ProbeStatus.DEFERRED) {
+                    context.requestWakeupAfter(1);
+                    return BehaviorActionStep.running(
+                            state.searching(state.attempts(), tick));
+                }
+                Path path = request.path();
+                if (path != null && path.canReach()
+                        && owner.getNavigation().moveTo(path, state.speed())) {
+                    int attempts = state.attempts() + 1;
+                    Vec3 destination = path.getEntityPosAtNode(owner, path.getNodeCount() - 1);
+                    context.requestWakeupAfter(1);
+                    return BehaviorActionStep.running(
+                            state.navigating(attempts, tick, destination));
+                }
+            }
+
+            int attempts = state.attempts() + 1;
+            WanderState next = state.searching(attempts, tick);
+            if (attempts >= WANDER_ATTEMPTS) {
+                return failure(next, BehaviorActionFailure.NO_DESTINATION,
+                        "No reachable wander destination was found");
+            }
+            context.requestWakeupAfter(1);
+            return BehaviorActionStep.running(next);
         }
     }
 
@@ -581,22 +599,6 @@ public final class BehaviorEntityExecutors {
         return plannedPosition.distanceToSqr(currentPosition) >= MOVE_REPATH_DISTANCE_SQR;
     }
 
-    private static PathNavigation isolatedNavigation(Mob owner) {
-        PathNavigation live = owner.getNavigation();
-        PathNavigation probe = ((MobNavigationInvoker) (Object) owner)
-                .geometryNode$createNavigation(owner.level());
-        NodeEvaluator source = live.getNodeEvaluator();
-        NodeEvaluator target = probe.getNodeEvaluator();
-        target.setCanFloat(source.canFloat());
-        target.setCanOpenDoors(source.canOpenDoors());
-        target.setCanPassDoors(source.canPassDoors());
-        target.setCanWalkOverFences(source.canWalkOverFences());
-        PathNavigationAccessor tuning = (PathNavigationAccessor) live;
-        probe.setMaxVisitedNodesMultiplier(tuning.geometryNode$getMaxVisitedNodesMultiplier());
-        probe.setRequiredPathLength(tuning.geometryNode$getRequiredPathLength());
-        return probe;
-    }
-
     private static boolean validUuid(String value) {
         try {
             UUID.fromString(value);
@@ -683,7 +685,22 @@ public final class BehaviorEntityExecutors {
         }
     }
 
-    private record WanderState(Mob navigator, Vec3 destination, double arrivalDistance) {
+    private record WanderState(Mob owner, double speed, int horizontalRange, int verticalRange,
+                               int attempts, long lastAttemptTick,
+                               @Nullable Vec3 destination, double arrivalDistance) {
+        private boolean navigating() {
+            return destination != null;
+        }
+
+        private WanderState searching(int value, long tick) {
+            return new WanderState(owner, speed, horizontalRange, verticalRange,
+                    value, tick, null, arrivalDistance);
+        }
+
+        private WanderState navigating(int value, long tick, Vec3 valueDestination) {
+            return new WanderState(owner, speed, horizontalRange, verticalRange,
+                    value, tick, valueDestination, arrivalDistance);
+        }
     }
 
     private record LookState(Entity target, long deadline) {
@@ -695,16 +712,4 @@ public final class BehaviorEntityExecutors {
     private record MoveTarget(@Nullable Object target, boolean supplied) {
     }
 
-    private record NavigationProbe(Level level, UUID targetId, BlockPos ownerPosition,
-                                   BlockPos targetPosition, long tick, boolean reachable) {
-        private boolean matches(Level currentLevel, UUID currentTargetId,
-                                BlockPos currentOwnerPosition, BlockPos currentTargetPosition,
-                                long currentTick) {
-            return level == currentLevel && targetId.equals(currentTargetId)
-                    && ownerPosition.equals(currentOwnerPosition)
-                    && targetPosition.equals(currentTargetPosition)
-                    && currentTick >= tick
-                    && currentTick - tick < NAVIGATION_PROBE_CACHE_TICKS;
-        }
-    }
 }

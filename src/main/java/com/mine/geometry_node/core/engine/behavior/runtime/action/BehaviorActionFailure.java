@@ -14,6 +14,8 @@ public record BehaviorActionFailure(String code, String detail) {
     public static final String CANNOT_ATTACK = "geometry_node:cannot_attack";
     public static final String COMMAND_REJECTED = "geometry_node:command_rejected";
     public static final String NO_DESTINATION = "geometry_node:no_destination";
+    public static final String NAVIGATION_PROBE_UNSUPPORTED =
+            "geometry_node:navigation_probe_unsupported";
     public static final String TARGET_LOST = "geometry_node:target_lost";
 
     public BehaviorActionFailure {

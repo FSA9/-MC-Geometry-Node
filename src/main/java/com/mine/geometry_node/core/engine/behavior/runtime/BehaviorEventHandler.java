@@ -2,12 +2,15 @@ package com.mine.geometry_node.core.engine.behavior.runtime;
 
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
 import com.mine.geometry_node.core.engine.behavior.contract.BehaviorTerminationReason;
+import com.mine.geometry_node.core.engine.behavior.runtime.navigation.BehaviorNavigationService;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 /** Bridges server lifecycle events into the behavior-tree engine. */
 public final class BehaviorEventHandler {
@@ -43,5 +46,12 @@ public final class BehaviorEventHandler {
                         event.getEntity(), BehaviorTerminationReason.CHUNK_UNLOADED);
             }
         });
+        bus.addListener((LevelEvent.Unload event) -> {
+            if (event.getLevel() instanceof ServerLevel level) {
+                BehaviorNavigationService.INSTANCE.clear(level);
+            }
+        });
+        bus.addListener((ServerStoppingEvent event) ->
+                BehaviorNavigationService.INSTANCE.clear(event.getServer()));
     }
 }
