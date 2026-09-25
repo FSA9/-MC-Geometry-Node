@@ -152,7 +152,8 @@ public final class DataLibraryDocument {
         DataLibraryDocument copy = new DataLibraryDocument();
         folders.values().forEach(copy::putFolder);
         entries.values().forEach(entry -> copy.put(new DataLibraryEntry(
-                entry.id(), entry.parentId(), entry.type(), entry.key(), GraphValueSnapshot.snapshot(entry.value()))));
+                entry.id(), entry.parentId(), entry.type(), entry.key(), GraphValueSnapshot.snapshot(entry.value()),
+                entry.tags())));
         return copy;
     }
 

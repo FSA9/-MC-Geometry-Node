@@ -12,7 +12,15 @@ public interface DataLibraryUiRepository {
 
     record Folder(UUID id, UUID parentId, String name) {}
 
-    record Entry(UUID id, UUID parentId, PortType type, String key, Object value) {}
+    record Entry(UUID id, UUID parentId, PortType type, String key, Object value, List<String> tags) {
+        public Entry {
+            tags = tags == null ? List.of() : List.copyOf(tags);
+        }
+
+        public Entry(UUID id, UUID parentId, PortType type, String key, Object value) {
+            this(id, parentId, type, key, value, List.of());
+        }
+    }
 
     List<Folder> folders();
 

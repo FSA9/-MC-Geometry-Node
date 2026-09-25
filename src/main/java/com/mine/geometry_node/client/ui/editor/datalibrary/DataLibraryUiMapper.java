@@ -21,7 +21,8 @@ final class DataLibraryUiMapper {
         DataLibraryDocument document = new DataLibraryDocument();
         putFolders(document, requiredFolders(folders, entries));
         for (DataLibraryUiRepository.Entry entry : entries) {
-            document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value()));
+            document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(),
+                    entry.tags()));
         }
         return document;
     }
@@ -53,7 +54,7 @@ final class DataLibraryUiMapper {
 
     static List<DataLibraryUiRepository.Entry> fromDocument(DataLibraryLoadResult loaded) {
         return loaded.document().entries().values().stream().map(entry -> new DataLibraryUiRepository.Entry(
-                entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value())).toList();
+                entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(), entry.tags())).toList();
     }
 
     static Set<DataLibraryObjectKey> toKeys(Set<DataLibraryUiRepository.EntryKey> keys) {
@@ -66,7 +67,8 @@ final class DataLibraryUiMapper {
     }
 
     static DataLibraryEntry toCore(DataLibraryUiRepository.Entry entry) {
-        return new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value());
+        return new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(),
+                entry.tags());
     }
 
     static DataLibraryFolder toCore(DataLibraryUiRepository.Folder folder) {

@@ -93,12 +93,14 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                         return;
                     }
                     if (java.util.Objects.equals(previous.key(), entry.key())
-                            && java.util.Objects.equals(previous.value(), entry.value())) {
+                            && java.util.Objects.equals(previous.value(), entry.value())
+                            && java.util.Objects.equals(previous.tags(), entry.tags())) {
                         refreshNow(generation, () -> finishMutation(generation, completion));
                         return;
                     }
                     DataLibraryUiRepository.Entry moved = new DataLibraryUiRepository.Entry(
-                            previous.id(), entry.parentId(), previous.type(), previous.key(), previous.value());
+                            previous.id(), entry.parentId(), previous.type(), previous.key(), previous.value(),
+                            previous.tags());
                     upload(generation, List.of(entry), moved, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
                             () -> finishMutation(generation, completion));
                 });

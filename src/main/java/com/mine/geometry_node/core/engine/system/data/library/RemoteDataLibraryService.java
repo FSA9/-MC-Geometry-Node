@@ -81,7 +81,7 @@ public final class RemoteDataLibraryService {
             if (cached == null) return null;
             return cached.document().find(entryId)
                     .map(entry -> new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
-                            GraphValueSnapshot.snapshot(entry.value())))
+                            GraphValueSnapshot.snapshot(entry.value()), entry.tags()))
                     .orElse(null);
         } catch (RuntimeException exception) {
             return null;
@@ -148,7 +148,8 @@ public final class RemoteDataLibraryService {
             UUID parentId = document.ensureFolderPath(path);
             DataLibraryEntry existing = document.findByLocation(parentId, type, key).orElse(null);
             DataLibraryEntry replacement = new DataLibraryEntry(
-                    existing != null ? existing.id() : UUID.randomUUID(), parentId, type, key, storedValue);
+                    existing != null ? existing.id() : UUID.randomUUID(), parentId, type, key, storedValue,
+                    existing != null ? existing.tags() : List.of());
             if (existing == null || !valuesEqual(server, type, existing.value(), storedValue)) document.put(replacement);
             resultEntry[0] = replacement;
         });
@@ -181,7 +182,7 @@ public final class RemoteDataLibraryService {
             requireExpected(entryId, Map.of(entryId, expectedFingerprint),
                     DataLibraryObjectFingerprint.entry(existing, server.overworld().registryAccess()));
             document.put(new DataLibraryEntry(existing.id(), parentId, existing.type(), existing.key(),
-                    GraphValueSnapshot.snapshot(existing.value())));
+                    GraphValueSnapshot.snapshot(existing.value()), existing.tags()));
         });
     }
 
@@ -266,7 +267,7 @@ public final class RemoteDataLibraryService {
 
     private static DataLibraryEntry copyEntry(DataLibraryEntry entry) {
         return new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
-                GraphValueSnapshot.snapshot(entry.value()));
+                GraphValueSnapshot.snapshot(entry.value()), entry.tags());
     }
 
     private static void requireExpected(UUID id, Map<UUID, String> expectedFingerprints, String actual) {

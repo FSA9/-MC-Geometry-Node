@@ -27,6 +27,9 @@ public final class DataLibraryObjectFingerprint {
         addParent(json, entry.parentId());
         json.addProperty("type", entry.type().name());
         json.addProperty("key", entry.key());
+        com.google.gson.JsonArray tags = new com.google.gson.JsonArray();
+        entry.tags().forEach(tags::add);
+        json.add("tags", tags);
         json.add("value", DataLibraryValueCodec.encode(entry.type(), entry.value(), registries));
         return sha256(json.toString());
     }

@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
@@ -103,13 +104,16 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final Set<DataLibraryUiRepository.EntryKey> selected = new LinkedHashSet<>();
     private final Set<UUID> selectedFolders = new LinkedHashSet<>();
     private final Set<UUID> expandedFolders = new HashSet<>();
-    private final Map<View, TreeDropRow> treeDropRows = new java.util.LinkedHashMap<>();
+    private final Set<UUID> expandedEntries = new HashSet<>();
+    private final Set<UUID> renderedEntries = new LinkedHashSet<>();
+    private final Map<View, UUID> folderDropRows = new java.util.LinkedHashMap<>();
     private final WorkspaceDragDropRegistry.DropTarget dropTarget = this::acceptInternalDrop;
     private final Runnable repositoryChanged = () -> post(this::requestRebuild);
     private View rootDropTarget;
     private boolean dropTargetRegistered;
     private String search = "";
     private PortType typeFilter;
+    private String tagFilter;
     private boolean syncingSelectAll;
     private boolean internalDragActive;
     private boolean rebuildPending;
@@ -168,6 +172,17 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         LayoutParams typeLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
         actionsRow.addView(typeButton, typeLp);
 
+        UiActionButton tagButton = button(context, tr("geometry_node.data_library.all_tags"),
+                UiActionButton.Role.INLINE);
+        tagButton.setOnClickListener(v -> showTagMenu(tagButton, selectedTag -> {
+            tagFilter = selectedTag;
+            tagButton.setText(selectedTag == null ? tr("geometry_node.data_library.all_tags") : selectedTag);
+            rebuild();
+        }));
+        LayoutParams tagFilterLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        tagFilterLp.leftMargin = px(3);
+        actionsRow.addView(tagButton, tagFilterLp);
+
         UiIconButton addFolder = iconButton(context,
                 new SvgIconView(context, SvgIconView.Icon.SQUARE_PLUS, TEXT),
                 tr("geometry_node.data_library.add_folder"));
@@ -207,6 +222,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         actionsRow.addView(deleteButton, deleteLp);
 
         scrollHost = new ScrollView(context);
+        scrollHost.setFillViewport(true);
         groupsHost = new DataLibraryTreeLayout(context);
         groupsHost.setOrientation(VERTICAL);
         groupsHost.setPadding(px(4), px(4), px(4), px(8));
@@ -241,9 +257,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
         selectedFolders.retainAll(availableFolders);
         expandedFolders.retainAll(availableFolders);
+        expandedEntries.retainAll(available.stream().map(DataLibraryUiRepository.EntryKey::id)
+                .collect(java.util.stream.Collectors.toSet()));
         groupsHost.removeAllViews();
         groupsHost.hideIndicator();
-        treeDropRows.clear();
+        folderDropRows.clear();
+        renderedEntries.clear();
         rootDropTarget = createRootRow();
         groupsHost.addView(rootDropTarget, rowParams(null));
 
@@ -304,10 +323,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                               Set<UUID> matchedEntries, Set<UUID> visibleFolders, Set<UUID> visited) {
         for (DataLibraryUiRepository.Entry entry : childEntries.getOrDefault(parentId, List.of())) {
             if (isFiltering() && !matchedEntries.contains(entry.id())) continue;
+            renderedEntries.add(entry.id());
             View row = createCard(entry);
             row.setPadding(px(4 + depth * 14), px(3), px(4), px(3));
             groupsHost.addView(row, rowParams(entry.type()));
-            treeDropRows.put(row, new TreeDropRow(entry.parentId(), null));
         }
         for (DataLibraryUiRepository.Folder folder : childFolders.getOrDefault(parentId, List.of())) {
             if (!visited.add(folder.id())) continue;
@@ -382,7 +401,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         LayoutParams addLp = fixed(26, 24);
         addLp.leftMargin = px(2);
         row.addView(addEntry, addLp);
-        treeDropRows.put(row, new TreeDropRow(folder.parentId(), folder.id()));
+        folderDropRows.put(row, folder.id());
         return row;
     }
 
@@ -403,19 +422,21 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static LayoutParams rowParams(PortType type) {
         LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                px(type == null ? 28 : cardHeightDp(type)));
+                type == null ? px(28) : ViewGroup.LayoutParams.WRAP_CONTENT);
         params.bottomMargin = px(2);
         return params;
     }
 
     private boolean matches(DataLibraryUiRepository.Entry entry) {
         if (typeFilter != null && entry.type() != typeFilter) return false;
+        if (tagFilter != null && entry.tags().stream().noneMatch(tag -> tag.equalsIgnoreCase(tagFilter))) return false;
         return search.isEmpty() || entry.key().toLowerCase(Locale.ROOT).contains(search)
-                || entry.type().name().toLowerCase(Locale.ROOT).contains(search);
+                || entry.type().name().toLowerCase(Locale.ROOT).contains(search)
+                || entry.tags().stream().anyMatch(tag -> tag.toLowerCase(Locale.ROOT).contains(search));
     }
 
     private boolean isFiltering() {
-        return typeFilter != null || !search.isEmpty();
+        return typeFilter != null || tagFilter != null || !search.isEmpty();
     }
 
     private EditText styledNameEditor(String value) {
@@ -445,6 +466,21 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         menu.showAt(anchor, overlayHost());
     }
 
+    private void showTagMenu(View anchor, Consumer<String> consumer) {
+        List<String> options = repository.entries().stream()
+                .flatMap(entry -> entry.tags().stream())
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        options.add(0, "*");
+        Map<String, String> labels = new HashMap<>();
+        labels.put("*", tr("geometry_node.data_library.all_tags"));
+        SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
+                getContext(), tr("geometry_node.data_library.choose_tag"), options, labels,
+                value -> consumer.accept("*".equals(value) ? null : value));
+        menu.showAt(anchor, overlayHost());
+    }
+
     private static boolean isInFolderTree(UUID folderId, UUID treeRoot,
                                           Map<UUID, DataLibraryUiRepository.Folder> folders) {
         if (treeRoot == null) return false;
@@ -460,10 +496,49 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private View createCard(DataLibraryUiRepository.Entry entry) {
         AtomicReference<DataLibraryUiRepository.Entry> current = new AtomicReference<>(entry);
-        FrameLayout card = new FrameLayout(getContext());
-        card.setPadding(px(4), px(3), px(4), px(3));
+        LinearLayout card = new LinearLayout(getContext());
+        card.setOrientation(VERTICAL);
         card.setBackground(solid(selected.contains(key(entry)) ? ROW_SELECTED_BG : ROW_BG, 0,
                 selected.contains(key(entry)) ? ACCENT : BORDER));
+
+        LinearLayout header = new LinearLayout(getContext());
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(createDragHandle(DataLibraryDragPayload.entry(entry.id(), entry.type(), entry.key())),
+                fixed(DRAG_HANDLE_WIDTH_DP, 32));
+
+        boolean expanded = expandedEntries.contains(entry.id());
+        SvgIconView disclosure = new SvgIconView(getContext(), SvgIconView.Icon.forExpandedState(expanded), TEXT);
+        disclosure.setClickable(true);
+        disclosure.setContentDescription(tr(expanded
+                ? "geometry_node.data_library.collapse_entry"
+                : "geometry_node.data_library.expand_entry"));
+        disclosure.setOnClickListener(v -> toggleEntry(entry.id()));
+        header.addView(disclosure, fixed(18, 32));
+
+        TextView type = label(getContext(), entry.type().name(), 9.0f, MUTED);
+        type.setSingleLine(true);
+        type.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        header.addView(type, fixed(66, 32));
+
+        TextView name = label(getContext(), entry.key(), 11.5f, TEXT);
+        name.setSingleLine(true);
+        name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        header.addView(name, new LayoutParams(0, px(32), 0.38f));
+
+        TextView summary = label(getContext(), compactValueSummary(entry), 10.0f, MUTED);
+        summary.setSingleLine(true);
+        summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        LayoutParams summaryLp = new LayoutParams(0, px(32), 0.34f);
+        summaryLp.leftMargin = px(4);
+        header.addView(summary, summaryLp);
+
+        if (!entry.tags().isEmpty()) {
+            TagFlowLayout tags = createCompactTags(entry.tags());
+            LayoutParams tagsLp = new LayoutParams(0, px(22), 0.28f);
+            tagsLp.leftMargin = px(4);
+            header.addView(tags, tagsLp);
+        }
+
         UiCheckBox check = new UiCheckBox(getContext());
         check.setChecked(selected.contains(key(entry)));
         check.setOnCheckedChangeListener((button, checked) -> {
@@ -472,115 +547,157 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             card.setBackground(solid(checked ? ROW_SELECTED_BG : ROW_BG, 0,
                     checked ? ACCENT : BORDER));
         });
-        FrameLayout.LayoutParams checkLp = new FrameLayout.LayoutParams(
-                px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP),
-                Gravity.RIGHT | Gravity.TOP);
+        LayoutParams checkLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
+        checkLp.leftMargin = px(5);
+        checkLp.rightMargin = px(5);
+        header.addView(check, checkLp);
+        header.setClickable(true);
+        header.setOnClickListener(v -> toggleEntry(entry.id()));
+        card.addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(32)));
+        if (expanded) {
+            View divider = new View(getContext());
+            divider.setBackground(solid(DIVIDER, 0));
+            LayoutParams dividerLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(1));
+            dividerLp.leftMargin = px(30);
+            card.addView(divider, dividerLp);
+            card.addView(createExpandedEditor(entry, current), new LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        return card;
+    }
 
-        EditText name = new EditText(getContext());
-        name.setSingleLine(true);
-        name.setText(entry.key() == null ? "" : entry.key());
-        name.setTextColor(TEXT);
-        name.setBackground(null);
-        name.setPadding(px(2), 0, px(2), 0);
-        UIUtils.setLockedTextSize(name, EDITOR_TEXT_SIZE_DP);
+    private void toggleEntry(UUID entryId) {
+        View focused = findFocus();
+        if (focused != null) focused.clearFocus();
+        if (!expandedEntries.remove(entryId)) expandedEntries.add(entryId);
+        rebuild();
+    }
+
+    private TagFlowLayout createCompactTags(List<String> values) {
+        TagFlowLayout flow = new TagFlowLayout(getContext(), 3, 0);
+        int visible = Math.min(values.size(), 2);
+        for (int index = 0; index < visible; index++) flow.addView(tagChip(values.get(index), false));
+        if (values.size() > visible) flow.addView(tagChip("+" + (values.size() - visible), false));
+        return flow;
+    }
+
+    private TextView tagChip(String value, boolean removable) {
+        TextView chip = label(getContext(), removable ? value + "  x" : value, 9.0f, 0xFFC5CEDA);
+        chip.setSingleLine(true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(px(5), 0, px(5), 0);
+        chip.setBackground(solid(0xFF343E49, 2, 0xFF4B5B6C));
+        int width = Math.min(px(92), Math.max(px(24), px(11 + chip.getText().length() * 6)));
+        chip.setLayoutParams(new ViewGroup.LayoutParams(width, px(18)));
+        return chip;
+    }
+
+    private View createExpandedEditor(DataLibraryUiRepository.Entry entry,
+                                      AtomicReference<DataLibraryUiRepository.Entry> current) {
+        LinearLayout content = new LinearLayout(getContext());
+        content.setOrientation(VERTICAL);
+        content.setPadding(px(34), px(5), px(6), px(6));
+
+        LinearLayout metadata = new LinearLayout(getContext());
+        metadata.setGravity(Gravity.CENTER_VERTICAL);
+        EditText name = styledNameEditor(entry.key());
+        name.setHint(tr("geometry_node.data_library.name"));
+        name.setBackground(solid(INPUT_BG, 2, BORDER));
         name.setOnFocusChangeListener((view, focused) -> {
-            if (!focused) {
-                DataLibraryUiRepository.Entry latest = current.get();
-                String updatedName = name.getText().toString();
-                if (Objects.equals(latest.key(), updatedName)) return;
-                DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                        latest.id(), latest.parentId(), latest.type(), updatedName, latest.value());
-                current.set(updated);
-                repository.update(latest, updated);
-            }
+            if (focused) return;
+            DataLibraryUiRepository.Entry latest = current.get();
+            String updatedName = name.getText().toString();
+            if (Objects.equals(latest.key(), updatedName)) return;
+            DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
+                    latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags());
+            current.set(updated);
+            repository.update(latest, updated);
         });
+        metadata.addView(name, new LayoutParams(0, px(26), 1));
+
+        UiActionButton copyId = button(getContext(), "ID", UiActionButton.Role.INLINE);
+        copyId.setContentDescription(tr("geometry_node.data_library.copy_uuid"));
+        copyId.setOnClickListener(v -> Minecraft.getInstance().keyboardHandler
+                .setClipboard(current.get().id().toString()));
+        LayoutParams copyLp = fixed(32, 22);
+        copyLp.leftMargin = px(4);
+        metadata.addView(copyId, copyLp);
+        content.addView(metadata, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(28)));
+
+        EditText tagEditor = styledNameEditor(String.join(", ", entry.tags()));
+        tagEditor.setHint(tr("geometry_node.data_library.tags_hint"));
+        tagEditor.setBackground(solid(INPUT_BG, 2, BORDER));
+        tagEditor.setOnFocusChangeListener((view, focused) -> {
+            if (focused) return;
+            DataLibraryUiRepository.Entry latest = current.get();
+            List<String> updatedTags = parseTags(tagEditor.getText().toString());
+            if (latest.tags().equals(updatedTags)) return;
+            DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
+                    latest.id(), latest.parentId(), latest.type(), latest.key(), latest.value(), updatedTags);
+            current.set(updated);
+            repository.update(latest, updated);
+        });
+        LayoutParams tagsLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(26));
+        tagsLp.topMargin = px(3);
+        content.addView(tagEditor, tagsLp);
+
+        View valueEditor = createExpandedValueEditor(entry, current);
+        LayoutParams valueLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                px(expandedValueHeightDp(entry.type())));
+        valueLp.topMargin = px(4);
+        content.addView(valueEditor, valueLp);
+        return content;
+    }
+
+    private View createExpandedValueEditor(DataLibraryUiRepository.Entry entry,
+                                           AtomicReference<DataLibraryUiRepository.Entry> current) {
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
             LinearLayout content = new LinearLayout(getContext());
-            content.setOrientation(VERTICAL);
-            content.addView(name, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(18)));
-
+            content.setGravity(Gravity.CENTER_VERTICAL);
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
             if (entry.value() instanceof EntityTemplateValue template) preview.setDisplayTemplate(template);
             else if (entry.value() instanceof UUID entityId) {
                 Entity entity = resolveClientEntity(entityId);
                 if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
             }
-            content.addView(centeredPreview(preview), new LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-
+            content.addView(centeredPreview(preview), fixed(58, 58));
             UiActionButton edit = button(getContext(), tr(entry.type() == PortType.ENTITY
                             ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"),
                     UiActionButton.Role.INLINE);
             edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
             edit.setOnClickListener(v -> editEntityValue(entry, current));
-            content.addView(previewActions(edit, check), previewActionsLayoutParams());
-            card.addView(content, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            LayoutParams editLp = new LayoutParams(0, px(26), 1);
+            editLp.leftMargin = px(6);
+            content.addView(edit, editLp);
+            return content;
         } else if (entry.type() == PortType.ITEM_STACK) {
             LinearLayout content = new LinearLayout(getContext());
-            content.setOrientation(VERTICAL);
-            content.addView(name, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(18)));
-
+            content.setGravity(Gravity.CENTER_VERTICAL);
             ItemSlotView preview = new ItemSlotView(getContext());
             preview.setDisplayStack(entry.value() instanceof ItemStack stack ? stack : ItemStack.EMPTY);
             preview.setOpenEditorOnClick(false);
             preview.setDisplayPasteAction(json -> pasteItemStack(current, json));
-            content.addView(centeredPreview(preview), new LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-
+            content.addView(centeredPreview(preview), fixed(58, 58));
             UiActionButton edit = button(getContext(), tr("geometry_node.node.pick_item_stack"),
                     UiActionButton.Role.INLINE);
             edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
             edit.setOnClickListener(v -> editItemStackValue(current));
-            content.addView(previewActions(edit, check), previewActionsLayoutParams());
-            card.addView(content, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            LayoutParams editLp = new LayoutParams(0, px(26), 1);
+            editLp.leftMargin = px(6);
+            content.addView(edit, editLp);
+            return content;
         } else if (entry.type() == PortType.XYZ) {
-            LinearLayout content = new LinearLayout(getContext());
-            content.setOrientation(VERTICAL);
-            content.setPadding(0, 0, px(CHECKBOX_SIZE_DP + 3), 0);
-            content.addView(name, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(18)));
-            content.addView(createXyzValueEditor(current), new LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-            card.addView(content, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            card.addView(check, checkLp);
+            return createXyzValueEditor(current);
         } else if (entry.type() == PortType.AREA) {
-            LinearLayout row = new LinearLayout(getContext());
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(name, new LayoutParams(0, px(26), 0.42f));
-            TextView summary = label(getContext(), areaSummary(entry.value()), 10.5f, MUTED);
-            summary.setSingleLine(true);
+            TextView summary = label(getContext(), areaSummary(entry.value()), 10.5f, TEXT);
             summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            LayoutParams summaryLp = new LayoutParams(0, px(26), 0.58f);
-            summaryLp.leftMargin = px(3);
-            row.addView(summary, summaryLp);
-            LayoutParams areaCheckLp = new LayoutParams(px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
-            areaCheckLp.leftMargin = px(3);
-            row.addView(check, areaCheckLp);
-            card.addView(row, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return summary;
         } else if (isSummaryType(entry.type())) {
-            LinearLayout row = new LinearLayout(getContext());
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(name, new LayoutParams(0, px(26), 0.42f));
-            TextView summary = label(getContext(), valueSummary(entry), 10.5f, MUTED);
-            summary.setSingleLine(true);
+            TextView summary = label(getContext(), valueSummary(entry), 10.5f, TEXT);
             summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            LayoutParams summaryLp = new LayoutParams(0, px(26), 0.58f);
-            summaryLp.leftMargin = px(3);
-            row.addView(summary, summaryLp);
-            LayoutParams summaryCheckLp = new LayoutParams(px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
-            summaryCheckLp.leftMargin = px(3);
-            row.addView(check, summaryCheckLp);
-            card.addView(row, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return summary;
         } else if (isInlineValueType(entry.type())) {
-            LinearLayout row = new LinearLayout(getContext());
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(name, new LayoutParams(0, px(26), 0.34f));
-
-            View valueEditor = switch (entry.type()) {
+            return switch (entry.type()) {
                 case BOOLEAN -> createBooleanValueEditor(entry, current);
                 case STRING -> createPlainTextValueEditor(current);
                 case PATH -> createPathValueEditor(current);
@@ -588,56 +705,39 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 case ITEM, BLOCK_STATE -> createRegistryValueEditor(entry.type(), current);
                 default -> createValueEditor(entry, current);
             };
-            LayoutParams valueLp = new LayoutParams(0, px(26), 0.66f);
-            valueLp.leftMargin = px(2);
-            row.addView(valueEditor, valueLp);
-            LayoutParams inlineCheckLp = new LayoutParams(
-                    px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
-            inlineCheckLp.leftMargin = px(3);
-            row.addView(check, inlineCheckLp);
-            card.addView(row, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        } else {
-            LinearLayout content = new LinearLayout(getContext());
-            content.setOrientation(VERTICAL);
-            content.setPadding(0, 0, px(CHECKBOX_SIZE_DP + 3), 0);
-            content.addView(name, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(20)));
-            content.addView(createValueEditor(entry, current),
-                    new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-            card.addView(content, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            card.addView(check, checkLp);
         }
-        installEntryHandle(card, entry);
-        UiActionButton copyId = button(getContext(), "ID", UiActionButton.Role.INLINE);
-        copyId.setContentDescription(tr("geometry_node.data_library.copy_uuid"));
-        copyId.setOnClickListener(v -> Minecraft.getInstance().keyboardHandler.setClipboard(entry.id().toString()));
-        FrameLayout.LayoutParams copyLp = new FrameLayout.LayoutParams(px(28), px(18),
-                Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        copyLp.rightMargin = px(2);
-        card.addView(copyId, copyLp);
-        return card;
+        return createValueEditor(entry, current);
     }
 
-    private void installEntryHandle(FrameLayout card, DataLibraryUiRepository.Entry entry) {
-        for (int index = 0; index < card.getChildCount(); index++) {
-            View child = card.getChildAt(index);
-            if (!(child.getLayoutParams() instanceof FrameLayout.LayoutParams params)) continue;
-            params.leftMargin += px(76);
-            params.rightMargin += px(32);
-            child.setLayoutParams(params);
+    private static List<String> parseTags(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        LinkedHashSet<String> tags = new LinkedHashSet<>();
+        for (String part : raw.split("[,，;；]+")) {
+            String tag = part.trim();
+            if (!tag.isEmpty()) tags.add(tag);
         }
-        View dragHandle = createDragHandle(DataLibraryDragPayload.entry(entry.id(), entry.type(), entry.key()));
-        FrameLayout.LayoutParams dragLp = new FrameLayout.LayoutParams(
-                px(DRAG_HANDLE_WIDTH_DP), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP);
-        card.addView(dragHandle, dragLp);
-        TextView type = label(getContext(), entry.type().name(), 9.0f, MUTED);
-        type.setSingleLine(true);
-        type.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        FrameLayout.LayoutParams typeLp = new FrameLayout.LayoutParams(
-                px(70), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        typeLp.leftMargin = px(14);
-        card.addView(type, typeLp);
+        return List.copyOf(tags);
+    }
+
+    private static int expandedValueHeightDp(PortType type) {
+        if (type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK) return 62;
+        if (type == PortType.XYZ) return 56;
+        if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 28;
+        return 54;
+    }
+
+    private String compactValueSummary(DataLibraryUiRepository.Entry entry) {
+        if (entry.type() == PortType.AREA) return areaSummary(entry.value());
+        if (isSummaryType(entry.type())) return valueSummary(entry);
+        if (entry.type() == PortType.ITEM_STACK && entry.value() instanceof ItemStack stack) {
+            return stack.isEmpty() ? "" : stack.getHoverName().getString() + " x" + stack.getCount();
+        }
+        if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
+            return entry.value() == null ? tr("geometry_node.data_library.reference_unavailable")
+                    : tr("geometry_node.data_library.preview_available");
+        }
+        String value = String.valueOf(entry.value());
+        return value.length() <= 42 ? value : value.substring(0, 39) + "...";
     }
 
     private View createDragHandle(DataLibraryDragPayload payload) {
@@ -696,7 +796,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             groupsHost.hideIndicator();
             return;
         }
-        groupsHost.updateIndicator(destination.indicatorY());
+        groupsHost.updateIndicator(destination.top(), destination.bottom());
     }
 
     private boolean acceptInternalDrop(WorkspaceDragState.Session session, float rawX, float rawY) {
@@ -708,27 +808,16 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private DropDestination dropDestinationAt(float rawX, float rawY) {
         if (isRawPointInside(rootDropTarget, rawX, rawY)) {
-            return new DropDestination(null, rootDropTarget.getBottom());
+            return new DropDestination(null, rootDropTarget.getTop(), rootDropTarget.getBottom());
         }
         if (!isRawPointInside(scrollHost, rawX, rawY)) return null;
-        Map.Entry<View, TreeDropRow> closest = null;
-        float closestDistance = Float.MAX_VALUE;
-        for (Map.Entry<View, TreeDropRow> candidate : treeDropRows.entrySet()) {
+        for (Map.Entry<View, UUID> candidate : folderDropRows.entrySet()) {
             View row = candidate.getKey();
-            int[] location = new int[2];
-            row.getLocationOnScreen(location);
-            float distance = rawY < location[1]
-                    ? location[1] - rawY
-                    : Math.max(0, rawY - (location[1] + row.getHeight()));
-            if (distance < closestDistance) {
-                closest = candidate;
-                closestDistance = distance;
+            if (isRawPointInside(row, rawX, rawY)) {
+                return new DropDestination(candidate.getValue(), row.getTop(), row.getBottom());
             }
         }
-        if (closest == null) return new DropDestination(null, rootDropTarget.getBottom());
-        TreeDropRow target = closest.getValue();
-        UUID targetParent = target.folderId() != null ? target.folderId() : target.parentId();
-        return new DropDestination(targetParent, closest.getKey().getBottom());
+        return null;
     }
 
     private boolean movePayload(DataLibraryDragPayload payload, UUID targetParent) {
@@ -751,7 +840,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean canMove(DataLibraryDragPayload payload, UUID targetParent) {
         if (payload.isEntry()) {
             DataLibraryUiRepository.Entry source = repository.findEntry(payload.id());
-            return source != null && !Objects.equals(source.parentId(), targetParent);
+            if (source == null || Objects.equals(source.parentId(), targetParent)) return false;
+            return repository.entries().stream().noneMatch(entry -> !entry.id().equals(source.id())
+                    && Objects.equals(entry.parentId(), targetParent)
+                    && entry.type() == source.type()
+                    && entry.key().trim().equalsIgnoreCase(source.key().trim()));
         }
 
         DataLibraryUiRepository.Folder source = repository.folders().stream()
@@ -759,7 +852,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (source == null || Objects.equals(source.parentId(), targetParent)) return false;
         Map<UUID, DataLibraryUiRepository.Folder> folders = new HashMap<>();
         repository.folders().forEach(folder -> folders.put(folder.id(), folder));
-        return targetParent == null || !isInFolderTree(targetParent, source.id(), folders);
+        if (targetParent != null && isInFolderTree(targetParent, source.id(), folders)) return false;
+        return repository.folders().stream().noneMatch(folder -> !folder.id().equals(source.id())
+                && Objects.equals(folder.parentId(), targetParent)
+                && folder.name().trim().equalsIgnoreCase(source.name().trim()));
     }
 
     private static boolean isRawPointInside(View view, float rawX, float rawY) {
@@ -772,9 +868,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 && rawY >= location[1] && rawY < location[1] + view.getHeight();
     }
 
-    private record TreeDropRow(UUID parentId, UUID folderId) {}
-
-    private record DropDestination(UUID parentId, int indicatorY) {}
+    private record DropDestination(UUID parentId, int top, int bottom) {}
 
     private EditText createValueEditor(DataLibraryUiRepository.Entry entry,
                                        AtomicReference<DataLibraryUiRepository.Entry> current) {
@@ -986,7 +1080,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         valueCheckBox.setOnCheckedChangeListener((button, checked) -> {
             DataLibraryUiRepository.Entry latest = current.get();
             DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                    latest.id(), latest.parentId(), latest.type(), latest.key(), checked);
+                    latest.id(), latest.parentId(), latest.type(), latest.key(), checked, latest.tags());
             current.set(updated);
             repository.update(latest, updated);
         });
@@ -1004,16 +1098,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static boolean isSummaryType(PortType type) {
         return type == PortType.LIST || type == PortType.DICT || type == PortType.SHOP;
-    }
-
-    private static boolean isPreviewType(PortType type) {
-        return type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK;
-    }
-
-    private static int cardHeightDp(PortType type) {
-        if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 36;
-        if (type == PortType.XYZ) return 94;
-        return isPreviewType(type) ? 94 : 70;
     }
 
     private EntityTemplatePreviewView createEntityPreview(
@@ -1067,22 +1151,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return host;
     }
 
-    private LinearLayout previewActions(View edit, View check) {
-        LinearLayout actions = new LinearLayout(getContext());
-        actions.setGravity(Gravity.CENTER_VERTICAL);
-        actions.addView(edit, new LayoutParams(0, px(18), 1));
-        LayoutParams checkLp = new LayoutParams(px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
-        checkLp.leftMargin = px(3);
-        actions.addView(check, checkLp);
-        return actions;
-    }
-
-    private static LayoutParams previewActionsLayoutParams() {
-        LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(18));
-        params.topMargin = px(2);
-        return params;
-    }
-
     private void editItemStackValue(AtomicReference<DataLibraryUiRepository.Entry> current) {
         AtomicBoolean picked = new AtomicBoolean();
         VanillaInventoryPicker.openItem(stack -> {
@@ -1122,7 +1190,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             return;
         }
         DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                latest.id(), latest.parentId(), latest.type(), latest.key(), value);
+                latest.id(), latest.parentId(), latest.type(), latest.key(), value, latest.tags());
         current.set(updated);
         repository.update(latest, updated);
     }
@@ -1148,8 +1216,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private void selectAllVisible(boolean checked) {
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
-            if (entry == null || !SUPPORTED_TYPES.contains(entry.type())) continue;
-            if (!matches(entry)) continue;
+            if (entry == null || !renderedEntries.contains(entry.id())) continue;
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
         }
         rebuild();
@@ -1161,7 +1228,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         boolean hasVisible = false;
         boolean allVisibleSelected = true;
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
-            if (!isVisible(entry)) continue;
+            if (entry == null || !renderedEntries.contains(entry.id())) continue;
             hasVisible = true;
             if (!selected.contains(key(entry))) allVisibleSelected = false;
         }
@@ -1171,11 +1238,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             selectAll.setChecked(checked);
             syncingSelectAll = false;
         }
-    }
-
-    private boolean isVisible(DataLibraryUiRepository.Entry entry) {
-        if (entry == null || entry.type() == null || !SUPPORTED_TYPES.contains(entry.type())) return false;
-        return matches(entry);
     }
 
     private String serializedValue(DataLibraryUiRepository.Entry entry) {
@@ -1198,7 +1260,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (DataLibraryValueCodec.encode(entry.type(), entry.value(), registries)
                     .equals(DataLibraryValueCodec.encode(entry.type(), value, registries))) return;
             DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                    entry.id(), entry.parentId(), entry.type(), entry.key(), value);
+                    entry.id(), entry.parentId(), entry.type(), entry.key(), value, entry.tags());
             current.set(updated);
             repository.update(entry, updated);
         } catch (RuntimeException ignored) {
@@ -1286,7 +1348,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static final class DataLibraryTreeLayout extends LinearLayout {
         private final Paint indicatorPaint = new Paint();
-        private int indicatorY = -1;
+        private int indicatorTop = -1;
+        private int indicatorBottom = -1;
 
         private DataLibraryTreeLayout(Context context) {
             super(context);
@@ -1294,25 +1357,34 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             indicatorPaint.setColor(DROP_INDICATOR_COLOR);
         }
 
-        private void updateIndicator(int y) {
-            if (indicatorY == y) return;
-            indicatorY = y;
+        private void updateIndicator(int top, int bottom) {
+            if (indicatorTop == top && indicatorBottom == bottom) return;
+            indicatorTop = top;
+            indicatorBottom = bottom;
             invalidate();
         }
 
         private void hideIndicator() {
-            if (indicatorY < 0) return;
-            indicatorY = -1;
+            if (indicatorTop < 0) return;
+            indicatorTop = -1;
+            indicatorBottom = -1;
             invalidate();
         }
 
         @Override
         protected void dispatchDraw(Canvas canvas) {
             super.dispatchDraw(canvas);
-            if (indicatorY < 0) return;
-            int half = Math.max(1, px(2));
-            int y = Math.max(half, Math.min(getHeight() - half, indicatorY));
-            canvas.drawRect(0, y - half, getWidth(), y + half, indicatorPaint);
+            if (indicatorTop < 0 || indicatorBottom <= indicatorTop) return;
+            float top = Math.max(0, indicatorTop);
+            float bottom = Math.min(getHeight(), indicatorBottom);
+            indicatorPaint.setStyle(Paint.Style.FILL);
+            indicatorPaint.setColor(0x335C8CCB);
+            canvas.drawRect(0, top, getWidth(), bottom, indicatorPaint);
+            indicatorPaint.setStyle(Paint.Style.STROKE);
+            indicatorPaint.setStrokeWidth(Math.max(1, px(1)));
+            indicatorPaint.setColor(DROP_INDICATOR_COLOR);
+            float inset = Math.max(1, px(1));
+            canvas.drawRect(inset, top + inset, getWidth() - inset, bottom - inset, indicatorPaint);
         }
     }
 

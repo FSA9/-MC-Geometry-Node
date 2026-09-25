@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.data.library;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -54,6 +55,9 @@ public final class DataLibraryJsonCodec {
             addParent(value, entry.parentId());
             value.addProperty("type", entry.type().name());
             value.addProperty("key", entry.key());
+            JsonArray tags = new JsonArray();
+            entry.tags().forEach(tags::add);
+            value.add("tags", tags);
             value.add("value", DataLibraryValueCodec.encode(entry.type(), entry.value(), registries));
             entries.add(entry.id().toString(), value);
         }
@@ -132,8 +136,9 @@ public final class DataLibraryJsonCodec {
                 PortType type = parseType(requireString(value, "type"));
                 if (!DataLibraryTypes.supports(type)) throw new IllegalArgumentException("Unsupported Data Library type");
                 String key = requireString(value, "key");
+                List<String> tags = readTags(value);
                 Object decoded = DataLibraryValueCodec.decode(type, value.get("value"), registries);
-                document.put(new DataLibraryEntry(id, parentId, type, key, decoded));
+                document.put(new DataLibraryEntry(id, parentId, type, key, decoded, tags));
             } catch (RuntimeException exception) {
                 diagnostics.add(new DataLibraryDiagnostic(path, readableMessage(exception)));
             }
@@ -214,6 +219,20 @@ public final class DataLibraryJsonCodec {
             throw new IllegalArgumentException(name + " must be a string");
         }
         return member.getAsString();
+    }
+
+    private static List<String> readTags(JsonObject value) {
+        JsonElement member = value.get("tags");
+        if (member == null || member.isJsonNull()) return List.of();
+        if (!member.isJsonArray()) throw new IllegalArgumentException("tags must be an array");
+        List<String> tags = new ArrayList<>();
+        for (JsonElement tag : member.getAsJsonArray()) {
+            if (!tag.isJsonPrimitive() || !tag.getAsJsonPrimitive().isString()) {
+                throw new IllegalArgumentException("tags must contain only strings");
+            }
+            tags.add(tag.getAsString());
+        }
+        return tags;
     }
 
     private static void addParent(JsonObject value, UUID parentId) {
