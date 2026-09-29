@@ -32,8 +32,13 @@ public final class ModelCommands {
         root.then(LiteralArgumentBuilder.<S>literal("resource").then(RequiredArgumentBuilder.<S,String>argument("identifier",StringArgumentType.string()).executes(c->run(()->{
             load("preview",MODELS.loadResource(Identifier.parse(StringArgumentType.getString(c,"identifier"))));
         }))));
-        root.then(LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();say("All client model instances cleared.");})));
+        var clear=LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();say("All client model instances cleared.");}));
+        clear.then(LiteralArgumentBuilder.<S>literal("temporary").executes(c->run(()->{MODELS.clearTemporary();say("Temporary client model instances cleared.");})));
+        root.then(clear);
         root.then(LiteralArgumentBuilder.<S>literal("remove").then(ModelCommands.<S>id().executes(c->run(()->say(MODELS.remove(StringArgumentType.getString(c,"id"))?"Model removed.":"No such model instance.")))));
+        root.then(LiteralArgumentBuilder.<S>literal("reload").then(ModelCommands.<S>id().executes(c->run(()->{
+            String id=StringArgumentType.getString(c,"id");load(id,MODELS.reload(id));
+        }))));
         root.then(LiteralArgumentBuilder.<S>literal("query").then(ModelCommands.<S>id().executes(c->run(()->say(JSON.toJson(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
         root.then(LiteralArgumentBuilder.<S>literal("status").executes(c->run(()->say(JSON.toJson(MODELS.report())))));
         root.then(LiteralArgumentBuilder.<S>literal("report").executes(c->run(ModelCommands::report)));
