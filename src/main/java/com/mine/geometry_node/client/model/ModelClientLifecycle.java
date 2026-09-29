@@ -16,6 +16,7 @@ public final class ModelClientLifecycle {
     public static void register(IEventBus modBus){
         modBus.addListener(ModelClientLifecycle::reload);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::submit);
+        NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawOpaqueResident);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::logout);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::shutdown);
@@ -25,10 +26,14 @@ public final class ModelClientLifecycle {
                 Minecraft.getInstance().execute(ClientModelService.INSTANCE::clear));
     }
     private static void submit(SubmitCustomGeometryEvent event){
-        ModelStaticRenderer.submit(event.getPoseStack(),event.getSubmitNodeCollector(),event.getLevelRenderState().cameraRenderState.pos,ClientModelService.INSTANCE.renderSnapshots());
+        ClientModelService.INSTANCE.processRenderUploads();
+        ModelStaticRenderer.submit(event.getPoseStack(),event.getSubmitNodeCollector(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());
+    }
+    private static void drawOpaqueResident(RenderLevelStageEvent.AfterOpaqueFeatures event){
+        ModelStaticRenderer.drawResidentOpaque();
     }
     private static void drawTransparent(RenderLevelStageEvent.AfterTranslucentParticles event){
-        ModelStaticRenderer.drawTransparent(event.getModelViewMatrix(),event.getLevelRenderState().cameraRenderState.pos,ClientModelService.INSTANCE.renderSnapshots());
+        ModelStaticRenderer.drawTransparent(event.getModelViewMatrix(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());
     }
     private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown();}
     private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(ClientModelService.INSTANCE::clear);}

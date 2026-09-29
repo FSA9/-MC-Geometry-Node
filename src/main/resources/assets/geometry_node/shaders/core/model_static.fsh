@@ -35,8 +35,10 @@ void main() {
     else {
         vec3 n=normalize(gl_FrontFacing ? modelNormal : -modelNormal);
         float diffuse=minecraft_mix_light(Light0_Direction,Light1_Direction,n,vec4(1.0)).r;
-        rgb=base.rgb*modelLight*diffuse+emission;
+        // The P1/P2 collector samples the lightmap per primitive. The P4 resident backend stores
+        // full-bright vertices and supplies the spatial light factor through ColorModulator.
+        rgb=base.rgb*modelLight*diffuse*ColorModulator.a+emission;
     }
-    vec4 outputColor=vec4(toDisplay(rgb),mode==2 ? base.a : 1.0)*ColorModulator;
+    vec4 outputColor=vec4(toDisplay(rgb),mode==2 ? base.a : 1.0)*vec4(ColorModulator.rgb,1.0);
     fragColor=apply_fog(outputColor,sphericalVertexDistance,cylindricalVertexDistance,FogEnvironmentalStart,FogEnvironmentalEnd,FogRenderDistanceStart,FogRenderDistanceEnd,FogColor);
 }

@@ -66,7 +66,24 @@ public final class ModelCommands {
     private static <S> double d(CommandContext<S> c,String name){return DoubleArgumentType.getDouble(c,name);}
     private static Path localPath(String input) {
         String text=input.strip();if(text.length()>1&&text.startsWith("\"")&&text.endsWith("\""))text=text.substring(1,text.length()-1);
-        Path path=Path.of(text);if(!path.isAbsolute())path=Minecraft.getInstance().gameDirectory.toPath().resolve(path);return path.normalize();
+        Path path=Path.of(text);
+        if(path.isAbsolute()) {
+            Path normalized=path.normalize();
+            if(!Files.isRegularFile(normalized)) throw new IllegalArgumentException("model file does not exist: "+normalized);
+            return normalized;
+        }
+        Path gameDirectory=Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize();
+        Path candidate=gameDirectory.resolve(path).normalize();
+        if(Files.isRegularFile(candidate)) return candidate;
+        // Development runs use <project>/run as the game directory while fixtures live in <project>/docs.
+        // Walk a bounded number of parents so fixture commands remain convenient without accepting an unbounded search.
+        Path parent=gameDirectory;
+        for(int i=0;i<3&&parent.getParent()!=null;i++){
+            parent=parent.getParent();
+            candidate=parent.resolve(path).normalize();
+            if(Files.isRegularFile(candidate)) return candidate;
+        }
+        throw new IllegalArgumentException("model file does not exist: "+gameDirectory.resolve(path).normalize());
     }
     private static void load(String id,CompletionStage<?> completion) {
         say("Model "+id+" queued for import.");
@@ -76,7 +93,7 @@ public final class ModelCommands {
         });
     }
     private static void report() {
-        String text=JSON.toJson(MODELS.report());Path target=Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_node/model/p2-report.json");
+        String text=JSON.toJson(MODELS.report());Path target=Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_node/model/p4-report.json");
         REPORT_IO.execute(()->{
             String message;
             try{Files.createDirectories(target.getParent());Files.writeString(target,text);message="Model report: "+target;}

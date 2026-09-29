@@ -11,11 +11,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.Identifier;
 import org.joml.Quaternionf;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Client-local P1/P2 instance API. Commands and future node adapters share this service. */
 public final class ClientModelService {
@@ -56,7 +59,13 @@ public final class ClientModelService {
     private final ModelInstanceStore<LoadedAsset> instances=new ModelInstanceStore<>();
     private final Map<String,Pending> pending=new LinkedHashMap<>();
     private final Map<String,String> failures=new LinkedHashMap<>();
+    private final ModelUploadQueue<PendingUpload> uploads=new ModelUploadQueue<>();
     private long epoch,requestSequence,assetsDisposed;
+    private final AtomicLong peakEncodedBytes=new AtomicLong();
+    private final AtomicLong peakCpuGeometryBytes=new AtomicLong();
+    private final AtomicLong peakDecodedTextureBytes=new AtomicLong();
+    private final AtomicLong peakPreparedBytes=new AtomicLong();
+    private final AtomicLong livePreparedBytes=new AtomicLong();
     private ClientLevel level;
     private ClientModelService(){workers.allowCoreThreadTimeOut(true);}
 
@@ -119,20 +128,41 @@ public final class ClientModelService {
         }
         cancellation.check();
         ModelRenderAsset.Prepared prepared=ModelRenderAsset.prepare(asset,cancellation);
-        try {cancellation.check();return new LoadedAsset(source,asset,prepared,contentHash(asset.report()));}
-        catch(Throwable failure){prepared.close();throw failure;}
+        long preparedBytes=Math.addExact(prepared.cpuGeometryBytes(),prepared.decodedTextureBytes());
+        long liveBytes=livePreparedBytes.addAndGet(preparedBytes);
+        peakEncodedBytes.accumulateAndGet(asset.report().encodedBytes(),Math::max);
+        peakCpuGeometryBytes.accumulateAndGet(prepared.cpuGeometryBytes(),Math::max);
+        peakDecodedTextureBytes.accumulateAndGet(prepared.decodedTextureBytes(),Math::max);
+        peakPreparedBytes.accumulateAndGet(liveBytes,Math::max);
+        try {cancellation.check();return new LoadedAsset(source,asset,prepared,contentHash(asset.report()),preparedBytes);}
+        catch(Throwable failure){prepared.close();livePreparedBytes.addAndGet(-preparedBytes);throw failure;}
     }
     private void publish(String id,Pending request,LoadedAsset asset,Throwable error) {
         RenderSystem.assertOnRenderThread();
         if(pending.get(id)!=request||request.epoch!=epoch||level!=Minecraft.getInstance().level) {request.close();return;}
-        pending.remove(id);
-        if(error!=null) {rememberFailure(id,error);request.fail(error);return;}
+        if(error!=null) {pending.remove(id);rememberFailure(id,error);request.fail(error);return;}
         try {
             int scene=request.scene<0?asset.cpu.defaultScene():request.scene;
-            validateScene(asset.cpu,scene);asset.render();
-            instances.put(id,asset,scene,request.transform,request.visible,request.lifetime,request.lease::close);
-            request.completion.complete(instances.get(id).orElseThrow());
-        } catch(Throwable failure) {rememberFailure(id,failure);request.fail(failure);}
+            validateScene(asset.cpu,scene);
+            request.queued=true;
+            long uploadBytes=Math.addExact(asset.prepared.gpuGeometryBytes(),asset.prepared.decodedTextureBytes());
+            uploads.enqueue(new PendingUpload(id,request,asset,scene),uploadBytes,request.visible?1:0);
+        } catch(Throwable failure) {pending.remove(id);rememberFailure(id,failure);request.fail(failure);}
+    }
+    /** Runs the bounded render-thread upload queue once per frame before model submission. */
+    public void processRenderUploads() {
+        RenderSystem.assertOnRenderThread();
+        ModelUploadQueue.FrameResult result=uploads.process(ModelStaticRenderer.budget().maxUploadBytesPerFrame(),ModelStaticRenderer.budget().maxUploadNanosPerFrame(),this::completeUpload);
+        ModelStaticRenderer.metrics().upload(result.bytes(),result.nanos());
+    }
+    private void completeUpload(PendingUpload upload) {
+        String id=upload.id(); Pending request=upload.request();
+        if(pending.get(id)!=request||request.epoch!=epoch||level!=Minecraft.getInstance().level) {request.close();return;}
+        try {
+            upload.asset().render();
+            instances.put(id,upload.asset(),upload.scene(),request.transform,request.visible,request.lifetime,request.lease::close);
+            pending.remove(id); request.completion.complete(instances.get(id).orElseThrow());
+        } catch(Throwable failure) {pending.remove(id);rememberFailure(id,failure);request.fail(failure);}
     }
     private static void validateScene(GltfAsset asset,int scene) {
         if(scene<0||scene>=asset.scenes().size())throw new IllegalArgumentException("scene index outside asset: "+scene);
@@ -171,6 +201,7 @@ public final class ClientModelService {
     /** Clears only instances of the requested lifetime; null clears the whole client session. */
     public void clear(ModelInstanceLifetime lifetime) {
         RenderSystem.assertOnRenderThread();epoch++;
+        uploads.clear();
         List<Pending> requests=pending.values().stream()
                 .filter(request->lifetime==null||request.lifetime==lifetime).toList();
         requests.forEach(request->pending.values().remove(request));
@@ -185,24 +216,64 @@ public final class ClientModelService {
     }
     public List<ModelRenderInstance> renderSnapshots() {
         RenderSystem.assertOnRenderThread();ensureWorld();
-        return instances.snapshots().stream().map(instance->new ModelRenderInstance(instance.id(),instance.asset().render(),instance.scene(),instance.transform(),instance.visible())).toList();
+        return instances.snapshots().stream().filter(instance->instance.visible()).map(instance->new ModelRenderInstance(instance.id(),instance.asset().render(),instance.scene(),instance.transform(),true)).toList();
     }
     private void ensureWorld(){if(level!=null&&level!=Minecraft.getInstance().level)clear();}
     private void dispose(LoadedAsset asset) {Minecraft.getInstance().execute(()->{asset.close();assetsDisposed++;});}
     public Map<String,Object> report() {
         RenderSystem.assertOnRenderThread();ensureWorld();
         Map<String,Object> report=new LinkedHashMap<>();
-        report.put("stage","P3-L LOCAL_RUNTIME; client-local instances");report.put("generation",epoch);
+        report.put("stage","P4 STATIC_RESIDENT; client-local instances");report.put("generation",epoch);
         report.put("repositoryEntries",repository.size());report.put("pending",List.copyOf(pending.keySet()));
+        report.put("uploadQueue",Map.of("items",uploads.size(),"enqueuedBytes",uploads.enqueuedBytes(),"processedItems",uploads.processedItems(),"processedBytes",uploads.processedBytes(),"deferredItems",uploads.deferredItems(),"oversizeItems",uploads.oversizeItems(),"peakEnqueuedBytes",uploads.peakEnqueuedBytes(),"peakQueueItems",uploads.peakQueueItems()));
         report.put("assetsDisposed",assetsDisposed);report.put("workerQueue",workers.getQueue().size());report.put("failures",Map.copyOf(failures));
         report.put("instances",instances.snapshots().stream().map(this::describe).toList());
         report.put("renderer",ModelStaticRenderer.report());
         Set<LoadedAsset> unique=Collections.newSetFromMap(new IdentityHashMap<>());instances.snapshots().forEach(instance->unique.add(instance.asset()));
         report.put("decodedTextureBytes",unique.stream().mapToLong(asset->asset.prepared.decodedTextureBytes()).sum());
         report.put("residentTextureBytes",unique.stream().mapToLong(asset->asset.render==null?0:asset.render.textureBytes()).sum());
+        report.put("rendererResidency",ModelRenderAsset.residency().snapshot());
+        report.put("memory",memoryReport(unique));
+        report.put("runtime",runtimeReport());
         report.put("visualVerification","UNTESTED until manual in-game verification");
-        report.put("limitations",List.of("client-local; persistence and networking P3-N", "PBR values retained; full PBR rendering P6", "animation P7/P8", "source cache is session-scoped; call reload/invalidate after dependency changes"));
+        report.put("limitations",List.of("client-local; persistence and networking P3-N", "PBR values retained; full PBR rendering P6", "animation P7/P8", "P4 uses bounded upload queue and resident opaque buffers; shaderpack compatibility remains P5", "source cache is session-scoped; call reload/invalidate after dependency changes"));
         return report;
+    }
+    private Map<String,Object> memoryReport(Set<LoadedAsset> unique) {
+        long encoded=unique.stream().mapToLong(asset->asset.cpu.report().encodedBytes()).sum();
+        long cpuGeometry=unique.stream().mapToLong(asset->asset.prepared.cpuGeometryBytes()).sum();
+        long gpuGeometry=unique.stream().mapToLong(asset->asset.prepared.gpuGeometryBytes()).sum();
+        long decodedTextures=unique.stream().mapToLong(asset->asset.prepared.decodedTextureBytes()).sum();
+        return Map.ofEntries(
+                Map.entry("sourceEncodedBytes",encoded),
+                Map.entry("cpuGeometryBytes",cpuGeometry),
+                Map.entry("gpuGeometryBytesEstimated",gpuGeometry),
+                Map.entry("decodedTextureBytes",decodedTextures),
+                Map.entry("preparedBytes",Math.addExact(cpuGeometry,decodedTextures)),
+                Map.entry("peakSourceEncodedBytes",peakEncodedBytes.get()),
+                Map.entry("peakCpuGeometryBytes",peakCpuGeometryBytes.get()),
+                Map.entry("peakDecodedTextureBytes",peakDecodedTextureBytes.get()),
+                Map.entry("peakPreparedBytes",peakPreparedBytes.get()),
+                Map.entry("gpuTimingAvailable",false),
+                Map.entry("gpuTimingNote","Host GPU timestamp query is unavailable through the current Minecraft render API")
+        );
+    }
+    private static Map<String,Object> runtimeReport() {
+        Runtime runtime=Runtime.getRuntime();
+        var heap=ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+        var nonHeap=ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage();
+        List<Map<String,Object>> gc=new ArrayList<>();
+        for(GarbageCollectorMXBean bean:ManagementFactory.getGarbageCollectorMXBeans()) {
+            gc.add(Map.of("name",bean.getName(),"collectionCount",bean.getCollectionCount(),"collectionTimeMillis",bean.getCollectionTime()));
+        }
+        return Map.ofEntries(
+                Map.entry("jvm",System.getProperty("java.vm.name","unknown")),
+                Map.entry("javaVersion",System.getProperty("java.version","unknown")),
+                Map.entry("availableProcessors",runtime.availableProcessors()),
+                Map.entry("heapUsedBytes",heap.getUsed()),Map.entry("heapCommittedBytes",heap.getCommitted()),Map.entry("heapMaxBytes",heap.getMax()),
+                Map.entry("nonHeapUsedBytes",nonHeap.getUsed()),Map.entry("nonHeapCommittedBytes",nonHeap.getCommitted()),
+                Map.entry("gc",gc)
+        );
     }
     public Map<String,Object> describe(ModelInstanceStore.Snapshot<LoadedAsset> instance) {
         Map<String,Object> result=new LinkedHashMap<>();result.put("id",instance.id());result.put("source",instance.asset().source);
@@ -210,7 +281,7 @@ public final class ClientModelService {
         result.put("assetKey",instance.asset().key());result.put("contentHash",instance.asset().contentHash());
         result.put("lifetime",instance.lifetime());
         result.put("scene",instance.scene());result.put("visible",instance.visible());result.put("transform",instance.transform());result.put("revision",instance.revision());
-        result.put("state","READY");result.put("rendererTextureBytes",instance.asset().render==null?0:instance.asset().render.textureBytes());
+        result.put("state","READY");result.put("gpuResident",instance.asset().render!=null&&instance.asset().render.gpuResident());result.put("rendererTextureBytes",instance.asset().render==null?0:instance.asset().render.textureBytes());
         result.put("import",instance.asset().cpu.report());result.put("scenes",instance.asset().cpu.scenes().stream().map(GltfAsset.Scene::name).toList());
         return result;
     }
@@ -244,21 +315,24 @@ public final class ClientModelService {
         }
     }
     public static final class LoadedAsset implements AutoCloseable {
-        private final Source source;private final GltfAsset cpu;private final ModelRenderAsset.Prepared prepared;private final String contentHash;
+        private final Source source;private final GltfAsset cpu;private final ModelRenderAsset.Prepared prepared;private final String contentHash;private final long preparedBytes;
         private ModelRenderAsset render;private boolean closed;
-        private LoadedAsset(Source source,GltfAsset cpu,ModelRenderAsset.Prepared prepared,String contentHash){this.source=source;this.cpu=cpu;this.prepared=prepared;this.contentHash=contentHash;}
+        private LoadedAsset(Source source,GltfAsset cpu,ModelRenderAsset.Prepared prepared,String contentHash,long preparedBytes){this.source=source;this.cpu=cpu;this.prepared=prepared;this.contentHash=contentHash;this.preparedBytes=preparedBytes;}
         public GltfAsset cpu(){return cpu;}
         public Source source(){return source;}
         public String contentHash(){return contentHash;}
         public com.mine.geometry_node.core.engine.system.model.asset.ModelAssetKey key(){
             return new com.mine.geometry_node.core.engine.system.model.asset.ModelAssetKey(source.sessionIdentity(),cpu.entry(),contentHash,IMPORT_PROFILE,IMPORTER_REVISION);
         }
-        private ModelRenderAsset render(){RenderSystem.assertOnRenderThread();if(closed)throw new IllegalStateException("model asset retired");if(render==null)render=ModelRenderAsset.create(prepared);return render;}
-        @Override public void close(){RenderSystem.assertOnRenderThread();if(closed)return;closed=true;if(render!=null)render.close();prepared.close();}
+        private ModelRenderAsset render(){RenderSystem.assertOnRenderThread();if(closed)throw new IllegalStateException("model asset retired");if(render==null||!render.gpuResident()){if(render!=null)render.close();render=ModelRenderAsset.create(prepared);}return render;}
+        @Override public void close(){RenderSystem.assertOnRenderThread();if(closed)return;closed=true;if(render!=null)render.close();prepared.close();ClientModelService.INSTANCE.livePreparedBytes.addAndGet(-preparedBytes);}
     }
+    private record PendingUpload(String id, Pending request, LoadedAsset asset, int scene) {}
+
     private static final class Pending {
         final long request,epoch;final ModelLease<LoadedAsset> lease;final Source source;final ModelTransform transform;final int scene;final boolean visible;final ModelInstanceLifetime lifetime;
         final CompletableFuture<ModelInstanceStore.Snapshot<LoadedAsset>> completion=new CompletableFuture<>();
+        boolean queued;
         Pending(long request,long epoch,ModelLease<LoadedAsset> lease,Source source,ModelTransform transform,int scene,boolean visible,ModelInstanceLifetime lifetime){this.request=request;this.epoch=epoch;this.lease=lease;this.source=source;this.transform=transform;this.scene=scene;this.visible=visible;this.lifetime=lifetime;}
         void close(){lease.close();completion.completeExceptionally(new CancellationException("model request cancelled"));}
         void fail(Throwable error){lease.close();completion.completeExceptionally(error);}
