@@ -39,10 +39,10 @@ public final class GlbContainerReader {
             offset+=length; count++;
         }
         if(json==null) throw problem("JSON","missing document");
-        JsonObject asset=json.has("asset") && json.get("asset").isJsonObject()?json.getAsJsonObject("asset"):null;
-        if(asset==null || !asset.has("version") || !"2.0".equals(asset.get("version").getAsString()))
+        JsonObject asset=GltfJson.optionalObject(json,"asset","");
+        if(!"2.0".equals(GltfJson.string(asset,"version","","/asset")))
             throw problem("/asset/version","only glTF 2.0 is supported");
-        if(asset.has("minVersion") && !"2.0".equals(asset.get("minVersion").getAsString()))
+        if(asset.has("minVersion") && !"2.0".equals(GltfJson.string(asset,"minVersion","","/asset")))
             throw problem("/asset/minVersion","unsupported minimum version");
         return new Container(json,Optional.ofNullable(bin),source.size());
     }
@@ -57,7 +57,7 @@ public final class GlbContainerReader {
             }
         } catch(IllegalStateException | UnsupportedOperationException e) { throw problem("/extensionsRequired","invalid extension list"); }
     }
-    private static JsonObject parseJson(String text,ModelCancellation token) throws IOException {
+    public static JsonObject parseJson(String text,ModelCancellation token) throws IOException {
         // Validate depth/token budget before Gson's recursive tree construction.
         try(JsonReader r=new JsonReader(new StringReader(text))) {
             r.setStrictness(Strictness.STRICT); int depth=0; long tokens=0;

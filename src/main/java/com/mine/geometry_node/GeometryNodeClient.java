@@ -48,6 +48,7 @@ public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
         com.mine.geometry_node.client.model.ModelProbeLifecycle.register(modBus);
+        com.mine.geometry_node.client.model.ModelClientLifecycle.register(modBus);
         ClientNetworkReceiverRegistry.init();
         // 注册按键
         modBus.addListener(KeyBindings::register);

@@ -56,4 +56,10 @@ class GltfAccessorReaderTest {
         assertThrows(ModelProblem.class,()->decode("[{\"buffer\":0,\"byteLength\":4,\"byteOffset\":1}]",
                 "{\"bufferView\":0,\"componentType\":5126,\"type\":\"SCALAR\",\"count\":1}",new byte[5]));
     }
+    @Test void matrixFinalPaddingMayBeAbsentButColumnsMustAlign() throws Exception {
+        assertArrayEquals(new double[]{1,2,3,4,5,6,7,8,9},decode("[{\"buffer\":0,\"byteLength\":11}]",
+                "{\"bufferView\":0,\"componentType\":5121,\"type\":\"MAT3\",\"count\":1}",new byte[]{1,2,3,0,4,5,6,0,7,8,9}));
+        assertThrows(ModelProblem.class,()->decode("[{\"buffer\":0,\"byteOffset\":1,\"byteLength\":11}]",
+                "{\"bufferView\":0,\"componentType\":5121,\"type\":\"MAT3\",\"count\":1}",new byte[12]));
+    }
 }

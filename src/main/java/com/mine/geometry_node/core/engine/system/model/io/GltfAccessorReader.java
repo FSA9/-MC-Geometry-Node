@@ -17,6 +17,7 @@ public final class GltfAccessorReader {
     }
     public double[] read(int accessorIndex) throws IOException {
         String location="/accessors/"+accessorIndex;
+        cancellation.check();
         try {
             JsonObject a=object("accessors",accessorIndex);
             int count=integer(a,"count",-1), component=integer(a,"componentType",-1);
@@ -58,6 +59,7 @@ public final class GltfAccessorReader {
                 int iw=width(it); JsonObject iv=object("bufferViews",indices.get("bufferView").getAsInt());
                 if(iv.has("byteStride")) throw invalid(location,"sparse view cannot be interleaved");
                 long io=number(indices,"byteOffset",0); range(iv,io,(long)n*iw,iw,location);
+                ModelLimits.requireWithin(values*Double.BYTES+(long)n*Integer.BYTES,limits.decodedAccessorBytes(),location+"/sparse");
                 int[] targets=new int[n]; long previous=-1;
                 for(int i=0;i<n;i++) {
                     if((i&255)==0) cancellation.check();
@@ -77,8 +79,9 @@ public final class GltfAccessorReader {
     }
     private void readElements(JsonObject view,long offset,int count,int stride,int rows,int columns,int colStride,
                               int width,int component,boolean normalized,double[] out,int[] targets,String location) throws IOException {
-        int elementBytes=colStride*columns;
-        range(view,offset,(long)(count-1)*stride+elementBytes,width,location);
+        // Last column padding may be absent at the end of a view (glTF matrix packing).
+        int elementBytes=colStride*(columns-1)+rows*width;
+        range(view,offset,(long)(count-1)*stride+elementBytes,columns>1?4:width,location);
         // Small fixed window avoids a read/allocation per vertex and never copies a complete large buffer.
         int batch=Math.max(1,Math.min(64*1024,limits.readSliceBytes())/stride);
         for(int start=0;start<count;start+=batch) {

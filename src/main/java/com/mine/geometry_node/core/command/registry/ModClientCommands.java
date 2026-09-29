@@ -16,6 +16,7 @@ public class ModClientCommands {
     private static <S> void registerClientCommands(CommandDispatcher<S> dispatcher) {
         ClientGraphListCommand.register(dispatcher);
         com.mine.geometry_node.client.model.diagnostic.ModelProbeCommands.register(dispatcher);
+        com.mine.geometry_node.client.model.diagnostic.ModelCommands.register(dispatcher);
         GraphUploadCommand.register(dispatcher);
         GraphDownloadCommand.register(dispatcher);
     }
