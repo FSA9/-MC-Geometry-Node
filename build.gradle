@@ -79,6 +79,9 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
+    // CPU model contracts run without bootstrapping Minecraft; match host library versions.
+    testImplementation "org.joml:joml:1.10.8"
+    testImplementation "com.google.code.gson:gson:2.13.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.14.2"
 
     jarJar(implementation("org.jetbrains.pty4j:pty4j:${pty4j_version}") {

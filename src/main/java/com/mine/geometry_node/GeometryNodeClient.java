@@ -47,6 +47,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
+        com.mine.geometry_node.client.model.ModelProbeLifecycle.register(modBus);
         ClientNetworkReceiverRegistry.init();
         // 注册按键
         modBus.addListener(KeyBindings::register);

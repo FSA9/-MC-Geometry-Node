@@ -41,3 +41,8 @@ docs/asset/
 docs/terminal/
 tools/
 src/test/
+# Model P0 contract tests are source, not generated fixtures.
+!src/test/
+src/test/**
+!src/test/**/
+!src/test/java/com/mine/geometry_node/core/engine/system/model/*.java
