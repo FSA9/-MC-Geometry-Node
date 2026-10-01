@@ -19,7 +19,13 @@
   ],
   "client": [
     "KeyboardHandlerMixin",
-    "MouseHandlerMixin"
+    "MouseHandlerMixin",
+    "ModelResidentLightMixin",
+    "ModelRenderTypeMetricsMixin",
+    "IrisSamplerRenderPassAccessor",
+    "IrisSamplerValidationMixin",
+    "IrisAlphaSourceMixin",
+    "ModelIrisAlphaDrawMixin"
   ],
   "injectors": {
     "defaultRequire": 1

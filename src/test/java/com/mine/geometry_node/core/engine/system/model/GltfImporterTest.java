@@ -65,7 +65,7 @@ class GltfImporterTest {
     @Test void optionalManualFixturesImportWithoutStartingGame() throws Exception {
         Path fixtures=Path.of("docs/model/fixtures");
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(fixtures));
-        for(String folder:List.of("P2","m8")) {
+        for(String folder:List.of("P2","m8","P5")) {
             try(var files=Files.list(fixtures.resolve(folder))) {
                 for(Path file:files.filter(f->f.toString().endsWith(".glb")||f.toString().endsWith(".gltf")).toList()) {
                     GltfAsset asset=new GltfImporter().load(new FileModelResourceProvider(file.getParent()),file.getFileName().toString(),new ModelCancellation());

@@ -18,23 +18,37 @@ public final class ModelClientLifecycle {
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::submit);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawOpaqueResident);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawTransparent);
+        NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawResolvedTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::logout);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::shutdown);
     }
     private static void reload(AddClientReloadListenersEvent event){
         event.addListener(Identifier.fromNamespaceAndPath("geometry_node","model_loader"),(ResourceManagerReloadListener)manager->
-                Minecraft.getInstance().execute(ClientModelService.INSTANCE::clear));
+                Minecraft.getInstance().execute(() -> {
+                    ModelStaticRenderer.refreshIris();
+                    ClientModelService.INSTANCE.invalidateRenderResources("resource_reload");
+                    ModelStaticRenderer.closeShadowResources();
+                }));
     }
     private static void submit(SubmitCustomGeometryEvent event){
+        ModelStaticRenderer.initializeIris();
+        ModelStaticRenderer.pollIrisLifecycle();
+        ModelStaticRenderer.beginMainFrame();
         ClientModelService.INSTANCE.processRenderUploads();
         ModelStaticRenderer.submit(event.getPoseStack(),event.getSubmitNodeCollector(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());
     }
     private static void drawOpaqueResident(RenderLevelStageEvent.AfterOpaqueFeatures event){
-        ModelStaticRenderer.drawResidentOpaque();
+        ModelStaticRenderer.drawResidentOpaque(event.getModelViewMatrix());
     }
     private static void drawTransparent(RenderLevelStageEvent.AfterTranslucentParticles event){
         ModelStaticRenderer.drawTransparent(event.getModelViewMatrix(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());
     }
-    private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown();}
-    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(ClientModelService.INSTANCE::clear);}
+    /** Iris has completed deferred/composite/final; world depth and projection are still bound. */
+    private static void drawResolvedTransparent(RenderLevelStageEvent.AfterLevel event){
+        if (!ModelStaticRenderer.needsResolvedTransparency()) return;
+        ModelStaticRenderer.drawResolvedTransparent(event.getModelViewMatrix(), event.getLevelRenderState().cameraRenderState.pos,
+                event.getLevelRenderState().cameraRenderState.cullFrustum, ClientModelService.INSTANCE.renderSnapshots());
+    }
+    private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources();}
+    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); });}
 }

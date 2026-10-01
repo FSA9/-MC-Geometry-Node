@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.model.diagnostic;
 
 import com.google.gson.GsonBuilder;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
+import com.mine.geometry_node.client.model.render.ModelStaticRenderer;
 import com.mine.geometry_node.core.command.client.ClientCommandUtils;
 import com.mine.geometry_node.core.engine.system.model.math.ModelTransform;
 import com.mojang.brigadier.CommandDispatcher;
@@ -39,9 +40,19 @@ public final class ModelCommands {
         root.then(LiteralArgumentBuilder.<S>literal("reload").then(ModelCommands.<S>id().executes(c->run(()->{
             String id=StringArgumentType.getString(c,"id");load(id,MODELS.reload(id));
         }))));
-        root.then(LiteralArgumentBuilder.<S>literal("query").then(ModelCommands.<S>id().executes(c->run(()->say(JSON.toJson(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
-        root.then(LiteralArgumentBuilder.<S>literal("status").executes(c->run(()->say(JSON.toJson(MODELS.report())))));
+        root.then(LiteralArgumentBuilder.<S>literal("query").then(ModelCommands.<S>id().executes(c->run(()->say(ModelReportSummary.query(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
+        root.then(LiteralArgumentBuilder.<S>literal("status").executes(c->run(()->say(ModelReportSummary.status(MODELS.report())+" /model report saves full diagnostics."))));
         root.then(LiteralArgumentBuilder.<S>literal("report").executes(c->run(ModelCommands::report)));
+        root.then(LiteralArgumentBuilder.<S>literal("backend")
+                .then(LiteralArgumentBuilder.<S>literal("resident").executes(c->run(()->{
+                    ModelStaticRenderer.setIrisResidentEnabled(true); say("Iris resident main/shadow enabled; warm up before comparing metrics.");
+                })))
+                .then(LiteralArgumentBuilder.<S>literal("compat").executes(c->run(()->{
+                    ModelStaticRenderer.setIrisResidentEnabled(false); say("Iris immediate compatibility path enabled for comparison; geometry uploads every frame.");
+                }))));
+        root.then(LiteralArgumentBuilder.<S>literal("metrics").then(LiteralArgumentBuilder.<S>literal("reset").executes(c->run(()->{
+            ModelStaticRenderer.resetPerformanceMetrics(); say("Model CPU/transfer metrics reset; resident assets preserved.");
+        }))));
         root.then(LiteralArgumentBuilder.<S>literal("update").then(update()));
         dispatcher.register(root);
     }
@@ -93,10 +104,20 @@ public final class ModelCommands {
         });
     }
     private static void report() {
-        String text=JSON.toJson(MODELS.report());Path target=Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_node/model/p4-report.json");
+        var snapshot = MODELS.report(); var context = ModelReportContext.capture();
+        String summary = ModelReportSummary.status(snapshot);
+        Path gameDirectory = Minecraft.getInstance().gameDirectory.toPath();
+        Path target = gameDirectory.resolve("geometry_node/model/p5-report.json");
         REPORT_IO.execute(()->{
             String message;
-            try{Files.createDirectories(target.getParent());Files.writeString(target,text);message="Model report: "+target;}
+            try{
+                ModelReportContext.addFileEvidence(context, gameDirectory); snapshot.put("testContext", context);
+                String text = JSON.toJson(snapshot);
+                Files.createDirectories(target.getParent());Files.writeString(target,text);
+                // Keep immutable evidence across shaderpack switches and repeated runs.
+                Path archive = target.resolveSibling("p5-report-" + java.time.Instant.now().toString().replace(':', '-') + ".json");
+                Files.writeString(archive, text); message=summary+" Report: "+target;
+            }
             catch(Exception error){message="Model report failed: "+error.getMessage();}
             String response=message;Minecraft.getInstance().execute(()->say(response));
         });

@@ -42,6 +42,26 @@ class ModelInstanceLifetimeTest {
     }
 
     @Test
+    void idleGateTracksVisibilityReplacementRemovalAndLifetimeClear() {
+        ModelInstanceStore<String> store = new ModelInstanceStore<>();
+        assertFalse(store.hasVisibleInstances());
+        store.put("a", "asset", 0, ModelTransform.IDENTITY, false, () -> {});
+        assertFalse(store.hasVisibleInstances());
+        store.visible("a", true);
+        assertTrue(store.hasVisibleInstances());
+        store.put("a", "replacement", 0, ModelTransform.IDENTITY, false, () -> {});
+        assertFalse(store.hasVisibleInstances());
+        store.put("b", "asset", 0, ModelTransform.IDENTITY, true, ModelInstanceLifetime.PERSISTENT, () -> {});
+        store.clear(ModelInstanceLifetime.TEMPORARY);
+        assertTrue(store.hasVisibleInstances());
+        store.remove("b");
+        assertFalse(store.hasVisibleInstances());
+        store.put("c", "asset", 0, ModelTransform.IDENTITY, true, () -> {});
+        store.clear();
+        assertFalse(store.hasVisibleInstances());
+    }
+
+    @Test
     void localSourceIdentityNeverUsesAbsolutePath() {
         var source=ClientModelService.Source.localRoot(Path.of("C:\\private\\models"),"house/model.glb");
         String identity=source.sessionIdentity();

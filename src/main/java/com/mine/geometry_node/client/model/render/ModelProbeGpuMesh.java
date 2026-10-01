@@ -59,6 +59,7 @@ public final class ModelProbeGpuMesh implements AutoCloseable {
             pass.setPipeline(ModelProbePipelines.PIPELINE);RenderSystem.bindDefaultUniforms(pass);pass.setUniform("DynamicTransforms",transform);
             var texture=mc.getTextureManager().getTexture(ModelProbePipelines.TEXTURE);
             pass.bindTexture("Sampler0",texture.getTextureView(),texture.getSampler());
+            pass.bindTexture("Sampler1",texture.getTextureView(),texture.getSampler());
             pass.bindTexture("Sampler2",mc.gameRenderer.lightmap(),RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             pass.setVertexBuffer(0,vertices);pass.setIndexBuffer(indices,VertexFormat.IndexType.INT);pass.drawIndexed(0,0,source.indexCount(),1);
         }

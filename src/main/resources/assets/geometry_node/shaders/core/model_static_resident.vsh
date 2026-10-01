@@ -28,6 +28,9 @@ void main() {
     modelNormal = normalize(transpose(inverse(mat3(ModelViewMat))) * Normal);
     int light = int(PackedLight + 0.5);
     modelLight = sample_lightmap(Sampler2, ivec2(light & 65535, (light >> 16) & 65535)).rgb;
-    sphericalVertexDistance = fog_spherical_distance(Position);
-    cylindricalVertexDistance = fog_cylindrical_distance(Position);
+    // Native resident draws store the camera-relative instance transform in TextureMat.
+    // UV transforms are already baked, so this does not change texture sampling.
+    vec3 relativePosition = (TextureMat * vec4(Position, 1.0)).xyz;
+    sphericalVertexDistance = fog_spherical_distance(relativePosition);
+    cylindricalVertexDistance = fog_cylindrical_distance(relativePosition);
 }

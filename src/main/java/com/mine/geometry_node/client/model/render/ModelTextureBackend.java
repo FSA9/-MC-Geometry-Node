@@ -26,6 +26,21 @@ final class ModelTextureBackend {
         @Override public void close(){levels.forEach(NativeImage::close);}
     }
     static Decoded solid(int argb){NativeImage image=new NativeImage(1,1,false);image.setPixel(0,0,argb);return new Decoded(List.of(image));}
+    /** glTF OPAQUE and emissive RGB ignore image alpha, including all mip levels. */
+    static Decoded opaqueCopy(Decoded source, ModelCancellation token, long remaining) throws IOException {
+        if (source.bytes > remaining) throw new IOException("opaque texture variant exceeds decoded texture budget");
+        List<NativeImage> levels = new ArrayList<>();
+        try {
+            for (NativeImage image : source.levels) {
+                NativeImage copy = new NativeImage(image.getWidth(), image.getHeight(), false); levels.add(copy);
+                for (int y = 0; y < image.getHeight(); y++) {
+                    if ((y & 31) == 0) token.check();
+                    for (int x = 0; x < image.getWidth(); x++) copy.setPixel(x, y, image.getPixel(x, y) | 0xff000000);
+                }
+            }
+            return new Decoded(levels);
+        } catch (IOException | RuntimeException | Error failure) { levels.forEach(NativeImage::close); throw failure; }
+    }
     static Decoded decode(GltfAsset.Texture source,ModelCancellation token,long remaining) throws IOException {
         token.check();byte[] encoded=source.bytes();
         int width,height;

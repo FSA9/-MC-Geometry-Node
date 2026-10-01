@@ -36,13 +36,13 @@ public final class GltfImporter {
             List<String> used = GltfJson.strings(document, "extensionsUsed"), required = GltfJson.strings(document, "extensionsRequired");
             ArrayList<String> optional = new ArrayList<>(), degraded = new ArrayList<>(), gaps = new ArrayList<>();
             for (String extension : used) if (!SUPPORTED_REQUIRED.contains(extension)) optional.add(extension);
-            if (document.has("skins")) gaps.add("skin: deferred to P8");
-            if (document.has("animations")) gaps.add("animation: deferred to P7");
+            if (document.has("skins")) gaps.add("skin: deferred to P10");
+            if (document.has("animations")) gaps.add("animation: deferred to P9");
             JsonArray meshArray = GltfJson.array(document, "meshes", "");
             for (int i = 0; i < meshArray.size(); i++) {
                 JsonObject mesh = GltfJson.at(meshArray, i, "/meshes");
                 JsonArray ps = GltfJson.array(mesh, "primitives", "/meshes/" + i);
-                for (int j = 0; j < ps.size(); j++) if (GltfJson.at(ps, j, "/meshes/" + i + "/primitives").has("targets")) gaps.add("morph: deferred to P8");
+                for (int j = 0; j < ps.size(); j++) if (GltfJson.at(ps, j, "/meshes/" + i + "/primitives").has("targets")) gaps.add("morph: deferred to P10");
             }
             GltfImportBudget budget = new GltfImportBudget(limits);
             ArrayList<ModelByteSource> buffers = readBuffers(document, rootId, glbBin, session, token, budget, limits);
@@ -51,7 +51,7 @@ public final class GltfImporter {
             GltfAsset.Material defaultMaterial = GltfMaterialReader.defaultMaterial();
             List<GltfAsset.Texture> textures = GltfTextureReader.read(document, rootId, session, buffers, budget, token, limits);
             GltfMaterialReader.validateTextures(materials, textures.size());
-            if (!materials.isEmpty()) degraded.add("STATIC_BASIC preserves PBR factors and textures; metallic/roughness, normal mapping and AO lighting are deferred to P6");
+            if (!materials.isEmpty()) degraded.add("STATIC_BASIC preserves PBR factors and textures; metallic/roughness, normal mapping and AO lighting are deferred to P7");
             List<GltfAsset.Mesh> meshes = new GltfGeometryReader(document, buffers, limits, token, budget, degraded).read(materials, defaultMaterial);
             GltfSceneReader.Result scenes = GltfSceneReader.read(document, meshes.size(), budget, token, gaps);
             if (materials.isEmpty()) materials = List.of(defaultMaterial);

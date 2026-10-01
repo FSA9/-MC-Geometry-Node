@@ -44,6 +44,10 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
         Entry<A> entry=instances.get(id); return entry==null?Optional.empty():Optional.of(entry.snapshot);
     }
     public synchronized List<Snapshot<A>> snapshots() { return instances.values().stream().map(Entry::snapshot).toList(); }
+    public synchronized boolean hasVisibleInstances() {
+        for (Entry<A> entry : instances.values()) if (entry.snapshot.visible()) return true;
+        return false;
+    }
     public synchronized int size() { return instances.size(); }
     public synchronized void transform(String id,ModelTransform transform) { change(id,transform,null,null); }
     public synchronized void visible(String id,boolean visible) { change(id,null,visible,null); }
