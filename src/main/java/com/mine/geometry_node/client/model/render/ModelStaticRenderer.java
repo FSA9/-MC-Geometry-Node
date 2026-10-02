@@ -40,7 +40,7 @@ public final class ModelStaticRenderer {
     private static long frame;
     private static ModelRenderBudget budget = ModelRenderBudget.DEFAULT;
     private static final ModelRenderMetrics METRICS = new ModelRenderMetrics();
-    /** Native resident draws are opt-in and run at AfterOpaqueFeatures, outside collector emission. */
+    /** Native resident draws are opt-in and run before host solid features, outside collector emission. */
     private static final boolean DIRECT_GPU_ENABLED = Boolean.getBoolean("geometry_node.model.direct_gpu");
     private static final ModelSpatialLightCache LIGHT_CACHE = new ModelSpatialLightCache();
     private static final IrisModelBridge IRIS = new IrisModelBridge();
@@ -110,7 +110,7 @@ public final class ModelStaticRenderer {
     private record FallbackDraw(ModelRenderAsset.Primitive primitive, Matrix4f transform, boolean mirrored, int packedLight, RenderType type, boolean iris) {}
     private record Triangle(FallbackDraw draw, int offset, float depth) {}
     private record BatchKey(ModelRenderAsset.MaterialBinding binding) {}
-    private record ModelRenderRendererLight(int packed, float factor) {}
+    record ModelRenderRendererLight(int packed, float factor) {}
 
     private ModelStaticRenderer() {}
 
@@ -119,7 +119,7 @@ public final class ModelStaticRenderer {
     public static ModelRenderMetrics metrics() { return METRICS; }
     public static String stage() {
         if (!irisInitialized || !IRIS.available()) return "P4 STATIC_RESIDENT; client-local instances";
-        return IRIS.active() ? "P5 IRIS_ROUTED; client-local instances" : "P5 IRIS_ADAPTER_READY; client-local instances";
+        return IRIS.active() ? "P6 LOCAL_LIGHT_OCCLUSION_IN_PROGRESS; client-local instances" : "P5 IRIS_ADAPTER_READY; client-local instances";
     }
 
     /** Initializes the optional Iris adapter on the render thread. */
@@ -131,7 +131,7 @@ public final class ModelStaticRenderer {
                 ModelStaticPipelines.irisEmissivePipelines(), ModelStaticPipelines.irisShadowPipelines(), ModelStaticRenderer::drawShadow);
     }
 
-    /** Reapplies pipeline assignments after F3+T or a shaderpack reload. */
+    /** Retains process-wide Iris mappings after F3+T or a shaderpack reload. */
     public static void refreshIris() {
         RenderSystem.assertOnRenderThread();
         if (irisInitialized) IRIS.refresh();
@@ -151,6 +151,7 @@ public final class ModelStaticRenderer {
 
     public static void submit(PoseStack ignoredHostStack, SubmitNodeCollector collector, Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
         RenderSystem.assertOnRenderThread();
+        ModelIrisHeldLight.update(instances, camera, IRIS.available() && IRIS.active());
         if (instances.isEmpty()) { queuedIris = List.of(); queuedDirect = Map.of(); return; }
         long started = System.nanoTime();
         boolean iris = IRIS.available() && IRIS.active();
@@ -443,6 +444,7 @@ public final class ModelStaticRenderer {
 
     public static void closeShadowResources() {
         RenderSystem.assertOnRenderThread();
+        ModelIrisHeldLight.clear();
         if (shadowProjection != null) { shadowProjection.close(); shadowProjection = null; }
         queuedIris = List.of(); queuedDirect = Map.of();
         ModelTransparentRenderer.clear();
@@ -649,7 +651,7 @@ public final class ModelStaticRenderer {
         return sampleLight(primitive, relative, camera).packed();
     }
 
-    private static ModelRenderRendererLight sampleLight(ModelRenderAsset.Primitive primitive, Matrix4fc relative, Vec3 camera) {
+    static ModelRenderRendererLight sampleLight(ModelRenderAsset.Primitive primitive, Matrix4fc relative, Vec3 camera) {
         var level = Minecraft.getInstance().level; if (primitive.material.unlit() || level == null) return new ModelRenderRendererLight(LightCoordsUtil.pack(15, 15), 1.0f);
         GltfAsset.Bounds b = primitive.bounds; float cx = (b.minX() + b.maxX()) * .5f, cy = (b.minY() + b.maxY()) * .5f, cz = (b.minZ() + b.maxZ()) * .5f;
         float ex = (b.maxX() - b.minX()) * .5f, ey = (b.maxY() - b.minY()) * .5f, ez = (b.maxZ() - b.minZ()) * .5f;
@@ -693,7 +695,7 @@ public final class ModelStaticRenderer {
     private static void failed(RuntimeException error) { String message = error.toString(); if (!message.equals(lastFailure)) GeometryNode.LOGGER.error("P4 static model renderer stopped affected pass", error); lastFailure = message; }
     public static Map<String, Object> report() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("backend", IRIS.active() ? (irisResidentEnabled ? "P5 Iris shared resident main + shadow" : "P5 Iris immediate compatibility comparison")
+        result.put("backend", IRIS.available() && IRIS.active() ? (irisResidentEnabled ? "P5 Iris shared resident main + shadow" : "P5 Iris immediate compatibility comparison")
                 : DIRECT_GPU_ENABLED ? "P4 native resident indexed opaque + sorted transparent"
                 : "P4 native collector opaque + sorted transparent");
         result.put("visualVerification", "UNTESTED");
@@ -709,6 +711,7 @@ public final class ModelStaticRenderer {
         result.put("residency", ModelRenderAsset.residency().snapshot());
         result.put("metrics", METRICS.report());
         result.put("lightSampleCache", LIGHT_CACHE.report());
+        result.put("localLightOcclusion", ModelIrisHeldLight.report());
         Map<String, Object> iris = new LinkedHashMap<>();
         iris.put("initialized", irisInitialized);
         iris.put("available", IRIS.available());

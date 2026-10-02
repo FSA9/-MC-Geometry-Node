@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.model;
 
 import com.mine.geometry_node.client.model.render.ModelStaticRenderer;
+import com.mojang.blaze3d.systems.RenderSystem;
+import org.joml.Matrix4f;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -16,7 +18,6 @@ public final class ModelClientLifecycle {
     public static void register(IEventBus modBus){
         modBus.addListener(ModelClientLifecycle::reload);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::submit);
-        NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawOpaqueResident);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawResolvedTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::logout);
@@ -36,9 +37,10 @@ public final class ModelClientLifecycle {
         ModelStaticRenderer.beginMainFrame();
         ClientModelService.INSTANCE.processRenderUploads();
         ModelStaticRenderer.submit(event.getPoseStack(),event.getSubmitNodeCollector(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());
-    }
-    private static void drawOpaqueResident(RenderLevelStageEvent.AfterOpaqueFeatures event){
-        ModelStaticRenderer.drawResidentOpaque(event.getModelViewMatrix());
+        // This event is before FeatureRenderDispatcher.renderSolidFeatures and outside a GPU pass.
+        // Solid particles can write additional pack targets that a later model draw cannot erase.
+        // Establish model depth before they run; snapshot the host stack before our draws mutate it.
+        ModelStaticRenderer.drawResidentOpaque(new Matrix4f(RenderSystem.getModelViewStack()));
     }
     private static void drawTransparent(RenderLevelStageEvent.AfterTranslucentParticles event){
         ModelStaticRenderer.drawTransparent(event.getModelViewMatrix(),event.getLevelRenderState().cameraRenderState.pos,event.getLevelRenderState().cameraRenderState.cullFrustum,ClientModelService.INSTANCE.renderSnapshots());

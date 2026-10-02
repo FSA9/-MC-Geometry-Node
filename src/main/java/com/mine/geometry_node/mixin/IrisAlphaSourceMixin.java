@@ -32,7 +32,7 @@ public abstract class IrisAlphaSourceMixin {
 
     @ModifyVariable(method = "link", at = @At("HEAD"), argsOnly = true, ordinal = 5, remap = false)
     private static String geometryNode$normalizeKnownSolidMask(String fragment) {
-        return ModelSundialMaskCoverage.patch(fragment);
+        return com.mine.geometry_node.client.model.render.ModelPackLightAdapters.patch(ModelSundialMaskCoverage.patch(fragment));
     }
 
     @Redirect(method = "link", at = @At(value = "INVOKE", target =

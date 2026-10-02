@@ -17,6 +17,8 @@ out vec2 baseUv;
 out vec2 emissiveUv;
 out vec3 modelNormal;
 out vec3 modelLight;
+out vec3 modelRelativePosition;
+out vec3 modelWorldNormal;
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
 float decodeUv(ivec2 pair) {
@@ -28,6 +30,8 @@ void main() {
     baseUv = UV0;
     emissiveUv = vec2(decodeUv(EmissionU),decodeUv(EmissionV));
     modelNormal = Normal;
+    modelRelativePosition=Position;
+    modelWorldNormal=Normal;
     int light = int(PackedLight + 0.5);
     modelLight = sample_lightmap(Sampler2,ivec2(light & 65535,(light >> 16) & 65535)).rgb;
     sphericalVertexDistance = fog_spherical_distance(Position);

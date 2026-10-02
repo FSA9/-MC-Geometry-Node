@@ -144,10 +144,12 @@ public final class ModelRenderAsset implements AutoCloseable {
         final int occurrenceCount;
         final List<Map<String, Object>> opaqueBatches;
         final List<Map<String, Object>> lightPartitions;
+        final List<ModelLightOcclusionScene> lightOcclusionScenes;
         private boolean closed;
         Prepared(GltfAsset source, Map<Integer, ModelTextureBackend.Decoded> images, Map<Integer, ModelTextureBackend.Decoded> opaqueImages, List<List<Occurrence>> scenes,
-                 List<ModelTransparentScene> transparentScenes, List<GltfAsset.Material> materials, long cpuGeometryBytes, long gpuGeometryBytes, int primitiveCount, int occurrenceCount, List<Map<String, Object>> opaqueBatches, List<Map<String, Object>> lightPartitions) {
+                 List<ModelTransparentScene> transparentScenes, List<GltfAsset.Material> materials, long cpuGeometryBytes, long gpuGeometryBytes, int primitiveCount, int occurrenceCount, List<Map<String, Object>> opaqueBatches, List<Map<String, Object>> lightPartitions, List<ModelLightOcclusionScene> lightOcclusionScenes) {
             this.lightPartitions = List.copyOf(lightPartitions);
+            this.lightOcclusionScenes = List.copyOf(lightOcclusionScenes);
             this.opaqueBatches = List.copyOf(opaqueBatches);
             this.source = source; this.images = Map.copyOf(images); this.opaqueImages = Map.copyOf(opaqueImages); this.scenes = List.copyOf(scenes); this.usedMaterials = List.copyOf(materials);
             this.transparentScenes = List.copyOf(transparentScenes);
@@ -162,12 +164,14 @@ public final class ModelRenderAsset implements AutoCloseable {
         public int occurrenceCount() { return occurrenceCount; }
         public List<Map<String, Object>> opaqueBatchReport() { return opaqueBatches; }
         public List<Map<String, Object>> lightPartitionReport() { return lightPartitions; }
+        public List<Map<String, Object>> lightOcclusionReport() { return lightOcclusionScenes.stream().map(ModelLightOcclusionScene::report).toList(); }
         @Override public synchronized void close() { if (closed) return; closed = true; images.values().forEach(ModelTextureBackend.Decoded::close); opaqueImages.values().forEach(ModelTextureBackend.Decoded::close); }
     }
 
     private final GltfAsset source;
     private final List<List<Occurrence>> scenes;
     private final List<ModelTransparentScene> transparentScenes;
+    private final List<ModelLightOcclusionScene> lightOcclusionScenes;
     private final IdentityHashMap<GltfAsset.Material, RenderType> materials = new IdentityHashMap<>();
     private final IdentityHashMap<GltfAsset.Material, RenderType> irisMaterials = new IdentityHashMap<>();
     private final IdentityHashMap<GltfAsset.Material, RenderType> irisShadowMaterials = new IdentityHashMap<>();
@@ -266,6 +270,22 @@ public final class ModelRenderAsset implements AutoCloseable {
                         "maxExtraDrawsPerScene", ModelLightPartitions.MAX_EXTRA_DRAWS,
                         "scope", "bounded lit OPAQUE/MASK cells; node transforms preserved; constant light per cell, no local light occlusion"));
             }
+            List<List<Occurrence>> occlusionScenes = new ArrayList<>(scenes.size());
+            // Keep large low-poly surfaces stable under nonlinear shadow-map projection.
+            // Refine once on the worker; the main/shadow passes retain the same resident mesh and draw count.
+            for (int i = 0; i < scenes.size(); i++) {
+                var refined = ModelShadowTessellation.prepare(scenes.get(i), token, 512L * 1024 * 1024 - geometryBytes);
+                scenes.set(i, refined.occurrences());
+                occlusionScenes.add(refined.occlusionOccurrences());
+                geometryBytes = Math.addExact(geometryBytes, refined.cpuBytes());
+                gpuBytes = Math.addExact(gpuBytes, refined.gpuBytes());
+                var details = new LinkedHashMap<String, Object>(lightPartitions.get(i));
+                details.put("shadowTessellation", Map.of("refinedPrimitives", refined.refined(),
+                        "outputTriangles", refined.outputTriangles(), "maxAssetEdge", ModelShadowTessellation.MAX_EDGE,
+                        "additionalCpuBytes", refined.cpuBytes(), "degraded", refined.degraded(),
+                        "scope", "OPAQUE/MASK worker-only, unchanged draw count; node scale included, later instance scaling excluded"));
+                lightPartitions.set(i, Map.copyOf(details));
+            }
             List<ModelTransparentScene> transparentScenes = new ArrayList<>();
             for (List<Occurrence> scene : scenes) {
                 token.check();
@@ -274,7 +294,18 @@ public final class ModelRenderAsset implements AutoCloseable {
                 geometryBytes = Math.addExact(geometryBytes, transparency.cpuBytes());
                 gpuBytes = Math.addExact(gpuBytes, transparency.gpuEstimate());
             }
-            token.check(); return new Prepared(source, images, opaqueImages, scenes, transparentScenes, usedMaterials, geometryBytes, gpuBytes, primitiveCount, occurrenceCount, opaqueBatches, lightPartitions);
+            var lightOcclusion = ModelLightOcclusionScene.prepare(occlusionScenes, token, 512L * 1024 * 1024 - geometryBytes, index -> {
+                var decoded=images.get(index);
+                if(decoded==null||decoded.levels.isEmpty())return null;
+                var image=decoded.levels.getFirst();
+                return new ModelLightOcclusionScene.AlphaTexture(new ModelOcclusionAlpha.Texture() {
+                    public int width(){return image.getWidth();}
+                    public int height(){return image.getHeight();}
+                    public float alpha(int x,int y){return (image.getPixel(x,y)>>>24)/255f;}
+                },source.textures().get(index).sampler());
+            });
+            for (var scene : lightOcclusion) geometryBytes = Math.addExact(geometryBytes, scene.cpuBytes());
+            token.check(); return new Prepared(source, images, opaqueImages, scenes, transparentScenes, usedMaterials, geometryBytes, gpuBytes, primitiveCount, occurrenceCount, opaqueBatches, lightPartitions, lightOcclusion);
         } catch (IOException | RuntimeException | Error e) { images.values().forEach(ModelTextureBackend.Decoded::close); opaqueImages.values().forEach(ModelTextureBackend.Decoded::close); throw e; }
     }
 
@@ -282,7 +313,7 @@ public final class ModelRenderAsset implements AutoCloseable {
     public static ModelRenderAsset create(Prepared prepared) { RenderSystem.assertOnRenderThread(); synchronized (prepared) { if (prepared.closed) throw new IllegalStateException("prepared asset closed"); return new ModelRenderAsset(prepared); } }
 
     private ModelRenderAsset(Prepared prepared) {
-        source = prepared.source; scenes = prepared.scenes; transparentScenes = prepared.transparentScenes; cpuGeometryBytes = prepared.cpuGeometryBytes; gpuGeometryBytes = prepared.gpuGeometryBytes; decodedTextureBytes = prepared.decodedTextureBytes();
+        source = prepared.source; scenes = prepared.scenes; transparentScenes = prepared.transparentScenes; lightOcclusionScenes = prepared.lightOcclusionScenes; cpuGeometryBytes = prepared.cpuGeometryBytes; gpuGeometryBytes = prepared.gpuGeometryBytes; decodedTextureBytes = prepared.decodedTextureBytes();
         long initialTextures = prepared.initialTextureUploadBytes();
         if (!RESIDENCY.reserve(this, cpuGeometryBytes + decodedTextureBytes, initialTextures, initialTextures)) throw new ModelGpuBudgetException("P4 model residency budget exhausted: " + RESIDENCY.snapshot());
         boolean registered = false;
@@ -533,6 +564,12 @@ public final class ModelRenderAsset implements AutoCloseable {
         return new ModelTextureBackend.Decoded(List.of(image));
     }
 
+    public ModelLightOcclusionScene lightOcclusion(int scene) {
+        if (closed) return ModelLightOcclusionScene.CLOSED;
+        int selected = scene < 0 ? source.defaultScene() : scene;
+        if (selected < 0 && !lightOcclusionScenes.isEmpty()) selected = 0;
+        return selected < 0 || selected >= lightOcclusionScenes.size() ? ModelLightOcclusionScene.CLOSED : lightOcclusionScenes.get(selected);
+    }
     List<Occurrence> occurrences(int scene) { if (closed) return List.of(); int selected = scene < 0 ? source.defaultScene() : scene; if (selected < 0 && !scenes.isEmpty()) selected = 0; if (selected < 0 || selected >= scenes.size()) return List.of(); return scenes.get(selected); }
     ModelTransparentScene transparentScene(int scene) {
         int selected = scene < 0 ? source.defaultScene() : scene;

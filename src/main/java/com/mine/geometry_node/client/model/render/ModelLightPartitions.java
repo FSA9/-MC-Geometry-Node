@@ -88,7 +88,7 @@ final class ModelLightPartitions {
         for (int i=0; i<p.indices.length; i+=3) { cancellation.check(); result.add(new Triangle(vertex(p,p.indices[i]),vertex(p,p.indices[i+1]),vertex(p,p.indices[i+2]),0)); }
         return result;
     }
-    private static Vertex vertex(ModelRenderAsset.Primitive p, int i) {
+    static Vertex vertex(ModelRenderAsset.Primitive p, int i) {
         int c=p.colors[i], v=i*3, uv=i*2;
         return new Vertex(new float[]{p.positions[v],p.positions[v+1],p.positions[v+2],p.normals[v],p.normals[v+1],p.normals[v+2],
                 p.baseUv[uv],p.baseUv[uv+1],p.emissionUv[uv],p.emissionUv[uv+1],

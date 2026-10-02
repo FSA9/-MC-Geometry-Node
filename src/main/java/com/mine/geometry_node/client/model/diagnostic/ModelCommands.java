@@ -33,7 +33,7 @@ public final class ModelCommands {
         root.then(LiteralArgumentBuilder.<S>literal("resource").then(RequiredArgumentBuilder.<S,String>argument("identifier",StringArgumentType.string()).executes(c->run(()->{
             load("preview",MODELS.loadResource(Identifier.parse(StringArgumentType.getString(c,"identifier"))));
         }))));
-        var clear=LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();say("All client model instances cleared.");}));
+        var clear=LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();com.mine.geometry_node.client.model.render.ModelLocalLightProviders.clearAttached();say("All client model instances cleared.");}));
         clear.then(LiteralArgumentBuilder.<S>literal("temporary").executes(c->run(()->{MODELS.clearTemporary();say("Temporary client model instances cleared.");})));
         root.then(clear);
         root.then(LiteralArgumentBuilder.<S>literal("remove").then(ModelCommands.<S>id().executes(c->run(()->say(MODELS.remove(StringArgumentType.getString(c,"id"))?"Model removed.":"No such model instance.")))));
@@ -53,6 +53,23 @@ public final class ModelCommands {
         root.then(LiteralArgumentBuilder.<S>literal("metrics").then(LiteralArgumentBuilder.<S>literal("reset").executes(c->run(()->{
             ModelStaticRenderer.resetPerformanceMetrics(); say("Model CPU/transfer metrics reset; resident assets preserved.");
         }))));
+        root.then(LiteralArgumentBuilder.<S>literal("lighting")
+                .then(LiteralArgumentBuilder.<S>literal("on").executes(c->run(()->{
+                    com.mine.geometry_node.client.model.render.ModelIrisHeldLight.setLightingEnabled(true);say("Model local lighting enabled.");
+                })))
+                .then(LiteralArgumentBuilder.<S>literal("off").executes(c->run(()->{
+                    com.mine.geometry_node.client.model.render.ModelIrisHeldLight.setLightingEnabled(false);say("Model local lighting disabled for comparison; geometry and resident resources preserved.");
+                }))));
+        root.then(LiteralArgumentBuilder.<S>literal("light").then(ModelCommands.<S>id()
+                .then(LiteralArgumentBuilder.<S>literal("off").executes(c->run(()->{
+                    com.mine.geometry_node.client.model.render.ModelLocalLightProviders.detach(StringArgumentType.getString(c,"id"));say("Model light removed.");
+                })))
+                .then(LiteralArgumentBuilder.<S>literal("attach").then(vector("x","y","z",c->{
+                    String instance=StringArgumentType.getString(c,"id");
+                    if(MODELS.query(instance).isEmpty())throw new IllegalArgumentException("unknown model instance: "+instance);
+                    com.mine.geometry_node.client.model.render.ModelLocalLightProviders.attach(instance,instance,(float)d(c,"x"),(float)d(c,"y"),(float)d(c,"z"),15);
+                    say("Visual point light attached at model-local coordinates; /model light "+instance+" off removes it.");
+                })))));
         root.then(LiteralArgumentBuilder.<S>literal("update").then(update()));
         dispatcher.register(root);
     }
@@ -107,7 +124,7 @@ public final class ModelCommands {
         var snapshot = MODELS.report(); var context = ModelReportContext.capture();
         String summary = ModelReportSummary.status(snapshot);
         Path gameDirectory = Minecraft.getInstance().gameDirectory.toPath();
-        Path target = gameDirectory.resolve("geometry_node/model/p5-report.json");
+        Path target = gameDirectory.resolve("geometry_node/model/p6-report.json");
         REPORT_IO.execute(()->{
             String message;
             try{
@@ -115,7 +132,7 @@ public final class ModelCommands {
                 String text = JSON.toJson(snapshot);
                 Files.createDirectories(target.getParent());Files.writeString(target,text);
                 // Keep immutable evidence across shaderpack switches and repeated runs.
-                Path archive = target.resolveSibling("p5-report-" + java.time.Instant.now().toString().replace(':', '-') + ".json");
+                Path archive = target.resolveSibling("p6-report-" + java.time.Instant.now().toString().replace(':', '-') + ".json");
                 Files.writeString(archive, text); message=summary+" Report: "+target;
             }
             catch(Exception error){message="Model report failed: "+error.getMessage();}

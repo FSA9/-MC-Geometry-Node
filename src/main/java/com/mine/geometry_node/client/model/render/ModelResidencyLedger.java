@@ -68,6 +68,20 @@ public final class ModelResidencyLedger {
         entry.gpuBytes += bytes; gpuBytes += bytes; entry.active = true; entry.lastTouch = ++clock;
         return true;
     }
+    /** Fixed-size renderer-owned light snapshots share the global CPU limit with prepared assets. */
+    public synchronized boolean reserveTransientCpu(long bytes) {
+        if (bytes < 0) throw new IllegalArgumentException("negative CPU reservation");
+        if (bytes > budget.maxResidentCpuBytes() - cpuBytes) {
+            lastFailure = "local-light CPU snapshot budget exhausted";
+            return false;
+        }
+        cpuBytes += bytes;
+        return true;
+    }
+    public synchronized void releaseTransientCpu(long bytes) {
+        if (bytes < 0 || bytes > cpuBytes) throw new IllegalArgumentException("invalid transient CPU release");
+        cpuBytes -= bytes;
+    }
     /** Renderer-owned sorted indices remain charged independently of any one model lifetime. */
     public synchronized boolean reserveTransientGpu(long bytes) {
         if (bytes < 0) throw new IllegalArgumentException("negative GPU reservation");

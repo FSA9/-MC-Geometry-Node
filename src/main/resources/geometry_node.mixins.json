@@ -21,10 +21,15 @@
     "KeyboardHandlerMixin",
     "MouseHandlerMixin",
     "ModelResidentLightMixin",
+    "ModelPlacedLightWorldMixin",
     "ModelRenderTypeMetricsMixin",
     "IrisSamplerRenderPassAccessor",
     "IrisSamplerValidationMixin",
     "IrisAlphaSourceMixin",
+    "IrisHeldLightProgramBuilderMixin",
+    "IrisHeldLightProgramMixin",
+    "IrisLightSamplerBuilderMixin",
+    "IrisLightExtendedShaderMixin",
     "ModelIrisAlphaDrawMixin"
   ],
   "injectors": {

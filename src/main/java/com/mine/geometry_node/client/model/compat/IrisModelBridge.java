@@ -17,6 +17,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class IrisModelBridge {
     private static final Object GLOBAL_LOCK = new Object();
+    private static final IrisPipelineAssignments GLOBAL_MAIN_ASSIGNMENTS = new IrisPipelineAssignments();
+    private static final IrisPipelineAssignments GLOBAL_SHADOW_ASSIGNMENTS = new IrisPipelineAssignments();
     private static final List<ShadowDraw> GLOBAL_SHADOW_LISTENERS = new CopyOnWriteArrayList<>();
     private static Object GLOBAL_API;
     private static Method GLOBAL_ACTIVE;
@@ -190,15 +192,20 @@ public final class IrisModelBridge {
         return new int[]{opaque, translucent, shadow, emissive};
     }
 
-    /** Reapplies public pipeline assignments after a shaderpack/resource reload. */
+    /**
+     * Iris 1.11 keeps API assignments in process-wide IrisPipelines maps. A pack/resource reload
+     * replaces GPU programs, NOT those mappings; assigning again throws even for the same role.
+     * Callers still invalidate model GPU resources after observing a changed pack generation.
+     */
     public void refresh() {
         if (!callbackRegistered || api == null || assignMain == null || assignShadow == null) return;
         try {
-            int[] mapped = mapPipelines();
+            int[] mapped = mapPipelines(); // ensures only new pipeline objects are registered
             registered = true;
-            status = "Iris API " + revision + ": refreshed opaque=" + mapped[0]
-                    + ", translucent=" + mapped[1] + ", shadow=" + mapped[2] + ", emissive=" + mapped[3] + "; visuals UNTESTED";
-        } catch (ReflectiveOperationException | LinkageError error) {
+            status = "Iris API " + revision + ": retained process mappings opaque=" + mapped[0]
+                    + ", translucent=" + mapped[1] + ", shadow=" + mapped[2] + ", emissive=" + mapped[3]
+                    + "; GPU resources refreshed separately; visuals UNTESTED";
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException error) {
             registered = false;
             status = "Iris refresh failed: " + rootMessage(error);
         }
@@ -208,25 +215,25 @@ public final class IrisModelBridge {
         int opaque = 0;
         for (RenderPipeline pipeline : opaquePipelines) {
             if (pipeline == null) continue;
-            assignMain.invoke(api, pipeline, mainEntities);
+            GLOBAL_MAIN_ASSIGNMENTS.ensure(pipeline, mainEntities, () -> assignMain.invoke(api, pipeline, mainEntities));
             opaque++;
         }
         int translucent = 0;
         for (RenderPipeline pipeline : translucentPipelines) {
             if (pipeline == null) continue;
-            assignMain.invoke(api, pipeline, mainTranslucent);
+            GLOBAL_MAIN_ASSIGNMENTS.ensure(pipeline, mainTranslucent, () -> assignMain.invoke(api, pipeline, mainTranslucent));
             translucent++;
         }
         int emissive = 0;
         for (RenderPipeline pipeline : emissivePipelines) {
             if (pipeline == null) continue;
-            assignMain.invoke(api, pipeline, mainEmissive);
+            GLOBAL_MAIN_ASSIGNMENTS.ensure(pipeline, mainEmissive, () -> assignMain.invoke(api, pipeline, mainEmissive));
             emissive++;
         }
         int shadow = 0;
         for (RenderPipeline pipeline : shadowPipelines) {
             if (pipeline == null) continue;
-            assignShadow.invoke(api, pipeline, shadowEntities);
+            GLOBAL_SHADOW_ASSIGNMENTS.ensure(pipeline, shadowEntities, () -> assignShadow.invoke(api, pipeline, shadowEntities));
             shadow++;
         }
         return new int[]{opaque, translucent, shadow, emissive};

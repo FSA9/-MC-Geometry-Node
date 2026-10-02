@@ -17,6 +17,8 @@ out vec2 baseUv;
 out vec2 emissiveUv;
 out vec3 modelNormal;
 out vec3 modelLight;
+out vec3 modelRelativePosition;
+out vec3 modelWorldNormal;
 out float sphericalVertexDistance;
 out float cylindricalVertexDistance;
 float decodeUv(ivec2 pair) { return uintBitsToFloat((uint(pair.x) & 65535u) | ((uint(pair.y) & 65535u) << 16u)); }
@@ -31,6 +33,8 @@ void main() {
     // Native resident draws store the camera-relative instance transform in TextureMat.
     // UV transforms are already baked, so this does not change texture sampling.
     vec3 relativePosition = (TextureMat * vec4(Position, 1.0)).xyz;
+    modelRelativePosition=relativePosition;
+    modelWorldNormal=normalize(transpose(inverse(mat3(TextureMat)))*Normal);
     sphericalVertexDistance = fog_spherical_distance(relativePosition);
     cylindricalVertexDistance = fog_cylindrical_distance(relativePosition);
 }

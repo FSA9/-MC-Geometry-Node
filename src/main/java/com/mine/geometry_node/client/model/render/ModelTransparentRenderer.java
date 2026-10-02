@@ -23,7 +23,7 @@ import java.util.*;
 final class ModelTransparentRenderer {
     record Result(int draws, int triangles) {}
     private record Source(ModelRenderAsset asset, ModelRenderAsset.Primitive primitive,
-                          ModelRenderAsset.GpuPrimitive mesh, Matrix4f transform, boolean mirrored, float lightFactor) {}
+                          ModelRenderAsset.GpuPrimitive mesh, Matrix4f transform, boolean mirrored, float lightFactor, int packedLight) {}
     private record Group(ModelTransparentScene scene, int firstSource, int sourceCount, int triangles, Matrix4f transform) {}
     private static List<Group> previousGroups = List.of();
     private static long bspGroups, centroidGroups;
@@ -149,8 +149,8 @@ final class ModelTransparentRenderer {
 
     private static Source source(ModelRenderAsset asset, ModelRenderAsset.Primitive primitive,
                                  ModelRenderAsset.GpuPrimitive mesh, Matrix4f transform, Vec3 camera) {
-        return new Source(asset, primitive, mesh, transform, transform.determinant3x3() < 0,
-                ModelStaticRenderer.lightFactor(primitive, transform, camera));
+        var light=ModelStaticRenderer.sampleLight(primitive,transform,camera);
+        return new Source(asset, primitive, mesh, transform, transform.determinant3x3() < 0, light.factor(), light.packed());
     }
 
     private static float groupDepth(Group group, List<Source> sources, Matrix4fc view) {
@@ -294,7 +294,8 @@ final class ModelTransparentRenderer {
         }
         int draws = 0, triangles = 0;
         var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
-        try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+        try (var lighting = ModelNativeLight.scope();
+             var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                 () -> "GeometryNode sorted resident transparency", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
             transparentPasses++;
             int previousSource = -1;
@@ -323,6 +324,7 @@ final class ModelTransparentRenderer {
                     pass.setVertexBuffer(0, source.mesh.vertices());
                     previousSource = run.source;
                 }
+                lighting.light(source.packedLight);
                 pass.drawIndexed(0, run.firstIndex, run.count, 1);
                 ModelStaticRenderer.recordTransparentDraw(run.count / 3); draws++; triangles += run.count / 3;
             }
@@ -364,6 +366,7 @@ final class ModelTransparentRenderer {
                     "order", scene.bsp() == null ? "CENTROID_OR_EMPTY" : "BSP"));
         }
         result.put("scenes", List.copyOf(sceneReports));
+        result.put("localLighting", ModelNativeLight.report());
         result.put("sortCpuNanos", sortNanos); result.put("sortCpuNanosMax", peakSortNanos);
         result.put("scope", "BSP split/order within each prepared instance; all-fallback frames retain global model centroid sorting; mixed/BSP instance groups use bounds-center depth, not exact cross-instance or vanilla transparency; resident vertices; fenced three-slot index ring");
         return result;

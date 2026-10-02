@@ -191,6 +191,7 @@ public final class ClientModelService {
     public boolean remove(String id) {
         RenderSystem.assertOnRenderThread();Pending request=pending.remove(id);if(request!=null)request.close();failures.remove(id);
         boolean removed = instances.remove(id);
+        com.mine.geometry_node.client.model.render.ModelLocalLightProviders.detachInstance(id);
         if (instances.size() == 0) ModelStaticRenderer.clearSceneResources();
         return removed||request!=null;
     }
@@ -213,6 +214,7 @@ public final class ClientModelService {
         requests.forEach(request->pending.values().remove(request));
         requests.forEach(Pending::close);
         instances.clear(lifetime);
+        if (instances.size() == 0) com.mine.geometry_node.client.model.render.ModelLocalLightProviders.clearAttached();
         renderDeferrals.clear();
         if (instances.size() == 0) ModelStaticRenderer.clearSceneResources();
         if(lifetime==null) {
@@ -346,6 +348,7 @@ public final class ClientModelService {
         result.put("id",assetId);result.put("source",asset.source);result.put("assetKey",asset.key());
         result.put("opaqueBatching",asset.prepared.opaqueBatchReport());
         result.put("lightPartitioning",asset.prepared.lightPartitionReport());
+        result.put("lightOcclusion",asset.prepared.lightOcclusionReport());
         result.put("geometry",asset.statistics.report());result.put("gpuResident",asset.render!=null&&asset.render.gpuResident());
         result.put("irisResidency",asset.render==null?Map.of():asset.render.irisResidencyReport());
         result.put("irisMaterials",asset.render==null?Map.of():asset.render.irisMaterialReport());
