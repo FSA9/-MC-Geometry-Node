@@ -19,7 +19,10 @@ final class DataLibraryUiMapper {
     static DataLibraryDocument toDocument(List<DataLibraryUiRepository.Folder> folders,
                                           List<DataLibraryUiRepository.Entry> entries) {
         DataLibraryDocument document = new DataLibraryDocument();
-        putFolders(document, requiredFolders(folders, entries));
+        // A full document must preserve empty folders as well as folders that
+        // currently contain entries.  Filtering to entry ancestors here made
+        // empty folders disappear during delete/fingerprint mutations.
+        putFolders(document, folders);
         for (DataLibraryUiRepository.Entry entry : entries) {
             document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(),
                     entry.tags()));
@@ -76,7 +79,17 @@ final class DataLibraryUiMapper {
     }
 
     private static void putFolders(DataLibraryDocument document, List<DataLibraryUiRepository.Folder> folders) {
-        List<DataLibraryUiRepository.Folder> remaining = new ArrayList<>(folders);
+        List<DataLibraryUiRepository.Folder> remaining = new ArrayList<>();
+        java.util.HashSet<UUID> ids = new java.util.HashSet<>();
+        for (DataLibraryUiRepository.Folder folder : folders) {
+            if (folder == null || folder.id() == null) {
+                throw new IllegalArgumentException("Data Library folder cannot be null");
+            }
+            if (!ids.add(folder.id())) {
+                throw new IllegalArgumentException("Duplicate Data Library folder: " + folder.id());
+            }
+            remaining.add(folder);
+        }
         boolean changed;
         do {
             changed = false;
@@ -88,24 +101,8 @@ final class DataLibraryUiMapper {
                 changed = true;
             }
         } while (changed && !remaining.isEmpty());
-        if (!remaining.isEmpty()) throw new IllegalArgumentException("Data Library folder hierarchy is invalid");
-    }
-
-    private static List<DataLibraryUiRepository.Folder> requiredFolders(
-            List<DataLibraryUiRepository.Folder> folders, List<DataLibraryUiRepository.Entry> entries) {
-        java.util.Map<UUID, DataLibraryUiRepository.Folder> byId = folders.stream()
-                .collect(Collectors.toMap(DataLibraryUiRepository.Folder::id, folder -> folder));
-        java.util.LinkedHashMap<UUID, DataLibraryUiRepository.Folder> required = new java.util.LinkedHashMap<>();
-        for (DataLibraryUiRepository.Entry entry : entries) {
-            UUID current = entry.parentId();
-            java.util.HashSet<UUID> visited = new java.util.HashSet<>();
-            while (current != null && visited.add(current)) {
-                DataLibraryUiRepository.Folder folder = byId.get(current);
-                if (folder == null) break;
-                required.put(folder.id(), folder);
-                current = folder.parentId();
-            }
+        if (!remaining.isEmpty()) {
+            throw new IllegalArgumentException("Data Library folder hierarchy is invalid (missing parent or cycle)");
         }
-        return List.copyOf(required.values());
     }
 }

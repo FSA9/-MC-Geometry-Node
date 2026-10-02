@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.valuepreview.ItemSlotView;
@@ -91,13 +92,17 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static final int DRAG_HANDLE_WIDTH_DP = 12;
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final int PREVIEW_SIZE_DP = 44;
+    private static final int CARD_PREVIEW_SIZE_DP = 64;
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
     private static final EnumSet<PortType> SUPPORTED_TYPES =
             EnumSet.copyOf(DataLibraryTypes.supported());
 
     private final DataLibraryUiRepository repository;
     private final DataLibraryTreeLayout groupsHost;
+    private final DataLibraryTreeLayout rightHost;
     private final ScrollView scrollHost;
+    private final TextView breadcrumbView;
+    private final TextView statusView;
     private final UiSearchInput searchInput;
     private final UiCheckBox selectAll;
     private final View deleteButton;
@@ -105,7 +110,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final Set<UUID> selectedFolders = new LinkedHashSet<>();
     private final Set<UUID> expandedFolders = new HashSet<>();
     private final Set<UUID> expandedEntries = new HashSet<>();
+    /** Expanded state for the type blocks shown inside each folder. */
+    private final Set<String> expandedTypeGroups = new HashSet<>();
     private final Set<UUID> renderedEntries = new LinkedHashSet<>();
+    /** Last clicked entry used as the anchor for shift range selection. */
+    private UUID selectionAnchor;
+    private UUID activeFolder;
     private final Map<View, UUID> folderDropRows = new java.util.LinkedHashMap<>();
     private final WorkspaceDragDropRegistry.DropTarget dropTarget = this::acceptInternalDrop;
     private final Runnable repositoryChanged = () -> post(this::requestRebuild);
@@ -113,12 +123,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean dropTargetRegistered;
     private String search = "";
     private PortType typeFilter;
-    private String tagFilter;
     private boolean syncingSelectAll;
     private boolean internalDragActive;
     private boolean rebuildPending;
     private static UUID entityReferenceClipboard;
     private static boolean hasEntityReferenceClipboard;
+    private static DataLibraryUiRepository.Entry clipboardEntry;
 
     public DataLibraryWindow(Context context) {
         this(context, DataLibraryUiRepository.EMPTY);
@@ -132,20 +142,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         setBackground(solid(BG, 0));
 
         LinearLayout toolbar = new LinearLayout(context);
-        toolbar.setOrientation(VERTICAL);
-        toolbar.setPadding(px(4), px(3), px(4), px(3));
+        toolbar.setOrientation(LinearLayout.HORIZONTAL);
+        toolbar.setGravity(Gravity.CENTER_VERTICAL);
+        toolbar.setPadding(px(8), px(7), px(8), px(7));
         toolbar.setBackground(solid(TOOLBAR_BG, 0, DIVIDER));
-
-        LinearLayout searchRow = new LinearLayout(context);
-        searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.addView(searchRow, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(28)));
-        LinearLayout actionsRow = new LinearLayout(context);
-        actionsRow.setGravity(Gravity.CENTER_VERTICAL);
-        LayoutParams actionsRowLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(26));
-        actionsRowLp.topMargin = px(2);
-        toolbar.addView(actionsRow, actionsRowLp);
-
-        addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(62)));
+        addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(46)));
 
         searchInput = new UiSearchInput(context);
         searchInput.setHint(tr("geometry_node.data_library.search"));
@@ -153,61 +154,28 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             search = value.trim().toLowerCase(Locale.ROOT);
             rebuild();
         });
-        LayoutParams searchLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
-        searchRow.addView(searchInput, searchLp);
-
-        TextView clear = toolbarIconButton(context, "×", tr("geometry_node.data_library.clear_search"));
-        clear.setOnClickListener(v -> searchInput.setText(""));
-        LayoutParams clearLp = new LayoutParams(px(26), ViewGroup.LayoutParams.MATCH_PARENT);
-        clearLp.leftMargin = px(2);
-        searchRow.addView(clear, clearLp);
+        LayoutParams searchLp = new LayoutParams(0, px(30), 1);
+        toolbar.addView(searchInput, searchLp);
 
         UiActionButton typeButton = button(context, tr("geometry_node.data_library.all_types"),
                 UiActionButton.Role.INLINE);
         typeButton.setOnClickListener(v -> showTypeMenu(typeButton, selectedType -> {
             typeFilter = selectedType;
-            typeButton.setText(selectedType == null ? tr("geometry_node.data_library.all_types") : selectedType.name());
+            typeButton.setText(selectedType == null ? tr("geometry_node.data_library.all_types") : displayTypeName(selectedType));
             rebuild();
         }, true));
-        LayoutParams typeLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
-        actionsRow.addView(typeButton, typeLp);
-
-        UiActionButton tagButton = button(context, tr("geometry_node.data_library.all_tags"),
-                UiActionButton.Role.INLINE);
-        tagButton.setOnClickListener(v -> showTagMenu(tagButton, selectedTag -> {
-            tagFilter = selectedTag;
-            tagButton.setText(selectedTag == null ? tr("geometry_node.data_library.all_tags") : selectedTag);
-            rebuild();
-        }));
-        LayoutParams tagFilterLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
-        tagFilterLp.leftMargin = px(3);
-        actionsRow.addView(tagButton, tagFilterLp);
-
-        UiIconButton addFolder = iconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.SQUARE_PLUS, TEXT),
-                tr("geometry_node.data_library.add_folder"));
-        addFolder.setOnClickListener(v -> repository.createFolder(null));
-        LayoutParams addFolderLp = fixed(28, 26);
-        addFolderLp.leftMargin = px(3);
-        actionsRow.addView(addFolder, addFolderLp);
-
-        UiIconButton addEntry = iconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.SQUARE_PLUS, ACCENT),
-                tr("geometry_node.data_library.add"));
-        addEntry.setOnClickListener(v -> showTypeMenu(addEntry,
-                selectedType -> repository.create(null, selectedType), false));
-        LayoutParams addEntryLp = fixed(28, 26);
-        addEntryLp.leftMargin = px(2);
-        actionsRow.addView(addEntry, addEntryLp);
+        LayoutParams typeLp = fixed(92, 30);
+        typeLp.leftMargin = px(8);
+        toolbar.addView(typeButton, typeLp);
 
         selectAll = new UiCheckBox(context);
         selectAll.setContentDescription(tr("geometry_node.data_library.all"));
         selectAll.setOnCheckedChangeListener((button, checked) -> {
             if (!syncingSelectAll) selectAllVisible(checked);
         });
-        LayoutParams selectLp = new LayoutParams(px(CHECKBOX_SIZE_DP), px(CHECKBOX_SIZE_DP));
-        selectLp.leftMargin = px(3);
-        actionsRow.addView(selectAll, selectLp);
+        LayoutParams selectLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
+        selectLp.leftMargin = px(6);
+        toolbar.addView(selectAll, selectLp);
 
         deleteButton = iconButton(context,
                 new VectorIconView(context, VectorIconView.Kind.TRASH, 0xFFFFB0B0),
@@ -217,9 +185,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             selected.clear();
             selectedFolders.clear();
         });
-        LayoutParams deleteLp = fixed(28, 26);
-        deleteLp.leftMargin = px(3);
-        actionsRow.addView(deleteButton, deleteLp);
+        // Selection is scoped to the folder tree/type headers.  Keep the
+        // legacy global controls available to keyboard automation, but do
+        // not add extra icons to the Blender-style toolbar.
+        selectAll.setVisibility(View.GONE);
+        deleteButton.setVisibility(View.GONE);
+        LayoutParams deleteLp = fixed(28, 30);
+        deleteLp.leftMargin = px(4);
+        toolbar.addView(deleteButton, deleteLp);
 
         scrollHost = new ScrollView(context);
         scrollHost.setFillViewport(true);
@@ -228,7 +201,49 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         groupsHost.setPadding(px(4), px(4), px(4), px(8));
         scrollHost.addView(groupsHost, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        addView(scrollHost, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        rightHost = new DataLibraryTreeLayout(context);
+        rightHost.setOrientation(VERTICAL);
+        rightHost.setPadding(px(8), px(4), px(8), px(8));
+        ScrollView rightScroll = new ScrollView(context);
+        rightScroll.setFillViewport(true);
+        rightScroll.addView(rightHost, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout leftPanel = new LinearLayout(context);
+        leftPanel.setOrientation(VERTICAL);
+        leftPanel.setPadding(px(8), px(8), px(4), px(6));
+        leftPanel.setBackground(solid(BG, 0, BORDER));
+        TextView leftTitle = label(context, "閺傚洣娆㈡径鐟扮湴缁?, 11, MUTED);
+        leftTitle.setPadding(px(2), 0, 0, px(5));
+        leftPanel.addView(leftTitle, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(22)));
+        leftPanel.addView(scrollHost, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
+        LinearLayout rightPanel = new LinearLayout(context);
+        rightPanel.setOrientation(VERTICAL);
+        rightPanel.setPadding(px(4), px(8), px(8), px(6));
+        rightPanel.setBackground(solid(BG, 0, BORDER));
+        breadcrumbView = label(context, tr("geometry_node.data_library.root"), 11, MUTED);
+        breadcrumbView.setPadding(px(8), 0, 0, px(5));
+        rightPanel.addView(breadcrumbView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(22)));
+        rightPanel.addView(rightScroll, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        groupsHost.setOnClickListener(v -> clearSelection());
+        rightHost.setOnClickListener(v -> clearSelection());
+        scrollHost.setOnClickListener(v -> clearSelection());
+        rightScroll.setOnClickListener(v -> clearSelection());
+        statusView = label(context, "", 9.5f, MUTED);
+        statusView.setVisibility(View.GONE);
+
+        LinearLayout split = new LinearLayout(context);
+        split.setOrientation(LinearLayout.HORIZONTAL);
+        split.setBackground(solid(BG, 0));
+        split.addView(leftPanel, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 0.24f));
+        split.addView(ResizableDivider.weighted(context,
+                ResizableDivider.Orientation.HORIZONTAL), new LinearLayout.LayoutParams(
+                px(5), ViewGroup.LayoutParams.MATCH_PARENT));
+        split.addView(rightPanel, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 0.76f));
+        addView(split, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         rebuild();
     }
 
@@ -256,11 +271,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (folder != null && folder.id() != null) availableFolders.add(folder.id());
         }
         selectedFolders.retainAll(availableFolders);
+        if (activeFolder != null && !availableFolders.contains(activeFolder)) activeFolder = null;
         expandedFolders.retainAll(availableFolders);
         expandedEntries.retainAll(available.stream().map(DataLibraryUiRepository.EntryKey::id)
                 .collect(java.util.stream.Collectors.toSet()));
         groupsHost.removeAllViews();
         groupsHost.hideIndicator();
+        rightHost.removeAllViews();
+        rightHost.hideIndicator();
         folderDropRows.clear();
         renderedEntries.clear();
         rootDropTarget = createRootRow();
@@ -298,13 +316,36 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             }
         }
         addTreeLevel(null, 0, childFolders, childEntries, matchedEntries, visibleFolders, new HashSet<>());
-        if (groupsHost.getChildCount() == 1) {
+        addEntriesGrouped(activeFolder, 0, childEntries, matchedEntries);
+        updateNavigationLabels();
+        if (rightHost.getChildCount() == 0) {
             TextView empty = label(getContext(), tr(!isFiltering()
                     ? "geometry_node.data_library.empty" : "geometry_node.data_library.no_results"), 12, MUTED);
             empty.setGravity(Gravity.CENTER);
-            groupsHost.addView(empty, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(90)));
+            rightHost.addView(empty, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(90)));
         }
         updateActions();
+    }
+
+    private void updateNavigationLabels() {
+        // Render the complete folder path so the right pane mirrors the asset
+        // browser breadcrumb instead of showing only the immediate parent.
+        List<String> path = new ArrayList<>();
+        Map<UUID, DataLibraryUiRepository.Folder> folders = new HashMap<>();
+        for (DataLibraryUiRepository.Folder folder : repository.folders()) {
+            if (folder != null && folder.id() != null) folders.put(folder.id(), folder);
+        }
+        Set<UUID> visited = new HashSet<>();
+        UUID cursor = activeFolder;
+        while (cursor != null && visited.add(cursor)) {
+            DataLibraryUiRepository.Folder folder = folders.get(cursor);
+            if (folder == null) break;
+            path.add(0, folder.name());
+            cursor = folder.parentId();
+        }
+        StringBuilder current = new StringBuilder(tr("geometry_node.data_library.root"));
+        for (String segment : path) current.append("  > ").append(segment);
+        breadcrumbView.setText(current);
     }
 
     private void collectAncestors(UUID folderId, Map<UUID, DataLibraryUiRepository.Folder> foldersById,
@@ -321,13 +362,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                               Map<UUID, List<DataLibraryUiRepository.Folder>> childFolders,
                               Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
                               Set<UUID> matchedEntries, Set<UUID> visibleFolders, Set<UUID> visited) {
-        for (DataLibraryUiRepository.Entry entry : childEntries.getOrDefault(parentId, List.of())) {
-            if (isFiltering() && !matchedEntries.contains(entry.id())) continue;
-            renderedEntries.add(entry.id());
-            View row = createCard(entry);
-            row.setPadding(px(4 + depth * 14), px(3), px(4), px(3));
-            groupsHost.addView(row, rowParams(entry.type()));
-        }
         for (DataLibraryUiRepository.Folder folder : childFolders.getOrDefault(parentId, List.of())) {
             if (!visited.add(folder.id())) continue;
             if (isFiltering() && !visibleFolders.contains(folder.id())) continue;
@@ -340,14 +374,66 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
+    private void addEntriesGrouped(UUID parentId, int depth,
+                                   Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
+                                   Set<UUID> matchedEntries) {
+        Map<PortType, List<DataLibraryUiRepository.Entry>> byType = new java.util.LinkedHashMap<>();
+        for (DataLibraryUiRepository.Entry entry : childEntries.getOrDefault(parentId, List.of())) {
+            if (isFiltering() && !matchedEntries.contains(entry.id())) continue;
+            byType.computeIfAbsent(entry.type(), ignored -> new ArrayList<>()).add(entry);
+        }
+        for (Map.Entry<PortType, List<DataLibraryUiRepository.Entry>> group : byType.entrySet()) {
+            PortType type = group.getKey();
+            String groupKey = (parentId == null ? "root" : parentId.toString()) + ":" + type.name();
+            boolean expanded = !expandedTypeGroups.contains("!" + groupKey);
+            LinearLayout header = new LinearLayout(getContext());
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.setPadding(px(8 + depth * 14), 0, px(5), 0);
+            header.setBackground(solid(0xFF292929, 2, type.getColor()));
+            SvgIconView disclosure = new SvgIconView(getContext(),
+                    SvgIconView.Icon.forExpandedState(expanded), type.getColor());
+            disclosure.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
+            header.addView(disclosure, fixed(18, 26));
+            TextView title = label(getContext(), displayTypeName(type), 10.5f, type.getColor());
+            title.setGravity(Gravity.CENTER_VERTICAL);
+            header.addView(title, new LayoutParams(0, px(26), 1));
+            UiCheckBox check = new UiCheckBox(getContext());
+            check.setContentDescription(tr("geometry_node.data_library.all"));
+            check.setOnCheckedChangeListener((button, checked) -> {
+                for (DataLibraryUiRepository.Entry entry : group.getValue()) {
+                    if (checked) selected.add(key(entry)); else selected.remove(key(entry));
+                }
+                rebuild();
+            });
+            header.addView(check, fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP));
+            header.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
+            LayoutParams hp = rowParams(null); hp.leftMargin = px(depth * 14); rightHost.addView(header, hp);
+            if (!expanded) continue;
+            DataLibraryCardGridLayout grid = new DataLibraryCardGridLayout(getContext(), 164, 6, 4);
+            LayoutParams gp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            gp.leftMargin = px(depth * 14 + 8); gp.bottomMargin = px(3);
+            rightHost.addView(grid, gp);
+            for (DataLibraryUiRepository.Entry entry : group.getValue()) {
+                renderedEntries.add(entry.id());
+                grid.addView(createCard(entry), new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+        }
+    }
+
     private View createFolderRow(DataLibraryUiRepository.Folder folder, int depth, boolean expanded) {
         AtomicReference<DataLibraryUiRepository.Folder> current = new AtomicReference<>(folder);
         LinearLayout row = new LinearLayout(getContext());
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(4 + depth * 14), 0, px(4), 0);
-        row.setBackground(solid(selectedFolders.contains(folder.id()) ? ROW_SELECTED_BG : HEADER_BG, 0, BORDER));
-        row.addView(createDragHandle(DataLibraryDragPayload.folder(folder.id())),
-                fixed(DRAG_HANDLE_WIDTH_DP, 28));
+        boolean active = Objects.equals(activeFolder, folder.id());
+        boolean selectedFolder = selectedFolders.contains(folder.id());
+        // Tree rows are deliberately flat and borderless at every depth.  Keep the
+        // unselected row transparent so the hierarchy reads as one continuous tree;
+        // only the active/checked state gets a quiet fill.
+        int rowFill = active ? 0xFF344454 : (selectedFolder ? 0xFF303A42 : 0x00000000);
+        row.setBackground(solid(rowFill, 0f, 0x00000000));
+        row.setOnClickListener(v -> { activeFolder = folder.id(); rebuild(); });
         SvgIconView disclosure = new SvgIconView(getContext(), SvgIconView.Icon.forExpandedState(expanded), TEXT);
         disclosure.setClickable(true);
         disclosure.setOnClickListener(v -> {
@@ -356,19 +442,34 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         });
         row.addView(disclosure, fixed(18, 28));
 
-        UiCheckBox check = new UiCheckBox(getContext());
-        check.setChecked(selectedFolders.contains(folder.id()));
-        check.setOnCheckedChangeListener((button, checked) -> {
-            if (checked) selectedFolders.add(folder.id()); else selectedFolders.remove(folder.id());
-            row.setBackground(solid(checked ? ROW_SELECTED_BG : HEADER_BG, 0,
-                    checked ? ACCENT : BORDER));
-            updateActions();
-        });
-        LayoutParams checkLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
-        checkLp.leftMargin = px(2);
-        row.addView(check, checkLp);
-
         EditText name = styledNameEditor(folder.name());
+        // Names are labels by default.  Editing starts only after a double click.
+        name.setFocusable(false);
+        name.setCursorVisible(false);
+        final long[] lastTap = {0L};
+        final Runnable[] pendingFolderRefresh = {null};
+        name.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                long now = System.currentTimeMillis();
+                if (now - lastTap[0] < 320L) {
+                    if (pendingFolderRefresh[0] != null) view.removeCallbacks(pendingFolderRefresh[0]);
+                    name.setFocusableInTouchMode(true);
+                    name.setFocusable(true);
+                    name.setCursorVisible(true);
+                    name.requestFocus();
+                    name.selectAll();
+                } else {
+                    activeFolder = folder.id();
+                    Runnable refresh = () -> {
+                        if (Objects.equals(activeFolder, folder.id())) rebuild();
+                    };
+                    pendingFolderRefresh[0] = refresh;
+                    view.postDelayed(refresh, 330L);
+                }
+                lastTap[0] = now;
+            }
+            return true;
+        });
         name.setOnFocusChangeListener((view, focused) -> {
             DataLibraryUiRepository.Folder expected = current.get();
             if (!focused && !Objects.equals(expected.name(), name.getText().toString())) {
@@ -382,41 +483,80 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         nameLp.leftMargin = px(5);
         row.addView(name, nameLp);
 
-        UiIconButton addFolder = iconButton(getContext(),
-                new SvgIconView(getContext(), SvgIconView.Icon.SQUARE_PLUS, TEXT),
-                tr("geometry_node.data_library.add_subfolder"));
-        addFolder.setOnClickListener(v -> {
-            expandedFolders.add(folder.id());
-            repository.createFolder(folder.id());
+        UiCheckBox check = new UiCheckBox(getContext());
+        check.setChecked(selectedFolders.contains(folder.id()));
+        check.setOnCheckedChangeListener((button, checked) -> {
+            activeFolder = folder.id();
+            selectFolderTree(folder.id(), checked);
+            rebuild();
         });
-        row.addView(addFolder, fixed(26, 24));
-
-        UiIconButton addEntry = iconButton(getContext(),
-                new SvgIconView(getContext(), SvgIconView.Icon.SQUARE_PLUS, ACCENT),
-                tr("geometry_node.data_library.add"));
-        addEntry.setOnClickListener(v -> showTypeMenu(addEntry, selectedType -> {
-            expandedFolders.add(folder.id());
-            repository.create(folder.id(), selectedType);
-        }, false));
-        LayoutParams addLp = fixed(26, 24);
-        addLp.leftMargin = px(2);
-        row.addView(addEntry, addLp);
+        LayoutParams checkLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
+        checkLp.leftMargin = px(4);
+        row.addView(check, checkLp);
         folderDropRows.put(row, folder.id());
         return row;
+    }
+
+    /** Selects a folder and all descendants, including their data entries. */
+    private void selectFolderTree(UUID root, boolean checked) {
+        if (root == null) return;
+        Map<UUID, Boolean> descendants = new HashMap<>();
+        descendants.put(root, true);
+        boolean changed;
+        do {
+            changed = false;
+            for (DataLibraryUiRepository.Folder folder : repository.folders()) {
+                if (folder != null && folder.parentId() != null && descendants.containsKey(folder.parentId())
+                        && !descendants.containsKey(folder.id())) {
+                    descendants.put(folder.id(), true);
+                    changed = true;
+                }
+            }
+        } while (changed);
+        for (UUID id : descendants.keySet()) {
+            if (checked) selectedFolders.add(id); else selectedFolders.remove(id);
+        }
+        for (DataLibraryUiRepository.Entry entry : repository.entries()) {
+            if (entry == null || entry.parentId() == null || !descendants.containsKey(entry.parentId())) continue;
+            if (checked) selected.add(key(entry)); else selected.remove(key(entry));
+        }
     }
 
     private View createRootRow() {
         LinearLayout row = new LinearLayout(getContext());
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(4), 0, px(4), 0);
-        row.setBackground(solid(HEADER_BG, 0, BORDER));
-        VectorIconView folder = new VectorIconView(getContext(), VectorIconView.Kind.FOLDER, MUTED);
-        row.addView(folder, fixed(18, 28));
+        // Root follows the same flat tree treatment as child folders.
+        row.setBackground(solid(activeFolder == null ? 0xFF344454 : 0x00000000, 0f, 0x00000000));
+        row.setOnClickListener(v -> { clearSelection(); activeFolder = null; rebuild(); });
+        VectorIconView folderIcon = new VectorIconView(getContext(), VectorIconView.Kind.FOLDER, MUTED);
+        row.addView(folderIcon, fixed(18, 28));
+        UiCheckBox check = new UiCheckBox(getContext());
+        check.setContentDescription(tr("geometry_node.data_library.all"));
+        boolean allSelected = true;
+        boolean hasSelectable = false;
+        for (DataLibraryUiRepository.Entry entry : repository.entries()) {
+            if (entry == null) continue;
+            hasSelectable = true;
+            if (!selected.contains(key(entry))) { allSelected = false; break; }
+        }
+        if (allSelected) {
+            for (DataLibraryUiRepository.Folder folder : repository.folders()) {
+                if (folder == null) continue;
+                hasSelectable = true;
+                if (!selectedFolders.contains(folder.id())) { allSelected = false; break; }
+            }
+        }
+        check.setChecked(hasSelectable && allSelected);
+        check.setOnCheckedChangeListener((button, checked) -> selectAllVisible(checked));
         TextView name = label(getContext(), tr("geometry_node.data_library.root"), 11.5f, TEXT);
         name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LayoutParams nameLp = new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
         nameLp.leftMargin = px(5);
         row.addView(name, nameLp);
+        LayoutParams rootCheckLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
+        rootCheckLp.leftMargin = px(4);
+        row.addView(check, rootCheckLp);
         return row;
     }
 
@@ -429,14 +569,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private boolean matches(DataLibraryUiRepository.Entry entry) {
         if (typeFilter != null && entry.type() != typeFilter) return false;
-        if (tagFilter != null && entry.tags().stream().noneMatch(tag -> tag.equalsIgnoreCase(tagFilter))) return false;
         return search.isEmpty() || entry.key().toLowerCase(Locale.ROOT).contains(search)
-                || entry.type().name().toLowerCase(Locale.ROOT).contains(search)
-                || entry.tags().stream().anyMatch(tag -> tag.toLowerCase(Locale.ROOT).contains(search));
+                || entry.type().name().toLowerCase(Locale.ROOT).contains(search);
     }
 
     private boolean isFiltering() {
-        return typeFilter != null || tagFilter != null || !search.isEmpty();
+        return typeFilter != null || !search.isEmpty();
     }
 
     private EditText styledNameEditor(String value) {
@@ -466,21 +604,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         menu.showAt(anchor, overlayHost());
     }
 
-    private void showTagMenu(View anchor, Consumer<String> consumer) {
-        List<String> options = repository.entries().stream()
-                .flatMap(entry -> entry.tags().stream())
-                .distinct()
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        options.add(0, "*");
-        Map<String, String> labels = new HashMap<>();
-        labels.put("*", tr("geometry_node.data_library.all_tags"));
-        SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
-                getContext(), tr("geometry_node.data_library.choose_tag"), options, labels,
-                value -> consumer.accept("*".equals(value) ? null : value));
-        menu.showAt(anchor, overlayHost());
-    }
-
     private static boolean isInFolderTree(UUID folderId, UUID treeRoot,
                                           Map<UUID, DataLibraryUiRepository.Folder> folders) {
         if (treeRoot == null) return false;
@@ -497,15 +620,18 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private View createCard(DataLibraryUiRepository.Entry entry) {
         AtomicReference<DataLibraryUiRepository.Entry> current = new AtomicReference<>(entry);
         LinearLayout card = new LinearLayout(getContext());
-        card.setOrientation(VERTICAL);
-        card.setBackground(solid(selected.contains(key(entry)) ? ROW_SELECTED_BG : ROW_BG, 0,
-                selected.contains(key(entry)) ? ACCENT : BORDER));
+        // Keep the card surface flat; the type-colored header supplies the visual grouping.
+        // Cards are content rows; selection is communicated by the row fill only.
+        // Keep the card surface focused on selection and content.
+        boolean initiallySelected = selected.contains(key(entry));
+        card.setBackground(solid(initiallySelected ? ROW_SELECTED_BG : ROW_BG, 3,
+                initiallySelected ? entry.type().getColor() : BORDER));
+        card.setPadding(px(2), px(2), px(2), px(2));
 
         LinearLayout header = new LinearLayout(getContext());
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(createDragHandle(DataLibraryDragPayload.entry(entry.id(), entry.type(), entry.key())),
-                fixed(DRAG_HANDLE_WIDTH_DP, 32));
-
+        header.setBackground(solid(withAlpha(entry.type().getColor(), 0x28), 2, entry.type().getColor()));
+        // Borderless card header; dragging is handled by the card surface when enabled.
         boolean expanded = expandedEntries.contains(entry.id());
         SvgIconView disclosure = new SvgIconView(getContext(), SvgIconView.Icon.forExpandedState(expanded), TEXT);
         disclosure.setClickable(true);
@@ -515,44 +641,61 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         disclosure.setOnClickListener(v -> toggleEntry(entry.id()));
         header.addView(disclosure, fixed(18, 32));
 
-        TextView type = label(getContext(), entry.type().name(), 9.0f, MUTED);
-        type.setSingleLine(true);
-        type.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        header.addView(type, fixed(66, 32));
-
-        TextView name = label(getContext(), entry.key(), 11.5f, TEXT);
+        EditText name = styledNameEditor(entry.key());
+        name.setTextColor(entry.type().getColor());
         name.setSingleLine(true);
         name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        name.setFocusable(false);
+        name.setCursorVisible(false);
+        final long[] lastNameTap = {0L};
+        name.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() != MotionEvent.ACTION_UP) return true;
+            long now = System.currentTimeMillis();
+            if (now - lastNameTap[0] < 320L) {
+                name.setFocusableInTouchMode(true);
+                name.setFocusable(true);
+                name.setCursorVisible(true);
+                name.requestFocus();
+                name.selectAll();
+            } else {
+                selectEntry(entry.id(), false);
+            }
+            lastNameTap[0] = now;
+            return true;
+        });
+        name.setOnFocusChangeListener((view, focused) -> {
+            if (focused) return;
+            DataLibraryUiRepository.Entry latest = current.get();
+            String updatedName = name.getText().toString().trim();
+            if (updatedName.isEmpty() || Objects.equals(latest.key(), updatedName)) return;
+            DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
+                    latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags());
+            current.set(updated);
+            repository.update(latest, updated);
+        });
         header.addView(name, new LayoutParams(0, px(32), 0.38f));
-
-        TextView summary = label(getContext(), compactValueSummary(entry), 10.0f, MUTED);
-        summary.setSingleLine(true);
-        summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        LayoutParams summaryLp = new LayoutParams(0, px(32), 0.34f);
-        summaryLp.leftMargin = px(4);
-        header.addView(summary, summaryLp);
-
-        if (!entry.tags().isEmpty()) {
-            TagFlowLayout tags = createCompactTags(entry.tags());
-            LayoutParams tagsLp = new LayoutParams(0, px(22), 0.28f);
-            tagsLp.leftMargin = px(4);
-            header.addView(tags, tagsLp);
-        }
 
         UiCheckBox check = new UiCheckBox(getContext());
         check.setChecked(selected.contains(key(entry)));
         check.setOnCheckedChangeListener((button, checked) -> {
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
             updateActions();
-            card.setBackground(solid(checked ? ROW_SELECTED_BG : ROW_BG, 0,
-                    checked ? ACCENT : BORDER));
+            card.setBackground(solid(checked ? ROW_SELECTED_BG : ROW_BG, 3,
+                    checked ? entry.type().getColor() : BORDER));
         });
         LayoutParams checkLp = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
         checkLp.leftMargin = px(5);
         checkLp.rightMargin = px(5);
         header.addView(check, checkLp);
         header.setClickable(true);
-        header.setOnClickListener(v -> toggleEntry(entry.id()));
+        header.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP && event.isShiftPressed()) {
+                selectEntry(entry.id(), true);
+                return true;
+            }
+            return false;
+        });
+        header.setOnClickListener(v -> selectEntry(entry.id(), false));
         card.addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(32)));
         if (expanded) {
             View divider = new View(getContext());
@@ -564,6 +707,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         return card;
+    }
+
+    private UUID selectedFolderParent() {
+        return activeFolder;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | ((alpha & 0xFF) << 24);
     }
 
     private void toggleEntry(UUID entryId) {
@@ -624,23 +775,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         metadata.addView(copyId, copyLp);
         content.addView(metadata, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(28)));
 
-        EditText tagEditor = styledNameEditor(String.join(", ", entry.tags()));
-        tagEditor.setHint(tr("geometry_node.data_library.tags_hint"));
-        tagEditor.setBackground(solid(INPUT_BG, 2, BORDER));
-        tagEditor.setOnFocusChangeListener((view, focused) -> {
-            if (focused) return;
-            DataLibraryUiRepository.Entry latest = current.get();
-            List<String> updatedTags = parseTags(tagEditor.getText().toString());
-            if (latest.tags().equals(updatedTags)) return;
-            DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                    latest.id(), latest.parentId(), latest.type(), latest.key(), latest.value(), updatedTags);
-            current.set(updated);
-            repository.update(latest, updated);
-        });
-        LayoutParams tagsLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(26));
-        tagsLp.topMargin = px(3);
-        content.addView(tagEditor, tagsLp);
-
         View valueEditor = createExpandedValueEditor(entry, current);
         LayoutParams valueLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 px(expandedValueHeightDp(entry.type())));
@@ -660,7 +794,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 Entity entity = resolveClientEntity(entityId);
                 if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
             }
-            content.addView(centeredPreview(preview), fixed(58, 58));
+            content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
             UiActionButton edit = button(getContext(), tr(entry.type() == PortType.ENTITY
                             ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"),
                     UiActionButton.Role.INLINE);
@@ -677,7 +811,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             preview.setDisplayStack(entry.value() instanceof ItemStack stack ? stack : ItemStack.EMPTY);
             preview.setOpenEditorOnClick(false);
             preview.setDisplayPasteAction(json -> pasteItemStack(current, json));
-            content.addView(centeredPreview(preview), fixed(58, 58));
+            content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
             UiActionButton edit = button(getContext(), tr("geometry_node.node.pick_item_stack"),
                     UiActionButton.Role.INLINE);
             edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
@@ -712,7 +846,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static List<String> parseTags(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
         LinkedHashSet<String> tags = new LinkedHashSet<>();
-        for (String part : raw.split("[,，;；]+")) {
+        for (String part : raw.split("[,;\\s]+")) {
             String tag = part.trim();
             if (!tag.isEmpty()) tags.add(tag);
         }
@@ -720,7 +854,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private static int expandedValueHeightDp(PortType type) {
-        if (type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK) return 62;
+        if (type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK) return 70;
         if (type == PortType.XYZ) return 56;
         if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 28;
         return 54;
@@ -779,6 +913,39 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return handle;
     }
 
+    private DataLibraryDragPayload dragPayloadForEntry(DataLibraryUiRepository.Entry entry) {
+        Set<UUID> ids = selected.stream().map(DataLibraryUiRepository.EntryKey::id)
+                .filter(renderedEntries::contains).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (!ids.contains(entry.id())) ids = Set.of(entry.id());
+        return ids.size() == 1 ? DataLibraryDragPayload.entry(entry.id(), entry.type(), entry.key())
+                : DataLibraryDragPayload.entries(entry.id(), entry.type(), entry.key(), ids);
+    }
+
+    private DataLibraryDragPayload dragPayloadForFolder(UUID id) {
+        Set<UUID> ids = new LinkedHashSet<>(selectedFolders);
+        if (!ids.contains(id)) ids = Set.of(id);
+        return ids.size() == 1 ? DataLibraryDragPayload.folder(id)
+                : DataLibraryDragPayload.folders(id, ids);
+    }
+
+    private void selectEntry(UUID id, boolean range) {
+        if (id == null) return;
+        List<UUID> ordered = new ArrayList<>(renderedEntries);
+        int target = ordered.indexOf(id);
+        if (target < 0) return;
+        if (!range || selectionAnchor == null || !ordered.contains(selectionAnchor)) {
+            selected.clear();
+            selected.add(new DataLibraryUiRepository.EntryKey(id));
+        } else {
+            selected.clear();
+            int anchor = ordered.indexOf(selectionAnchor);
+            int from = Math.min(anchor, target), to = Math.max(anchor, target);
+            for (int i = from; i <= to; i++) selected.add(new DataLibraryUiRepository.EntryKey(ordered.get(i)));
+        }
+        selectionAnchor = id;
+        rebuild();
+    }
+
     private void finishInternalDrag() {
         internalDragActive = false;
         if (!rebuildPending) return;
@@ -822,18 +989,23 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private boolean movePayload(DataLibraryDragPayload payload, UUID targetParent) {
         if (payload.isEntry()) {
-            DataLibraryUiRepository.Entry expected = repository.findEntry(payload.id());
-            if (expected == null) return true;
             if (targetParent != null) expandedFolders.add(targetParent);
-            repository.moveEntry(expected.id(), targetParent);
+            for (UUID id : payload.entryIds()) {
+                DataLibraryUiRepository.Entry expected = repository.findEntry(id);
+                if (expected != null && canMove(DataLibraryDragPayload.entry(expected.id(), expected.type(), expected.key()), targetParent)) {
+                    repository.moveEntry(expected.id(), targetParent);
+                }
+            }
             return true;
         }
-
-        DataLibraryUiRepository.Folder expected = repository.folders().stream()
-                .filter(folder -> folder.id().equals(payload.id())).findFirst().orElse(null);
-        if (expected == null) return true;
         if (targetParent != null) expandedFolders.add(targetParent);
-        repository.moveFolder(expected.id(), targetParent);
+        for (UUID id : payload.folderIds()) {
+            DataLibraryUiRepository.Folder expected = repository.folders().stream()
+                    .filter(folder -> folder.id().equals(id)).findFirst().orElse(null);
+            if (expected != null && canMove(DataLibraryDragPayload.folder(id), targetParent)) {
+                repository.moveFolder(expected.id(), targetParent);
+            }
+        }
         return true;
     }
 
@@ -1177,20 +1349,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private void updateValue(AtomicReference<DataLibraryUiRepository.Entry> current, Object value) {
         DataLibraryUiRepository.Entry latest = current.get();
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            try {
-                var registries = minecraft.level.registryAccess();
-                if (DataLibraryValueCodec.encode(latest.type(), latest.value(), registries)
-                        .equals(DataLibraryValueCodec.encode(latest.type(), value, registries))) return;
-            } catch (RuntimeException ignored) {
-                // Let the server-side codec report unsupported values through the transfer result.
-            }
-        } else if (Objects.equals(latest.value(), value)) {
-            return;
-        }
-        DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
-                latest.id(), latest.parentId(), latest.type(), latest.key(), value, latest.tags());
+        if (DataLibraryValueChanges.equivalent(latest, value)) return;
+        DataLibraryUiRepository.Entry updated = DataLibraryValueChanges.replace(latest, value);
         current.set(updated);
         repository.update(latest, updated);
     }
@@ -1214,12 +1374,49 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
+    private void clearSelection() {
+        if (selected.isEmpty() && selectedFolders.isEmpty()) return;
+        selected.clear();
+        selectedFolders.clear();
+        selectionAnchor = null;
+        rebuild();
+    }
+
     private void selectAllVisible(boolean checked) {
+        if (checked) {
+            for (DataLibraryUiRepository.Folder folder : repository.folders()) {
+                if (folder != null && folder.id() != null) selectedFolders.add(folder.id());
+            }
+        } else {
+            selectedFolders.clear();
+        }
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
-            if (entry == null || !renderedEntries.contains(entry.id())) continue;
+            if (entry == null) continue;
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
         }
         rebuild();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
+        KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
+        if (copy != null && copy.matches(event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                clipboardEntry = selected.size() == 1
+                        ? repository.findEntry(selected.iterator().next().id()) : null;
+            }
+            return true;
+        }
+        if (paste != null && paste.matches(event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && clipboardEntry != null && selected.size() == 1) {
+                DataLibraryUiRepository.Entry target = repository.findEntry(selected.iterator().next().id());
+                if (target != null && target.type() == clipboardEntry.type()) updateValue(
+                        new AtomicReference<>(target), clipboardEntry.value());
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void updateActions() {
@@ -1228,7 +1425,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         boolean hasVisible = false;
         boolean allVisibleSelected = true;
         for (DataLibraryUiRepository.Entry entry : repository.entries()) {
-            if (entry == null || !renderedEntries.contains(entry.id())) continue;
+            if (entry == null) continue;
             hasVisible = true;
             if (!selected.contains(key(entry))) allVisibleSelected = false;
         }
@@ -1241,13 +1438,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private String serializedValue(DataLibraryUiRepository.Entry entry) {
-        try {
-            if (Minecraft.getInstance().level == null) return String.valueOf(entry.value());
-            return DataLibraryValueCodec.encode(entry.type(), entry.value(),
-                    Minecraft.getInstance().level.registryAccess()).toString();
-        } catch (RuntimeException ignored) {
-            return String.valueOf(entry.value());
-        }
+        return DataLibraryValueChanges.serialize(entry);
     }
 
     private void commitValue(AtomicReference<DataLibraryUiRepository.Entry> current, String json) {
@@ -1282,6 +1473,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return Component.translatable(key).getString();
     }
 
+    private static String displayTypeName(PortType type) {
+        if (type == null) return "";
+        String translated = tr("geometry_node.port." + type.name().toLowerCase(Locale.ROOT));
+        return translated.startsWith("geometry_node.") ? type.name() : translated;
+    }
+
     private static UiActionButton button(Context context, String text, UiActionButton.Role role) {
         return new UiActionButton(context, text, role, UiActionButton.Density.COMPACT);
     }
@@ -1289,26 +1486,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static UiIconButton iconButton(Context context, View icon, String description) {
         UiIconButton button = new UiIconButton(context, icon);
         return button.tooltip(description);
-    }
-
-    private static TextView toolbarIconButton(Context context, String text, String description) {
-        TextView button = UIUtils.createLockedTextView(context, text, 14, TEXT);
-        button.setSingleLine(true);
-        button.setPadding(0, 0, 0, 0);
-        button.setGravity(Gravity.CENTER);
-        button.setContentDescription(description);
-        button.setBackground(solid(0xFF353535, 1, BORDER));
-        button.setOnHoverListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                button.setBackground(solid(0xFF444444, 1, BORDER));
-                button.setTextColor(ACCENT);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                button.setBackground(solid(0xFF353535, 1, BORDER));
-                button.setTextColor(TEXT);
-            }
-            return false;
-        });
-        return button;
     }
 
     private ViewGroup overlayHost() {
