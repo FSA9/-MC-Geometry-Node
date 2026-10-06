@@ -213,7 +213,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         leftPanel.setOrientation(VERTICAL);
         leftPanel.setPadding(px(8), px(8), px(4), px(6));
         leftPanel.setBackground(solid(BG, 0, BORDER));
-        TextView leftTitle = label(context, "閺傚洣娆㈡径鐟扮湴缁?, 11, MUTED);
+        TextView leftTitle = label(context, tr("geometry_node.workspace.area.data_library"), 11, MUTED);
         leftTitle.setPadding(px(2), 0, 0, px(5));
         leftPanel.addView(leftTitle, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(22)));
         leftPanel.addView(scrollHost, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));

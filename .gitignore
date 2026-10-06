@@ -46,3 +46,5 @@ src/test/
 src/test/**
 !src/test/**/
 !src/test/java/com/mine/geometry_node/core/engine/system/model/*.java
+
+tmp/

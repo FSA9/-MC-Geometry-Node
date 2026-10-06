@@ -1,0 +1,1265 @@
+package com.mine.geometry_node.client.model.render.geometry;
+
+import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.client.model.render.bvh.ModelLightOcclusionScene;
+import com.mine.geometry_node.client.model.render.bvh.ModelOcclusionAlpha;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisAlphaPolicy;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisAlphaTest;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisBlendOverride;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisGeometryLayout;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisTangents;
+import com.mine.geometry_node.client.model.render.pipeline.ModelStaticPipelines;
+import com.mine.geometry_node.client.model.render.pipeline.ModelStaticRenderer;
+import com.mine.geometry_node.client.model.render.pipeline.ModelTransparentBsp;
+import com.mine.geometry_node.client.model.render.pipeline.ModelTransparentScene;
+import com.mine.geometry_node.client.model.render.lod.model.ModelLodPreparation;
+import com.mine.geometry_node.client.model.render.lod.model.ModelLodResidency;
+import com.mine.geometry_node.client.model.render.lod.model.ModelLodObject;
+import com.mine.geometry_node.client.model.render.resource.ModelGpuBudgetException;
+import com.mine.geometry_node.client.model.render.resource.ModelGeometryRetention;
+import com.mine.geometry_node.client.model.render.resource.ModelIrisUploadBudget;
+import com.mine.geometry_node.client.model.render.resource.ModelLabPbrBaker;
+import com.mine.geometry_node.client.model.render.resource.ModelMaterialUploadQueue;
+import com.mine.geometry_node.client.model.render.resource.ModelResidencyLedger;
+import com.mine.geometry_node.client.model.render.resource.ModelTextureBackend;
+import com.mine.geometry_node.client.model.render.resource.ModelTextureDecodeCache;
+import com.mine.geometry_node.client.model.render.shadow.ModelShadowTessellation;
+
+import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
+import com.mine.geometry_node.client.model.compat.ModelIrisPbrBindings;
+import com.mine.geometry_node.core.engine.system.model.io.ModelCancellation;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.resources.Identifier;
+import org.joml.Matrix4f;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
+
+/** Immutable CPU preparation plus render-thread-owned textures and resident indexed geometry. */
+public final class ModelRenderAsset implements AutoCloseable {
+    private static final AtomicLong NEXT_ID = new AtomicLong();
+    private static final ModelResidencyLedger RESIDENCY = new ModelResidencyLedger();
+    public static final int FULL_LIGHT = LightCoordsUtil.pack(15, 15);
+
+    public static final class Primitive {
+        public final float[] positions, normals, tangents, baseUv, emissionUv, uv0, uv1, triangleCenters;
+        public final int[] colors, indices;
+        public final float[] baseColorFactor;
+        public final GltfAsset.Material material;
+        public final GltfAsset.Bounds bounds;
+        final int primitiveId;
+        final List<ModelClusterAsset.Cluster> clusters;
+        public Primitive(GltfAsset.Primitive source, ModelCancellation token) throws IOException {
+            this(-1, source, token);
+        }
+        Primitive(int primitiveId, GltfAsset.Primitive source, ModelCancellation token) throws IOException {
+            this.primitiveId = primitiveId;
+            positions = source.positions(); normals = source.normals(); indices = source.indices();
+            tangents = source.tangents();
+            material = Objects.requireNonNull(source.material()); bounds = source.bounds();
+            clusters = ModelClusterBuilder.build(primitiveId, positions, indices, material, token);
+            triangleCenters = new float[material.alphaMode() == GltfAsset.AlphaMode.BLEND ? indices.length : 0];
+            for (int t = 0; t < triangleCenters.length; t += 3) {
+                if ((t & 4095) == 0) token.check();
+                for (int axis = 0; axis < 3; axis++) triangleCenters[t + axis] =
+                        (positions[indices[t] * 3 + axis] + positions[indices[t + 1] * 3 + axis] + positions[indices[t + 2] * 3 + axis]) / 3;
+            }
+            baseColorFactor = material.baseColorFactor();
+            if (normals.length != positions.length) throw new IOException("renderer requires importer-generated normals");
+            float[] sourceUv0 = source.uv0(), sourceUv1 = source.uv1();
+            uv0 = sourceUv0.length == 0 ? new float[source.vertexCount()*2] : sourceUv0;
+            uv1 = sourceUv1.length == 0 ? new float[source.vertexCount()*2] : sourceUv1;
+            baseUv = uv(source.vertexCount(), uv0, uv1, material.baseColorTexture(), token);
+            // Keep meaningful UV derivatives even on a white fallback texture; some packs
+            // interpret a constant zero UV as a special untextured vanilla effect.
+            if (material.baseColorTexture() == null) {
+                for (int i = 0; i < source.vertexCount(); i++) {
+                    if ((i & 4095) == 0) token.check();
+                    baseUv[i * 2] = sourceUv0.length == baseUv.length ? sourceUv0[i * 2] : positions[i * 3] + .371f * positions[i * 3 + 1] + .113f * positions[i * 3 + 2];
+                    baseUv[i * 2 + 1] = sourceUv0.length == baseUv.length ? sourceUv0[i * 2 + 1] : positions[i * 3 + 2] + .279f * positions[i * 3 + 1] - .159f * positions[i * 3];
+                }
+            }
+            emissionUv = uv(source.vertexCount(), uv0, uv1, material.emissiveTexture(), token);
+            float[] color = source.colors(); colors = new int[source.vertexCount()];
+            for (int i = 0; i < colors.length; i++) {
+                if ((i & 4095) == 0) token.check();
+                colors[i] = color.length == 0 ? 0xffffffff : channel(color[i * 4 + 3]) << 24
+                        | channel(color[i * 4]) << 16 | channel(color[i * 4 + 1]) << 8 | channel(color[i * 4 + 2]);
+            }
+        }
+        /** Worker-created split geometry, already expressed in asset-local coordinates. */
+        public Primitive(GltfAsset.Material material, List<ModelTransparentBsp.Triangle> triangles) {
+            this(-1, material, triangles);
+        }
+        Primitive(int primitiveId, GltfAsset.Material material, List<ModelTransparentBsp.Triangle> triangles) {
+            this.primitiveId = primitiveId;
+            this.material = material; this.baseColorFactor = material.baseColorFactor();
+            int count = Math.multiplyExact(triangles.size(), 3);
+            positions = new float[count * 3]; normals = new float[count * 3]; tangents = material.normalTexture()==null ? new float[0] : new float[count*4];
+            baseUv = new float[count * 2]; emissionUv = new float[count * 2]; uv0 = new float[count*2]; uv1 = new float[count*2];
+            colors = new int[count]; indices = new int[count];
+            triangleCenters = new float[material.alphaMode() == GltfAsset.AlphaMode.BLEND ? count : 0];
+            GltfAsset.Bounds extent = GltfAsset.Bounds.empty();
+            int vertex = 0;
+            for (var triangle : triangles) {
+                for (var point : List.of(triangle.a(), triangle.b(), triangle.c())) {
+                    int p = vertex * 3, uv = vertex * 2;
+                    for (int axis = 0; axis < 3; axis++) {
+                        positions[p + axis] = point.attribute(axis);
+                        normals[p + axis] = point.attribute(3 + axis);
+                        if (triangleCenters.length > 0) triangleCenters[(vertex / 3) * 3 + axis] += positions[p + axis] / 3;
+                    }
+                    // Preserve the interpolated normal: normalizing newly introduced vertices
+                    // would change the original triangle's interpolated shading field.
+                    extent = extent.include(positions[p], positions[p + 1], positions[p + 2]);
+                    baseUv[uv] = point.attribute(6); baseUv[uv + 1] = point.attribute(7);
+                    emissionUv[uv] = point.attribute(8); emissionUv[uv + 1] = point.attribute(9);
+                    uv0[uv] = point.attribute(point.attributeCount()>14 ? 14 : 6); uv0[uv+1] = point.attribute(point.attributeCount()>15 ? 15 : 7);
+                    uv1[uv] = point.attribute(point.attributeCount()>16 ? 16 : 8); uv1[uv+1] = point.attribute(point.attributeCount()>17 ? 17 : 9);
+                    for (int component = 0; tangents.length>0 && component < 4; component++) tangents[vertex*4+component] = point.attributeCount()>18+component ? point.attribute(18+component) : 0;
+                    colors[vertex] = channel(point.attribute(13)) << 24 | channel(point.attribute(10)) << 16
+                            | channel(point.attribute(11)) << 8 | channel(point.attribute(12));
+                    indices[vertex] = vertex; vertex++;
+                }
+            }
+            bounds = extent;
+            try {
+                clusters = ModelClusterBuilder.build(primitiveId, positions, indices, material, new ModelCancellation());
+            } catch (IOException failure) {
+                throw new IllegalStateException("failed to build generated primitive clusters", failure);
+            }
+        }
+        public static Primitive lodVariant(Primitive source, int[] indices) {
+            if (source.material.alphaMode() != GltfAsset.AlphaMode.OPAQUE
+                    || indices.length < 3 || indices.length % 3 != 0 || indices.length > source.indices.length)
+                throw new IllegalArgumentException("invalid opaque LOD geometry");
+            for (int index : indices) if (index < 0 || index >= source.positions.length / 3)
+                throw new IllegalArgumentException("LOD vertex index out of bounds");
+            return new Primitive(source, indices);
+        }
+
+        private Primitive(Primitive source, int[] lodIndices) {
+            this.primitiveId = source.primitiveId;
+            // All levels reference the same immutable vertex attributes. Only connectivity changes.
+            this.positions = source.positions; this.normals = source.normals; this.tangents = source.tangents;
+            this.baseUv = source.baseUv; this.emissionUv = source.emissionUv; this.uv0 = source.uv0; this.uv1 = source.uv1;
+            this.colors = source.colors; this.indices = lodIndices; this.material = source.material;
+            this.baseColorFactor = source.baseColorFactor; this.bounds = source.bounds;
+            // Reduced LODs are opaque; triangle centers are only consumed by BLEND sorting.
+            this.triangleCenters = new float[0];
+            this.clusters = List.of();
+        }
+
+        int primitiveId() { return primitiveId; }
+        public List<ModelClusterAsset.Cluster> clusters() { return clusters; }
+        private static int channel(float v) { return Math.clamp(Math.round(v * 255), 0, 255); }
+        private static float[] uv(int count, float[] uv0, float[] uv1, GltfAsset.TextureInfo info, ModelCancellation token) throws IOException {
+            float[] result = new float[count * 2]; if (info == null) return result;
+            float[] input = info.texCoord() == 0 ? uv0 : info.texCoord() == 1 ? uv1 : null;
+            if (input == null || input.length != count * 2) throw new IOException("material references missing TEXCOORD_" + info.texCoord());
+            float[] scale = info.scale(), offset = info.offset(); float c = (float) Math.cos(info.rotation()), s = (float) Math.sin(info.rotation());
+            for (int i = 0; i < count; i++) {
+                if ((i & 4095) == 0) token.check();
+                float u = input[i * 2] * scale[0], v = input[i * 2 + 1] * scale[1];
+                result[i * 2] = c * u - s * v + offset[0]; result[i * 2 + 1] = s * u + c * v + offset[1];
+            }
+            return result;
+        }
+        public long cpuBytes() {
+            long arrays = (long) (positions.length + normals.length + tangents.length + baseUv.length + emissionUv.length + uv0.length + uv1.length + triangleCenters.length + colors.length) * 4L + (long) indices.length * 4L;
+            long metadata = (long) clusters.size() * 96L;
+            return Math.addExact(arrays, metadata);
+        }
+        public long gpuEstimate() { return Math.addExact((long) indices.length * 64L, (long) indices.length * 4L); }
+    }
+    public record Occurrence(Matrix4f transform, List<Primitive> primitives, int nodeIndex) {
+        public Occurrence(Matrix4f transform, List<Primitive> primitives) { this(transform, primitives, -1); }
+    }
+    public record MaterialBinding(Identifier base, Identifier emission, Identifier data, Identifier overlay, boolean blend, boolean doubleSided, Identifier irisBase, Identifier normal, Identifier metallicRoughness, Identifier occlusion, Identifier irisNormal, Identifier irisSpecular) {}
+
+    /** Valid triangle prefix in an existing allocation; this snapshot never advances an upload. */
+    public record ResidentGeometry(GpuPrimitive mesh, int uploadedIndices) {
+        private static final ResidentGeometry EMPTY = new ResidentGeometry(null, 0);
+        public ResidentGeometry {
+            if (uploadedIndices < 0 || uploadedIndices % 3 != 0
+                    || mesh == null && uploadedIndices != 0
+                    || mesh != null && uploadedIndices > mesh.indexCount())
+                throw new IllegalArgumentException("invalid resident geometry prefix");
+        }
+    }
+
+    public static final class GpuPrimitive implements AutoCloseable {
+        private GpuBuffer vertices, indices, mirroredIndices;
+        private final VertexFormat format;
+        private final int indexCount;
+        private final long bytes;
+        GpuPrimitive(GpuBuffer vertices, GpuBuffer indices, int indexCount, long bytes) {
+            this(vertices, indices, null, indexCount, bytes, ModelStaticPipelines.FORMAT);
+        }
+        GpuPrimitive(GpuBuffer vertices, GpuBuffer indices, GpuBuffer mirroredIndices, int indexCount, long bytes, VertexFormat format) {
+            this.vertices = vertices; this.indices = indices; this.mirroredIndices = mirroredIndices;
+            this.indexCount = indexCount; this.bytes = bytes; this.format = format;
+        }
+        public VertexFormat format() { return format; }
+        public GpuBuffer indices(boolean mirrored) { return mirrored && mirroredIndices != null ? mirroredIndices : indices; }
+        public GpuBuffer vertices() { return vertices; }
+        public GpuBuffer indices() { return indices; }
+        int indexCount() { return indexCount; }
+        long bytes() { return bytes; }
+        @Override public void close() {
+            GpuBuffer vertex = vertices, index = indices, reversed = mirroredIndices; vertices = null; indices = null; mirroredIndices = null;
+            if (vertex != null) vertex.close(); if (index != null) index.close(); if (reversed != null) reversed.close();
+        }
+    }
+
+    public static final class Prepared implements AutoCloseable {
+        final GltfAsset source;
+        final Map<Integer, ModelTextureBackend.Decoded> images, opaqueImages;
+        final Map<Integer, ModelTextureBackend.Decoded> linearImages;
+        final Map<GltfAsset.Material, ModelLabPbrBaker.Baked> pbr;
+        final List<List<Occurrence>> scenes;
+        final List<List<List<Occurrence>>> lodScenes;
+        final List<List<ModelLodObject>> lodObjects;
+        final List<GltfAsset.Bounds> sceneBounds;
+        final Map<String, Object> lodReport;
+        final List<ModelTransparentScene> transparentScenes;
+        final List<GltfAsset.Material> usedMaterials;
+        final long cpuGeometryBytes;
+        final long gpuGeometryBytes;
+        final int primitiveCount;
+        final int occurrenceCount;
+        final List<Map<String, Object>> opaqueBatches;
+        final List<Map<String, Object>> lightPartitions;
+        final List<ModelLightOcclusionScene> lightOcclusionScenes;
+        private boolean closed;
+        private int readers;
+        private synchronized void retain() { if (closed) throw new IllegalStateException("prepared asset closed"); readers++; }
+        private synchronized void release() { if (--readers == 0 && closed) disposeImages(); }
+        private void disposeImages() { ModelTextureDecodeCache.close(images.values(), opaqueImages.values(), linearImages.values()); pbr.values().forEach(ModelLabPbrBaker.Baked::close); }
+        Prepared(GltfAsset source, Map<Integer, ModelTextureBackend.Decoded> images, Map<Integer, ModelTextureBackend.Decoded> opaqueImages, List<List<Occurrence>> scenes,
+                 List<ModelTransparentScene> transparentScenes, List<GltfAsset.Material> materials, long cpuGeometryBytes, long gpuGeometryBytes, int primitiveCount, int occurrenceCount, List<Map<String, Object>> opaqueBatches, List<Map<String, Object>> lightPartitions, List<ModelLightOcclusionScene> lightOcclusionScenes, Map<Integer, ModelTextureBackend.Decoded> linearImages, Map<GltfAsset.Material, ModelLabPbrBaker.Baked> pbr, ModelLodPreparation.Result lod) {
+            this.lodScenes = lod.scenes(); this.lodReport = lod.report(); this.lodObjects = lod.objects();
+            this.sceneBounds = scenes.stream().map(ModelRenderAsset::boundsOfScene).toList();
+            this.linearImages = Map.copyOf(linearImages); this.pbr = Map.copyOf(pbr);
+            this.lightPartitions = List.copyOf(lightPartitions);
+            this.lightOcclusionScenes = List.copyOf(lightOcclusionScenes);
+            this.opaqueBatches = List.copyOf(opaqueBatches);
+            this.source = source; this.images = Map.copyOf(images); this.opaqueImages = Map.copyOf(opaqueImages); this.scenes = List.copyOf(scenes); this.usedMaterials = List.copyOf(materials);
+            this.transparentScenes = List.copyOf(transparentScenes);
+            this.cpuGeometryBytes = cpuGeometryBytes; this.gpuGeometryBytes = gpuGeometryBytes; this.primitiveCount = primitiveCount; this.occurrenceCount = occurrenceCount;
+        }
+        public GltfAsset source() { return source; }
+        public long sourceDecodedTextureBytes() { return ModelTextureDecodeCache.bytes(images.values(),linearImages.values()); }
+        public long translatedTextureBytes() { return pbr.values().stream().mapToLong(ModelLabPbrBaker.Baked::bytes).sum(); }
+        public long decodedTextureBytes() { return ModelTextureDecodeCache.bytes(images.values(),opaqueImages.values(),linearImages.values()) + translatedTextureBytes(); }
+        public long cpuGeometryBytes() { return cpuGeometryBytes; }
+        public long initialTextureUploadBytes() {
+            // CPU images may be shared; each texture index still uploads its own GPU texture and sampler.
+            long sourceUploads=images.values().stream().mapToLong(d->d.bytes).sum()+linearImages.values().stream().mapToLong(d->d.bytes).sum();
+            return Math.addExact(sourceUploads + translatedTextureBytes(), 12L + usedMaterials.size() * MATERIAL_FLOATS * 4L);
+        }
+        public long gpuGeometryBytes() { return gpuGeometryBytes; }
+        public int primitiveCount() { return primitiveCount; }
+        public int occurrenceCount() { return occurrenceCount; }
+        public int clusterCount() { return ModelRenderAsset.clusterCount(scenes); }
+        public List<Map<String, Object>> clusterReport() { return ModelRenderAsset.clusterReport(scenes); }
+        public Map<String, Object> lodReport() { return lodReport; }
+        public int lodObjectCount(int scene) {
+            int selected = scene < 0 ? source.defaultScene() : scene;
+            if (selected < 0 && !lodObjects.isEmpty()) selected = 0;
+            return selected < 0 || selected >= lodObjects.size() ? 0 : lodObjects.get(selected).size();
+        }
+        public List<Map<String, Object>> opaqueBatchReport() { return opaqueBatches; }
+        public List<Map<String, Object>> lightPartitionReport() { return lightPartitions; }
+        public List<Map<String, Object>> lightOcclusionReport() { return lightOcclusionScenes.stream().map(ModelLightOcclusionScene::report).toList(); }
+        @Override public synchronized void close() { if (closed) return; closed = true; if (readers == 0) disposeImages(); }
+
+    }
+
+    private static int clusterCount(List<List<Occurrence>> scenes) {
+        Set<Primitive> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        int count = 0;
+        for (List<Occurrence> scene : scenes) for (Occurrence occurrence : scene) for (Primitive primitive : occurrence.primitives())
+            if (seen.add(primitive)) count = Math.addExact(count, primitive.clusters.size());
+        return count;
+    }
+
+    private static List<Map<String, Object>> clusterReport(List<List<Occurrence>> scenes) {
+        Set<Primitive> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        List<Map<String, Object>> report = new ArrayList<>();
+        for (List<Occurrence> scene : scenes) for (Occurrence occurrence : scene) for (Primitive primitive : occurrence.primitives()) {
+            if (!seen.add(primitive)) continue;
+            var item = new LinkedHashMap<String, Object>();
+            item.put("primitiveId", primitive.primitiveId);
+            item.put("triangleCount", primitive.indices.length / 3);
+            item.put("clusterCount", primitive.clusters.size());
+            item.put("alphaMode", primitive.material.alphaMode().name());
+            item.put("doubleSided", primitive.material.doubleSided());
+            item.put("castsShadow", primitive.material.alphaMode() != GltfAsset.AlphaMode.BLEND);
+            item.put("unlit", primitive.material.unlit());
+            item.put("clusters", primitive.clusters.stream().map(cluster -> {
+                var detail = new LinkedHashMap<String, Object>();
+                detail.put("clusterIndex", cluster.clusterIndex());
+                detail.put("firstIndex", cluster.firstIndex());
+                detail.put("indexCount", cluster.indexCount());
+                detail.put("triangleCount", cluster.triangleCount());
+                detail.put("bounds", boundsReport(cluster.bounds()));
+                return detail;
+            }).toList());
+            report.add(Map.copyOf(item));
+        }
+        return List.copyOf(report);
+    }
+
+    private static Map<String, Object> boundsReport(GltfAsset.Bounds bounds) {
+        return Map.of("minX", bounds.minX(), "minY", bounds.minY(), "minZ", bounds.minZ(),
+                "maxX", bounds.maxX(), "maxY", bounds.maxY(), "maxZ", bounds.maxZ());
+    }
+
+    private final Prepared prepared;
+    private final List<AutoCloseable> pbrLeases = new ArrayList<>();
+    private final IdentityHashMap<GltfAsset.Material, GltfAsset.Material> overrides = new IdentityHashMap<>();
+    private long materialRevision;
+    private final ModelCancellation materialCancellation = new ModelCancellation();
+    private final IdentityHashMap<GltfAsset.Material, String> materialFailures = new IdentityHashMap<>();
+    private final IdentityHashMap<GltfAsset.Material, List<String>> currentTranslationLosses = new IdentityHashMap<>();
+    private final IdentityHashMap<GltfAsset.Material, AutoCloseable> activePbrLeases = new IdentityHashMap<>();
+    private final LinkedHashMap<GltfAsset.Material, GltfAsset.Material> queuedMaterials = new LinkedHashMap<>();
+    private int pendingMaterialUpdates;
+    private final IdentityHashMap<GltfAsset.Material, Long> materialGenerations = new IdentityHashMap<>();
+    private static final java.util.concurrent.ThreadPoolExecutor MATERIAL_WORKERS = new java.util.concurrent.ThreadPoolExecutor(1,1,30,java.util.concurrent.TimeUnit.SECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(16), task -> { Thread thread = new Thread(task,"GeometryNode-material"); thread.setDaemon(true); return thread; });
+    static { MATERIAL_WORKERS.allowCoreThreadTimeOut(true); }
+    private static final int MATERIAL_FLOATS = 54;
+    private final GltfAsset source;
+    private final List<List<Occurrence>> scenes;
+    private final List<ModelTransparentScene> transparentScenes;
+    private final List<ModelLightOcclusionScene> lightOcclusionScenes;
+    private final IdentityHashMap<GltfAsset.Material, RenderType> materials = new IdentityHashMap<>();
+    private final IdentityHashMap<GltfAsset.Material, RenderType> irisMaterials = new IdentityHashMap<>();
+    private final IdentityHashMap<GltfAsset.Material, RenderType> irisShadowMaterials = new IdentityHashMap<>();
+    private final IdentityHashMap<GltfAsset.Material, MaterialBinding> bindings = new IdentityHashMap<>();
+    private final IdentityHashMap<Primitive, GpuPrimitive> gpuMeshes = new IdentityHashMap<>();
+    private final IdentityHashMap<Primitive, GpuPrimitive> irisGpuMeshes = new IdentityHashMap<>();
+    private long nativeGpuBytes, irisGpuBytes, irisCacheBuilds, irisCacheHits, irisLayoutInvalidations;
+    private final IdentityHashMap<Primitive, PendingGeometry> pendingNative = new IdentityHashMap<>();
+    private final IdentityHashMap<Primitive, PendingGeometry> pendingIris = new IdentityHashMap<>();
+    private final ModelGeometryRetention<Primitive> nativeGeometryUses = new ModelGeometryRetention<>();
+    private final ModelGeometryRetention<Primitive> irisGeometryUses = new ModelGeometryRetention<>();
+    private long irisGeometryChunks;
+    private int lastIrisRequestedScene = -1, lastIrisRequestedLevel = -1;
+    private String irisUploadStatus = "IDLE";
+    private long retiredUnusedGeometryBytes;
+    private record LodPressure(int scene, int object, int level, boolean iris) {}
+    private final Map<LodPressure, Long> lodBudgetPressure = new HashMap<>();
+    private long lastLodPressureFrame = Long.MIN_VALUE;
+    private record ObjectRequest(int scene, int object) {}
+    private final Map<ObjectRequest, Integer> irisObjectRequests = new LinkedHashMap<>();
+    private long irisObjectRequestFrame = Long.MIN_VALUE;
+    private boolean lastLodUploadBudgetBlocked;
+    private final List<Identifier> textureIds = new ArrayList<>();
+    private final long identity = NEXT_ID.incrementAndGet();
+    private final long cpuGeometryBytes;
+    private final long gpuGeometryBytes;
+    private final long decodedTextureBytes;
+    private boolean closed;
+    private boolean gpuResident;
+    private long textureBytes;
+
+    public static ModelResidencyLedger residency() { return RESIDENCY; }
+
+    public static Prepared prepare(GltfAsset source, ModelCancellation token) throws IOException {
+        Objects.requireNonNull(source); token.check(); Map<Integer, ModelTextureBackend.Decoded> images = new LinkedHashMap<>(), opaqueImages = new LinkedHashMap<>(), linearImages = new LinkedHashMap<>();
+        Map<GltfAsset.Material, ModelLabPbrBaker.Baked> pbr = new IdentityHashMap<>();
+        var decodeCache = new ModelTextureDecodeCache();
+        try {
+            List<List<Primitive>> meshes = new ArrayList<>(); List<GltfAsset.Material> usedMaterials = new ArrayList<>();
+            Set<GltfAsset.Material> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            long geometryBytes = 0, gpuBytes = 0; int primitiveCount = 0;
+            for (int meshIndex = 0; meshIndex < source.meshes().size(); meshIndex++) {
+                GltfAsset.Mesh mesh = source.meshes().get(meshIndex);
+                List<Primitive> primitives = new ArrayList<>();
+                for (int primitiveIndex = 0; primitiveIndex < mesh.primitives().size(); primitiveIndex++) {
+                    GltfAsset.Primitive primitive = mesh.primitives().get(primitiveIndex);
+                    token.check(); Primitive prepared = new Primitive((meshIndex << 16) | primitiveIndex, primitive, token);
+                    geometryBytes = Math.addExact(geometryBytes, prepared.cpuBytes()); gpuBytes = Math.addExact(gpuBytes, prepared.gpuEstimate());
+                    if (geometryBytes > 512L * 1024 * 1024) throw new IOException("prepared geometry exceeds 512 MiB CPU budget");
+                    primitives.add(prepared); primitiveCount++;
+                    if (seen.add(primitive.material())) usedMaterials.add(primitive.material());
+                }
+                meshes.add(List.copyOf(primitives));
+            }
+            Set<Integer> usedTextures = new LinkedHashSet<>();
+            for (GltfAsset.Material material : usedMaterials) {
+                if (material.baseColorTexture() != null) usedTextures.add(material.baseColorTexture().textureIndex());
+                if (!material.unlit() && material.emissiveTexture() != null) usedTextures.add(material.emissiveTexture().textureIndex());
+            }
+            Set<Integer> dataTextures = new LinkedHashSet<>();
+            for (var material : usedMaterials) if (!material.unlit()) {
+                for (var info : new GltfAsset.TextureInfo[]{material.normalTexture(), material.metallicRoughnessTexture(), material.occlusionTexture()})
+                    if (info != null) dataTextures.add(info.textureIndex());
+            }
+            long remaining = ModelTextureBackend.MAX_TEXTURE_BYTES;
+            for (int index : usedTextures) {
+                token.check(); if (index < 0 || index >= source.textures().size()) throw new IOException("material texture index out of bounds: " + index);
+                var decoded = decodeCache.decode(source.textures().get(index), true, token, remaining); images.put(index, decoded); remaining = ModelTextureBackend.MAX_TEXTURE_BYTES - decodeCache.bytes();
+            }
+            for (int index : dataTextures) {
+                token.check(); if (index < 0 || index >= source.textures().size()) throw new IOException("material texture index out of bounds: " + index);
+                var decoded = decodeCache.decode(source.textures().get(index), false, token, remaining);
+                linearImages.put(index, decoded); remaining = ModelTextureBackend.MAX_TEXTURE_BYTES - decodeCache.bytes();
+            }
+            var allImages = new HashMap<>(images); allImages.putAll(linearImages);
+            for (var material : usedMaterials) {
+                var baked = ModelLabPbrBaker.bake(material, source.textures(), allImages, token, remaining);
+                pbr.put(material, baked); remaining -= baked.bytes();
+            }
+            List<List<Occurrence>> scenes = new ArrayList<>(); int occurrenceCount = 0;
+            for (GltfAsset.Scene scene : source.scenes()) {
+                List<Occurrence> occurrences = new ArrayList<>(); record Pending(int node, Matrix4f parent, int depth) {}
+                Deque<Pending> queue = new ArrayDeque<>(); for (int root : scene.roots()) queue.addLast(new Pending(root, new Matrix4f(), 0)); Set<Integer> visited = new HashSet<>();
+                while (!queue.isEmpty()) {
+                    token.check(); Pending pending = queue.removeFirst(); int index = pending.node();
+                    if (index < 0 || index >= source.nodes().size() || !visited.add(index)) throw new IOException("cyclic/duplicate scene node " + index);
+                    if (pending.depth() > 1024) throw new IOException("scene depth exceeds 1024");
+                    GltfAsset.Node node = source.nodes().get(index); Matrix4f matrix = new Matrix4f(pending.parent()).mul(node.local());
+                    if (!matrix.isFinite() || Math.abs(matrix.determinant3x3()) < 1e-12f) throw new IOException("singular/nonfinite world node transform " + index);
+                    if (node.mesh() >= 0) { if (node.mesh() >= meshes.size()) throw new IOException("mesh index out of bounds"); occurrences.add(new Occurrence(matrix, meshes.get(node.mesh()), index)); occurrenceCount++; }
+                    for (int child : node.children()) queue.addLast(new Pending(child, matrix, pending.depth() + 1));
+                }
+                scenes.add(List.copyOf(occurrences));
+            }
+            List<Map<String, Object>> opaqueBatches = new ArrayList<>();
+            // Merge small static unlit runs before either main or shadow creates resident buffers.
+            // Keep original-array estimates charged conservatively alongside the baked copy.
+            for (int i = 0; i < scenes.size(); i++) {
+                var batched = ModelOpaqueBatches.prepare(scenes.get(i), token,
+                        Math.max(0L, 512L * 1024 * 1024 - geometryBytes));
+                long before = scenes.get(i).stream().flatMap(o -> o.primitives().stream())
+                        .filter(p -> p.material.alphaMode() != GltfAsset.AlphaMode.BLEND).count();
+                opaqueBatches.add(Map.of("scene", i, "sourceOpaqueDraws", before,
+                        "preparedOpaqueDraws", before - batched.savedDraws(), "savedDrawsPerPass", batched.savedDraws(),
+                        "additionalCpuBytes", batched.cpuBytes(),
+                        "scope", "consecutive identical unlit OPAQUE material within each node; shared mesh batching reused; node boundaries preserved"));
+                scenes.set(i, batched.occurrences());
+                geometryBytes = Math.addExact(geometryBytes, batched.cpuBytes());
+                gpuBytes = Math.addExact(gpuBytes, batched.gpuBytes());
+            }
+            List<Map<String, Object>> lightPartitions = new ArrayList<>();
+            for (int i = 0; i < scenes.size(); i++) {
+                var partitioned = ModelLightPartitions.prepare(scenes.get(i), token,
+                        Math.max(0L, 512L * 1024 * 1024 - geometryBytes));
+                scenes.set(i, partitioned.occurrences());
+                geometryBytes = Math.addExact(geometryBytes, partitioned.cpuBytes());
+                gpuBytes = Math.addExact(gpuBytes, partitioned.gpuBytes());
+                lightPartitions.add(Map.of("scene", i, "partitionedPrimitives", partitioned.partitioned(),
+                        "additionalDrawsPerPass", partitioned.extraDraws(), "additionalCpuBytes", partitioned.cpuBytes(),
+                        "degraded", partitioned.degraded(), "targetAssetSpan", ModelLightPartitions.TARGET_SPAN,
+                        "maxExtraDrawsPerScene", ModelLightPartitions.MAX_EXTRA_DRAWS,
+                        "scope", "bounded lit OPAQUE/MASK cells; node transforms preserved; constant light per cell, no local light occlusion"));
+            }
+            List<List<Occurrence>> occlusionScenes = new ArrayList<>(scenes.size());
+            // Keep large low-poly surfaces stable under nonlinear shadow-map projection.
+            // Refine once on the worker; the main/shadow passes retain the same resident mesh and draw count.
+            for (int i = 0; i < scenes.size(); i++) {
+                var refined = ModelShadowTessellation.prepare(scenes.get(i), token,
+                        Math.max(0L, 512L * 1024 * 1024 - geometryBytes));
+                scenes.set(i, refined.occurrences());
+                occlusionScenes.add(refined.occlusionOccurrences());
+                geometryBytes = Math.addExact(geometryBytes, refined.cpuBytes());
+                gpuBytes = Math.addExact(gpuBytes, refined.gpuBytes());
+                var details = new LinkedHashMap<String, Object>(lightPartitions.get(i));
+                details.put("shadowTessellation", Map.of("refinedPrimitives", refined.refined(),
+                        "outputTriangles", refined.outputTriangles(), "maxAssetEdge", ModelShadowTessellation.MAX_EDGE,
+                        "additionalCpuBytes", refined.cpuBytes(), "degraded", refined.degraded(),
+                        "scope", "OPAQUE/MASK worker-only, unchanged draw count; node scale included, later instance scaling excluded"));
+                lightPartitions.set(i, Map.copyOf(details));
+            }
+            List<ModelTransparentScene> transparentScenes = new ArrayList<>();
+            for (List<Occurrence> scene : scenes) {
+                token.check();
+                var transparency = ModelTransparentScene.prepare(scene, token,
+                        Math.max(0L, 512L * 1024 * 1024 - geometryBytes));
+                transparentScenes.add(transparency);
+                geometryBytes = Math.addExact(geometryBytes, transparency.cpuBytes());
+                gpuBytes = Math.addExact(gpuBytes, transparency.gpuEstimate());
+            }
+            // BVH is an optional optimization.  A large model may already consume the
+            // preparation CPU budget before occlusion data is considered; pass zero so the
+            // scene builder records a degraded/absent BVH instead of aborting model loading
+            // with an invalid negative budget.
+            var lightOcclusion = ModelLightOcclusionScene.prepare(occlusionScenes, token,
+                    Math.max(0L, 512L * 1024 * 1024 - geometryBytes - ModelLodPreparation.objectMetadataBytes(scenes)), index -> {
+                var decoded=images.get(index);
+                if(decoded==null||decoded.levels.isEmpty())return null;
+                var image=decoded.levels.getFirst();
+                return new ModelLightOcclusionScene.AlphaTexture(new ModelOcclusionAlpha.Texture() {
+                    public int width(){return image.getWidth();}
+                    public int height(){return image.getHeight();}
+                    public float alpha(int x,int y){return (image.getPixel(x,y)>>>24)/255f;}
+                },source.textures().get(index).sampler());
+            });
+            for (var scene : lightOcclusion) geometryBytes = Math.addExact(geometryBytes, scene.cpuBytes());
+            // LOD receives only the remaining budget, after complete source/BVH preparation.
+            var lodDirectory = Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_nodes/caches/model");
+            var lod = ModelLodPreparation.prepare(scenes, source.nodes(), lodDirectory, token,
+                    Math.max(0L, 512L * 1024 * 1024 - geometryBytes));
+            geometryBytes = Math.addExact(geometryBytes, lod.cpuBytes());
+            token.check(); return new Prepared(source, images, opaqueImages, scenes, transparentScenes, usedMaterials, geometryBytes, gpuBytes, primitiveCount, occurrenceCount, opaqueBatches, lightPartitions, lightOcclusion, linearImages, pbr, lod);
+        } catch (IOException | RuntimeException | Error e) { ModelTextureDecodeCache.close(decodeCache.values(), images.values(), opaqueImages.values(), linearImages.values()); pbr.values().forEach(ModelLabPbrBaker.Baked::close); throw e; }
+    }
+
+    private static GltfAsset.Bounds boundsOfScene(List<Occurrence> scene) {
+        GltfAsset.Bounds result = GltfAsset.Bounds.empty();
+        org.joml.Vector3f point = new org.joml.Vector3f();
+        for (var occurrence : scene) for (var primitive : occurrence.primitives()) {
+            var b = primitive.bounds;
+            for (int corner = 0; corner < 8; corner++) {
+                occurrence.transform().transformPosition((corner & 1) == 0 ? b.minX() : b.maxX(),
+                        (corner & 2) == 0 ? b.minY() : b.maxY(), (corner & 4) == 0 ? b.minZ() : b.maxZ(), point);
+                result = result.include(point.x, point.y, point.z);
+            }
+        }
+        return result;
+    }
+
+    public static ModelRenderAsset create(Prepared prepared) { RenderSystem.assertOnRenderThread(); synchronized (prepared) { if (prepared.closed) throw new IllegalStateException("prepared asset closed"); return new ModelRenderAsset(prepared); } }
+
+    private ModelRenderAsset(Prepared prepared) {
+        this.prepared = prepared; source = prepared.source; scenes = prepared.scenes; transparentScenes = prepared.transparentScenes; lightOcclusionScenes = prepared.lightOcclusionScenes; cpuGeometryBytes = prepared.cpuGeometryBytes; gpuGeometryBytes = prepared.gpuGeometryBytes; decodedTextureBytes = prepared.decodedTextureBytes();
+        long initialTextures = prepared.initialTextureUploadBytes();
+        if (!RESIDENCY.reserve(this, cpuGeometryBytes + decodedTextureBytes, initialTextures, initialTextures)) throw new ModelGpuBudgetException("P4 model residency budget exhausted: " + RESIDENCY.snapshot());
+        boolean registered = false;
+        try {
+            Map<Integer, Identifier> uploaded = new HashMap<>();
+            for (var entry : prepared.images.entrySet()) uploaded.put(entry.getKey(), register("texture_" + entry.getKey(), entry.getValue(), source.textures().get(entry.getKey()).sampler()));
+            Map<Integer, Identifier> dataUploaded = new HashMap<>();
+            for (var entry : prepared.linearImages.entrySet()) dataUploaded.put(entry.getKey(), register("data_texture_" + entry.getKey(), entry.getValue(), source.textures().get(entry.getKey()).sampler()));
+            Identifier white; try (var pixel = ModelTextureBackend.solid(0xffffffff)) { white = register("white", pixel, ModelTextureBackend.WHITE_SAMPLER); }
+            Identifier flatNormal, whiteData;
+            try (var pixel = ModelTextureBackend.solid(0xff8080ff)) { flatNormal = register("flat_normal", pixel, ModelTextureBackend.WHITE_SAMPLER); }
+            try (var pixel = ModelTextureBackend.solid(0xffffffff)) { whiteData = register("white_data", pixel, ModelTextureBackend.WHITE_SAMPLER); }
+            int number = 0;
+            for (GltfAsset.Material material : prepared.usedMaterials) {
+                Identifier base = material.baseColorTexture() == null ? white : uploaded.get(material.baseColorTexture().textureIndex());
+                Identifier emission = material.emissiveTexture() == null || material.unlit() ? white : uploaded.get(material.emissiveTexture().textureIndex());
+                Identifier data; try (var decoded = materialData(material)) { data = register("material_" + number, decoded, ModelTextureBackend.WHITE_SAMPLER); }
+                boolean blend = material.alphaMode() == GltfAsset.AlphaMode.BLEND;
+                var baked = prepared.pbr.get(material);
+                Identifier irisBase = register("iris_albedo_" + number, baked.albedo(), baked.sampler());
+                Identifier irisNormal = register("iris_normal_" + number, baked.normal(), baked.sampler());
+                Identifier irisSpecular = register("iris_specular_" + number, baked.specular(), baked.specularSampler());
+                var manager = Minecraft.getInstance().getTextureManager();
+                var lease = ModelIrisPbrBindings.register(manager.getTexture(irisBase).getTexture(), manager.getTexture(irisNormal), manager.getTexture(irisSpecular));
+                pbrLeases.add(lease); activePbrLeases.put(material,lease); currentTranslationLosses.put(material,baked.losses());
+                Identifier normal = material.normalTexture() == null || material.unlit() ? flatNormal : dataUploaded.get(material.normalTexture().textureIndex());
+                Identifier mr = material.metallicRoughnessTexture() == null || material.unlit() ? whiteData : dataUploaded.get(material.metallicRoughnessTexture().textureIndex());
+                Identifier ao = material.occlusionTexture() == null || material.unlit() ? whiteData : dataUploaded.get(material.occlusionTexture().textureIndex());
+                RenderSetup setup = RenderSetup.builder(ModelStaticPipelines.get(blend, material.doubleSided()))
+                        .withTexture("BaseTexture", base).withTexture("EmissionTexture", emission).withTexture("MaterialData", data).withTexture("NormalTexture", normal).withTexture("MetallicRoughnessTexture", mr).withTexture("OcclusionTexture", ao)
+                        .withTexture("Sampler0", base).withTexture("Sampler1", white).useLightmap().bufferSize(65536).createRenderSetup();
+                materials.put(material, RenderType.create("geometry_node_model_" + identity + "_" + number, setup));
+                irisMaterials.put(material, RenderType.create("geometry_node_model_iris_" + identity + "_" + number,
+                        RenderSetup.builder(material.unlit() ? ModelStaticPipelines.irisUnlit(blend, material.doubleSided()) : ModelStaticPipelines.iris(blend, material.doubleSided()))
+                                .withTexture("Sampler0", irisBase).useOverlay().useLightmap().bufferSize(65536).createRenderSetup()));
+                irisShadowMaterials.put(material, RenderType.create("geometry_node_model_iris_shadow_" + identity + "_" + number,
+                        RenderSetup.builder(ModelStaticPipelines.iris(false, true))
+                                .withTexture("Sampler0", irisBase).useOverlay().useLightmap().bufferSize(65536).createRenderSetup()));
+                ModelIrisAlphaTest.registerRenderType(irisShadowMaterials.get(material), alphaPolicy(material));
+                ModelIrisAlphaTest.registerRenderType(irisMaterials.get(material), alphaPolicy(material));
+                if (!blend) {
+                    ModelIrisBlendOverride.registerRenderType(irisMaterials.get(material), false);
+                    ModelIrisBlendOverride.registerRenderType(irisShadowMaterials.get(material), false);
+                }
+                bindings.put(material, new MaterialBinding(base, emission, data, white, blend, material.doubleSided(), irisBase, normal, mr, ao, irisNormal, irisSpecular)); number++;
+            }
+            // Geometry is built lazily in bounded slices for the backend that actually consumes it.
+            // Creating an Iris asset must not first build an unused native copy.
+            gpuResident = true;
+            registered = true;
+        } catch (RuntimeException | Error e) { gpuMeshes.values().forEach(GpuPrimitive::close); gpuMeshes.clear(); releaseImmediately(); RESIDENCY.release(this); closed = true; throw e; }
+        if (!registered) throw new IllegalStateException("model asset was not registered");
+    }
+
+    /** Only completed triangle prefixes may draw; all vertex/index buffers advance together. */
+    private static final class PendingGeometry implements AutoCloseable {
+        final VertexFormat format;
+        final boolean iris;
+        final long bytes;
+        GpuPrimitive storage;
+        int completedVertices;
+        long buildNanos;
+        PendingGeometry(VertexFormat format, boolean iris, long bytes) {
+            this.format = format; this.iris = iris; this.bytes = bytes;
+        }
+        @Override public void close() { if (storage != null) storage.close(); }
+    }
+
+    /** Called outside a host RenderPass. Both passes advance one shared, frame-budgeted build. */
+    public GpuPrimitive irisGpuPrimitive(Primitive primitive) {
+        return residentPrimitive(primitive, irisPipeline(primitive, false).getVertexFormat(), true);
+    }
+
+    public static ModelIrisAlphaPolicy alphaPolicy(GltfAsset.Material material) {
+        return switch (material.alphaMode()) {
+            case OPAQUE -> ModelIrisAlphaPolicy.opaque();
+            case MASK -> ModelIrisAlphaPolicy.mask(material.alphaCutoff());
+            case BLEND -> ModelIrisAlphaPolicy.blend();
+        };
+    }
+
+    public static com.mojang.blaze3d.pipeline.RenderPipeline irisPipeline(Primitive primitive, boolean shadow) {
+        boolean blend = primitive.material.alphaMode() == GltfAsset.AlphaMode.BLEND;
+        // Keep the existing two-sided shadow depth contract for thin casters.
+        boolean doubleSided = shadow || primitive.material.doubleSided();
+        return !shadow && primitive.material.unlit()
+                ? ModelStaticPipelines.irisUnlit(blend, doubleSided)
+                : ModelStaticPipelines.iris(blend, doubleSided);
+    }
+
+    private GpuPrimitive residentPrimitive(Primitive primitive, VertexFormat format, boolean iris) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || !gpuResident) throw new IllegalStateException("model GPU residency is unavailable");
+        touchGeometry(primitive, iris);
+        var cache = iris ? irisGpuMeshes : gpuMeshes;
+        var pending = iris ? pendingIris : pendingNative;
+        GpuPrimitive cached = cache.get(primitive);
+        if (cached != null && cached.format().equals(format)) {
+            if (iris) irisCacheHits++;
+            return cached;
+        }
+        if (cached != null) {
+            if (iris) irisLayoutInvalidations++;
+            cache.remove(primitive);
+            retireGeometry(cached, iris);
+        }
+        PendingGeometry build = pending.get(primitive);
+        if (build != null && !build.format.equals(format)) {
+            pending.remove(primitive);
+            if (iris) irisLayoutInvalidations++;
+            retireGeometry(build.storage, iris);
+            build = null;
+        }
+        int total = primitive.indices.length;
+        while (build == null || build.completedVertices < total) {
+            int offset = build == null ? 0 : build.completedVertices;
+            int count = ModelGeometryChunks.nextCount(total, offset, format.getVertexSize(), iris,
+                    RESIDENCY.budget().maxUploadBytesPerFrame());
+            long chunkBytes = (long) count * (format.getVertexSize() + (iris ? 8 : 4));
+            if (!ModelIrisUploadBudget.INSTANCE.tryAcquire(chunkBytes)) return null;
+            long started = System.nanoTime();
+            try {
+                if (build == null) {
+                    long bytes = Math.multiplyExact((long) total, format.getVertexSize() + (iris ? 8L : 4L));
+                    if (!RESIDENCY.reserveAdditionalGpu(this, bytes))
+                        throw new ModelGpuBudgetException("Resident geometry budget exhausted: " + RESIDENCY.snapshot());
+                    build = new PendingGeometry(format, iris, bytes);
+                    long allocationStarted = System.nanoTime();
+                    try { build.storage = allocateGeometry(total, format, iris, bytes); }
+                    catch (RuntimeException | Error failure) { RESIDENCY.releaseAdditionalGpu(this, bytes); throw failure; }
+                    finally { ModelStaticRenderer.metrics().residentGeometryAllocation(System.nanoTime() - allocationStarted); }
+                    pending.put(primitive, build);
+                    if (iris) irisGpuBytes += bytes; else nativeGpuBytes += bytes;
+                }
+                uploadGeometryChunk(primitive, build, count);
+                build.completedVertices += count;
+                if (iris) irisGeometryChunks++;
+            } catch (RuntimeException | Error failure) {
+                PendingGeometry failed = pending.remove(primitive);
+                if (failed != null) retireGeometry(failed.storage, iris);
+                throw failure;
+            } finally {
+                ModelIrisUploadBudget.INSTANCE.recordElapsed(System.nanoTime() - started);
+            }
+        }
+        pending.remove(primitive);
+        cache.put(primitive, build.storage);
+        ModelStaticRenderer.metrics().residentGeometryBuild(build.buildNanos);
+        if (iris) irisCacheBuilds++;
+        return build.storage;
+    }
+
+    private void retireGeometry(GpuPrimitive mesh, boolean iris) {
+        if (iris) irisGpuBytes -= mesh.bytes(); else nativeGpuBytes -= mesh.bytes();
+        RESIDENCY.markGeometryRetiring(this, mesh.bytes());
+        // Pending uploads and old-layout draws can still be in flight.
+        RenderSystem.queueFencedTask(() -> { mesh.close(); RESIDENCY.releaseRetiredGeometry(this, mesh.bytes()); });
+    }
+
+    private GpuPrimitive allocateGeometry(int count, VertexFormat format, boolean iris, long bytes) {
+        GpuBuffer vertex = null, index = null, reversed = null;
+        try {
+            var device = RenderSystem.getDevice();
+            vertex = device.createBuffer(() -> "GeometryNode resident vertices " + identity,
+                    GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, (long) count * format.getVertexSize());
+            index = device.createBuffer(() -> "GeometryNode resident indices " + identity,
+                    GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, (long) count * Integer.BYTES);
+            if (iris) reversed = device.createBuffer(() -> "GeometryNode resident mirrored indices " + identity,
+                    GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, (long) count * Integer.BYTES);
+            return new GpuPrimitive(vertex, index, reversed, count, bytes, format);
+        } catch (RuntimeException | Error failure) {
+            if (vertex != null) vertex.close(); if (index != null) index.close(); if (reversed != null) reversed.close();
+            throw failure;
+        }
+    }
+
+    private void uploadGeometryChunk(Primitive primitive, PendingGeometry build, int count) {
+        long buildStarted = System.nanoTime();
+        int offset = build.completedVertices;
+        VertexFormat format = build.format;
+        try (ByteBufferBuilder arena = new ByteBufferBuilder(Math.max(8192, count * format.getVertexSize()))) {
+            // Preserve Iris's tangent/mid-UV generation. A chunk contains only complete triangles.
+            BufferBuilder builder = new BufferBuilder(arena, VertexFormat.Mode.TRIANGLES, format);
+            PoseStack.Pose pose = new PoseStack().last();
+            if (build.iris) {
+                for (int i = offset; i < offset + count; i++) emitIrisVertex(primitive, pose, primitive.indices[i], builder);
+            } else {
+                for (int i = offset; i < offset + count; i += 3) emitStaticTriangle(primitive, pose, i, builder);
+            }
+            try (MeshData mesh = builder.buildOrThrow()) {
+                ByteBuffer vertexData = mesh.vertexBuffer();
+                if (mesh.drawState().vertexCount() != count || vertexData == null
+                        || vertexData.remaining() != (long) count * format.getVertexSize())
+                    throw new IllegalStateException("Unexpected resident geometry chunk layout/count");
+                if (build.iris) ModelIrisTangents.write(vertexData, format, primitive.tangents, primitive.indices, offset, count);
+                int entityAttribute = format.getElementAttributeNames().indexOf("iris_Entity");
+                if (build.iris && entityAttribute >= 0) {
+                    VertexFormatElement element = format.getElements().get(entityAttribute);
+                    if (element.type() != VertexFormatElement.Type.USHORT || element.count() != 4)
+                        throw new IllegalStateException("unsupported Iris entity ID vertex layout");
+                    ModelIrisGeometryLayout.neutralEntityIds(vertexData, count, format.getVertexSize(), format.getOffset(element));
+                }
+                ByteBuffer indexData = ModelGeometryChunks.indices(offset, count, false);
+                ByteBuffer reversedData = build.iris ? ModelGeometryChunks.indices(offset, count, true) : null;
+                long buildElapsed = System.nanoTime() - buildStarted;
+                build.buildNanos += buildElapsed;
+                ModelStaticRenderer.metrics().residentGeometryChunk(buildElapsed);
+                long uploadStarted = System.nanoTime(), uploadedBytes = 0;
+                try {
+                    var encoder = RenderSystem.getDevice().createCommandEncoder();
+                    int vertexBytes = vertexData.remaining();
+                    encoder.writeToBuffer(build.storage.vertices().slice((long) offset * format.getVertexSize(), vertexBytes), vertexData);
+                    uploadedBytes += vertexBytes;
+                    encoder.writeToBuffer(build.storage.indices().slice((long) offset * 4, (long) count * 4), indexData);
+                    uploadedBytes += (long) count * 4;
+                    if (reversedData != null) {
+                        encoder.writeToBuffer(build.storage.indices(true).slice((long) offset * 4, (long) count * 4), reversedData);
+                        uploadedBytes += (long) count * 4;
+                    }
+                } finally {
+                    if (uploadedBytes > 0) ModelStaticRenderer.metrics().residentGeometryUpload(uploadedBytes, System.nanoTime() - uploadStarted);
+                }
+            }
+        }
+    }
+
+    private static void emitIrisVertex(Primitive primitive, PoseStack.Pose pose, int source, VertexConsumer builder) {
+        int at = source * 3, uv = source * 2, color = primitive.colors[source];
+        float[] factor = primitive.baseColorFactor;
+        int alpha = primitive.material.alphaMode() == GltfAsset.AlphaMode.OPAQUE ? 255
+                : Math.clamp(Math.round((color >>> 24) * factor[3]), 0, 255);
+        builder.addVertex(pose, primitive.positions[at], primitive.positions[at + 1], primitive.positions[at + 2])
+                .setColor(Math.clamp(Math.round(((color >>> 16) & 255)), 0, 255),
+                        Math.clamp(Math.round(((color >>> 8) & 255)), 0, 255),
+                        Math.clamp(Math.round((color & 255)), 0, 255), alpha)
+                .setUv(primitive.baseUv[uv], primitive.baseUv[uv + 1])
+                .setOverlay(OverlayTexture.NO_OVERLAY).setLight(FULL_LIGHT)
+                .setNormal(pose, primitive.normals[at], primitive.normals[at + 1], primitive.normals[at + 2]);
+    }
+
+    private static void emitStaticTriangle(Primitive primitive, PoseStack.Pose pose, int offset, VertexConsumer out) {
+        for (int corner = 0; corner < 3; corner++) {
+            int index = primitive.indices[offset + corner], at = index * 3, uv = index * 2;
+            int u = Float.floatToRawIntBits(primitive.uv1[uv]), v = Float.floatToRawIntBits(primitive.uv1[uv + 1]);
+            out.addVertex(pose, primitive.positions[at], primitive.positions[at + 1], primitive.positions[at + 2])
+                    .setColor(primitive.colors[index]).setUv(primitive.uv0[uv], primitive.uv0[uv + 1])
+                    .setUv1(u & 65535, u >>> 16).setUv2(v & 65535, v >>> 16).setLineWidth((float) FULL_LIGHT)
+                    .setNormal(pose, primitive.normals[at], primitive.normals[at + 1], primitive.normals[at + 2]);
+        }
+    }
+
+    private Identifier register(String name, ModelTextureBackend.Decoded data, GltfAsset.Sampler sampler) {
+        Identifier id = ModelStaticPipelines.id("runtime_model/" + identity + "/" + name);
+        var texture = ModelTextureBackend.upload("GeometryNode model " + id, data, sampler, !name.startsWith("material_"));
+        try { Minecraft.getInstance().getTextureManager().register(id, texture); textureIds.add(id); textureBytes += data.bytes; }
+        catch (RuntimeException | Error e) { texture.close(); throw e; }
+        return id;
+    }
+    private static ModelTextureBackend.Decoded materialData(GltfAsset.Material material) {
+        float[] base = material.baseColorFactor(), emission = material.unlit() ? new float[3] : material.emissiveFactor();
+        float[] values = new float[MATERIAL_FLOATS];
+        float[] factors = {base[0], base[1], base[2], base[3], emission[0]*material.emissiveStrength(), emission[1]*material.emissiveStrength(), emission[2]*material.emissiveStrength(), material.alphaCutoff(), material.alphaMode().ordinal(), material.unlit()?1:0,
+                material.metallicFactor(), material.roughnessFactor(), material.normalScale(), material.occlusionStrength()};
+        System.arraycopy(factors, 0, values, 0, factors.length);
+        var infos = new GltfAsset.TextureInfo[]{material.baseColorTexture(), material.emissiveTexture(), material.normalTexture(), material.metallicRoughnessTexture(), material.occlusionTexture()};
+        for (int i=0; i<infos.length; i++) {
+            var info=infos[i]; int offset=14+i*8;
+            values[offset]=info==null?0:1; values[offset+1]=info==null?0:info.texCoord();
+            float[] scale=info==null?new float[]{1,1}:info.scale(), shift=info==null?new float[]{0,0}:info.offset();
+            float c=info==null?1:(float)Math.cos(info.rotation()), sn=info==null?0:(float)Math.sin(info.rotation());
+            values[offset+2]=c*scale[0]; values[offset+3]=-sn*scale[1]; values[offset+4]=sn*scale[0]; values[offset+5]=c*scale[1]; values[offset+6]=shift[0]; values[offset+7]=shift[1];
+        }
+        NativeImage image = new NativeImage(values.length, 1, false);
+        for (int i = 0; i < values.length; i++) { int bits = Float.floatToRawIntBits(values[i]); int argb = ((bits >>> 24) & 255) << 24 | (bits & 255) << 16 | ((bits >>> 8) & 255) << 8 | ((bits >>> 16) & 255); image.setPixel(i, 0, argb); }
+        return new ModelTextureBackend.Decoded(List.of(image));
+    }
+
+    /** Factor overrides preserve vertex/index buffers, draw classification and P6 occlusion geometry. */
+    public void overrideMaterial(int index, String property, float value) {
+        RenderSystem.assertOnRenderThread();
+        if (!Float.isFinite(value)) throw new IllegalArgumentException("finite material value required");
+        GltfAsset.Material original = materialAt(index), current = overrides.getOrDefault(original, original);
+        float metal=current.metallicFactor(), rough=current.roughnessFactor(), normal=current.normalScale(), ao=current.occlusionStrength(), emission=current.emissiveStrength();
+        switch (property) {
+            case "metallic" -> { unit(value); metal=value; }
+            case "roughness" -> { unit(value); rough=value; }
+            case "normalScale" -> normal=value;
+            case "occlusionStrength" -> { unit(value); ao=value; }
+            case "emissiveStrength" -> { if(value<0) throw new IllegalArgumentException("emissiveStrength must be nonnegative"); emission=value; }
+            default -> throw new IllegalArgumentException("unknown material property " + property);
+        }
+        var replacement = new GltfAsset.Material(current.name(), current.alphaMode(), current.alphaCutoff(), current.doubleSided(), current.unlit(), current.baseColorFactor(), metal, rough,
+                current.emissiveFactor(), normal, ao, current.baseColorTexture(), current.metallicRoughnessTexture(), current.normalTexture(), current.occlusionTexture(), current.emissiveTexture(), current.extensions(), emission);
+        queueMaterialUpdate(original, replacement);
+        overrides.put(original, replacement);
+    }
+    public void resetMaterial(int index) {
+        RenderSystem.assertOnRenderThread(); var original=materialAt(index); queueMaterialUpdate(original, original); overrides.remove(original);
+    }
+    private static void unit(float v) { if(v<0||v>1) throw new IllegalArgumentException("material factor must be within [0,1]"); }
+    private GltfAsset.Material materialAt(int index) {
+        if(closed || !gpuResident) throw new IllegalStateException("model renderer unavailable");
+        if(index<0 || index>=source.materials().size()) throw new IllegalArgumentException("material index outside asset");
+        var original=source.materials().get(index);
+        if(!bindings.containsKey(original)) throw new IllegalArgumentException("material is unused by this asset");
+        return original;
+    }
+    private void queueMaterialUpdate(GltfAsset.Material original, GltfAsset.Material replacement) {
+        materialGenerations.put(original,++materialRevision);
+        queuedMaterials.put(original,replacement);
+        startNextMaterialUpdate();
+    }
+    private void startNextMaterialUpdate() {
+        if(closed || !gpuResident || pendingMaterialUpdates!=0 || queuedMaterials.isEmpty())return;
+        while(!queuedMaterials.isEmpty()) {
+        var first=queuedMaterials.entrySet().iterator().next();
+        var original=first.getKey(); var replacement=first.getValue(); queuedMaterials.remove(original);
+        long revision=materialGenerations.get(original);
+        long outputBytes=prepared.pbr.get(original).normal().bytes+prepared.pbr.get(original).specular().bytes+4+MATERIAL_FLOATS*4L;
+        long retainedBytes=prepared.cpuGeometryBytes()+prepared.decodedTextureBytes();
+        if(!RESIDENCY.reserveTransientCpu(outputBytes+retainedBytes)) { materialFailures.put(original,"material refresh CPU budget exhausted"); continue; }
+        prepared.retain(); pendingMaterialUpdates=1;
+        try {
+            MATERIAL_WORKERS.execute(() -> {
+                ModelLabPbrBaker.Baked baked=null; ModelTextureBackend.Decoded data=null;
+                try {
+                    var images=new HashMap<>(prepared.images); images.putAll(prepared.linearImages);
+                    baked=ModelLabPbrBaker.bakeParameters(replacement,source.textures(),images,materialCancellation,outputBytes);
+                    data=materialData(replacement);
+                    var ready=baked; var readyData=data;
+                    Minecraft.getInstance().execute(() -> stageMaterial(original,revision,ready,readyData,outputBytes+retainedBytes));
+                    baked=null; data=null;
+                } catch(Exception failure) {
+                    String message=failure.toString();
+                    Minecraft.getInstance().execute(() -> {
+                        if(Objects.equals(materialGenerations.get(original),revision))materialFailures.put(original,message);
+                        RESIDENCY.releaseTransientCpu(outputBytes+retainedBytes); pendingMaterialUpdates=0; startNextMaterialUpdate();
+                    });
+                } finally {
+                    if(baked!=null)baked.close(); if(data!=null)data.close();
+                    prepared.release();
+                }
+            });
+            return;
+        } catch(RuntimeException failure) {
+            pendingMaterialUpdates=0; prepared.release(); RESIDENCY.releaseTransientCpu(outputBytes+retainedBytes);
+            materialFailures.put(original,failure.toString());
+        }
+        }
+    }
+    private void stageMaterial(GltfAsset.Material original,long revision,ModelLabPbrBaker.Baked baked,ModelTextureBackend.Decoded data,long outputBytes) {
+        if(closed || !gpuResident || !Objects.equals(materialGenerations.get(original),revision)) {
+            finishMaterial(baked,data,outputBytes); return;
+        }
+        long bytes=baked.normal().bytes+baked.specular().bytes+data.bytes;
+        if(!RESIDENCY.reserveAdditionalTextures(this,bytes)) {
+            materialFailures.put(original,"material refresh GPU/texture budget exhausted"); finishMaterial(baked,data,outputBytes); return;
+        }
+        var staged=new ArrayList<ModelTextureBackend.OwnedTexture>();
+        var terminated=new java.util.concurrent.atomic.AtomicBoolean();
+        try {
+            staged.add(new ModelTextureBackend.OwnedTexture("model material staging normal",baked.normal(),baked.sampler(),false));
+            staged.add(new ModelTextureBackend.OwnedTexture("model material staging specular",baked.specular(),baked.specularSampler(),false));
+            staged.add(new ModelTextureBackend.OwnedTexture("model material staging factors",data,ModelTextureBackend.WHITE_SAMPLER,false));
+            ModelMaterialUploadQueue.enqueue(this,List.of(new ModelMaterialUploadQueue.Upload(staged.get(0).getTexture(),baked.normal()),
+                    new ModelMaterialUploadQueue.Upload(staged.get(1).getTexture(),baked.specular()),new ModelMaterialUploadQueue.Upload(staged.get(2).getTexture(),data)), () -> {
+                if(!terminated.compareAndSet(false,true))return;
+                try {
+                    if(closed || !gpuResident || !Objects.equals(materialGenerations.get(original),revision)) retireStaging(staged,bytes);
+                    else publishMaterial(original,revision,staged,baked,bytes);
+                } catch(RuntimeException failure) { materialFailures.put(original,failure.toString()); retireStaging(staged,bytes); }
+                finally { finishMaterial(baked,data,outputBytes); }
+            }, failure -> {
+                if(!terminated.compareAndSet(false,true))return;
+                if(!closed && Objects.equals(materialGenerations.get(original),revision))materialFailures.put(original,failure.toString());
+                retireStaging(staged,bytes); finishMaterial(baked,data,outputBytes);
+            });
+        } catch(RuntimeException failure) {
+            if(terminated.compareAndSet(false,true)) { materialFailures.put(original,failure.toString()); retireStaging(staged,bytes); finishMaterial(baked,data,outputBytes); }
+        }
+    }
+    private void retireStaging(List<ModelTextureBackend.OwnedTexture> textures,long bytes) {
+        RenderSystem.queueFencedTask(() -> { textures.forEach(ModelTextureBackend.OwnedTexture::close); RESIDENCY.releaseAdditionalTextures(this,bytes); });
+    }
+    private void publishMaterial(GltfAsset.Material original,long revision,List<ModelTextureBackend.OwnedTexture> staged,ModelLabPbrBaker.Baked baked,long bytes) {
+        var old=bindings.get(original); var manager=Minecraft.getInstance().getTextureManager();
+        Identifier n=ModelStaticPipelines.id("runtime_model/"+identity+"/refresh_"+revision+"_n"),
+                spec=ModelStaticPipelines.id("runtime_model/"+identity+"/refresh_"+revision+"_s"), d=ModelStaticPipelines.id("runtime_model/"+identity+"/refresh_"+revision+"_d");
+        var replacement=new MaterialBinding(old.base(),old.emission(),d,old.overlay(),old.blend(),old.doubleSided(),old.irisBase(),old.normal(),old.metallicRoughness(),old.occlusion(),n,spec);
+        var setup=RenderSetup.builder(ModelStaticPipelines.get(old.blend(),old.doubleSided()))
+                .withTexture("BaseTexture",old.base()).withTexture("EmissionTexture",old.emission()).withTexture("MaterialData",d)
+                .withTexture("NormalTexture",old.normal()).withTexture("MetallicRoughnessTexture",old.metallicRoughness()).withTexture("OcclusionTexture",old.occlusion())
+                .withTexture("Sampler0",old.base()).withTexture("Sampler1",old.overlay()).useLightmap().bufferSize(65536).createRenderSetup();
+        var type=RenderType.create("geometry_node_material_refresh_"+identity+"_"+revision,setup);
+        AutoCloseable lease;
+        try {
+            manager.register(n,staged.get(0)); manager.register(spec,staged.get(1)); manager.register(d,staged.get(2));
+            lease=ModelIrisPbrBindings.replace(manager.getTexture(old.irisBase()).getTexture(),staged.get(0),staged.get(1));
+        } catch(RuntimeException failure) {
+            // The previous binding remains live; remove partially published manager entries at a fence.
+            RenderSystem.queueFencedTask(() -> { manager.release(n); manager.release(spec); manager.release(d); });
+            throw failure;
+        }
+        var previousLease=activePbrLeases.get(original); closeLeases(List.of(previousLease)); pbrLeases.remove(previousLease);
+        activePbrLeases.put(original,lease); pbrLeases.add(lease);
+        bindings.put(original,replacement); materials.put(original,type);
+        textureIds.addAll(List.of(n,spec,d)); textureIds.removeAll(List.of(old.irisNormal(),old.irisSpecular(),old.data()));
+        currentTranslationLosses.put(original,baked.losses()); materialFailures.remove(original);
+        // Factor refresh keeps sizes invariant. The old textures stay accounted until their fence.
+        RenderSystem.queueFencedTask(() -> { manager.release(old.irisNormal()); manager.release(old.irisSpecular()); manager.release(old.data()); RESIDENCY.releaseAdditionalTextures(this,bytes); });
+    }
+    private void finishMaterial(ModelLabPbrBaker.Baked baked,ModelTextureBackend.Decoded data,long bytes) {
+        baked.close(); data.close(); RESIDENCY.releaseTransientCpu(bytes); pendingMaterialUpdates=0; startNextMaterialUpdate();
+    }
+
+    public ModelLightOcclusionScene lightOcclusion(int scene) {
+        if (closed) return ModelLightOcclusionScene.CLOSED;
+        int selected = scene < 0 ? source.defaultScene() : scene;
+        if (selected < 0 && !lightOcclusionScenes.isEmpty()) selected = 0;
+        return selected < 0 || selected >= lightOcclusionScenes.size() ? ModelLightOcclusionScene.CLOSED : lightOcclusionScenes.get(selected);
+    }
+    public List<Occurrence> occurrences(int scene) { if (closed) return List.of(); int selected = scene < 0 ? source.defaultScene() : scene; if (selected < 0 && !scenes.isEmpty()) selected = 0; if (selected < 0 || selected >= scenes.size()) return List.of(); return scenes.get(selected); }
+    public ModelTransparentScene transparentScene(int scene) {
+        int selected = scene < 0 ? source.defaultScene() : scene;
+        if (selected < 0 && !transparentScenes.isEmpty()) selected = 0;
+        return closed || selected < 0 || selected >= transparentScenes.size() ? ModelTransparentScene.EMPTY : transparentScenes.get(selected);
+    }
+    public List<Map<String, Object>> transparentPreparationReport() {
+        return transparentScenes.stream().map(ModelTransparentScene::report).toList();
+    }
+    public RenderType renderType(GltfAsset.Material material) { return materials.get(material); }
+    public RenderType irisRenderType(GltfAsset.Material material) { return irisMaterials.get(material); }
+    public RenderType irisShadowRenderType(GltfAsset.Material material) { return irisShadowMaterials.get(material); }
+    public MaterialBinding binding(GltfAsset.Material material) { return bindings.get(material); }
+    public GpuPrimitive gpuPrimitive(Primitive primitive) { return residentPrimitive(primitive, ModelStaticPipelines.FORMAT, false); }
+
+    public Map<String, Object> lodReport() { return prepared.lodReport(); }
+
+    private int sceneIndex(int scene) {
+        int selected = scene < 0 ? source.defaultScene() : scene;
+        return selected < 0 && !scenes.isEmpty() ? 0 : selected;
+    }
+
+    public GltfAsset.Bounds sceneBounds(int scene) {
+        int selected = sceneIndex(scene);
+        return selected < 0 || selected >= prepared.sceneBounds.size()
+                ? GltfAsset.Bounds.empty() : prepared.sceneBounds.get(selected);
+    }
+
+    public List<Occurrence> occurrences(int scene, int level) {
+        if (level < 0 || level > 3) throw new IllegalArgumentException("LOD must be 0..3");
+        int selected = sceneIndex(scene);
+        if (closed || selected < 0 || selected >= scenes.size()) return List.of();
+        return prepared.lodScenes.get(level).get(selected);
+    }
+
+    public long lodTriangles(int scene, int level) {
+        long count = 0;
+        for (var occurrence : occurrences(scene, level)) for (var primitive : occurrence.primitives())
+            if (primitive.material.alphaMode() != GltfAsset.AlphaMode.BLEND) count += primitive.indices.length / 3;
+        return count;
+    }
+
+    public List<ModelLodObject> lodObjects(int scene) {
+        int selected = sceneIndex(scene);
+        if (closed || selected < 0 || selected >= prepared.lodObjects.size()) return List.of();
+        return prepared.lodObjects.get(selected);
+    }
+
+    public void pinObjectLod(int scene, int objectIndex, int level, boolean iris) {
+        pinOccurrences(lodObjects(scene).get(objectIndex).occurrences(level), iris);
+    }
+
+    /** All primitives within one node switch together; other objects and shared mesh users remain independent. */
+    public ModelLodResidency.Selection resolveObjectLod(int scene, int objectIndex, int requested,
+                                                       boolean iris, boolean useResident) {
+        var object = lodObjects(scene).get(objectIndex);
+        if (iris && useResident) {
+            long frame = ModelIrisUploadBudget.INSTANCE.frame();
+            if (irisObjectRequestFrame != frame) { irisObjectRequests.clear(); irisObjectRequestFrame = frame; }
+            irisObjectRequests.merge(new ObjectRequest(sceneIndex(scene), objectIndex), 1 << requested, (first, next) -> first | next);
+            lastIrisRequestedLevel = -1;
+        }
+        return resolveLod(scene, objectIndex, requested, iris, useResident, object::occurrences);
+    }
+
+    /** Publish only complete model levels. A pending level never replaces individual model parts. */
+    public ModelLodResidency.Selection resolveLod(int scene, int requested, boolean iris, boolean useResident) {
+        if (iris && useResident) {
+            lastIrisRequestedScene = scene; lastIrisRequestedLevel = requested; irisObjectRequests.clear();
+        }
+        return resolveLod(scene, -1, requested, iris, useResident, level -> occurrences(scene, level));
+    }
+
+    private ModelLodResidency.Selection resolveLod(int scene, int objectIndex, int requested,
+                                                  boolean iris, boolean useResident,
+                                                  java.util.function.IntFunction<List<Occurrence>> levels) {
+        touch();
+        if (useResident) pinOccurrences(levels.apply(requested), iris);
+        long frame = ModelIrisUploadBudget.INSTANCE.frame();
+        if (lastLodPressureFrame != frame) {
+            lodBudgetPressure.entrySet().removeIf(entry -> entry.getValue() < frame - 1);
+            lastLodPressureFrame = frame;
+        }
+        LodPressure key = new LodPressure(sceneIndex(scene), objectIndex, requested, iris);
+        boolean requestedOnly = useResident && lodBudgetPressure.containsKey(key);
+        if (requestedOnly) lodBudgetPressure.put(key, frame);
+        lastLodUploadBudgetBlocked = false;
+        var selected = ModelLodResidency.select(requested, useResident, requestedOnly, level -> lodResident(levels.apply(level), iris),
+                level -> uploadLod(levels.apply(level), iris));
+        if (useResident && lastLodUploadBudgetBlocked && selected.level() != requested) {
+            // A complete older level must not permanently consume the room needed by its replacement.
+            lodBudgetPressure.put(key, frame);
+            selected = new ModelLodResidency.Selection(requested, false);
+        }
+        if (useResident && lastLodUploadBudgetBlocked && selected.deferred()) {
+            // A genuinely oversized active set must remain visible through the compatibility path.
+            selected = new ModelLodResidency.Selection(requested, false);
+        }
+        if (selected.residentReady() && selected.level() == requested) lodBudgetPressure.remove(key);
+        if (iris && useResident && selected.residentReady() && selected.level() == requested) irisUploadStatus = "READY";
+        return selected;
+    }
+
+    private boolean uploadLod(List<Occurrence> occurrences, boolean iris) {
+        boolean ready = true;
+        try {
+            Set<Primitive> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            for (var occurrence : occurrences) for (var primitive : occurrence.primitives()) {
+                if (primitive.material.alphaMode() == GltfAsset.AlphaMode.BLEND || !seen.add(primitive)) continue;
+                if ((iris ? irisGpuPrimitive(primitive) : gpuPrimitive(primitive)) == null) ready = false;
+            }
+        } catch (ModelGpuBudgetException unavailable) {
+            ready = false;
+            boolean fenced = RESIDENCY.snapshot().lastFailure().contains("fenced");
+            lastLodUploadBudgetBlocked = !fenced;
+            if (iris) irisUploadStatus = fenced
+                    ? "FENCED_RETIREMENT" : "GPU_BUDGET_WAIT";
+            return false;
+        }
+        if (iris) irisUploadStatus = ready ? "READY" : "UPLOADING";
+        return ready;
+    }
+
+    private boolean lodResident(List<Occurrence> occurrences, boolean iris) {
+        for (var occurrence : occurrences) for (var primitive : occurrence.primitives())
+            if (primitive.material.alphaMode() != GltfAsset.AlphaMode.BLEND && !isResident(primitive, iris)) return false;
+        pinOccurrences(occurrences, iris);
+        return true;
+    }
+
+    private void pinOccurrences(List<Occurrence> occurrences, boolean iris) {
+        for (Occurrence occurrence : occurrences) for (Primitive primitive : occurrence.primitives())
+            touchGeometry(primitive, iris);
+    }
+
+    private void touchGeometry(Primitive primitive, boolean iris) {
+        (iris ? irisGeometryUses : nativeGeometryUses).touch(primitive, ModelIrisUploadBudget.INSTANCE.frame());
+    }
+
+    /** Retire unused historical levels, keeping current/previous-frame users and BLEND resident. */
+    public long retireUnusedGeometry(long frame, long requestedBytes) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || !gpuResident || requestedBytes <= 0) return 0;
+        long retired = retireUnusedGeometry(irisGpuMeshes, pendingIris, irisGeometryUses, true, frame, requestedBytes);
+        if (retired < requestedBytes)
+            retired += retireUnusedGeometry(gpuMeshes, pendingNative, nativeGeometryUses, false, frame, requestedBytes - retired);
+        retiredUnusedGeometryBytes += retired;
+        return retired;
+    }
+
+    private long retireUnusedGeometry(IdentityHashMap<Primitive, GpuPrimitive> cache,
+                                      IdentityHashMap<Primitive, PendingGeometry> pending,
+                                      ModelGeometryRetention<Primitive> uses, boolean iris, long frame, long requestedBytes) {
+        long retired = 0;
+        for (Primitive primitive : uses.candidates(frame)) {
+            if (retired >= requestedBytes) break;
+            if (primitive.material.alphaMode() == GltfAsset.AlphaMode.BLEND) continue;
+            GpuPrimitive complete = cache.remove(primitive);
+            PendingGeometry partial = pending.remove(primitive);
+            if (complete != null) { retired += complete.bytes(); retireGeometry(complete, iris); }
+            if (partial != null) { retired += partial.bytes; retireGeometry(partial.storage, iris); }
+            uses.forget(primitive);
+        }
+        return retired;
+    }
+
+    private boolean isResident(Primitive primitive, boolean iris) {
+        GpuPrimitive cached = (iris ? irisGpuMeshes : gpuMeshes).get(primitive);
+        return cached != null && cached.format().equals(iris ? irisPipeline(primitive, false).getVertexFormat() : ModelStaticPipelines.FORMAT)
+                && !(iris ? pendingIris : pendingNative).containsKey(primitive);
+    }
+
+    /** Reuse completed triangles while later triangles in the same LOD primitive are still uploading. */
+    public ResidentGeometry residentGeometry(Primitive primitive, boolean iris) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || !gpuResident) return ResidentGeometry.EMPTY;
+        touchGeometry(primitive, iris);
+        return residentGeometrySnapshot(primitive, iris);
+    }
+
+    private ResidentGeometry residentGeometrySnapshot(Primitive primitive, boolean iris) {
+        if (closed || !gpuResident) return ResidentGeometry.EMPTY;
+        VertexFormat format = iris ? irisPipeline(primitive, false).getVertexFormat() : ModelStaticPipelines.FORMAT;
+        GpuPrimitive cached = (iris ? irisGpuMeshes : gpuMeshes).get(primitive);
+        if (cached != null && cached.format().equals(format))
+            return new ResidentGeometry(cached, cached.indexCount());
+        PendingGeometry pending = (iris ? pendingIris : pendingNative).get(primitive);
+        if (pending == null || !pending.format.equals(format) || pending.storage == null || pending.completedVertices == 0)
+            return ResidentGeometry.EMPTY;
+        return new ResidentGeometry(pending.storage, pending.completedVertices);
+    }
+
+    public Map<String, Object> irisResidencyReport() {
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("primitives", irisGpuMeshes.size());
+        report.put("gpuBytes", irisGpuBytes);
+        report.put("builds", irisCacheBuilds);
+        report.put("cacheHits", irisCacheHits);
+        report.put("layoutInvalidations", irisLayoutInvalidations);
+        report.put("pendingPrimitives", pendingIris.size());
+        report.put("uploadedChunks", irisGeometryChunks);
+        long remainingBytes = 0;
+        for (PendingGeometry pending : pendingIris.values())
+            remainingBytes += pending.bytes - (long) pending.completedVertices * (pending.format.getVertexSize() + 8L);
+        report.put("uploadedBytes", irisGpuBytes - remainingBytes);
+        report.put("pendingUploadBytes", remainingBytes);
+        report.put("retiredUnusedGeometryBytes", retiredUnusedGeometryBytes);
+        if (lastIrisRequestedLevel >= 0 || !irisObjectRequests.isEmpty()) {
+            List<Occurrence> requestedOccurrences = new ArrayList<>();
+            Set<Integer> requestedLevels = new TreeSet<>();
+            if (lastIrisRequestedLevel >= 0) {
+                requestedOccurrences.addAll(occurrences(lastIrisRequestedScene, lastIrisRequestedLevel));
+                requestedLevels.add(lastIrisRequestedLevel);
+            } else for (var request : irisObjectRequests.entrySet()) {
+                var object = lodObjects(request.getKey().scene()).get(request.getKey().object());
+                for (int level = 0; level < 4; level++) if ((request.getValue() & (1 << level)) != 0) {
+                    requestedOccurrences.addAll(object.occurrences(level));
+                    requestedLevels.add(level);
+                }
+            }
+            Set<Primitive> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            long total = 0, uploaded = 0;
+            int completed = 0;
+            for (Occurrence occurrence : requestedOccurrences)
+                for (Primitive primitive : occurrence.primitives()) {
+                    if (primitive.material.alphaMode() == GltfAsset.AlphaMode.BLEND || !seen.add(primitive)) continue;
+                    // Iris changes pipeline formats outside world rendering. Reports inspect stored
+                    // upload state, never the context-dependent format returned by the current pipeline.
+                    GpuPrimitive cached = irisGpuMeshes.get(primitive);
+                    PendingGeometry pending = pendingIris.get(primitive);
+                    int prefix = cached != null ? cached.indexCount() : pending == null ? 0 : pending.completedVertices;
+                    total += primitive.indices.length;
+                    uploaded += prefix;
+                    if (prefix == primitive.indices.length) completed++;
+                }
+            report.put("requestedLevelUpload", Map.of("level", requestedLevels.size() == 1 ? requestedLevels.iterator().next() : -1,
+                    "totalIndices", total, "uploadedIndices", uploaded, "pendingIndices", total - uploaded,
+                    "completedPrimitives", completed, "pendingPrimitives", seen.size() - completed,
+                    "status", total == uploaded ? "READY" : "READY".equals(irisUploadStatus) ? "UPLOADING" : irisUploadStatus,
+                    "objects", irisObjectRequests.size(), "levels", List.copyOf(requestedLevels)));
+        }
+        return Map.copyOf(report);
+    }
+    public Map<String, Object> materialUpdateStatistics() {
+        return Map.of("pendingMaterialUpdates", pendingMaterialUpdates + queuedMaterials.size(),
+                "failedMaterialUpdates", materialFailures.size());
+    }
+    public Map<String, Object> irisMaterialReport() {
+        var result = new LinkedHashMap<String,Object>();
+        result.put("native", "linear material inputs; UV0/UV1 independent transforms/samplers; derivative normal map, GGX two-light approximation, AO, HDR emissive strength; no environment reflection probe");
+        result.put("iris", ModelIrisPbrBindings.snapshot());
+        result.put("texturePreparation",Map.of(
+                "sourceDecodedBytes",prepared.sourceDecodedTextureBytes(),
+                "sourceDecodedVariants",ModelTextureDecodeCache.distinct(prepared.images.values(),prepared.linearImages.values()).size(),
+                "sourceGpuTextureEntries",prepared.images.size()+prepared.linearImages.size(),
+                "translatedLabPbrBytes",prepared.translatedTextureBytes(),
+                "largestTranslatedMaterialBytes",prepared.pbr.values().stream().mapToLong(ModelLabPbrBaker.Baked::bytes).max().orElse(0),
+                "materialsWithTranslationLosses",currentTranslationLosses.values().stream().filter(losses->!losses.isEmpty()).count()));
+        result.put("translationLosses", currentTranslationLosses.entrySet().stream().filter(e->!e.getValue().isEmpty()).map(e->Map.of("material",e.getKey().name(),"losses",e.getValue())).toList());
+        result.put("materialRevision",materialRevision); result.put("pendingMaterialUpdates",pendingMaterialUpdates+queuedMaterials.size());
+        result.put("lastMaterialFailure",materialFailures.isEmpty()?"":materialFailures.entrySet().stream().map(e->e.getKey().name()+": "+e.getValue()).toList().toString());
+        result.put("overrideScope","shared asset factors; asynchronous texture-only refresh; alpha/geometry unchanged; full source reload resets overrides");
+        result.put("visualVerification","UNTESTED P7");
+        return result;
+    }
+
+    public GltfAsset source() { return source; }
+    public long textureBytes() { return textureBytes; }
+    public long cpuGeometryBytes() { return cpuGeometryBytes; }
+    public long gpuGeometryBytes() { return nativeGpuBytes + irisGpuBytes; }
+    public long decodedTextureBytes() { return decodedTextureBytes; }
+    public int clusterCount() { return clusterCount(scenes); }
+    public List<Map<String, Object>> clusterReport() { return clusterReport(scenes); }
+    public boolean isClosed() { return closed; }
+    public boolean hasGpuGeometry() { return (!gpuMeshes.isEmpty() || !irisGpuMeshes.isEmpty()) && !closed; }
+    public boolean gpuResident() { return gpuResident && !closed; }
+    public void touch() { RESIDENCY.touch(this); }
+    public void evictGpu() {
+        if (closed || !gpuResident) return;
+        gpuResident = false; materialCancellation.cancel(); queuedMaterials.clear(); ModelMaterialUploadQueue.cancel(this); materials.clear(); irisMaterials.clear(); irisShadowMaterials.clear(); bindings.clear();
+        retireResources();
+    }
+    private static void closeLeases(List<AutoCloseable> leases) { for (var lease:leases) try { lease.close(); } catch (Exception e) { throw new IllegalStateException(e); } }
+    private void releaseImmediately() { closeLeases(pbrLeases); pbrLeases.clear(); var manager = Minecraft.getInstance().getTextureManager(); for (Identifier id : textureIds) manager.release(id); textureIds.clear(); textureBytes = 0; }
+    private void retireResources() {
+        List<AutoCloseable> retiredPbr = List.copyOf(pbrLeases); pbrLeases.clear();
+        List<Identifier> retired = List.copyOf(textureIds); textureIds.clear(); textureBytes = 0;
+        List<GpuPrimitive> meshes = new ArrayList<>(gpuMeshes.values()); meshes.addAll(irisGpuMeshes.values());
+        pendingNative.values().forEach(build -> meshes.add(build.storage));
+        pendingIris.values().forEach(build -> meshes.add(build.storage));
+        pendingNative.clear(); pendingIris.clear();
+        nativeGeometryUses.clear(); irisGeometryUses.clear();
+        lodBudgetPressure.clear();
+        irisObjectRequests.clear();
+        gpuMeshes.clear(); irisGpuMeshes.clear(); nativeGpuBytes = irisGpuBytes = 0;
+        RenderSystem.queueFencedTask(() -> {
+            closeLeases(retiredPbr);
+            var manager = Minecraft.getInstance().getTextureManager(); retired.forEach(manager::release);
+            meshes.forEach(GpuPrimitive::close); RESIDENCY.release(this);
+        });
+    }
+    @Override public void close() {
+        RenderSystem.assertOnRenderThread(); if (closed) return;
+        closed = true; gpuResident = false; materialCancellation.cancel(); queuedMaterials.clear(); ModelMaterialUploadQueue.cancel(this); retireResources();
+    }
+}

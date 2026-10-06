@@ -8,6 +8,36 @@ import java.nio.*;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 class GltfAccessorReaderTest {
+    @Test void sparseIndicesUseBoundedBatchesAndValidateAcrossBatchBoundaries() throws Exception {
+        int count=20_000;
+        ByteBuffer bytes=ByteBuffer.allocate(count*8).order(ByteOrder.LITTLE_ENDIAN);
+        for(int i=0;i<count;i++)bytes.putInt(i);
+        for(int i=0;i<count;i++)bytes.putFloat(i*.5f);
+        JsonObject doc=JsonParser.parseString("""
+                {"bufferViews":[{"buffer":0,"byteLength":80000},
+                  {"buffer":0,"byteOffset":80000,"byteLength":80000}],
+                 "accessors":[{"componentType":5126,"type":"SCALAR","count":20000,
+                  "sparse":{"count":20000,"indices":{"bufferView":0,"componentType":5125},
+                  "values":{"bufferView":1}}}]}
+                """).getAsJsonObject();
+        java.util.concurrent.atomic.AtomicInteger reads=new java.util.concurrent.atomic.AtomicInteger();
+        ModelByteSource source=new ModelByteSource() {
+            public long size(){return bytes.capacity();}
+            public ByteBuffer read(long offset,int length,ModelCancellation token) throws java.io.IOException {
+                token.check();assertTrue(length<=64*1024);reads.incrementAndGet();
+                return ByteBuffer.wrap(bytes.array(),(int)offset,length).slice().order(ByteOrder.LITTLE_ENDIAN);
+            }
+            public void close(){}
+        };
+        GltfAccessorReader reader=new GltfAccessorReader(doc,List.of(source),ModelLimits.DEFAULT,new ModelCancellation());
+        double[] result=reader.read(0);
+        assertEquals(4,reads.get());
+        for(int i=0;i<count;i++)assertEquals(i*.5,result[i]);
+
+        bytes.putInt(64*1024,16383);
+        assertThrows(ModelProblem.class,()->reader.read(0));
+    }
+
     private static ModelByteSource source(byte[] data) {
         return new ModelByteSource() {
             public long size(){return data.length;}

@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.model.diagnostic;
 
+import com.mine.geometry_node.GeometryNode;
 import com.google.gson.GsonBuilder;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
-import com.mine.geometry_node.client.model.render.ModelStaticRenderer;
+import com.mine.geometry_node.client.model.render.bvh.ModelLightingProfiler;
 import com.mine.geometry_node.core.command.client.ClientCommandUtils;
 import com.mine.geometry_node.core.engine.system.model.math.ModelTransform;
 import com.mojang.brigadier.CommandDispatcher;
@@ -23,7 +24,8 @@ public final class ModelCommands {
     static {REPORT_IO.allowCoreThreadTimeOut(true);}
     private ModelCommands(){}
     public static <S> void register(CommandDispatcher<S> dispatcher) {
-        LiteralArgumentBuilder<S> root=LiteralArgumentBuilder.literal("model");
+        LiteralArgumentBuilder<S> root=LiteralArgumentBuilder.<S>literal("model")
+                .executes(c->run(()->say(ModelReportSummary.status(MODELS.report()))));
         root.then(LiteralArgumentBuilder.<S>literal("load").then(RequiredArgumentBuilder.<S,String>argument("path",StringArgumentType.greedyString()).executes(c->run(()->{
             load("preview",MODELS.load(localPath(StringArgumentType.getString(c,"path"))));
         }))));
@@ -33,45 +35,111 @@ public final class ModelCommands {
         root.then(LiteralArgumentBuilder.<S>literal("resource").then(RequiredArgumentBuilder.<S,String>argument("identifier",StringArgumentType.string()).executes(c->run(()->{
             load("preview",MODELS.loadResource(Identifier.parse(StringArgumentType.getString(c,"identifier"))));
         }))));
-        var clear=LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();com.mine.geometry_node.client.model.render.ModelLocalLightProviders.clearAttached();say("All client model instances cleared.");}));
+        var clear=LiteralArgumentBuilder.<S>literal("clear").executes(c->run(()->{MODELS.clear();com.mine.geometry_node.client.model.render.bvh.ModelLocalLightProviders.clearAttached();say("All client model instances cleared.");}));
         clear.then(LiteralArgumentBuilder.<S>literal("temporary").executes(c->run(()->{MODELS.clearTemporary();say("Temporary client model instances cleared.");})));
         root.then(clear);
         root.then(LiteralArgumentBuilder.<S>literal("remove").then(ModelCommands.<S>id().executes(c->run(()->say(MODELS.remove(StringArgumentType.getString(c,"id"))?"Model removed.":"No such model instance.")))));
         root.then(LiteralArgumentBuilder.<S>literal("reload").then(ModelCommands.<S>id().executes(c->run(()->{
             String id=StringArgumentType.getString(c,"id");load(id,MODELS.reload(id));
         }))));
-        root.then(LiteralArgumentBuilder.<S>literal("query").then(ModelCommands.<S>id().executes(c->run(()->say(ModelReportSummary.query(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
-        root.then(LiteralArgumentBuilder.<S>literal("status").executes(c->run(()->say(ModelReportSummary.status(MODELS.report())+" /model report saves full diagnostics."))));
+        root.then(LiteralArgumentBuilder.<S>literal("status")
+                .executes(c->run(()->say(ModelReportSummary.status(MODELS.report()))))
+                .then(ModelCommands.<S>id().executes(c->run(()->say(ModelReportSummary.query(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
+        ModelRenderCommands.register(root);
+        root.then(LiteralArgumentBuilder.<S>literal("hud")
+                .executes(c -> ModelHud.command(null))
+                .then(LiteralArgumentBuilder.<S>literal("on").executes(c -> ModelHud.command(true)))
+                .then(LiteralArgumentBuilder.<S>literal("off").executes(c -> ModelHud.command(false)))
+                .then(LiteralArgumentBuilder.<S>literal("status").executes(c -> ModelHud.command(null))));
         root.then(LiteralArgumentBuilder.<S>literal("report").executes(c->run(ModelCommands::report)));
-        root.then(LiteralArgumentBuilder.<S>literal("backend")
-                .then(LiteralArgumentBuilder.<S>literal("resident").executes(c->run(()->{
-                    ModelStaticRenderer.setIrisResidentEnabled(true); say("Iris resident main/shadow enabled; warm up before comparing metrics.");
-                })))
-                .then(LiteralArgumentBuilder.<S>literal("compat").executes(c->run(()->{
-                    ModelStaticRenderer.setIrisResidentEnabled(false); say("Iris immediate compatibility path enabled for comparison; geometry uploads every frame.");
-                }))));
-        root.then(LiteralArgumentBuilder.<S>literal("metrics").then(LiteralArgumentBuilder.<S>literal("reset").executes(c->run(()->{
-            ModelStaticRenderer.resetPerformanceMetrics(); say("Model CPU/transfer metrics reset; resident assets preserved.");
-        }))));
-        root.then(LiteralArgumentBuilder.<S>literal("lighting")
-                .then(LiteralArgumentBuilder.<S>literal("on").executes(c->run(()->{
-                    com.mine.geometry_node.client.model.render.ModelIrisHeldLight.setLightingEnabled(true);say("Model local lighting enabled.");
-                })))
-                .then(LiteralArgumentBuilder.<S>literal("off").executes(c->run(()->{
-                    com.mine.geometry_node.client.model.render.ModelIrisHeldLight.setLightingEnabled(false);say("Model local lighting disabled for comparison; geometry and resident resources preserved.");
-                }))));
-        root.then(LiteralArgumentBuilder.<S>literal("light").then(ModelCommands.<S>id()
-                .then(LiteralArgumentBuilder.<S>literal("off").executes(c->run(()->{
-                    com.mine.geometry_node.client.model.render.ModelLocalLightProviders.detach(StringArgumentType.getString(c,"id"));say("Model light removed.");
-                })))
-                .then(LiteralArgumentBuilder.<S>literal("attach").then(vector("x","y","z",c->{
-                    String instance=StringArgumentType.getString(c,"id");
-                    if(MODELS.query(instance).isEmpty())throw new IllegalArgumentException("unknown model instance: "+instance);
-                    com.mine.geometry_node.client.model.render.ModelLocalLightProviders.attach(instance,instance,(float)d(c,"x"),(float)d(c,"y"),(float)d(c,"z"),15);
-                    say("Visual point light attached at model-local coordinates; /model light "+instance+" off removes it.");
-                })))));
+        root.then(LiteralArgumentBuilder.<S>literal("material").then(material()));
         root.then(LiteralArgumentBuilder.<S>literal("update").then(update()));
         dispatcher.register(root);
+    }
+    static <S> LiteralArgumentBuilder<S> profileCommands() {
+        return LiteralArgumentBuilder.<S>literal("profile")
+                .then(LiteralArgumentBuilder.<S>literal("lighting")
+                        .executes(c->run(()->startLightingProfile(20)))
+                        .then(RequiredArgumentBuilder.<S,Integer>argument("frames",IntegerArgumentType.integer(1,120))
+                                .executes(c->run(()->startLightingProfile(IntegerArgumentType.getInteger(c,"frames"))))))
+                .then(LiteralArgumentBuilder.<S>literal("samples")
+                        .executes(c->run(()->startQualityProfile(60)))
+                        .then(RequiredArgumentBuilder.<S,Integer>argument("frames",IntegerArgumentType.integer(1,120))
+                                .executes(c->run(()->startQualityProfile(IntegerArgumentType.getInteger(c,"frames"))))))
+                .then(LiteralArgumentBuilder.<S>literal("resolution")
+                        .executes(c->run(()->startResolutionProfile(60)))
+                        .then(RequiredArgumentBuilder.<S,Integer>argument("frames",IntegerArgumentType.integer(1,120))
+                                .executes(c->run(()->startResolutionProfile(IntegerArgumentType.getInteger(c,"frames"))))))
+                .then(LiteralArgumentBuilder.<S>literal("status").executes(c->run(()->say("Lighting profile: "+ModelLightingProfiler.status()))))
+                .then(LiteralArgumentBuilder.<S>literal("cancel").executes(c->run(()->{
+                    ModelLightingProfiler.cancel(); say("Lighting profile cancelled; original modules and quality restored.");
+                })));
+    }
+
+    private static void startLightingProfile(int frames) {
+        requireLightingProfileIdle();
+        ModelLightingProfiler.start(frames, ModelCommands::writeLightingProfile);
+        say("Lighting profile started: "+ModelLightingProfiler.stageCount()+" stages, 60 warmup frames and "+frames+" samples per stage. /model local profile cancel restores settings.");
+    }
+    private static void startQualityProfile(int frames) {
+        requireLightingProfileIdle();
+        ModelLightingProfiler.startQuality(frames, ModelCommands::writeLightingProfile);
+        say("Local-light samples profile started: 4 / 3 / 2 / 1 / 4 samples; auto starts from full resolution. 60 warmup frames and "+frames+" samples per stage. Keep the scene stable; original settings are restored afterwards.");
+    }
+    private static void startResolutionProfile(int frames) {
+        requireLightingProfileIdle();
+        ModelLightingProfiler.startResolution(frames, ModelCommands::writeLightingProfile);
+        say("Local-light resolution profile started: 1 / 0.75 / 0.5 / 0.25 / 1; auto starts from 4 samples. 60 warmup frames and "+frames+" samples per stage. Keep the scene stable; original settings are restored afterwards.");
+    }
+    static void requireLightingProfileIdle() {
+        if (ModelLightingProfiler.active()) throw new IllegalStateException("profile running: "+ModelLightingProfiler.status()+"; wait or use /model local profile cancel before changing settings");
+    }
+    private static void writeLightingProfile(java.util.Map<String,Object> report) {
+        Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_node/model");
+        var capturedAt = java.time.Instant.now();
+        var output = new java.util.LinkedHashMap<String,Object>(report);
+        output.put("capture", ModelReportContext.capture(capturedAt));
+        try {
+            output.put("performance", ModelPerformanceReport.create(MODELS.report(), java.util.Map.of()));
+        } catch (RuntimeException error) {
+            GeometryNode.LOGGER.error("Lighting profile snapshot failed", error);
+            throw error;
+        }
+        try {
+        REPORT_IO.execute(()->{
+            String message;
+            try {
+                String text = JSON.toJson(output);
+                Path target = ModelReportFiles.write(directory, capturedAt, text);
+                message="Lighting profile complete. Report: "+target;
+            } catch(Exception error) {
+                GeometryNode.LOGGER.error("Lighting profile write failed", error);
+                message="Lighting profile write failed: "+ClientModelService.rootMessage(error);
+            }
+            String response=message; Minecraft.getInstance().execute(()->say(response));
+        });
+        } catch (RuntimeException error) {
+            GeometryNode.LOGGER.error("Lighting profile scheduling failed", error);
+            throw error;
+        }
+    }
+    private static <S> RequiredArgumentBuilder<S,String> material() {
+        var instance=ModelCommands.<S>id();
+        var index=RequiredArgumentBuilder.<S,Integer>argument("materialIndex",IntegerArgumentType.integer(0));
+        for(String property:java.util.List.of("metallic","roughness","normalScale","occlusionStrength","emissiveStrength")) {
+            index.then(LiteralArgumentBuilder.<S>literal(property).then(RequiredArgumentBuilder.<S,Float>argument("value",FloatArgumentType.floatArg())
+                    .executes(c->run(()->{
+                        int materialIndex=IntegerArgumentType.getInteger(c,"materialIndex");
+                        int affected=MODELS.overrideMaterial(StringArgumentType.getString(c,"id"),materialIndex,property,FloatArgumentType.getFloat(c,"value"));
+                        say("Material "+materialIndex+" "+property+" queued on shared asset ("+affected+" instances); /model report shows pendingMaterialUpdates and failedMaterialUpdates.");
+                    }))));
+        }
+        index.then(LiteralArgumentBuilder.<S>literal("reset").executes(c->run(()->{
+            int materialIndex=IntegerArgumentType.getInteger(c,"materialIndex");
+            int affected=MODELS.resetMaterial(StringArgumentType.getString(c,"id"),materialIndex);
+            say("Material "+materialIndex+" reset queued on shared asset ("+affected+" instances); wait for pendingMaterialUpdates=0 and failedMaterialUpdates=0.");
+        })));
+        return instance.then(index);
     }
     private static <S> RequiredArgumentBuilder<S,String> update() {
         var id=ModelCommands.<S>id();
@@ -116,29 +184,43 @@ public final class ModelCommands {
     private static void load(String id,CompletionStage<?> completion) {
         say("Model "+id+" queued for import.");
         completion.whenComplete((value,error)->{
-            if(error==null)say("Model "+id+" ready. Use /model query "+id+" for import details.");
+            if(error==null)say("Model "+id+" ready. /model status "+id);
             else say("Model "+id+": "+ClientModelService.rootMessage(error));
         });
     }
     private static void report() {
-        var snapshot = MODELS.report(); var context = ModelReportContext.capture();
-        String summary = ModelReportSummary.status(snapshot);
-        Path gameDirectory = Minecraft.getInstance().gameDirectory.toPath();
-        Path target = gameDirectory.resolve("geometry_node/model/p6-report.json");
+        var capturedAt = java.time.Instant.now();
+        final java.util.Map<String,Object> source;
+        final java.util.Map<String,Object> snapshot;
+        final String summary;
+        try {
+            source = MODELS.report();
+            snapshot = ModelPerformanceReport.create(source, ModelReportContext.capture(capturedAt));
+            summary = ModelReportSummary.status(source);
+        } catch (RuntimeException error) {
+            GeometryNode.LOGGER.error("Model report snapshot failed", error);
+            throw error;
+        }
+        Path directory = Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_node/model");
+        try {
         REPORT_IO.execute(()->{
             String message;
             try{
-                ModelReportContext.addFileEvidence(context, gameDirectory); snapshot.put("testContext", context);
                 String text = JSON.toJson(snapshot);
-                Files.createDirectories(target.getParent());Files.writeString(target,text);
-                // Keep immutable evidence across shaderpack switches and repeated runs.
-                Path archive = target.resolveSibling("p6-report-" + java.time.Instant.now().toString().replace(':', '-') + ".json");
-                Files.writeString(archive, text); message=summary+" Report: "+target;
+                Path target = ModelReportFiles.write(directory, capturedAt, text);
+                message=summary+" Report: "+target;
             }
-            catch(Exception error){message="Model report failed: "+error.getMessage();}
+            catch(Exception error){
+                GeometryNode.LOGGER.error("Model report write failed", error);
+                message="Model report failed: "+ClientModelService.rootMessage(error);
+            }
             String response=message;Minecraft.getInstance().execute(()->say(response));
         });
+        } catch (RuntimeException error) {
+            GeometryNode.LOGGER.error("Model report scheduling failed", error);
+            throw error;
+        }
     }
-    private static int run(Runnable action){try{action.run();return 1;}catch(RuntimeException error){say("Model: "+ClientModelService.rootMessage(error));return 0;}}
-    private static void say(String text){ClientCommandUtils.sendClientMsg(text);}
+    static int run(Runnable action){try{action.run();return 1;}catch(RuntimeException error){say("Model: "+ClientModelService.rootMessage(error));return 0;}}
+    static void say(String text){ClientCommandUtils.sendClientMsg(text);}
 }

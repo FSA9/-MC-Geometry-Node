@@ -13,6 +13,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ModelInstanceLifetimeTest {
     @Test
+    void removalInvalidatesRevisionOnlyWhenAnInstanceWasRemoved() {
+        ModelInstanceStore<String> store = new ModelInstanceStore<>();
+        store.put("a", "asset", 0, ModelTransform.IDENTITY, true, () -> {});
+        long before = store.revision();
+
+        assertTrue(store.remove("a"));
+        assertEquals(before + 1, store.revision());
+        assertFalse(store.remove("a"));
+        assertEquals(before + 1, store.revision());
+    }
+
+    @Test
     void temporaryClearDoesNotRetirePersistentStoreEntries() {
         AtomicInteger released=new AtomicInteger();
         ModelInstanceStore<String> store=new ModelInstanceStore<>();

@@ -10,7 +10,7 @@ import java.util.*;
 
 /** CPU glTF 2.0 importer for the STATIC_BASIC profile. It owns no renderer state. */
 public final class GltfImporter {
-    private static final Set<String> SUPPORTED_REQUIRED = Set.of("KHR_texture_transform", "KHR_materials_unlit");
+    private static final Set<String> SUPPORTED_REQUIRED = Set.of("KHR_texture_transform", "KHR_materials_unlit", "KHR_materials_emissive_strength");
     private final ModelLimits limits;
     public GltfImporter() { this(ModelLimits.DEFAULT); }
     public GltfImporter(ModelLimits limits) { this.limits = Objects.requireNonNull(limits); }
@@ -51,7 +51,8 @@ public final class GltfImporter {
             GltfAsset.Material defaultMaterial = GltfMaterialReader.defaultMaterial();
             List<GltfAsset.Texture> textures = GltfTextureReader.read(document, rootId, session, buffers, budget, token, limits);
             GltfMaterialReader.validateTextures(materials, textures.size());
-            if (!materials.isEmpty()) degraded.add("STATIC_BASIC preserves PBR factors and textures; metallic/roughness, normal mapping and AO lighting are deferred to P7");
+            for (String extension : optional) if (extension.startsWith("KHR_materials_"))
+                degraded.add(extension + ": JSON preserved; shading extension not implemented; core metallic-roughness fallback (required use is rejected)");
             List<GltfAsset.Mesh> meshes = new GltfGeometryReader(document, buffers, limits, token, budget, degraded).read(materials, defaultMaterial);
             GltfSceneReader.Result scenes = GltfSceneReader.read(document, meshes.size(), budget, token, gaps);
             if (materials.isEmpty()) materials = List.of(defaultMaterial);

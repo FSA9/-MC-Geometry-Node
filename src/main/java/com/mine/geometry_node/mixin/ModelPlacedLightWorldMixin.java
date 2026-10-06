@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.client.model.render.ModelPlacedLightField;
+import com.mine.geometry_node.client.model.render.bvh.ModelPlacedLightField;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;

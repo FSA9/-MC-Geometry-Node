@@ -6,6 +6,15 @@
 uniform sampler2D BaseTexture;
 uniform sampler2D EmissionTexture;
 uniform sampler2D MaterialData;
+flat in vec4 materialFactors0;
+flat in vec4 materialFactors1;
+flat in vec4 materialFactors2;
+flat in vec4 materialFactors3;
+in vec4 normalMrUv;
+in vec2 aoUv;
+uniform sampler2D NormalTexture;
+uniform sampler2D MetallicRoughnessTexture;
+uniform sampler2D OcclusionTexture;
 uniform sampler2D Sampler2;
 uniform int geometry_node_nativeActive;
 uniform vec2 geometry_node_nativeLight;
@@ -17,12 +26,28 @@ in vec3 modelNormal;
 in vec3 modelLight;
 in vec3 modelRelativePosition;
 in vec3 modelWorldNormal;
-in float sphericalVertexDistance;
-in float cylindricalVertexDistance;
+in vec3 modelViewPosition;
+in vec2 modelFogDistances;
 out vec4 fragColor;
 float material(int i) {
-    uvec4 bytes = uvec4(round(texelFetch(MaterialData,ivec2(i,0),0) * 255.0));
-    return uintBitsToFloat(bytes.r | (bytes.g << 8u) | (bytes.b << 16u) | (bytes.a << 24u));
+    // Avoid dynamic indexing into vec4 varyings. Some NVIDIA GLSL drivers reject
+    // the otherwise range guarded form as an out-of-bounds vector access at link time.
+    if(i==0)return materialFactors0.x;
+    if(i==1)return materialFactors0.y;
+    if(i==2)return materialFactors0.z;
+    if(i==3)return materialFactors0.w;
+    if(i==4)return materialFactors1.x;
+    if(i==5)return materialFactors1.y;
+    if(i==6)return materialFactors1.z;
+    if(i==7)return materialFactors1.w;
+    if(i==8)return materialFactors2.x;
+    if(i==9)return materialFactors2.y;
+    if(i==10)return materialFactors2.z;
+    if(i==11)return materialFactors2.w;
+    if(i==12)return materialFactors3.x;
+    if(i==13)return materialFactors3.y;
+    uvec4 bytes=uvec4(round(texelFetch(MaterialData,ivec2(i,0),0)*255.0));
+    return uintBitsToFloat(bytes.r|(bytes.g<<8u)|(bytes.b<<16u)|(bytes.a<<24u));
 }
 vec3 toLinear(vec3 v) {
     return mix(v / 12.92,pow((v + 0.055) / 1.055,vec3(2.4)),greaterThan(v,vec3(0.04045)));
@@ -31,16 +56,49 @@ vec3 toDisplay(vec3 v) {
     v=max(v,vec3(0.0));
     return mix(v*12.92,1.055*pow(v,vec3(1.0/2.4))-0.055,greaterThan(v,vec3(0.0031308)));
 }
+vec3 safeNormalize(vec3 v, vec3 fallback) { float squared=dot(v,v); return squared>1e-12 ? v*inversesqrt(squared) : fallback; }
+vec2 materialUv(int slot) {
+    if(slot==0)return baseUv;
+    if(slot==1)return emissiveUv;
+    if(slot==2)return normalMrUv.xy;
+    if(slot==3)return normalMrUv.zw;
+    return aoUv;
+}
+// Cotangent frame handles mirrored UVs and transformed UV0/UV1 without changing resident buffers.
+vec3 mappedNormal(vec3 n, vec3 position) {
+    if(materialFactors3.z<0.5) return n;
+    vec2 uv=materialUv(2);
+    vec3 dp1=dFdx(position), dp2=dFdy(position);
+    vec2 du1=dFdx(uv), du2=dFdy(uv);
+    float det=du1.x*du2.y-du1.y*du2.x;
+    if(abs(det)<1e-10) return n;
+    vec3 tangent=(dp1*du2.y-dp2*du1.y)/det;
+    vec3 bitangent=(-dp1*du2.x+dp2*du1.x)/det;
+    tangent-=n*dot(n,tangent);
+    if(dot(tangent,tangent)<1e-12) return n;
+    tangent=normalize(tangent);
+    float handed=dot(cross(n,tangent),bitangent)<0.0?-1.0:1.0;
+    bitangent=cross(n,tangent)*handed;
+    vec3 m=texture(NormalTexture,uv).rgb*2.0-1.0;
+    m.xy*=material(12);
+    return safeNormalize(tangent*m.x+bitangent*m.y+n*m.z,n);
+}
 void main() {
-    vec4 tex = texture(BaseTexture,baseUv);
-    vec4 base = vec4(toLinear(tex.rgb),tex.a) * modelColor * vec4(material(0),material(1),material(2),material(3));
+    vec4 tex = texture(BaseTexture,materialUv(0));
+    // Keep coverage independent from the spatial light factor.  ColorModulator.a is
+    // used below as the resident light multiplier; it must never attenuate BLEND
+    // coverage (a dark hand-held glass surface is still the same glass surface).
+    vec3 baseRgb = toLinear(tex.rgb) * modelColor.rgb * vec3(material(0),material(1),material(2));
+    float baseAlpha = clamp(tex.a * modelColor.a * material(3), 0.0, 1.0);
+    vec4 base = vec4(baseRgb,baseAlpha);
     int mode = int(material(8));
     if(mode==1 && base.a < material(7)) discard;
-    vec3 emission=toLinear(texture(EmissionTexture,emissiveUv).rgb)*vec3(material(4),material(5),material(6));
+    vec3 emission=toLinear(texture(EmissionTexture,materialUv(1)).rgb)*vec3(material(4),material(5),material(6));
     vec3 rgb;
-    if(material(9)>0.5) rgb=base.rgb+emission;
+    if(material(9)>0.5) rgb=base.rgb;
     else {
         vec3 n=normalize(gl_FrontFacing ? modelNormal : -modelNormal);
+        n=mappedNormal(n,modelViewPosition);
         float diffuse=minecraft_mix_light(Light0_Direction,Light1_Direction,n,vec4(1.0)).r;
         // The P1/P2 collector samples the lightmap per primitive. The P4 resident backend stores
         // full-bright vertices and supplies the spatial light factor through ColorModulator.
@@ -53,8 +111,28 @@ void main() {
             float skyLight=geometry_node_nativeLight.y;
             lighting=sample_lightmap(Sampler2,ivec2(clamp(vec2(blockLight,skyLight),0.0,1.0)*240.0)).rgb;
         }
-        rgb=base.rgb*lighting*diffuse+emission;
+        vec4 mr=texture(MetallicRoughnessTexture,materialUv(3));
+        float metallic=clamp(material(10)*mr.b,0.0,1.0);
+        float roughness=clamp(material(11)*mr.g,0.045,1.0);
+        float ao=mix(1.0,texture(OcclusionTexture,materialUv(4)).r,material(13));
+        // Native has no environment reflection probe: bounded two-light GGX approximation,
+        // driven by the existing vanilla lightmap. No emissive/fullbright substitute for metal.
+        vec3 viewDir=safeNormalize(-modelViewPosition,n);
+        vec3 f0=mix(vec3(0.04),base.rgb,metallic), spec=vec3(0.0);
+        float nv=max(dot(n,viewDir),0.001), a=roughness*roughness, a2=a*a;
+        for(int j=0;j<2;j++) {
+            vec3 l=normalize(j==0?Light0_Direction:Light1_Direction), h=safeNormalize(l+viewDir,n);
+            float nl=max(dot(n,l),0.0), nh=max(dot(n,h),0.0), vh=max(dot(viewDir,h),0.0);
+            float denom=nh*nh*(a2-1.0)+1.0;
+            float distribution=a2/max(3.14159265*denom*denom,1e-6);
+            float k=(roughness+1.0)*(roughness+1.0)*0.125;
+            float visibility=(nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k));
+            vec3 fresnel=f0+(1.0-f0)*pow(1.0-vh,5.0);
+            spec+=distribution*visibility*fresnel*nl/max(4.0*nv*nl,0.001)*0.3;
+        }
+        rgb=(base.rgb*(1.0-metallic)*diffuse*ao+spec)*toLinear(clamp(lighting,0.0,1.0))+emission;
     }
-    vec4 outputColor=vec4(toDisplay(rgb),mode==2 ? base.a : 1.0)*vec4(ColorModulator.rgb,1.0);
-    fragColor=apply_fog(outputColor,sphericalVertexDistance,cylindricalVertexDistance,FogEnvironmentalStart,FogEnvironmentalEnd,FogRenderDistanceStart,FogRenderDistanceEnd,FogColor);
+    float outputAlpha = mode==2 ? baseAlpha : 1.0;
+    vec4 outputColor=vec4(toDisplay(rgb),outputAlpha)*vec4(ColorModulator.rgb,1.0);
+    fragColor=apply_fog(outputColor,modelFogDistances.x,modelFogDistances.y,FogEnvironmentalStart,FogEnvironmentalEnd,FogRenderDistanceStart,FogRenderDistanceEnd,FogColor);
 }

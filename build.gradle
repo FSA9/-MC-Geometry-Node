@@ -76,12 +76,34 @@ neoForge {
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
+// Historical CPU cluster LOD is kept beside the active model LOD, outside compilation.
+sourceSets.main.java.exclude '**/render/lod/cluster/**'
+sourceSets.test.java.exclude '**/render/lod/cluster/**'
+
+configurations {
+    modelLodNatives { transitive = false }
+    runtimeClasspath.extendsFrom(modelLodNatives)
+}
 
 dependencies {
+    // Match Minecraft's LWJGL ABI; the extra binding owns only mesh simplification.
+    jarJar(implementation('org.lwjgl:lwjgl-meshoptimizer:3.4.1')) {
+        version {
+            strictly '[3.4.1]'
+            prefer '3.4.1'
+        }
+    }
+    for (nativePlatform in ['natives-windows', 'natives-windows-arm64', 'natives-linux', 'natives-linux-arm64', 'natives-macos', 'natives-macos-arm64']) {
+        modelLodNatives "org.lwjgl:lwjgl-meshoptimizer:3.4.1:${nativePlatform}"
+    }
+    testImplementation 'org.lwjgl:lwjgl:3.4.1'
+    testRuntimeOnly 'org.lwjgl:lwjgl:3.4.1:natives-linux'
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
     // CPU model contracts run without bootstrapping Minecraft; match host library versions.
     testImplementation "org.joml:joml:1.10.8"
     testImplementation "com.google.code.gson:gson:2.13.2"
+    // Exercise the public command grammar against the same Brigadier used by Minecraft.
+    testImplementation files(sourceSets.main.compileClasspath.filter { it.name.startsWith('brigadier-') })
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.14.2"
 
     jarJar(implementation("org.jetbrains.pty4j:pty4j:${pty4j_version}") {
@@ -172,6 +194,14 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
+}
+
+// JarJar identifies libraries by group/artifact, so classifiers cannot be separate nested jars.
+// Keep the binding as one nested library and package all platform-specific native resource paths.
+tasks.named('processResources', ProcessResources).configure {
+    from({ configurations.modelLodNatives.collect { zipTree(it) } }) {
+        include '**/*.dll', '**/*.so', '**/*.dylib'
+    }
 }
 
 idea {

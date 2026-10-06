@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.client.model.render.ModelResidentLight;
+import com.mine.geometry_node.client.model.render.bvh.ModelResidentLight;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;

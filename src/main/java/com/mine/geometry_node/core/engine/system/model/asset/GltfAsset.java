@@ -66,7 +66,7 @@ public final class GltfAsset {
     }
     public static final class Material {
         private final String name; private final Map<String,String> extensions; private final AlphaMode alphaMode; private final float alphaCutoff; private final boolean doubleSided,unlit;
-        private final float[] baseColorFactor,emissiveFactor; private final float metallicFactor,roughnessFactor,normalScale,occlusionStrength;
+        private final float[] baseColorFactor,emissiveFactor; private final float metallicFactor,roughnessFactor,normalScale,occlusionStrength,emissiveStrength;
         private final TextureInfo baseColorTexture,metallicRoughnessTexture,normalTexture,occlusionTexture,emissiveTexture;
         public Material(String name,AlphaMode mode,float cutoff,boolean doubleSided,boolean unlit,float[] base,float metallic,float rough,float[] emissive,float normalScale,float ao,
                         TextureInfo baseTex,TextureInfo mrTex,TextureInfo normalTex,TextureInfo aoTex,TextureInfo emissiveTex){
@@ -74,10 +74,16 @@ public final class GltfAsset {
         }
         public Material(String name,AlphaMode mode,float cutoff,boolean doubleSided,boolean unlit,float[] base,float metallic,float rough,float[] emissive,float normalScale,float ao,
                         TextureInfo baseTex,TextureInfo mrTex,TextureInfo normalTex,TextureInfo aoTex,TextureInfo emissiveTex,Map<String,String> extensions){
+            this(name,mode,cutoff,doubleSided,unlit,base,metallic,rough,emissive,normalScale,ao,baseTex,mrTex,normalTex,aoTex,emissiveTex,extensions,1);
+        }
+        public Material(String name,AlphaMode mode,float cutoff,boolean doubleSided,boolean unlit,float[] base,float metallic,float rough,float[] emissive,float normalScale,float ao,
+                        TextureInfo baseTex,TextureInfo mrTex,TextureInfo normalTex,TextureInfo aoTex,TextureInfo emissiveTex,Map<String,String> extensions,float emissiveStrength){
+            if (!Float.isFinite(emissiveStrength) || emissiveStrength < 0) throw new IllegalArgumentException("nonnegative finite emissiveStrength required");
+            this.emissiveStrength=emissiveStrength;
             this.name=name==null?"":name;this.extensions=Map.copyOf(extensions);this.alphaMode=Objects.requireNonNull(mode);this.alphaCutoff=cutoff;this.doubleSided=doubleSided;this.unlit=unlit;this.baseColorFactor=base.clone();this.metallicFactor=metallic;this.roughnessFactor=rough;this.emissiveFactor=emissive.clone();this.normalScale=normalScale;this.occlusionStrength=ao;this.baseColorTexture=baseTex;this.metallicRoughnessTexture=mrTex;this.normalTexture=normalTex;this.occlusionTexture=aoTex;this.emissiveTexture=emissiveTex;
         }
         public String name(){return name;} public Map<String,String> extensions(){return extensions;} public AlphaMode alphaMode(){return alphaMode;} public float alphaCutoff(){return alphaCutoff;} public boolean doubleSided(){return doubleSided;} public boolean unlit(){return unlit;}
-        public float[] baseColorFactor(){return baseColorFactor.clone();} public float metallicFactor(){return metallicFactor;} public float roughnessFactor(){return roughnessFactor;} public float[] emissiveFactor(){return emissiveFactor.clone();} public float normalScale(){return normalScale;} public float occlusionStrength(){return occlusionStrength;}
+        public float[] baseColorFactor(){return baseColorFactor.clone();} public float metallicFactor(){return metallicFactor;} public float roughnessFactor(){return roughnessFactor;} public float[] emissiveFactor(){return emissiveFactor.clone();} public float emissiveStrength(){return emissiveStrength;} public float normalScale(){return normalScale;} public float occlusionStrength(){return occlusionStrength;}
         public TextureInfo baseColorTexture(){return baseColorTexture;} public TextureInfo metallicRoughnessTexture(){return metallicRoughnessTexture;} public TextureInfo normalTexture(){return normalTexture;} public TextureInfo occlusionTexture(){return occlusionTexture;} public TextureInfo emissiveTexture(){return emissiveTexture;}
     }
     public record Sampler(int magFilter,int minFilter,int wrapS,int wrapT) {}

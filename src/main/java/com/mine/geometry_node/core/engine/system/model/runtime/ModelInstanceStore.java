@@ -61,7 +61,7 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
     }
     public boolean remove(String id) {
         Entry<A> old;
-        synchronized(this) { old=instances.remove(id); }
+        synchronized(this) { old=instances.remove(id); if(old!=null)revision++; }
         if(old!=null)old.release.run();
         return old!=null;
     }

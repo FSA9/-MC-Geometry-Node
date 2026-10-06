@@ -12,5 +12,9 @@ final class GltfImportBudget {
                 "aggregate decoded payload exceeds " + maximum + " bytes");
         retained += bytes;
     }
+    void checkTemporary(long bytes, String path) throws ModelProblem {
+        if (bytes < 0 || bytes > maximum - retained) throw new ModelProblem(ModelProblem.Code.BUDGET_EXCEEDED, path,
+                "tangent working set exceeds aggregate decoded budget " + maximum + " bytes");
+    }
     long retained() { return retained; }
 }

@@ -84,6 +84,12 @@ final class GltfGeometryReader {
             material = materials.get(index);
         }
         validateTextureCoordinates(material, uv0, uv1, path);
+        if (GltfTangents.needsGeneration(material.normalTexture(), tangents)) {
+            GltfTangents.Result generated=GltfTangents.generate(positions,normals,tex0,tex1,colors,indices,material.normalTexture(),tangents.length>0,budget,path,token);
+            positions=generated.positions(); normals=generated.normals(); tex0=generated.uv0(); tex1=generated.uv1();
+            colors=generated.colors(); tangents=generated.tangents(); indices=generated.indices();
+            notes.add(path + ": generated angle-weighted normal-UV tangents with mirrored seam splitting; not bit-exact MikkTSpace");
+        }
         GltfAsset.Bounds bounds = GltfAsset.Bounds.empty();
         for (int i = 0; i < positions.length; i += 3) bounds = bounds.include(positions[i], positions[i+1], positions[i+2]);
         return new GltfAsset.Primitive(positions, normals, tangents, tex0, tex1, colors, indices, material, sourceMode, bounds);

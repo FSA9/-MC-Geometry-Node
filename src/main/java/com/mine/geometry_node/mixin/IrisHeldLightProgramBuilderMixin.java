@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.client.model.render.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.ModelPackLightAdapters;
+import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.model.render.bvh.ModelPackLightAdapters;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;

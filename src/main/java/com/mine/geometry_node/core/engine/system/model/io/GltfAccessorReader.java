@@ -61,12 +61,15 @@ public final class GltfAccessorReader {
                 long io=number(indices,"byteOffset",0); range(iv,io,(long)n*iw,iw,location);
                 ModelLimits.requireWithin(values*Double.BYTES+(long)n*Integer.BYTES,limits.decodedAccessorBytes(),location+"/sparse");
                 int[] targets=new int[n]; long previous=-1;
-                for(int i=0;i<n;i++) {
-                    if((i&255)==0) cancellation.check();
-                    ByteBuffer b=readView(iv,io+(long)i*iw,iw);
-                    long v=(long)scalar(b,0,it,false);
-                    if(v<=previous||v>=count) throw invalid(location,"sparse indices must be increasing and in range");
-                    targets[i]=(int)v; previous=v;
+                int batch=Math.max(1,Math.min(64*1024,limits.readSliceBytes())/iw);
+                for(int start=0;start<n;start+=batch) {
+                    cancellation.check(); int size=Math.min(batch,n-start);
+                    ByteBuffer b=readView(iv,io+(long)start*iw,size*iw);
+                    for(int i=0;i<size;i++) {
+                        long v=(long)scalar(b,i*iw,it,false);
+                        if(v<=previous||v>=count) throw invalid(location,"sparse indices must be increasing and in range");
+                        targets[start+i]=(int)v; previous=v;
+                    }
                 }
                 JsonObject vv=object("bufferViews",vals.get("bufferView").getAsInt());
                 if(vv.has("byteStride")) throw invalid(location,"sparse value view cannot be interleaved");

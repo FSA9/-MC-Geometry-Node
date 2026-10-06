@@ -19,9 +19,16 @@ final class GltfMaterialReader {
             out.add(new GltfAsset.Material(GltfJson.string(m, "name", "material_" + i, path), mode, cutoff, GltfJson.bool(m, "doubleSided", false, path), unlit, base,
                     GltfJson.scalar(pbr, "metallicFactor", 1, path + "/pbrMetallicRoughness"), GltfJson.scalar(pbr, "roughnessFactor", 1, path + "/pbrMetallicRoughness"), emissive,
                     GltfJson.scalar(normal, "scale", 1, path + "/normalTexture"), GltfJson.scalar(ao, "strength", 1, path + "/occlusionTexture"),
-                    textureInfo(pbr, "baseColorTexture", path), textureInfo(pbr, "metallicRoughnessTexture", path), textureInfo(m, "normalTexture", path), textureInfo(m, "occlusionTexture", path), textureInfo(m, "emissiveTexture", path), extensions(m,path)));
+                    textureInfo(pbr, "baseColorTexture", path), textureInfo(pbr, "metallicRoughnessTexture", path), textureInfo(m, "normalTexture", path), textureInfo(m, "occlusionTexture", path), textureInfo(m, "emissiveTexture", path), extensions(m,path), emissiveStrength(m,path)));
         }
         return out;
+    }
+    private static float emissiveStrength(JsonObject material,String path) throws ModelProblem {
+        JsonObject extensions=GltfJson.optionalObject(material,"extensions",path);
+        JsonObject strength=GltfJson.optionalObject(extensions,"KHR_materials_emissive_strength",path+"/extensions");
+        float value=GltfJson.scalar(strength,"emissiveStrength",1,path+"/extensions/KHR_materials_emissive_strength");
+        if(value<0) throw GltfJson.invalid(path+"/extensions/KHR_materials_emissive_strength/emissiveStrength","must be nonnegative");
+        return value;
     }
     private static Map<String,String> extensions(JsonObject material,String path) throws ModelProblem {
         LinkedHashMap<String,String> result=new LinkedHashMap<>();

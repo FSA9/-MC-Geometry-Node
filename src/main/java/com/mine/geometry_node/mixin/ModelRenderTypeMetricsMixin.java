@@ -1,8 +1,8 @@
 package com.mine.geometry_node.mixin;
 
-import com.mine.geometry_node.client.model.render.ModelStaticRenderer;
-import com.mine.geometry_node.client.model.render.ModelIrisAlphaTest;
-import com.mine.geometry_node.client.model.render.ModelIrisBlendOverride;
+import com.mine.geometry_node.client.model.render.pipeline.ModelStaticRenderer;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisAlphaTest;
+import com.mine.geometry_node.client.model.render.pipeline.ModelIrisBlendOverride;
 import com.mine.geometry_node.GeometryNode;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
