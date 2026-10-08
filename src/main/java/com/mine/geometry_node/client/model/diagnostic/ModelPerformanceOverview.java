@@ -18,6 +18,21 @@ final class ModelPerformanceOverview {
         }
         rank(cpu);
         result.put("cpuMs", cpu);
+        var collision = child(child(report, "collision"), "runtime");
+        List<Map<String, Object>> collisionCpu = new ArrayList<>();
+        for (String side : List.of("client", "server")) for (String operation : List.of("query", "movement")) {
+            var row = timing(side + "." + operation, "collision.runtime." + side + "." + operation,
+                    child(child(collision, side), operation), "cpuNanos");
+            row.put("unit", "per invocation, not per frame");
+            collisionCpu.add(row);
+        }
+        for (String operation : List.of("build", "render")) {
+            var row = timing("debug." + operation, "collision.runtime.debug." + operation,
+                    child(child(collision, "debug"), operation), "cpuNanos");
+            row.put("unit", operation.equals("build") ? "per debug snapshot rebuild" : "per shared debug render pass");
+            collisionCpu.add(row);
+        }
+        result.put("collisionCpuMs", collisionCpu);
         List<Map<String, Object>> gpu = new ArrayList<>();
         for (String group : List.of("modelGpu", "shaderGpu")) {
             Object passes = child(renderer, group).get("passes");
@@ -41,9 +56,11 @@ final class ModelPerformanceOverview {
                 "Model GPU intervals sample every 16 frames; shaderGpu measures full pack draws, not isolated model lighting.",
                 "hostInterval excludes portions of the frame. reportedFps is the game counter, not a measured CPU/GPU frame budget.",
                 "No sample means unknown, not zero. Disabled modules and pending uploads must be checked before comparisons.",
+                "Collision query is nested in movement; collision CPU rows are per invocation, not per frame. Debug build is intermittent; debug render includes other geometry sharing the same pass. GPU debug cost is not measured.",
                 "Group coverage reports the best available sample status; SAMPLED does not mean every pass has sufficient fresh samples. Inspect individual timing rows."));
         result.put("coverage", List.of(
                 coverage("model_cpu", sampleState(cpu), "renderer.metrics", "Main/shadow submission, lighting preparation, transparency; not all game CPU work."),
+                coverage("collision_cpu", sampleState(collisionCpu), "collision.runtime", "Sampled client/server queries, movement/SAT batches, debug snapshot construction and shared debug CPU submission."),
                 coverage("model_gpu", state(child(renderer, "modelGpu")), "renderer.modelGpu", "Main opaque batch, model shadow batch, transparent batch; collector fallback excluded."),
                 coverage("pack_gpu", state(child(renderer, "shaderGpu")), "renderer.shaderGpu", "Instrumented Iris fullscreen draws; excludes compute and other uninstrumented passes."),
                 coverage("local_and_gi_gpu", "PROFILE_COMPARISON_REQUIRED", "renderer.modelLighting", "Shared BVH; no isolated GPU function timings. Use /model local profile lighting."),
@@ -54,6 +71,9 @@ final class ModelPerformanceOverview {
         if (number(child(report, "counts"), "pendingLoads") > 0
                 || number(child(report, "counts"), "deferredInstances") > 0) observations.add("LOAD_OR_RESIDENCY_PENDING");
         if (number(child(report, "counts"), "failedLoads") > 0) observations.add("MODEL_LOAD_FAILURES");
+        var collisionDebug = child(child(collision, "debug"), "state");
+        if (Boolean.TRUE.equals(collisionDebug.get("enabled")) && Boolean.TRUE.equals(collisionDebug.get("truncated")))
+            observations.add("COLLISION_DEBUG_PREVIEW_TRUNCATED");
         var bvh = child(child(renderer, "modelLighting"), "sharedBvh");
         if (Boolean.FALSE.equals(bvh.get("uploadReady"))) observations.add("BVH_UPLOAD_NOT_READY");
         for (String group : List.of("modelGpu", "shaderGpu")) {

@@ -57,6 +57,14 @@ vec3 toDisplay(vec3 v) {
     return mix(v*12.92,1.055*pow(v,vec3(1.0/2.4))-0.055,greaterThan(v,vec3(0.0031308)));
 }
 vec3 safeNormalize(vec3 v, vec3 fallback) { float squared=dot(v,v); return squared>1e-12 ? v*inversesqrt(squared) : fallback; }
+// Analytic split-sum GGX environment BRDF (Lazarov/Karis, Physically Based Shading on Mobile).
+// Vanilla provides lightmap irradiance but no reflection probe; use it as a uniform environment.
+vec3 nativeEnvironmentReflectance(vec3 f0, float roughness, float nv) {
+    vec4 r=roughness*vec4(-1.0,-0.0275,-0.572,0.022)+vec4(1.0,0.0425,1.04,-0.04);
+    float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;
+    vec2 integrated=vec2(-1.04,1.04)*a004+r.zw;
+    return clamp(f0*integrated.x+integrated.y,0.0,1.0);
+}
 vec2 materialUv(int slot) {
     if(slot==0)return baseUv;
     if(slot==1)return emissiveUv;
@@ -115,8 +123,8 @@ void main() {
         float metallic=clamp(material(10)*mr.b,0.0,1.0);
         float roughness=clamp(material(11)*mr.g,0.045,1.0);
         float ao=mix(1.0,texture(OcclusionTexture,materialUv(4)).r,material(13));
-        // Native has no environment reflection probe: bounded two-light GGX approximation,
-        // driven by the existing vanilla lightmap. No emissive/fullbright substitute for metal.
+        // Keep both direct GGX and indirect reflection: removing metal's diffuse term without
+        // an environment contribution makes glTF's default white, fully metallic material black.
         vec3 viewDir=safeNormalize(-modelViewPosition,n);
         vec3 f0=mix(vec3(0.04),base.rgb,metallic), spec=vec3(0.0);
         float nv=max(dot(n,viewDir),0.001), a=roughness*roughness, a2=a*a;
@@ -130,7 +138,8 @@ void main() {
             vec3 fresnel=f0+(1.0-f0)*pow(1.0-vh,5.0);
             spec+=distribution*visibility*fresnel*nl/max(4.0*nv*nl,0.001)*0.3;
         }
-        rgb=(base.rgb*(1.0-metallic)*diffuse*ao+spec)*toLinear(clamp(lighting,0.0,1.0))+emission;
+        vec3 indirectSpecular=nativeEnvironmentReflectance(f0,roughness,nv)*ao;
+        rgb=(base.rgb*(1.0-metallic)*diffuse*ao+spec+indirectSpecular)*toLinear(clamp(lighting,0.0,1.0))+emission;
     }
     float outputAlpha = mode==2 ? baseAlpha : 1.0;
     vec4 outputColor=vec4(toDisplay(rgb),outputAlpha)*vec4(ColorModulator.rgb,1.0);

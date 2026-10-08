@@ -5,6 +5,7 @@ import java.util.Map;
 /** Model solar-shadow switch and caster distance, independent of BVH lighting. */
 public final class ModelShadowDistancePolicy {
     public static final double DEFAULT_MAX_DISTANCE = 512.0;
+    public static final float MAX_TOLERANCE = 100.0f;
     private static boolean enabled = true;
     private static boolean automatic = true;
     private static float manualTolerance;
@@ -25,8 +26,8 @@ public final class ModelShadowDistancePolicy {
     public static void setAutomatic() { automatic = true; enabled = true; }
 
     public static void setTolerance(float value) {
-        if (!Float.isFinite(value) || value < 0 || value > 2)
-            throw new IllegalArgumentException("shadow tolerance must be in [0,2] texels");
+        if (!Float.isFinite(value) || value < 0 || value > MAX_TOLERANCE)
+            throw new IllegalArgumentException("shadow tolerance must be in [0," + MAX_TOLERANCE + "] texels");
         manualTolerance = value;
         automatic = false;
     }

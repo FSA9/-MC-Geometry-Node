@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.engine.behavior.runtime.navigation;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.mixin.GroundPathNavigationAccessor;
-import com.mine.geometry_node.mixin.MobNavigationInvoker;
-import com.mine.geometry_node.mixin.PathNavigationAccessor;
+import com.mine.geometry_node.mixin.behavior.GroundPathNavigationAccessor;
+import com.mine.geometry_node.mixin.behavior.MobNavigationInvoker;
+import com.mine.geometry_node.mixin.behavior.PathNavigationAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;

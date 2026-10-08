@@ -3,7 +3,6 @@ package com.mine.geometry_node.client.model.render.lod.model;
 import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset.Occurrence;
 import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
 import org.joml.Vector3f;
-import org.joml.Matrix4fc;
 
 import java.util.List;
 
@@ -54,11 +53,4 @@ public final class ModelLodObject {
     public boolean hasOpaque() { return triangles[0] > 0; }
     public boolean hasBlend() { return transparentTriangles > 0; }
 
-    /** Native opaque resident buffers contain only the original winding order. */
-    public boolean supportsNativeResidency(Matrix4fc instanceTransform) {
-        boolean instanceMirrored = instanceTransform.determinant3x3() < 0;
-        for (var occurrence : levels.getFirst())
-            if (instanceMirrored != (occurrence.transform().determinant3x3() < 0)) return false;
-        return true;
-    }
 }

@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.texture.TextureAtlas;
 final class GeometryDebugRenderTypes {
     static final RenderType GEOMETRY_FACE = RenderType.create(
             "geometry_node_geometry_debug_face",
-            RenderSetup.builder(RenderPipelines.DEBUG_QUADS)
+            RenderSetup.builder(GeometryDebugPipelines.FACE)
                     .bufferSize(262144)
                     .sortOnUpload()
                     .createRenderSetup()
@@ -20,14 +20,14 @@ final class GeometryDebugRenderTypes {
 
     static final RenderType GEOMETRY_LINE = RenderType.create(
             "geometry_node_geometry_debug_line",
-            RenderSetup.builder(RenderPipelines.LINES_TRANSLUCENT)
+            RenderSetup.builder(GeometryDebugPipelines.LINE)
                     .bufferSize(262144)
                     .createRenderSetup()
     );
 
     static final RenderType GEOMETRY_POINT = RenderType.create(
             "geometry_node_geometry_debug_point",
-            RenderSetup.builder(RenderPipelines.DEBUG_POINTS)
+            RenderSetup.builder(GeometryDebugPipelines.POINT)
                     .bufferSize(65536)
                     .createRenderSetup()
     );

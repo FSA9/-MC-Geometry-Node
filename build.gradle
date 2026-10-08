@@ -86,6 +86,15 @@ configurations {
 }
 
 dependencies {
+    // Pure Java convex hulls for collision generation, independent of render LOD.
+    jarJar(implementation('com.github.quickhull3d:quickhull3d:1.0.0') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }) {
+        version {
+            strictly '[1.0.0]'
+            prefer '1.0.0'
+        }
+    }
     // Match Minecraft's LWJGL ABI; the extra binding owns only mesh simplification.
     jarJar(implementation('org.lwjgl:lwjgl-meshoptimizer:3.4.1')) {
         version {
@@ -104,6 +113,8 @@ dependencies {
     testImplementation "com.google.code.gson:gson:2.13.2"
     // Exercise the public command grammar against the same Brigadier used by Minecraft.
     testImplementation files(sourceSets.main.compileClasspath.filter { it.name.startsWith('brigadier-') })
+    // Collision movement tests exercise the host AABB/Vec3 implementations, without starting a world.
+    testImplementation files(sourceSets.main.compileClasspath)
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.14.2"
 
     jarJar(implementation("org.jetbrains.pty4j:pty4j:${pty4j_version}") {

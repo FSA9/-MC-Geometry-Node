@@ -652,19 +652,19 @@ public final class ModelRenderAsset implements AutoCloseable {
         int total = primitive.indices.length;
         while (build == null || build.completedVertices < total) {
             int offset = build == null ? 0 : build.completedVertices;
-            int count = ModelGeometryChunks.nextCount(total, offset, format.getVertexSize(), iris,
+            int count = ModelGeometryChunks.nextCount(total, offset, format.getVertexSize(), true,
                     RESIDENCY.budget().maxUploadBytesPerFrame());
-            long chunkBytes = (long) count * (format.getVertexSize() + (iris ? 8 : 4));
+            long chunkBytes = (long) count * (format.getVertexSize() + 8);
             if (!ModelIrisUploadBudget.INSTANCE.tryAcquire(chunkBytes)) return null;
             long started = System.nanoTime();
             try {
                 if (build == null) {
-                    long bytes = Math.multiplyExact((long) total, format.getVertexSize() + (iris ? 8L : 4L));
+                    long bytes = Math.multiplyExact((long) total, format.getVertexSize() + 8L);
                     if (!RESIDENCY.reserveAdditionalGpu(this, bytes))
                         throw new ModelGpuBudgetException("Resident geometry budget exhausted: " + RESIDENCY.snapshot());
                     build = new PendingGeometry(format, iris, bytes);
                     long allocationStarted = System.nanoTime();
-                    try { build.storage = allocateGeometry(total, format, iris, bytes); }
+                    try { build.storage = allocateGeometry(total, format, bytes); }
                     catch (RuntimeException | Error failure) { RESIDENCY.releaseAdditionalGpu(this, bytes); throw failure; }
                     finally { ModelStaticRenderer.metrics().residentGeometryAllocation(System.nanoTime() - allocationStarted); }
                     pending.put(primitive, build);
@@ -695,7 +695,7 @@ public final class ModelRenderAsset implements AutoCloseable {
         RenderSystem.queueFencedTask(() -> { mesh.close(); RESIDENCY.releaseRetiredGeometry(this, mesh.bytes()); });
     }
 
-    private GpuPrimitive allocateGeometry(int count, VertexFormat format, boolean iris, long bytes) {
+    private GpuPrimitive allocateGeometry(int count, VertexFormat format, long bytes) {
         GpuBuffer vertex = null, index = null, reversed = null;
         try {
             var device = RenderSystem.getDevice();
@@ -703,7 +703,7 @@ public final class ModelRenderAsset implements AutoCloseable {
                     GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, (long) count * format.getVertexSize());
             index = device.createBuffer(() -> "GeometryNode resident indices " + identity,
                     GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, (long) count * Integer.BYTES);
-            if (iris) reversed = device.createBuffer(() -> "GeometryNode resident mirrored indices " + identity,
+            reversed = device.createBuffer(() -> "GeometryNode resident mirrored indices " + identity,
                     GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, (long) count * Integer.BYTES);
             return new GpuPrimitive(vertex, index, reversed, count, bytes, format);
         } catch (RuntimeException | Error failure) {
@@ -739,7 +739,7 @@ public final class ModelRenderAsset implements AutoCloseable {
                     ModelIrisGeometryLayout.neutralEntityIds(vertexData, count, format.getVertexSize(), format.getOffset(element));
                 }
                 ByteBuffer indexData = ModelGeometryChunks.indices(offset, count, false);
-                ByteBuffer reversedData = build.iris ? ModelGeometryChunks.indices(offset, count, true) : null;
+                ByteBuffer reversedData = ModelGeometryChunks.indices(offset, count, true);
                 long buildElapsed = System.nanoTime() - buildStarted;
                 build.buildNanos += buildElapsed;
                 ModelStaticRenderer.metrics().residentGeometryChunk(buildElapsed);
@@ -751,10 +751,8 @@ public final class ModelRenderAsset implements AutoCloseable {
                     uploadedBytes += vertexBytes;
                     encoder.writeToBuffer(build.storage.indices().slice((long) offset * 4, (long) count * 4), indexData);
                     uploadedBytes += (long) count * 4;
-                    if (reversedData != null) {
-                        encoder.writeToBuffer(build.storage.indices(true).slice((long) offset * 4, (long) count * 4), reversedData);
-                        uploadedBytes += (long) count * 4;
-                    }
+                    encoder.writeToBuffer(build.storage.indices(true).slice((long) offset * 4, (long) count * 4), reversedData);
+                    uploadedBytes += (long) count * 4;
                 } finally {
                     if (uploadedBytes > 0) ModelStaticRenderer.metrics().residentGeometryUpload(uploadedBytes, System.nanoTime() - uploadStarted);
                 }

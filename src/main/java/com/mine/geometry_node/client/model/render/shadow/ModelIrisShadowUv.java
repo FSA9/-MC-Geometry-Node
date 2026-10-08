@@ -40,7 +40,7 @@ public final class ModelIrisShadowUv {
         if (geometry != null && geometry.contains("uniform float " + ModelSeusShadowDepth.TOLERANCE + ";")) TOLERANCE_LOCATIONS.put(program, -2);
         if (geometry != null && geometry.contains("flat out vec3 modelShadowBaryA;")) SEUS_COVERAGE_PROGRAMS.add(program);
         if (ModelSeusShadowDepth.patched(geometry) && geometry.contains("bool modelOriented = false;")) SEUS_ORIENTED_COVERAGE_PROGRAMS.add(program);
-        if (vertex != null && vertex.contains("out vec3 geometry_node_shadowPosition;")) DEPTH_PROGRAMS.add(program);
+        if (ModelSundialShadowDepth.patched(geometry)) DEPTH_PROGRAMS.add(program);
         if (ModelSeusShadowVoxel.patched(geometry)) VOXEL_PROGRAMS.add(program);
         if (ModelSundialShadowUv.patched(vertex) || ModelSeusShadowVoxel.patched(geometry)) LOCATIONS.put(program, -2);
         else LOCATIONS.remove(program);
@@ -57,7 +57,8 @@ public final class ModelIrisShadowUv {
     }
     /** Set from the queued caster, not the last model visited while collecting draws. */
     public static void tolerance(float value) {
-        if (!Float.isFinite(value) || value < 0 || value > 2) throw new IllegalArgumentException("Shadow tolerance must be in [0, 2]");
+        if (!Float.isFinite(value) || value < 0 || value > ModelShadowDistancePolicy.MAX_TOLERANCE)
+            throw new IllegalArgumentException("Shadow tolerance must be in [0, " + ModelShadowDistancePolicy.MAX_TOLERANCE + "]");
         tolerance = value;
     }
     public static final class Scope implements AutoCloseable {
@@ -107,7 +108,7 @@ public final class ModelIrisShadowUv {
                 Map.entry("seusOrientedCoveragePrograms", SEUS_ORIENTED_COVERAGE_PROGRAMS.size()),
                 Map.entry("seusDepthDraws", seusDepthDraws),
                 Map.entry("uniformUploads", UNIFORM_UPLOADS.uploads()), Map.entry("uniformUploadsSkipped", UNIFORM_UPLOADS.skippedUploads()),
-                Map.entry("scope", "Model-only Sundial depth, SEUS finite triangle coverage/depth, Sundial repeat UV and SEUS block voxel exclusion; unmatched programs unchanged, pixels require verification"));
+                Map.entry("scope", "Model-only Sundial and SEUS finite triangle coverage/depth, Sundial repeat UV and SEUS block voxel exclusion; unmatched programs unchanged, pixels require verification"));
     }
     private ModelIrisShadowUv() {}
 }

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.runtime.render.debug;
 
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
+import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionMetrics;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -26,6 +27,8 @@ public final class GeometryDebugRenderer {
 
     private static List<PacketGeometryDebugSnapshot.Mesh> meshes = List.of();
     private static boolean enabled;
+    private static boolean hasModelCollision;
+    private static long submittedFaces, submittedEdges, estimatedUploadBytes;
 
     private GeometryDebugRenderer() {
     }
@@ -33,11 +36,35 @@ public final class GeometryDebugRenderer {
     public static void handleSnapshot(PacketGeometryDebugSnapshot packet) {
         enabled = packet.enabled();
         meshes = enabled ? List.copyOf(packet.meshes()) : List.of();
+        hasModelCollision = meshes.stream().anyMatch(mesh -> "model_collision".equals(mesh.graphId()));
+        if (!enabled || hasModelCollision) ModelCollisionMetrics.debugEnabled(hasModelCollision);
+        submittedFaces = submittedEdges = estimatedUploadBytes = 0;
+        for (var mesh : meshes) {
+            long faces = switch (mesh.geometryType()) {
+                case MESH -> mesh.faces().length / 4;
+                case PERFECT_CYLINDER -> PERFECT_CURVE_SEGMENTS * 3L;
+                case PERFECT_SPHERE -> PERFECT_SPHERE_SEGMENTS * (long) PERFECT_SPHERE_RINGS;
+            };
+            long edges = switch (mesh.geometryType()) {
+                case MESH -> mesh.edges().length / 2;
+                case PERFECT_CYLINDER -> PERFECT_CURVE_SEGMENTS * 2L + 4;
+                case PERFECT_SPHERE -> PERFECT_CURVE_SEGMENTS * 3L;
+            };
+            submittedFaces += faces;
+            submittedEdges += edges;
+            // POSITION_COLOR faces (16 B), POSITION_COLOR_NORMAL_LINE_WIDTH lines (24 B),
+            // plus quad/expanded-line indices (32-bit upper estimate).
+            estimatedUploadBytes += faces * (4 * 16L + 6 * 4L) + edges * (4 * 24L + 6 * 4L);
+            if (mesh.geometryType() == GeometryDebugType.MESH && mesh.showPoints())
+                estimatedUploadBytes += mesh.vertices().length / 3L * (4 * 20L + 6 * 4L);
+        }
     }
 
     public static void clear() {
         enabled = false;
         meshes = List.of();
+        hasModelCollision = false;
+        ModelCollisionMetrics.debugEnabled(false);
     }
 
     public static void render(PoseStack poseStack, Camera camera) {
@@ -46,6 +73,21 @@ public final class GeometryDebugRenderer {
             return;
         }
         if (!enabled || meshes.isEmpty()) return;
+
+        if (hasModelCollision) {
+            try (var sample = ModelCollisionMetrics.debugRender()) {
+                renderMeshes(poseStack, camera);
+                if (sample.sampled()) {
+                    sample.meshes = meshes.size();
+                    sample.faces = submittedFaces;
+                    sample.edges = submittedEdges;
+                    sample.uploadedBytes = estimatedUploadBytes;
+                }
+            }
+        } else renderMeshes(poseStack, camera);
+    }
+
+    private static void renderMeshes(PoseStack poseStack, Camera camera) {
 
         Minecraft minecraft = Minecraft.getInstance();
         MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();

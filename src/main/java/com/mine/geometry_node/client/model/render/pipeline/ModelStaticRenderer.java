@@ -63,8 +63,8 @@ public final class ModelStaticRenderer {
     private static long frame;
     private static ModelRenderBudget budget = ModelRenderBudget.DEFAULT;
     private static final ModelRenderMetrics METRICS = new ModelRenderMetrics();
-    /** Native resident draws are opt-in and run before host solid features, outside collector emission. */
-    private static final boolean DIRECT_GPU_ENABLED = Boolean.getBoolean("geometry_node.model.direct_gpu");
+    /** Keep immutable native meshes on the GPU; the collector remains an explicit compatibility fallback. */
+    private static final boolean DIRECT_GPU_ENABLED = Boolean.parseBoolean(System.getProperty("geometry_node.model.direct_gpu", "true"));
     private static final ModelSpatialLightCache LIGHT_CACHE = new ModelSpatialLightCache();
     private static final ModelCullingBounds CULLING_BOUNDS = new ModelCullingBounds();
     private static final IrisModelBridge IRIS = new IrisModelBridge();
@@ -142,7 +142,7 @@ public final class ModelStaticRenderer {
 
     private record DirectDraw(ModelRenderAsset asset, ModelRenderAsset.GpuPrimitive mesh, ModelRenderAsset.MaterialBinding binding,
                               Matrix4f transform, ModelRenderAsset.Primitive primitive, ModelRenderRendererLight light,
-                              List<IndexRange> ranges) {}
+                              boolean mirrored, List<IndexRange> ranges) {}
     private record FallbackDraw(ModelRenderAsset.Primitive primitive, Matrix4f transform, boolean mirrored, int packedLight, RenderType type, boolean iris,
                                 List<IndexRange> ranges) {}
     private record Triangle(FallbackDraw draw, ModelRenderInstance instance, int nodeIndex, int offset, float depth) {}
@@ -256,7 +256,7 @@ public final class ModelStaticRenderer {
                                 if (iris) irisDraws.add(new IrisDraw(asset, primitive, mesh, transform,
                                         light.packed(), mirrored, ranges.resident(), 0, ModelIrisHeldLight.receiverSlot(instance.id())));
                                 else direct.computeIfAbsent(new BatchKey(binding), key -> new ArrayList<>())
-                                        .add(new DirectDraw(asset, mesh, binding, new Matrix4f(transform), primitive, light, ranges.resident()));
+                                        .add(new DirectDraw(asset, mesh, binding, new Matrix4f(transform), primitive, light, mirrored, ranges.resident()));
                             }
                             if (!ranges.immediate().isEmpty()) {
                                 if (iris) {
@@ -666,9 +666,11 @@ public final class ModelStaticRenderer {
                 ModelRenderAsset.MaterialBinding binding = entry.getKey().binding();
                 List<GpuBufferSlice> transforms = new ArrayList<>();
                 for (DirectDraw draw : entry.getValue()) {
-                    float factor = shadowPass || draw.primitive().material.unlit() ? 1.0f : draw.light().factor();
+                    // Opaque native draws use the exact collector lightmap coordinates. A scalar
+                    // brightness approximation would lose sky/block tint and darken materials.
+                    int packedLight = draw.light().packed();
                     GpuBufferSlice dynamic = RenderSystem.getDynamicUniforms().writeTransform(new Matrix4f(baseView).mul(draw.transform()),
-                            new Vector4f(1.0f, 1.0f, 1.0f, factor), new Vector3f(), draw.transform());
+                            new Vector4f(1.0f), new Vector3f(packedLight & 65535, packedLight >>> 16, 1), draw.transform());
                     transforms.add(dynamic);
                     METRICS.dynamicUniformUpload(shadowPass ? ModelRenderMetrics.Pass.SHADOW : ModelRenderMetrics.Pass.MAIN,
                             dynamic.length());
@@ -690,7 +692,7 @@ public final class ModelStaticRenderer {
                 for (DirectDraw draw : entry.getValue()) {
                     pass.setUniform("DynamicTransforms", transforms.get(transformIndex++));
                     pass.setVertexBuffer(0, draw.mesh().vertices());
-                    pass.setIndexBuffer(draw.mesh().indices(), VertexFormat.IndexType.INT);
+                    pass.setIndexBuffer(draw.mesh().indices(draw.mirrored()), VertexFormat.IndexType.INT);
                     for (IndexRange range : draw.ranges()) {
                         pass.drawIndexed(0, range.firstIndex(), range.count(), 1);
                         if (shadowPass) { shadowDraws++; METRICS.opaqueDraw(); } else { opaqueSubmissions++; mainDrawCount++; METRICS.opaqueDraw(); }
@@ -906,13 +908,10 @@ public final class ModelStaticRenderer {
         if (!resident) return;
         var history = existingObjectHistory(instance);
         if (history == null) return;
-        var objects = instance.asset().lodObjects(instance.scene());
-        Matrix4f nativeTransform = iris ? null : instance.transform().relativeTo(0, 0, 0);
         for (int index = 0; index < history.objects.length; index++) {
             var state = history.objects[index];
             var lod = state.lod;
             if (lod.selection() != null && lod.selectionFrame() >= frame - 1 && lod.iris() == iris && lod.resident()
-                    && (iris || objects.get(index).supportsNativeResidency(nativeTransform))
                     && lod.selection().residentReady())
                 instance.asset().pinObjectLod(instance.scene(), index, lod.selection().level(), iris);
         }
@@ -952,7 +951,7 @@ public final class ModelStaticRenderer {
         var policy = ModelLodPolicy.active();
         long selectionFrame = shadow ? frame + 1 : frame;
         var state = history.objects[object.index()];
-        boolean useResident = resident && (iris || object.supportsNativeResidency(transform));
+        boolean useResident = resident;
         if (state.lod.matches(selectionFrame, policy, iris, useResident)) return state;
         double distance = distanceToBounds(object.bounds(), transform);
         state.lod.select(selectionFrame, policy, distance, object.hasOpaque(), iris, useResident, level -> {
@@ -1162,8 +1161,8 @@ public final class ModelStaticRenderer {
                 "Iris PBR uses LabPBR 1.3; pack material settings must match; native BLEND uses the documented PBR approximation",
                 "BLEND draws native forward into resolved world color/depth after Iris final; preserves background instead of writing packed Gbuffers; worker BSP splits intra-scene intersections, bounded centroid fallback; instance groups and vanilla transparency remain approximate",
                 "P4 culling includes distance/sphere and camera frustum; shadow callback uses an independent camera without main-view culling",
-                "resident geometry uses full-bright vertices and supplies spatial light through the dynamic color factor",
-                "native opaque resident rendering is opt-in; explicit compatibility mode intentionally rebuilds vertices; default BLEND uploads only changed indices",
+                "native opaque resident draws sample the same per-primitive lightmap coordinates as collector draws; native BLEND retains its dynamic color light factor",
+                "native opaque resident rendering is default with cached reverse-winding indices; explicit compatibility draws rebuild vertices; default BLEND uploads only changed indices",
                 "spatial light samples persist across frames and require explicit render-thread invalidation; geometry/GPU residency is not rebuilt"));
         return result;
     }

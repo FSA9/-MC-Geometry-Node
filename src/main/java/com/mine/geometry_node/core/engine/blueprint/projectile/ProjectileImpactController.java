@@ -6,7 +6,7 @@ import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.nodes.events.projectile.OnProjectileHit;
-import com.mine.geometry_node.mixin.AbstractArrowAccessor;
+import com.mine.geometry_node.mixin.projectile.AbstractArrowAccessor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;

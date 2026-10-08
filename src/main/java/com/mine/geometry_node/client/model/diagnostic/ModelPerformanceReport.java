@@ -13,7 +13,7 @@ import java.util.Map;
 final class ModelPerformanceReport {
     static Map<String, Object> create(Map<String, Object> snapshot, Map<String, Object> capture) {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("schemaVersion", 8);
+        result.put("schemaVersion", 9);
         result.put("capture", capture);
         result.put("overview", null);
         Map<String, Object> counts = select(snapshot, "repositoryEntries", "workerQueue", "assetsDisposed");
@@ -35,6 +35,7 @@ final class ModelPerformanceReport {
         result.put("memory", memory);
         result.put("uploadQueue", statistics(map(snapshot.get("uploadQueue"))));
         result.put("renderer", renderer(map(snapshot.get("renderer"))));
+        result.put("collision", snapshot.getOrDefault("collision", Map.of()));
         result.put("assets", entries(snapshot.get("assets")).stream().map(ModelPerformanceReport::asset).toList());
         Map<?, ?> runtime = map(snapshot.get("runtime"));
         Map<String, Object> jvm = select(runtime, "heapUsedBytes", "heapCommittedBytes", "heapMaxBytes",

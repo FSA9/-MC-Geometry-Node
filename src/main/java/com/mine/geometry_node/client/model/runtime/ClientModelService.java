@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.model.render.resource.ModelUploadQueue;
 
 import com.mine.geometry_node.client.model.resource.ResourcePackModelProvider;
 import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
+import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionSettings;
 import com.mine.geometry_node.core.engine.system.model.io.*;
 import com.mine.geometry_node.core.engine.system.model.math.ModelTransform;
 import com.mine.geometry_node.core.engine.system.model.runtime.*;
@@ -89,17 +90,23 @@ public final class ClientModelService {
     /** Creates a client-local instance; persistent lifetime is reserved for P3-N. */
     public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> create(String id,Source source,ModelTransform transform,int scene,
                                                                             boolean visible,ModelInstanceLifetime lifetime) {
+        return create(id, source, transform, scene, visible, lifetime, ClientModelCollisions.INSTANCE.settings(id));
+    }
+    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> create(String id,Source source,ModelTransform transform,int scene,
+            boolean visible,ModelInstanceLifetime lifetime,ModelCollisionSettings collision) {
         RenderSystem.assertOnRenderThread();ModelInstanceStore.validateId(id);
         Objects.requireNonNull(source);Objects.requireNonNull(transform);Objects.requireNonNull(lifetime);
         if(lifetime==ModelInstanceLifetime.PERSISTENT)
             throw new UnsupportedOperationException("persistent model instances are provided by P3-N");
         Minecraft minecraft=Minecraft.getInstance();
         if(minecraft.level==null)throw new IllegalStateException("enter a world before creating a model");
+        if(collision!=null)ClientModelCollisions.requireAuthority();
         ensureWorld();level=minecraft.level;
+        ClientModelCollisions.INSTANCE.cancel(id);
         Pending previous=pending.remove(id);if(previous!=null)previous.close();
         RepositoryKey repositoryKey=repositoryKey(source);
         ModelLease<LoadedAsset> lease=repository.acquire(repositoryKey,(key,cancel)->importAsset(key.source(),cancel));
-        Pending request=new Pending(++requestSequence,epoch,lease,transform,scene,visible,lifetime);
+        Pending request=new Pending(++requestSequence,epoch,lease,transform,scene,visible,lifetime,collision);
         pending.put(id,request);failures.remove(id);
         lease.completion().whenComplete((asset,error)->minecraft.execute(()->publish(id,request,asset,error)));
         return request.completion.minimalCompletionStage();
@@ -172,18 +179,59 @@ public final class ClientModelService {
         if(pending.get(id)!=request||request.epoch!=epoch||level!=Minecraft.getInstance().level) {request.close();return;}
         try {
             upload.asset().render();
-            instances.put(id,upload.asset(),upload.scene(),request.transform,request.visible,request.lifetime,request.lease::close);
-            pending.remove(id); request.completion.complete(instances.get(id).orElseThrow());
+            Runnable commit=()->{
+                if(pending.get(id)!=request||request.epoch!=epoch)throw new CancellationException("model request superseded");
+                instances.put(id,upload.asset(),upload.scene(),request.transform,request.visible,request.lifetime,request.lease::close);
+            };
+            if(request.collision==null) {
+                ClientModelCollisions.INSTANCE.remove(id);commit.run();
+                pending.remove(id);request.completion.complete(instances.get(id).orElseThrow());
+            }
+            else ClientModelCollisions.INSTANCE.replace(id,upload.asset().cpu,upload.scene(),request.transform,request.collision,commit)
+                    .whenComplete((ignored,error)->{
+                        if(pending.get(id)!=request)return;
+                        pending.remove(id);
+                        if(error!=null){rememberFailure(id,error);request.fail(error);}
+                        else request.completion.complete(instances.get(id).orElseThrow());
+                    });
         } catch(Throwable failure) {pending.remove(id);rememberFailure(id,failure);request.fail(failure);}
     }
     private static void validateScene(GltfAsset asset,int scene) {
         if(scene<0||scene>=asset.scenes().size())throw new IllegalArgumentException("scene index outside asset: "+scene);
     }
-    public void transform(String id,ModelTransform transform) {RenderSystem.assertOnRenderThread();instances.transform(id,transform);}
+    public void transform(String id,ModelTransform transform) {
+        transformAsync(id,transform).whenComplete((ignored,error)->{if(error!=null)collisionFailure(id,error);});
+    }
+    public CompletionStage<Void> transformAsync(String id,ModelTransform transform) {
+        RenderSystem.assertOnRenderThread();requireNotLoading(id);
+        var current=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
+        var settings=ClientModelCollisions.INSTANCE.settings(id);
+        if(settings==null){instances.transform(id,transform);return CompletableFuture.completedFuture(null);}
+        return ClientModelCollisions.INSTANCE.replace(id,current.asset().cpu,current.scene(),transform,settings,
+                ()->instances.transform(id,transform));
+    }
     public void visible(String id,boolean visible) {RenderSystem.assertOnRenderThread();instances.visible(id,visible);}
     public void scene(String id,int scene) {
-        RenderSystem.assertOnRenderThread();var instance=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        validateScene(instance.asset().cpu,scene);instances.scene(id,scene);
+        RenderSystem.assertOnRenderThread();requireNotLoading(id);
+        var instance=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
+        validateScene(instance.asset().cpu,scene);
+        var settings=ClientModelCollisions.INSTANCE.settings(id);
+        if(settings==null)instances.scene(id,scene);
+        else ClientModelCollisions.INSTANCE.replace(id,instance.asset().cpu,scene,instance.transform(),settings,
+                ()->instances.scene(id,scene)).whenComplete((ignored,error)->{if(error!=null)collisionFailure(id,error);});
+    }
+    public CompletionStage<Void> collision(String id,ModelCollisionSettings settings) {
+        RenderSystem.assertOnRenderThread();ensureWorld();requireNotLoading(id);
+        var instance=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
+        if(settings==null){ClientModelCollisions.INSTANCE.remove(id);return CompletableFuture.completedFuture(null);}
+        return ClientModelCollisions.INSTANCE.replace(id,instance.asset().cpu,instance.scene(),instance.transform(),settings,()->{});
+    }
+    private void requireNotLoading(String id) {
+        if(pending.containsKey(id))throw new IllegalStateException("model import pending: "+id);
+    }
+    private static void collisionFailure(String id,Throwable error) {
+        if(Minecraft.getInstance().player!=null)Minecraft.getInstance().player.sendSystemMessage(
+                net.minecraft.network.chat.Component.translatable("geometry_node.model.collision.failed",id,rootMessage(error)));
     }
     /** Queues a shared asset material override; returned count is affected instances, not completion. */
     public int overrideMaterial(String id,int materialIndex,String property,float value) {
@@ -223,8 +271,9 @@ public final class ClientModelService {
         failures.remove(id);failures.put(id,message);while(failures.size()>64)failures.remove(failures.keySet().iterator().next());
         GeometryNode.LOGGER.error("Model request failed: id={}, detail={}",id,message,failure);
     }
-    public void shutdown(){RenderSystem.assertOnRenderThread();clear();repository.close();workers.shutdownNow();}
+    public void shutdown(){RenderSystem.assertOnRenderThread();clear();ClientModelCollisions.INSTANCE.shutdown();repository.close();workers.shutdownNow();}
     public boolean remove(String id) {
+        ClientModelCollisions.INSTANCE.remove(id);
         RenderSystem.assertOnRenderThread();Pending request=pending.remove(id);if(request!=null)request.close();failures.remove(id);
         boolean removed = instances.remove(id);
         com.mine.geometry_node.client.model.render.bvh.ModelLightingSettings.removeInstance(id);
@@ -245,6 +294,11 @@ public final class ClientModelService {
     /** Clears only instances of the requested lifetime; null clears the whole client session. */
     public void clear(ModelInstanceLifetime lifetime) {
         RenderSystem.assertOnRenderThread();epoch++;
+        if(lifetime==null)ClientModelCollisions.INSTANCE.clear();
+        else {
+            for(var instance:instances.snapshots(lifetime))ClientModelCollisions.INSTANCE.remove(instance.id());
+            for(var entry:List.copyOf(pending.entrySet()))if(entry.getValue().lifetime==lifetime)ClientModelCollisions.INSTANCE.remove(entry.getKey());
+        }
         uploads.clear();
         List<Pending> requests=pending.values().stream()
                 .filter(request->lifetime==null||request.lifetime==lifetime).toList();
@@ -339,6 +393,9 @@ public final class ClientModelService {
         report.put("instances",instanceReports);
         report.put("assets",unique.stream().map(asset->describePerformanceAsset(asset,assetIds.get(asset))).toList());
         report.put("renderer",ModelStaticRenderer.report());
+        var collisionReport = new LinkedHashMap<String,Object>(ClientModelCollisions.INSTANCE.report());
+        collisionReport.put("runtime",com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionMetrics.report());
+        report.put("collision",collisionReport);
         report.put("renderResourceLifecycle",Map.of("generation",renderResourceGeneration,"lastInvalidation",lastRenderInvalidation,"reloadPreservesInstances",true));
         ModelGeometryStatistics.Counts geometry=ModelGeometryStatistics.ZERO;
         for(LoadedAsset asset:unique)geometry=geometry.plus(asset.statistics.uniqueMeshes());
@@ -517,8 +574,9 @@ public final class ClientModelService {
 
     private static final class Pending {
         final long request,epoch;final ModelLease<LoadedAsset> lease;final ModelTransform transform;final int scene;final boolean visible;final ModelInstanceLifetime lifetime;
+        final ModelCollisionSettings collision;
         final CompletableFuture<ModelInstanceStore.Snapshot<LoadedAsset>> completion=new CompletableFuture<>();
-        Pending(long request,long epoch,ModelLease<LoadedAsset> lease,ModelTransform transform,int scene,boolean visible,ModelInstanceLifetime lifetime){this.request=request;this.epoch=epoch;this.lease=lease;this.transform=transform;this.scene=scene;this.visible=visible;this.lifetime=lifetime;}
+        Pending(long request,long epoch,ModelLease<LoadedAsset> lease,ModelTransform transform,int scene,boolean visible,ModelInstanceLifetime lifetime,ModelCollisionSettings collision){this.request=request;this.epoch=epoch;this.lease=lease;this.transform=transform;this.scene=scene;this.visible=visible;this.lifetime=lifetime;this.collision=collision;}
         void close(){lease.close();completion.completeExceptionally(new CancellationException("model request cancelled"));}
         void fail(Throwable error){lease.close();completion.completeExceptionally(error);}
     }

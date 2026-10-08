@@ -20,8 +20,25 @@ final class DebugSnapshotAssembler {
                       int maxPathfindingEntities,
                       DebugSourceStore sources,
                       DebugLevelObservationCache observations) {
+        return assemble(level, origin, radius, channelMask, maxMeshes, maxPathfindingEntities,
+                sources, observations, List.of());
+    }
+
+    Snapshot assemble(ServerLevel level,
+                      Vec3 origin,
+                      double radius,
+                      int channelMask,
+                      int maxMeshes,
+                      int maxPathfindingEntities,
+                      DebugSourceStore sources,
+                      DebugLevelObservationCache observations,
+                      List<GeometryDebugElement> modelCollision) {
         double radiusSqr = radius * radius;
         List<Candidate> candidates = new ArrayList<>();
+        // Collision parts have already been bounded using their full extent, not just their center.
+        for (GeometryDebugElement mesh : modelCollision) {
+            candidates.add(new Candidate(mesh, mesh.center().distanceToSqr(origin)));
+        }
         for (DebugSourceStore.VisibleSource source : sources.sources(level)) {
             if (!isEnabled(channelMask, source.id().channel())) continue;
             for (GeometryDebugElement mesh : source.meshes()) {

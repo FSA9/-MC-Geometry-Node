@@ -15,7 +15,7 @@ import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
-import com.mine.geometry_node.mixin.AbstractArrowAccessor;
+import com.mine.geometry_node.mixin.projectile.AbstractArrowAccessor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;

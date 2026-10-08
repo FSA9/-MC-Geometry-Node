@@ -58,9 +58,13 @@ void main() {
     prepareMaterial(UV0,vec2(decodeUv(EmissionU),decodeUv(EmissionV)));
     modelNormal = normalize(transpose(inverse(mat3(ModelViewMat))) * Normal);
     int light = int(PackedLight + 0.5);
-    modelLight = sample_lightmap(Sampler2, ivec2(light & 65535, (light >> 16) & 65535)).rgb;
+    // Opaque native draws carry per-primitive lightmap coordinates in ModelOffset.
+    // Other resident users keep their existing per-vertex light and brightness factor.
+    ivec2 lightUv = ModelOffset.z > 0.5 ? ivec2(ModelOffset.xy)
+        : ivec2(light & 65535, (light >> 16) & 65535);
+    modelLight = sample_lightmap(Sampler2, lightUv).rgb;
     // Native resident draws store the camera-relative instance transform in TextureMat.
-    // UV transforms are already baked, so this does not change texture sampling.
+    // Material UV transforms are applied independently by prepareMaterial above.
     vec3 relativePosition = (TextureMat * vec4(Position, 1.0)).xyz;
     modelRelativePosition=relativePosition;
     modelWorldNormal=normalize(transpose(inverse(mat3(TextureMat)))*Normal);

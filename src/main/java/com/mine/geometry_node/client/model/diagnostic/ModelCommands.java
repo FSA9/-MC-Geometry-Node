@@ -46,6 +46,7 @@ public final class ModelCommands {
                 .executes(c->run(()->say(ModelReportSummary.status(MODELS.report()))))
                 .then(ModelCommands.<S>id().executes(c->run(()->say(ModelReportSummary.query(MODELS.queryReport(StringArgumentType.getString(c,"id"))))))));
         ModelRenderCommands.register(root);
+        ModelCollisionCommands.register(root);
         root.then(LiteralArgumentBuilder.<S>literal("hud")
                 .executes(c -> ModelHud.command(null))
                 .then(LiteralArgumentBuilder.<S>literal("on").executes(c -> ModelHud.command(true)))
@@ -157,10 +158,13 @@ public final class ModelCommands {
     }
     private static <S> void modify(CommandContext<S> context,java.util.function.UnaryOperator<ModelTransform> change) {
         String id=StringArgumentType.getString(context,"id");var instance=MODELS.query(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        MODELS.transform(id,change.apply(instance.transform()));say("Model "+id+" updated.");
+        MODELS.transformAsync(id,change.apply(instance.transform())).whenComplete((ignored,error)->{
+            if(error==null)say("Model "+id+" updated.");
+            else say("Model "+id+": "+ClientModelService.rootMessage(error));
+        });
     }
     private static <S> double d(CommandContext<S> c,String name){return DoubleArgumentType.getDouble(c,name);}
-    private static Path localPath(String input) {
+    static Path localPath(String input) {
         String text=input.strip();if(text.length()>1&&text.startsWith("\"")&&text.endsWith("\""))text=text.substring(1,text.length()-1);
         Path path=Path.of(text);
         if(path.isAbsolute()) {

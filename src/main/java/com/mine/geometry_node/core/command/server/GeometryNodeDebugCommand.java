@@ -47,6 +47,17 @@ public final class GeometryNodeDebugCommand {
                                                 .executes(GeometryNodeDebugCommand::disableGeometry)
                                         )
                                 )
+                                .then(Commands.literal("model")
+                                        .then(Commands.literal("collision")
+                                                .then(Commands.literal("on")
+                                                        .executes(context -> DebugRendererSessionManager.enableModelCollision(
+                                                                context.getSource().getPlayerOrException(), DebugRendererSessionManager.DEFAULT_RADIUS))
+                                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                                .executes(context -> DebugRendererSessionManager.enableModelCollision(
+                                                                        context.getSource().getPlayerOrException(), DoubleArgumentType.getDouble(context, "radius")))))
+                                                .then(Commands.literal("off")
+                                                        .executes(context -> DebugRendererSessionManager.disableModelCollision(
+                                                                context.getSource().getPlayerOrException(), true)))))
                                 .then(Commands.literal("schem")
                                         .then(Commands.literal("on")
                                                 .executes(context -> enableSchematic(context, DebugRendererSessionManager.DEFAULT_RADIUS))

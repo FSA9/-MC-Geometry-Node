@@ -26,7 +26,7 @@ final class ModelRenderCommands {
                 .then(LiteralArgumentBuilder.<S>literal("auto")
                         .executes(c -> change(ModelShadowDistancePolicy::setAutomatic, ModelRenderCommands::shadowStatus)))
                 .then(LiteralArgumentBuilder.<S>literal("tolerance")
-                        .then(RequiredArgumentBuilder.<S, Float>argument("texels", FloatArgumentType.floatArg(0, 2))
+                        .then(RequiredArgumentBuilder.<S, Float>argument("texels", FloatArgumentType.floatArg(0, ModelShadowDistancePolicy.MAX_TOLERANCE))
                                 .executes(c -> change(() -> ModelShadowDistancePolicy.setTolerance(
                                         FloatArgumentType.getFloat(c, "texels")), ModelRenderCommands::shadowStatus))))
                 .then(LiteralArgumentBuilder.<S>literal("distance")

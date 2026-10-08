@@ -36,6 +36,8 @@ public class SvgIconView extends View {
         DATA_LIBRARY("data_library.svg"),
         TERMINAL("console.svg"),
         PERFORMANCE("analysis.svg"),
+        SEARCH("function/search.svg"),
+        PLUS("function/plus.svg"),
         CLEAR("function/clear.svg"),
         RESET("function/refresh.svg"),
         CLOSE("function/close.svg"),

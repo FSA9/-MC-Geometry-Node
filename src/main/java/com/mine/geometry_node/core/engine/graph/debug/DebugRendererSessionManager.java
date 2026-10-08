@@ -120,6 +120,7 @@ public final class DebugRendererSessionManager {
         session.areaEnabled = true;
         session.schematicEnabled = true;
         session.geometryEnabled = true;
+        session.modelCollisionEnabled = true;
         session.interactionEnabled = true;
         session.pathfindingEnabled = true;
         hydrateSchematicChannel(player, session);
@@ -183,6 +184,28 @@ public final class DebugRendererSessionManager {
         session.geometryEnabled = true;
         finishEnable(player, session, "Geometry");
         return 1;
+    }
+
+    public static int enableModelCollision(ServerPlayer player, double radius) {
+        Session session = enableChannel(player, radius);
+        session.modelCollisionEnabled = true;
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.translatable("geometry_node.debug.model_collision.enabled",
+                formatRadius(session.radius)));
+        return 1;
+    }
+
+    public static int disableModelCollision(ServerPlayer player, boolean notify) {
+        com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionMetrics.debugEnabled(false);
+        Session session = session(player);
+        boolean changed = session != null && session.modelCollisionEnabled;
+        if (session != null) {
+            session.modelCollisionEnabled = false;
+            session.modelCollision.clear();
+            finishDisableOrRefresh(player, session);
+        }
+        if (notify) player.sendSystemMessage(Component.translatable("geometry_node.debug.model_collision.disabled"));
+        return changed ? 1 : 0;
     }
 
     public static int disableGeometry(ServerPlayer player, boolean notify) {
@@ -567,7 +590,8 @@ public final class DebugRendererSessionManager {
         return SNAPSHOT_ASSEMBLER.assemble(
                 level, player.position(), session.radius, session.channelMask(),
                 DEFAULT_MAX_MESHES, MAX_PATHFINDING_ENTITIES,
-                state.sources, state.observations.get(level));
+                state.sources, state.observations.get(level), session.modelCollisionEnabled
+                        ? session.modelCollision.collect(player, session.radius) : List.of());
     }
 
     private static void sendSnapshot(ServerPlayer player, Session session, DebugSnapshotAssembler.Snapshot snapshot) {
@@ -687,6 +711,8 @@ public final class DebugRendererSessionManager {
         private boolean areaEnabled;
         private boolean schematicEnabled;
         private boolean geometryEnabled;
+        private boolean modelCollisionEnabled;
+        private final ModelCollisionDebugProvider modelCollision = new ModelCollisionDebugProvider();
         private boolean interactionEnabled;
         private boolean pathfindingEnabled;
         private Vec3 lastPosition;
@@ -695,7 +721,7 @@ public final class DebugRendererSessionManager {
         private long lastSignature = Long.MIN_VALUE;
 
         private boolean hasAnyChannel() {
-            return areaEnabled || schematicEnabled || geometryEnabled || interactionEnabled || pathfindingEnabled;
+            return areaEnabled || schematicEnabled || geometryEnabled || modelCollisionEnabled || interactionEnabled || pathfindingEnabled;
         }
 
         private int channelMask() {
