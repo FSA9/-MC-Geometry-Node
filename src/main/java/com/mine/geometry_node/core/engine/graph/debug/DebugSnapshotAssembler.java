@@ -69,6 +69,10 @@ final class DebugSnapshotAssembler {
                 .thenComparing(candidate -> candidate.mesh().id())
                 .thenComparing(candidate -> candidate.mesh().graphId()));
         int count = Math.min(maxMeshes, candidates.size());
+        // Distance selects the budgeted set; stable wire order avoids resending moving anchors' meshes.
+        candidates = candidates.subList(0, count);
+        candidates.sort(Comparator.comparing((Candidate candidate) -> candidate.mesh().id())
+                .thenComparing(candidate -> candidate.mesh().graphId()));
         List<PacketGeometryDebugSnapshot.Mesh> meshes = new ArrayList<>(count);
         long signature = 1469598103934665603L;
         for (int i = 0; i < count; i++) {
@@ -91,8 +95,14 @@ final class DebugSnapshotAssembler {
 
     private static void addBoundedCandidate(ServerLevel level, Vec3 origin, double radiusSqr,
                                             GeometryDebugElement mesh, List<Candidate> candidates) {
-        if (!level.isLoaded(BlockPos.containing(mesh.center()))) return;
-        double distanceSqr = mesh.center().distanceToSqr(origin);
+        Vec3 center = mesh.center();
+        if (mesh.anchorUuid() != null) {
+            var anchor = level.getEntity(mesh.anchorUuid());
+            if (anchor == null || !anchor.isAlive()) return;
+            center = center.add(anchor.position());
+        }
+        if (!level.isLoaded(BlockPos.containing(center))) return;
+        double distanceSqr = center.distanceToSqr(origin);
         if (distanceSqr <= radiusSqr) candidates.add(new Candidate(mesh, distanceSqr));
     }
 
@@ -103,7 +113,7 @@ final class DebugSnapshotAssembler {
                 center.x, center.y, center.z,
                 mesh.size().x, mesh.size().y, mesh.size().z,
                 mesh.rotation().x, mesh.rotation().y, mesh.rotation().z,
-                mesh.vertices(), mesh.edges(), mesh.faces()
+                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.anchorUuid(), mesh.anchorEntityId()
         );
     }
 
@@ -113,6 +123,8 @@ final class DebugSnapshotAssembler {
         signature = mix(signature, mesh.geometryType().networkId());
         signature = mix(signature, mesh.color());
         signature = mix(signature, mesh.showPoints() ? 1L : 0L);
+        signature = mix(signature, mesh.anchorUuid() == null ? 0 : mesh.anchorUuid().hashCode());
+        signature = mix(signature, mesh.anchorEntityId());
         signature = mix(signature, Double.doubleToLongBits(mesh.centerX()));
         signature = mix(signature, Double.doubleToLongBits(mesh.centerY()));
         signature = mix(signature, Double.doubleToLongBits(mesh.centerZ()));

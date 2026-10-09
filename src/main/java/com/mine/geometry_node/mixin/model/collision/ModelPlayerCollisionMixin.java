@@ -18,7 +18,7 @@ public abstract class ModelPlayerCollisionMixin {
         AABB b = player.getBoundingBox();
         AABB feet = new AABB(b.minX + 1.0e-7 + dx, b.minY - height - 1.0e-7, b.minZ + 1.0e-7 + dz,
                 b.maxX - 1.0e-7 + dx, b.minY, b.maxZ - 1.0e-7 + dz);
-        for (var candidate : ModelCollisionScene.query(player.level(), feet)) {
+        for (var candidate : ModelCollisionScene.query(player.level(), feet, player.getUUID())) {
             if (candidate.intersects(feet)) { callback.setReturnValue(false); return; }
         }
     }

@@ -56,7 +56,12 @@ final class DebugSourceStore {
     boolean pruneExpired(ServerLevel level, long tick) {
         LevelSources levelSources = levels.get(level);
         if (levelSources == null) return false;
-        boolean changed = levelSources.sources.values().removeIf(source -> source.isExpired(tick, idleExpiryTicks));
+        boolean changed = levelSources.sources.values().removeIf(source -> source.isExpired(tick, idleExpiryTicks)
+                || source.meshes.stream().anyMatch(mesh -> {
+                    if (mesh.anchorUuid() == null) return false;
+                    var anchor = level.getEntity(mesh.anchorUuid());
+                    return anchor == null || !anchor.isAlive();
+                }));
         if (levelSources.sources.isEmpty()) levels.remove(level);
         else if (changed) levelSources.publish();
         return changed;

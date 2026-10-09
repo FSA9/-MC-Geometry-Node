@@ -91,12 +91,28 @@ public final class GeometryDebugRenderer {
 
         Minecraft minecraft = Minecraft.getInstance();
         MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();
-        Vec3 camPos = camera.position();
+        Vec3 cameraPosition = camera.position();
+        float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        Vec3[] relativeCameras = new Vec3[meshes.size()];
+        for (int i = 0; i < meshes.size(); i++) {
+            var mesh = meshes.get(i);
+            if (mesh.anchorUuid() == null) {
+                relativeCameras[i] = cameraPosition;
+            } else {
+                var anchor = minecraft.level.getEntity(mesh.anchorEntityId());
+                if (anchor != null && anchor.isAlive() && mesh.anchorUuid().equals(anchor.getUUID())) {
+                    relativeCameras[i] = cameraPosition.subtract(anchor.getPosition(partialTick));
+                }
+            }
+        }
 
         poseStack.pushPose();
         Matrix4f matrix = poseStack.last().pose();
         VertexConsumer faces = bufferSource.getBuffer(GeometryDebugRenderTypes.GEOMETRY_FACE);
-        for (PacketGeometryDebugSnapshot.Mesh mesh : meshes) {
+        for (int i = 0; i < meshes.size(); i++) {
+            PacketGeometryDebugSnapshot.Mesh mesh = meshes.get(i);
+            Vec3 camPos = relativeCameras[i];
+            if (camPos == null) continue;
             switch (mesh.geometryType()) {
                 case MESH -> drawFaces(mesh, faces, matrix, camPos);
                 case PERFECT_CYLINDER -> drawPerfectCylinderFaces(mesh, faces, matrix, camPos);
@@ -107,7 +123,10 @@ public final class GeometryDebugRenderer {
 
         PoseStack.Pose pose = poseStack.last();
         VertexConsumer lines = bufferSource.getBuffer(GeometryDebugRenderTypes.GEOMETRY_LINE);
-        for (PacketGeometryDebugSnapshot.Mesh mesh : meshes) {
+        for (int i = 0; i < meshes.size(); i++) {
+            PacketGeometryDebugSnapshot.Mesh mesh = meshes.get(i);
+            Vec3 camPos = relativeCameras[i];
+            if (camPos == null) continue;
             switch (mesh.geometryType()) {
                 case MESH -> drawEdges(mesh, lines, pose, matrix, camPos);
                 case PERFECT_CYLINDER -> drawPerfectCylinderLines(mesh, lines, pose, matrix, camPos);
@@ -117,7 +136,10 @@ public final class GeometryDebugRenderer {
         bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_LINE);
 
         VertexConsumer points = bufferSource.getBuffer(GeometryDebugRenderTypes.GEOMETRY_POINT);
-        for (PacketGeometryDebugSnapshot.Mesh mesh : meshes) {
+        for (int i = 0; i < meshes.size(); i++) {
+            PacketGeometryDebugSnapshot.Mesh mesh = meshes.get(i);
+            Vec3 camPos = relativeCameras[i];
+            if (camPos == null) continue;
             if (mesh.geometryType() == GeometryDebugType.MESH && mesh.showPoints()) {
                 drawPoints(mesh, points, matrix, camPos);
             }

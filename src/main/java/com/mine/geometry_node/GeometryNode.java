@@ -17,6 +17,7 @@ import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
 import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
+import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionService;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
@@ -176,6 +177,7 @@ public class GeometryNode {
         // 初始化图运行时注册表
         ServerEngineDriver.init();
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(GeometryCollisionService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerGraphRepository.INSTANCE);

@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.UUID;
 
 /** Level identity isolates client prediction, server authority, dimensions and reconnects. */
 public final class ModelCollisionScene {
@@ -30,23 +31,28 @@ public final class ModelCollisionScene {
     }
 
     public static synchronized void publish(Level level, Object instanceId, Prepared geometry, double x, double y, double z) {
+        publish(level, instanceId, geometry, x, y, z, null);
+    }
+
+    public static synchronized void publish(Level level, Object instanceId, Prepared geometry, double x, double y, double z,
+                                            UUID excludedEntity) {
         State state = LEVELS.computeIfAbsent(level, ignored -> new State());
-        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z));
-        state.snapshot = List.copyOf(state.entries.values());
+        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z, excludedEntity));
+        state.snapshotDirty = true;
         state.revision++;
     }
 
     public static synchronized void remove(Level level, Object instanceId) {
         State state = LEVELS.get(level);
         if (state != null && state.entries.remove(instanceId) != null) {
-            state.snapshot = List.copyOf(state.entries.values()); state.revision++;
+            state.snapshotDirty = true; state.revision++;
         }
     }
 
     public static synchronized void clear(Level level) {
         State state = LEVELS.get(level);
         if (state != null && !state.entries.isEmpty()) {
-            state.entries.clear(); state.snapshot = List.of(); state.revision++;
+            state.entries.clear(); state.snapshot = List.of(); state.snapshotDirty = false; state.revision++;
         }
     }
 
@@ -57,15 +63,29 @@ public final class ModelCollisionScene {
 
     public static synchronized List<Entry> snapshots(Level level) {
         State state = LEVELS.get(level);
+        if (state != null && state.snapshotDirty) {
+            state.snapshot = List.copyOf(state.entries.values());
+            state.snapshotDirty = false;
+        }
         return state == null ? List.of() : state.snapshot;
     }
 
+    public static synchronized Entry lookup(Level level, Object instanceId) {
+        State state = LEVELS.get(level);
+        return state == null ? null : state.entries.get(instanceId);
+    }
+
     public static List<Candidate> query(Level level, AABB bounds) {
+        return query(level, bounds, null);
+    }
+
+    public static List<Candidate> query(Level level, AABB bounds, UUID movingEntity) {
         List<Entry> entries = snapshots(level);
         if (entries.isEmpty()) return List.of();
         try (var sample = ModelCollisionMetrics.query(level.isClientSide())) {
         List<Candidate> result = new ArrayList<>();
         for (Entry entry : entries) {
+            if (movingEntity != null && movingEntity.equals(entry.excludedEntity)) continue;
             AABB local = bounds.move(-entry.x, -entry.y, -entry.z);
             entry.geometry.query(local, entry.x, entry.y, entry.z, result, sample.sampled() ? sample : null);
         }
@@ -74,7 +94,7 @@ public final class ModelCollisionScene {
         }
     }
 
-    public record Entry(Object instanceId, Prepared geometry, double x, double y, double z) {}
+    public record Entry(Object instanceId, Prepared geometry, double x, double y, double z, UUID excludedEntity) {}
 
     public record Candidate(ModelConvexCollider collider, double x, double y, double z) {
         public ModelConvexCollider.Hit sweep(AABB bounds, Vec3 movement) {
@@ -158,6 +178,7 @@ public final class ModelCollisionScene {
     private static final class State {
         private final Map<Object, Entry> entries = new LinkedHashMap<>();
         private List<Entry> snapshot = List.of();
+        private boolean snapshotDirty;
         private long revision;
     }
 }

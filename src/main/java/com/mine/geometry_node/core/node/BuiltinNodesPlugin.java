@@ -48,7 +48,8 @@ import com.mine.geometry_node.core.node.nodes.events.world.*;
 import com.mine.geometry_node.core.node.nodes.functions.graph.*;
 import com.mine.geometry_node.core.node.nodes.functions.color.*;
 import com.mine.geometry_node.core.node.nodes.functions.time.*;
-import com.mine.geometry_node.core.node.nodes.geometry.*;
+import com.mine.geometry_node.core.node.nodes.actions.geometry.*;
+import com.mine.geometry_node.core.node.nodes.actions.collision.*;
 import com.mine.geometry_node.core.node.nodes.maths.vector.*;
 import com.mine.geometry_node.core.node.nodes.logics.*;
 import com.mine.geometry_node.core.node.nodes.maths.*;
@@ -404,9 +405,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("data/value", new BoolValue());
 
         // Geometry
-        registry.register("geometry/mesh", new CreateMesh());
-        registry.register("geometry/mesh", new CreateGeometryDebugMesh());
-        registry.register("geometry/mesh", new DeleteGeometryDebugMesh());
+        registry.register("actions/geometry", new CreateMesh());
+        registry.register("actions/geometry", new CreateGeometryDebugMesh());
+        registry.register("actions/geometry", new DeleteGeometryDebugMesh());
+        registry.register("actions/collision", new CreateGeometryCollision());
+        registry.register("actions/collision", new DeleteGeometryCollision());
 
         // --- DIALOGUE ---
         registry.register("dialogue", new BeginDialogue());

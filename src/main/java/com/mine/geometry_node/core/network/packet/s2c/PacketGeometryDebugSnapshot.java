@@ -8,6 +8,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public record PacketGeometryDebugSnapshot(
         boolean enabled,
@@ -83,8 +84,16 @@ public record PacketGeometryDebugSnapshot(
             double rotationZ,
             float[] vertices,
             int[] edges,
-            int[] faces
+            int[] faces,
+            UUID anchorUuid,
+            int anchorEntityId
     ) {
+        public Mesh(String id, String graphId, GeometryDebugType geometryType, int color, boolean showPoints,
+                    double centerX, double centerY, double centerZ, double sizeX, double sizeY, double sizeZ,
+                    double rotationX, double rotationY, double rotationZ, float[] vertices, int[] edges, int[] faces) {
+            this(id, graphId, geometryType, color, showPoints, centerX, centerY, centerZ,
+                    sizeX, sizeY, sizeZ, rotationX, rotationY, rotationZ, vertices, edges, faces, null, -1);
+        }
         public Mesh {
             geometryType = geometryType != null ? geometryType : GeometryDebugType.MESH;
             vertices = vertices != null ? vertices : new float[0];
@@ -110,7 +119,9 @@ public record PacketGeometryDebugSnapshot(
                     buf.readDouble(),
                     readFloatArray(buf, MAX_VERTICES, 3, "vertex"),
                     readIntArray(buf, MAX_EDGES, 2, "edge"),
-                    readIntArray(buf, MAX_FACES, 4, "face")
+                    readIntArray(buf, MAX_FACES, 4, "face"),
+                    buf.readBoolean() ? buf.readUUID() : null,
+                    buf.readVarInt()
             );
         }
 
@@ -132,6 +143,9 @@ public record PacketGeometryDebugSnapshot(
             writeFloatArray(buf, vertices, 3);
             writeIntArray(buf, edges, 2);
             writeIntArray(buf, faces, 4);
+            buf.writeBoolean(anchorUuid != null);
+            if (anchorUuid != null) buf.writeUUID(anchorUuid);
+            buf.writeVarInt(anchorEntityId);
         }
 
         public int vertexCount() {

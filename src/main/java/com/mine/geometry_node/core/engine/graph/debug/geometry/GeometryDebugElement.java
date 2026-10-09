@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.debug.geometry;
 
 import net.minecraft.world.phys.Vec3;
+import java.util.UUID;
 
 public record GeometryDebugElement(
         String id,
@@ -13,8 +14,20 @@ public record GeometryDebugElement(
         Vec3 rotation,
         float[] vertices,
         int[] edges,
-        int[] faces
+        int[] faces,
+        UUID anchorUuid,
+        int anchorEntityId
 ) {
+    public GeometryDebugElement(String id, String graphId, GeometryDebugType type, int color,
+                                boolean showPoints, Vec3 center, Vec3 size, Vec3 rotation,
+                                float[] vertices, int[] edges, int[] faces) {
+        this(id, graphId, type, color, showPoints, center, size, rotation, vertices, edges, faces, null, -1);
+    }
+
+    public GeometryDebugElement withAnchor(UUID uuid, int entityId) {
+        return new GeometryDebugElement(id, graphId, type, color, showPoints, center, size, rotation,
+                vertices, edges, faces, uuid, entityId);
+    }
     public GeometryDebugElement {
         type = type != null ? type : GeometryDebugType.MESH;
         center = center != null ? center : Vec3.ZERO;

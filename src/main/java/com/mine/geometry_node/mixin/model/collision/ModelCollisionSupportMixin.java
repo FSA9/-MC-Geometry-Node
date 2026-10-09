@@ -18,7 +18,7 @@ public abstract class ModelCollisionSupportMixin {
         if (!callback.getReturnValue() || ModelCollisionScene.snapshots(entity.level()).isEmpty()) return;
         AABB box = entity.getBoundingBox();
         Vec3 down = new Vec3(0, -0.55, 0);
-        for (var candidate : ModelCollisionScene.query(entity.level(), box.expandTowards(down).inflate(1.0e-6))) {
+        for (var candidate : ModelCollisionScene.query(entity.level(), box.expandTowards(down).inflate(1.0e-6), entity.getUUID())) {
             var hit = candidate.sweep(box, down);
             if (hit != null && hit.normal().y >= 0.5) { callback.setReturnValue(false); return; }
         }

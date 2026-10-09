@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTran
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCloseDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
+import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryCollision;
 import com.mine.geometry_node.core.network.packet.s2c.PacketBehaviorDebugSnapshot;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerRemove;
 import com.mine.geometry_node.core.network.packet.s2c.PacketMarkerSnapshot;
@@ -41,6 +42,7 @@ public final class ClientboundPayloadRegistry {
         add(PacketSpawnDynamicVisual.TYPE, PacketSpawnDynamicVisual.STREAM_CODEC);
         add(PacketVisualAssetData.TYPE, PacketVisualAssetData.STREAM_CODEC);
         add(PacketGeometryDebugSnapshot.TYPE, PacketGeometryDebugSnapshot.STREAM_CODEC);
+        add(PacketGeometryCollision.TYPE, PacketGeometryCollision.STREAM_CODEC);
         add(PacketBehaviorDebugSnapshot.TYPE, PacketBehaviorDebugSnapshot.STREAM_CODEC);
         add(PacketSchematicProjection.TYPE, PacketSchematicProjection.STREAM_CODEC);
         add(PacketRemoteAssetCapabilitiesResponse.TYPE, PacketRemoteAssetCapabilitiesResponse.STREAM_CODEC);

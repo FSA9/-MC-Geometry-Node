@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.geometry;
+package com.mine.geometry_node.core.node.nodes.actions.geometry;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.node.document.NodeData;

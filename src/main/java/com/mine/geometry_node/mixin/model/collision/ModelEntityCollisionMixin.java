@@ -26,7 +26,7 @@ public abstract class ModelEntityCollisionMixin {
         double lift = vanillaMovement.horizontalDistance() * 1.8 + Math.max(0.61, entity.maxUpStep());
         // Wall slides may redirect motion outside the original component-wise sweep.
         double sideways = vanillaMovement.length() * 2 + 1.0e-6;
-        var candidates = ModelCollisionScene.query(level, box.expandTowards(vanillaMovement).inflate(sideways, lift, sideways));
+        var candidates = ModelCollisionScene.query(level, box.expandTowards(vanillaMovement).inflate(sideways, lift, sideways), entity.getUUID());
         if (sample.sampled()) sample.candidates = candidates.size();
         if (candidates.isEmpty()) return;
         Vec3 resolved = ModelCollisionMovement.resolve(box, vanillaMovement, entity.onGround(), entity.maxUpStep(), candidates,

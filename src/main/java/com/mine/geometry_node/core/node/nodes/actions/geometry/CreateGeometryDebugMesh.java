@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.node.nodes.geometry;
+package com.mine.geometry_node.core.node.nodes.actions.geometry;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 
@@ -23,6 +23,7 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -39,6 +40,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .input(StandardPorts.GEOMETRY, "geometry")
+                        .input(StandardPorts.SOURCE_ENTITY, "source_entity")
                         .input(StandardPorts.WORLD_POSITION, "world_position")
                         .input(StandardPorts.WORLD_ROTATION, "world_rotation")
                         .input(StandardPorts.PIVOT, "pivot")
@@ -51,6 +53,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.RESOURCE_ID.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.GEOMETRY.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
@@ -72,6 +75,10 @@ public class CreateGeometryDebugMesh extends BaseNode {
             return next(StandardPorts.FLOW_OUT.getId());
         }
 
+        Entity anchor = getInputFromList(context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
+        if (anchor != null && (!anchor.isAlive() || anchor.level() != level)) {
+            return next(StandardPorts.FLOW_OUT.getId());
+        }
         Vec3 worldPosition = valueOr(getInput(context, StandardPorts.WORLD_POSITION.getId(), Vec3.class), Vec3.ZERO);
         Vec3 worldRotation = valueOr(getInput(context, StandardPorts.WORLD_ROTATION.getId(), Vec3.class), Vec3.ZERO);
         Vec3 pivot = valueOr(getInput(context, StandardPorts.PIVOT.getId(), Vec3.class), Vec3.ZERO);
@@ -96,6 +103,9 @@ public class CreateGeometryDebugMesh extends BaseNode {
                 rotation,
                 scale
         );
+        if (anchor != null) {
+            meshes = meshes.stream().map(mesh -> mesh.withAnchor(anchor.getUUID(), anchor.getId())).toList();
+        }
         if (!meshes.isEmpty()) {
             DebugRendererSessionManager.replaceSourceGeometry(level, sourceId, meshes);
             context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceIdCodec.encode(resourceId));

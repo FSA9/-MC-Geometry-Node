@@ -2,6 +2,8 @@ package com.mine.geometry_node.core.engine.graph.debug;
 
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionMetrics;
@@ -16,10 +18,22 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /** On-demand, bounded visualization of the same surfaces used by server collision. */
-final class ModelCollisionDebugProvider {
+final class CollisionDebugProvider {
     private static final int MAX_FACES = 8192;
     private static final int CHUNK_FACES = 512;
     private static final int COLOR = 0xFF56E39F;
+    private final boolean nodeCollision;
+    private final String channel;
+
+    CollisionDebugProvider(boolean nodeCollision) {
+        this.nodeCollision = nodeCollision;
+        this.channel = nodeCollision ? "collision" : "model_collision";
+    }
+
+    static boolean isNodeCollision(Object instanceId) {
+        return instanceId instanceof GraphResourceId id
+                && id.type().equals(GraphResourceTypeRegistry.GEOMETRY_COLLISION);
+    }
     private ServerLevel lastLevel;
     private long lastRevision = Long.MIN_VALUE;
     private Vec3 lastOrigin;
@@ -37,12 +51,13 @@ final class ModelCollisionDebugProvider {
         lastRevision = revision;
         lastOrigin = origin;
         lastRadius = radius;
-        try (var sample = ModelCollisionMetrics.debugBuild()) {
+        try (var sample = nodeCollision ? null : ModelCollisionMetrics.debugBuild()) {
         int availableParts = 0, displayedParts = 0;
         Comparator<Part> order = Comparator.comparingDouble(Part::distance);
         PriorityQueue<Part> nearest = new PriorityQueue<>(order.reversed());
         boolean truncated = false;
         for (ModelCollisionScene.Entry entry : ModelCollisionScene.snapshots(level)) {
+            if (isNodeCollision(entry.instanceId()) != nodeCollision) continue;
             for (ModelCollisionMesh.Part part : entry.geometry().mesh().parts()) {
                 availableParts++;
                 double distance = distanceSquared(part, entry, origin);
@@ -75,14 +90,16 @@ final class ModelCollisionDebugProvider {
         if (!chunk.faces.isEmpty()) result.add(chunk.mesh(result.size(), origin));
         meshes = List.copyOf(result);
         if (truncated && !warned) player.sendSystemMessage(Component.translatable(
-                "geometry_node.debug.model_collision.limited", MAX_FACES));
+                "geometry_node.debug." + channel + ".limited", MAX_FACES));
         warned = truncated;
+        if (sample != null) {
         sample.partsTested = availableParts;
         sample.candidates = parts.size();
         sample.meshes = meshes.size(); sample.faces = total;
         sample.edges = meshes.stream().mapToLong(mesh -> mesh.edges().length / 2).sum();
         ModelCollisionMetrics.debugState(true, availableParts, parts.size(), displayedParts,
                 total, (int) sample.edges, truncated);
+        }
         return meshes;
         }
     }
@@ -95,7 +112,7 @@ final class ModelCollisionDebugProvider {
         warned = false;
     }
 
-    private static final class Chunk {
+    private final class Chunk {
         final List<Float> vertices = new ArrayList<>();
         final List<Integer> edges = new ArrayList<>(), faces = new ArrayList<>();
 
@@ -114,7 +131,7 @@ final class ModelCollisionDebugProvider {
         GeometryDebugElement mesh(int index, Vec3 center) {
             float[] positions = new float[vertices.size()];
             for (int i = 0; i < positions.length; i++) positions[i] = vertices.get(i);
-            return new GeometryDebugElement("model_collision:" + index, "model_collision", GeometryDebugType.MESH,
+            return new GeometryDebugElement(channel + ":" + index, channel, GeometryDebugType.MESH,
                     COLOR, false, center, Vec3.ZERO, Vec3.ZERO, positions,
                     edges.stream().mapToInt(Integer::intValue).toArray(), faces.stream().mapToInt(Integer::intValue).toArray());
         }

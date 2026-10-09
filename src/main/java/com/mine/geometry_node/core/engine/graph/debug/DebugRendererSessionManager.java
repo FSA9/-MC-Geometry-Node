@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMesh
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
+import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.network.chat.Component;
@@ -121,6 +122,7 @@ public final class DebugRendererSessionManager {
         session.schematicEnabled = true;
         session.geometryEnabled = true;
         session.modelCollisionEnabled = true;
+        session.collisionEnabled = true;
         session.interactionEnabled = true;
         session.pathfindingEnabled = true;
         hydrateSchematicChannel(player, session);
@@ -193,6 +195,27 @@ public final class DebugRendererSessionManager {
         player.sendSystemMessage(Component.translatable("geometry_node.debug.model_collision.enabled",
                 formatRadius(session.radius)));
         return 1;
+    }
+
+    public static int enableCollision(ServerPlayer player, double radius) {
+        Session session = enableChannel(player, radius);
+        session.collisionEnabled = true;
+        refreshPlayer(player, session);
+        player.sendSystemMessage(Component.translatable("geometry_node.debug.collision.enabled",
+                formatRadius(session.radius)));
+        return 1;
+    }
+
+    public static int disableCollision(ServerPlayer player, boolean notify) {
+        Session session = session(player);
+        boolean changed = session != null && session.collisionEnabled;
+        if (session != null) {
+            session.collisionEnabled = false;
+            session.collision.clear();
+            finishDisableOrRefresh(player, session);
+        }
+        if (notify) player.sendSystemMessage(Component.translatable("geometry_node.debug.collision.disabled"));
+        return changed ? 1 : 0;
     }
 
     public static int disableModelCollision(ServerPlayer player, boolean notify) {
@@ -388,7 +411,11 @@ public final class DebugRendererSessionManager {
             boolean moved = session.lastPosition == null
                     || session.lastPosition.distanceToSqr(player.position()) >= MOVE_REFRESH_DISTANCE_SQR;
             boolean dirty = session.lastDirtyVersion != state.dirtyVersion;
+            // Collision changes do not mutate the debug source store; observe their own revision.
+            boolean collisionChanged = (session.collisionEnabled || session.modelCollisionEnabled)
+                    && session.lastCollisionRevision != ModelCollisionScene.revision(level);
             boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources
+                    || collisionChanged
                     || session.pathfindingEnabled && pathfindingCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
@@ -473,7 +500,7 @@ public final class DebugRendererSessionManager {
         return new GeometryDebugElement(
                 mesh.id(), mesh.graphId(), mesh.type(), color, mesh.showPoints(),
                 mesh.center(), mesh.size(), mesh.rotation(),
-                mesh.vertices(), mesh.edges(), mesh.faces()
+                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.anchorUuid(), mesh.anchorEntityId()
         );
     }
 
@@ -587,11 +614,13 @@ public final class DebugRendererSessionManager {
         if (!session.hasAnyChannel()) return new DebugSnapshotAssembler.Snapshot(List.of(), 1L);
         ServerLevel level = player.level();
         if (state.sources.pruneExpired(level, level.getGameTime())) markDirty(state);
+        List<GeometryDebugElement> collisions = new ArrayList<>();
+        if (session.modelCollisionEnabled) collisions.addAll(session.modelCollision.collect(player, session.radius));
+        if (session.collisionEnabled) collisions.addAll(session.collision.collect(player, session.radius));
         return SNAPSHOT_ASSEMBLER.assemble(
                 level, player.position(), session.radius, session.channelMask(),
                 DEFAULT_MAX_MESHES, MAX_PATHFINDING_ENTITIES,
-                state.sources, state.observations.get(level), session.modelCollisionEnabled
-                        ? session.modelCollision.collect(player, session.radius) : List.of());
+                state.sources, state.observations.get(level), collisions);
     }
 
     private static void sendSnapshot(ServerPlayer player, Session session, DebugSnapshotAssembler.Snapshot snapshot) {
@@ -632,6 +661,7 @@ public final class DebugRendererSessionManager {
         session.lastPosition = player.position();
         session.lastDimension = player.level().dimension();
         session.lastDirtyVersion = state.dirtyVersion;
+        session.lastCollisionRevision = ModelCollisionScene.revision(player.level());
         session.lastSignature = snapshot.signature();
     }
 
@@ -664,6 +694,11 @@ public final class DebugRendererSessionManager {
             signature = mix(signature, mesh.type().networkId());
             signature = mix(signature, mesh.color());
             signature = mix(signature, mesh.showPoints() ? 1L : 0L);
+            if (mesh.anchorUuid() != null) {
+                signature = mix(signature, mesh.anchorUuid().getMostSignificantBits());
+                signature = mix(signature, mesh.anchorUuid().getLeastSignificantBits());
+            }
+            signature = mix(signature, mesh.anchorEntityId());
             signature = mix(signature, Double.doubleToLongBits(mesh.center().x));
             signature = mix(signature, Double.doubleToLongBits(mesh.center().y));
             signature = mix(signature, Double.doubleToLongBits(mesh.center().z));
@@ -712,16 +747,19 @@ public final class DebugRendererSessionManager {
         private boolean schematicEnabled;
         private boolean geometryEnabled;
         private boolean modelCollisionEnabled;
-        private final ModelCollisionDebugProvider modelCollision = new ModelCollisionDebugProvider();
+        private final CollisionDebugProvider modelCollision = new CollisionDebugProvider(false);
+        private boolean collisionEnabled;
+        private final CollisionDebugProvider collision = new CollisionDebugProvider(true);
         private boolean interactionEnabled;
         private boolean pathfindingEnabled;
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
+        private long lastCollisionRevision = Long.MIN_VALUE;
         private long lastSignature = Long.MIN_VALUE;
 
         private boolean hasAnyChannel() {
-            return areaEnabled || schematicEnabled || geometryEnabled || modelCollisionEnabled || interactionEnabled || pathfindingEnabled;
+            return areaEnabled || schematicEnabled || geometryEnabled || modelCollisionEnabled || collisionEnabled || interactionEnabled || pathfindingEnabled;
         }
 
         private int channelMask() {
@@ -738,6 +776,7 @@ public final class DebugRendererSessionManager {
             lastPosition = null;
             lastDimension = null;
             lastDirtyVersion = Long.MIN_VALUE;
+            lastCollisionRevision = Long.MIN_VALUE;
             lastSignature = Long.MIN_VALUE;
         }
     }

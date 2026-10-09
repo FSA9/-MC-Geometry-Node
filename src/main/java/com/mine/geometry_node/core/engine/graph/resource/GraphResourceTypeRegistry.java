@@ -21,6 +21,9 @@ public final class GraphResourceTypeRegistry {
     public static final GraphResourceType GEOMETRY_DEBUG = type("geometry_debug",
             Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
             GraphResourceType.TargetEntityPolicy.NONE);
+    public static final GraphResourceType GEOMETRY_COLLISION = type("geometry_collision",
+            Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
+            GraphResourceType.TargetEntityPolicy.NONE);
     public static final GraphResourceType SCHEMATIC_PROJECTION = type("schematic_projection",
             Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
             GraphResourceType.TargetEntityPolicy.NONE);
@@ -36,6 +39,7 @@ public final class GraphResourceTypeRegistry {
         registerBuiltin(AREA_QUERY);
         registerBuiltin(FORCE_FIELD);
         registerBuiltin(GEOMETRY_DEBUG);
+        registerBuiltin(GEOMETRY_COLLISION);
         registerBuiltin(SCHEMATIC_PROJECTION);
         publishSnapshot();
     }
