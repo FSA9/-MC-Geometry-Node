@@ -22,7 +22,6 @@ import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 /** Creates an independently owned collision resource from procedural geometry. */
@@ -40,7 +39,6 @@ public final class CreateGeometryCollision extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node." + TYPE_ID))
                 .comment(NodeComment.builder(TYPE_ID).text("summary")
                         .input(StandardPorts.GEOMETRY, "geometry")
-                        .input(StandardPorts.SOURCE_ENTITY, "source_entity")
                         .input(StandardPorts.WORLD_POSITION, "world_position")
                         .input(StandardPorts.WORLD_ROTATION, "world_rotation")
                         .input(StandardPorts.PIVOT, "pivot")
@@ -52,7 +50,6 @@ public final class CreateGeometryCollision extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.RESOURCE_ID.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.GEOMETRY.toInput(), UIHint.DEFAULT)
-                .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(POSITION, UIHint.VECTOR)
                 .addPassthroughInput(WORLD_ROTATION, UIHint.VECTOR)
                 .addPassthroughInput(PIVOT, UIHint.VECTOR)
@@ -71,8 +68,7 @@ public final class CreateGeometryCollision extends BaseNode {
         try {
             String key = getInput(context, StandardPorts.KEY.getId(), String.class);
             var id = GraphResourceIds.forKey(context, stableNodeId(context), GraphResourceTypeRegistry.GEOMETRY_COLLISION, key);
-            Entity anchor = getInputFromList(context, StandardPorts.SOURCE_ENTITY.getId(), 0, Entity.class);
-            GeometryCollisionService.INSTANCE.create(context.getLevel(), id, geometry, anchor,
+            GeometryCollisionService.INSTANCE.create(context.getLevel(), id, geometry, null,
                     capture(context, POSITION), capture(context, WORLD_ROTATION), capture(context, PIVOT),
                     capture(context, TRANSLATION), capture(context, ROTATION), capture(context, SCALE));
             context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceIdCodec.encode(id));
