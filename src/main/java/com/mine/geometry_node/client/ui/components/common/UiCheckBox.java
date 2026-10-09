@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.common;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -9,14 +10,14 @@ import icyllis.modernui.view.View;
 /** Stateful checkbox whose drawn and interactive bounds are exactly the View bounds. */
 public final class UiCheckBox extends View {
     public static final Style DEFAULT_STYLE = new Style(
-            2.0f,
-            1.0f,
+            UiTheme.Metrics.RADIUS_SMALL,
+            UiTheme.Metrics.BORDER,
             1.6f,
-            0xFF252525,
-            0xFF3D6EA8,
-            0xFF3A3A3A,
-            0xFF6FA2DD,
-            0xFFFFFFFF
+            UiTheme.Surface.PANEL,
+            UiTheme.Control.CHECKED,
+            UiTheme.Control.CHECK_BORDER,
+            UiTheme.Control.FOCUS,
+            UiTheme.Text.STRONG
     );
 
     private final Paint paint = new Paint();
@@ -62,32 +63,52 @@ public final class UiCheckBox extends View {
     }
 
     @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        invalidate();
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float width = getWidth();
         float height = getHeight();
         if (width <= 0 || height <= 0) return;
 
-        float strokeWidth = UIUtils.dp2px(style.strokeWidthDp());
+        boolean focused = isEnabled() && isFocused();
+        float strokeWidth = UIUtils.dp2px(focused
+                ? Math.max(style.strokeWidthDp(), 2.0f) : style.strokeWidthDp());
         float offset = strokeWidth * 0.5f;
         int radius = UIUtils.dp2pxInt(style.cornerRadiusDp());
 
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(checked ? style.checkedBackground() : style.uncheckedBackground());
+        paint.setColor(stateColor(checked ? style.checkedBackground() : style.uncheckedBackground()));
         canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
+
+        if (isEnabled() && (isHovered() || isPressed())) {
+            paint.setColor(isPressed() ? 0x28000000 : 0x18FFFFFF);
+            canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
+        }
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(strokeWidth);
-        paint.setColor(checked ? style.checkedBorder() : style.uncheckedBorder());
+        paint.setColor(stateColor(focused ? UiTheme.Control.FOCUS
+                : checked ? style.checkedBorder() : style.uncheckedBorder()));
         canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
 
         if (!checked) return;
-        paint.setColor(style.checkColor());
+        paint.setColor(stateColor(style.checkColor()));
         paint.setStrokeWidth(UIUtils.dp2px(style.checkStrokeWidthDp()));
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeJoin(Paint.Join.ROUND);
         canvas.drawLine(width * 0.27f, height * 0.52f, width * 0.43f, height * 0.68f, paint);
         canvas.drawLine(width * 0.43f, height * 0.68f, width * 0.74f, height * 0.32f, paint);
+    }
+
+    private int stateColor(int color) {
+        if (isEnabled()) return color;
+        int alpha = Math.round((color >>> 24) * UiTheme.Metrics.DISABLED_ALPHA);
+        return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
     /** Visual parameters in density-independent units; layout controls the component bounds. */

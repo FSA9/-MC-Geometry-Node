@@ -107,6 +107,7 @@ dependencies {
     }
     testImplementation 'org.lwjgl:lwjgl:3.4.1'
     testRuntimeOnly 'org.lwjgl:lwjgl:3.4.1:natives-linux'
+    testRuntimeOnly 'org.lwjgl:lwjgl-glfw:3.4.1:natives-linux'
     testImplementation "org.junit.jupiter:junit-jupiter:5.14.2"
     // CPU model contracts run without bootstrapping Minecraft; match host library versions.
     testImplementation "org.joml:joml:1.10.8"

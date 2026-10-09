@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -39,15 +42,12 @@ public final class GraphPropertiesUi {
             int hintColor,
             int backgroundColor,
             int borderColor) {
-        EditText input = new EditText(context);
+        UiTextInput input = new UiTextInput(context, new UiTextInput.Style(
+                UiTheme.Metrics.TEXT_CONTROL, 7.0f, UiTheme.Metrics.RADIUS_INPUT,
+                UiTheme.Metrics.BORDER, textColor, hintColor, backgroundColor, borderColor));
         input.setSingleLine(true);
         input.setText(value != null ? value : "");
         input.setHint(hint);
-        input.setTextColor(textColor);
-        input.setHintTextColor(hintColor);
-        input.setTextSize(0, UIUtils.dp2px(10.5f));
-        input.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
-        input.setBackground(rect(backgroundColor, 3.0f, 1, borderColor));
         return input;
     }
 
@@ -58,10 +58,18 @@ public final class GraphPropertiesUi {
             int textColor,
             int normalColor,
             int hoverColor) {
-        TextView button = label(context, text, 10.0f, textColor);
-        button.setGravity(Gravity.CENTER);
+        UiActionButton button = UiActionButton.withPalette(context, text,
+                new UiActionButton.Palette(normalColor, hoverColor, hoverColor, textColor),
+                UiActionButton.Density.COMPACT,
+                new UiActionButton.Style(UiTheme.Metrics.RADIUS_INPUT, 0, 0,
+                        UiTheme.Metrics.DISABLED_ALPHA));
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setMinimumWidth(0);
+        button.setMinimumHeight(0);
+        button.setPadding(0, 0, 0, 0);
+        button.setSingleLine(true);
         button.setTooltipText(tooltip);
-        styleButton(button, normalColor, hoverColor);
         return button;
     }
 
@@ -121,6 +129,11 @@ public final class GraphPropertiesUi {
     }
 
     public static void styleButton(View button, int normalColor, int hoverColor) {
+        if (button instanceof UiActionButton action) {
+            action.setPalette(new UiActionButton.Palette(normalColor, hoverColor, hoverColor,
+                    action.palette().text()));
+            return;
+        }
         button.setBackground(rect(normalColor, 3.0f, 0, 0));
         button.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {

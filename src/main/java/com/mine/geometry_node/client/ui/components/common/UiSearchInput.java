@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.common;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
@@ -12,15 +13,17 @@ import java.util.function.Consumer;
 
 /** Shared visual style for search inputs; search execution remains owned by the caller. */
 public final class UiSearchInput extends EditText {
+    private Consumer<String> onQueryChanged;
+    private final Style style;
     public static final Style DEFAULT_STYLE = new Style(
-            14.0f,
+            UiTheme.Metrics.TEXT_SEARCH,
             10.0f,
-            3.0f,
-            1.0f,
-            0xFFE6E6E6,
-            0xFF737B86,
-            0xFF202020,
-            0xFF484848
+            UiTheme.Metrics.RADIUS_INPUT,
+            UiTheme.Metrics.BORDER,
+            UiTheme.Text.NORMAL,
+            UiTheme.Text.HINT,
+            UiTheme.Control.INPUT,
+            UiTheme.Control.INPUT_BORDER
     );
 
     public UiSearchInput(Context context) {
@@ -30,6 +33,7 @@ public final class UiSearchInput extends EditText {
     public UiSearchInput(Context context, Style style) {
         super(context);
         Style resolved = style != null ? style : DEFAULT_STYLE;
+        this.style = resolved;
         setSingleLine(true);
         setGravity(Gravity.CENTER_VERTICAL);
         setTextColor(resolved.textColor());
@@ -37,10 +41,7 @@ public final class UiSearchInput extends EditText {
         setPadding(UIUtils.dp2pxInt(resolved.horizontalPaddingDp()), 0,
                 UIUtils.dp2pxInt(resolved.horizontalPaddingDp()), 0);
         UIUtils.setLockedTextSize(this, resolved.textSizeDp());
-        setBackground(background(resolved));
-    }
-
-    public void setOnQueryChanged(Consumer<String> listener) {
+        updateVisualState();
         addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -48,6 +49,7 @@ public final class UiSearchInput extends EditText {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
+                Consumer<String> listener = onQueryChanged;
                 if (listener != null) listener.accept(s == null ? "" : s.toString());
             }
 
@@ -57,14 +59,28 @@ public final class UiSearchInput extends EditText {
         });
     }
 
-    private static ShapeDrawable background(Style style) {
+    /** Replaces the query listener; null clears it. Programmatic text changes still notify. */
+    public void setOnQueryChanged(Consumer<String> listener) {
+        onQueryChanged = listener;
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        if (style != null) updateVisualState();
+    }
+
+    private void updateVisualState() {
+        setAlpha(isEnabled() ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
         ShapeDrawable drawable = new ShapeDrawable();
         drawable.setColor(style.backgroundColor());
         drawable.setCornerRadius(UIUtils.dp2px(style.cornerRadiusDp()));
-        if (style.strokeWidthDp() > 0.0f) {
+        if (isEnabled() && isFocused()) {
+            drawable.setStroke(Math.max(1, UIUtils.dp2pxInt(UiTheme.Metrics.BORDER)), UiTheme.Control.FOCUS);
+        } else if (style.strokeWidthDp() > 0.0f) {
             drawable.setStroke(Math.max(1, UIUtils.dp2pxInt(style.strokeWidthDp())), style.borderColor());
         }
-        return drawable;
+        setBackground(drawable);
     }
 
     /** Visual parameters in density-independent units. */

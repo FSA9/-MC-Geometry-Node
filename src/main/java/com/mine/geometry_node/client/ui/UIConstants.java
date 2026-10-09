@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 /**
  * UI 常量配置中心
  * <p>
@@ -13,19 +15,19 @@ public class UIConstants {
     // ==========================================
 
     // --- 背景深色系 ---
-    public static final int CLR_BG_DARK_1 = 0xFF181818;      // 视口背景 (最深)
-    public static final int CLR_BG_DARK_2 = 0xFF1D1D1D;      // 根容器与菜单背景
-    public static final int CLR_BG_DARK_3 = 0xFF252525;      // 底部面板背景
-    public static final int CLR_BG_DARK_4 = 0xFF2D2D2D;      // 顶部标题栏背景
-    public static final int CLR_BG_DARK_5 = 0xFF303030;      // 左右侧属性栏面板背景
-    public static final int CLR_BG_NODE_BODY = 0xE6303030;   // 节点主体背景 (略透)
+    public static final int CLR_BG_DARK_1 = UiTheme.Surface.CANVAS;      // 视口背景 (最深)
+    public static final int CLR_BG_DARK_2 = UiTheme.Surface.ROOT;      // 根容器与菜单背景
+    public static final int CLR_BG_DARK_3 = UiTheme.Surface.PANEL;      // 底部面板背景
+    public static final int CLR_BG_DARK_4 = UiTheme.Surface.HEADER;      // 顶部标题栏背景
+    public static final int CLR_BG_DARK_5 = UiTheme.Surface.SIDEBAR;      // 左右侧属性栏面板背景
+    public static final int CLR_BG_NODE_BODY = UiTheme.Surface.NODE;   // 节点主体背景 (略透)
 
     // --- 装饰与功能色 ---
     public static final int CLR_BLACK = 0xFF000000;          // 纯黑 (基础描边/坐标轴)
     public static final int CLR_NODE_OUTLINE = 0xFF111111;   // 节点未选中时的外框边框色
-    public static final int CLR_WHITE = 0xFFFFFFFF;          // 纯白 (高亮/标题文字/选中态边框)
-    public static final int CLR_GRAY_TEXT = 0xFFAAAAAA;      // 辅助文字灰色
-    public static final int CLR_GRAY_LABEL = 0xFFCCCCCC;     // 节点内端口标签文字灰色
+    public static final int CLR_WHITE = UiTheme.Text.STRONG;          // 纯白 (高亮/标题文字/选中态边框)
+    public static final int CLR_GRAY_TEXT = UiTheme.Text.MUTED;      // 辅助文字灰色
+    public static final int CLR_GRAY_LABEL = UiTheme.Text.SECONDARY;     // 节点内端口标签文字灰色
     public static final int CLR_GRID_LINE = 0xFF282828;      // 画布网格线暗灰色
 
     // --- 屏幕显示 ---
