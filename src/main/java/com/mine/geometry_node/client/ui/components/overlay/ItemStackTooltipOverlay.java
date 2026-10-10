@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -27,8 +29,16 @@ public final class ItemStackTooltipOverlay {
     private static final int TOOLTIP_MAX_WIDTH_DP = 220;
 
     private static ViewGroup sHost;
+    private static View sAnchor;
+    private static OverlayHandle sOverlayHandle;
     private static LinearLayout sTooltipView;
     private static final List<TextView> sTooltipLines = new ArrayList<>();
+    private static final View.OnAttachStateChangeListener ANCHOR_LIFETIME = new View.OnAttachStateChangeListener() {
+        @Override public void onViewAttachedToWindow(View view) {}
+        @Override public void onViewDetachedFromWindow(View view) {
+            if (sAnchor == view) hide();
+        }
+    };
 
     private ItemStackTooltipOverlay() {
     }
@@ -47,18 +57,21 @@ public final class ItemStackTooltipOverlay {
             return;
         }
 
-        ViewGroup host = findWindowHost(anchor);
+        ViewGroup host = OverlayMount.host(anchor);
+        if (host == null) host = findWindowHost(anchor);
         if (host == null) {
             hide();
             return;
         }
 
-        ensureTooltipView(host);
         List<Component> lines = tooltipComponents(stack);
         if (lines.isEmpty()) {
             hide();
             return;
         }
+
+        ensureTooltipView(anchor, host);
+        if (sTooltipView == null) return;
 
         ensureTooltipLineCount(host.getContext(), lines.size());
         sTooltipView.removeAllViews();
@@ -100,29 +113,43 @@ public final class ItemStackTooltipOverlay {
     }
 
     public static void hide() {
-        if (sTooltipView != null) {
-            sTooltipView.setVisibility(View.GONE);
-        }
+        OverlayHandle handle = sOverlayHandle;
+        LinearLayout tooltip = sTooltipView;
+        clearReferences(tooltip);
+        if (handle != null) handle.close();
+        else if (tooltip != null && tooltip.getParent() instanceof ViewGroup parent) parent.removeView(tooltip);
     }
 
-    private static void ensureTooltipView(ViewGroup host) {
-        if (sHost != host && sTooltipView != null && sTooltipView.getParent() instanceof ViewGroup parent) {
-            parent.removeView(sTooltipView);
-        }
+    private static void clearReferences(LinearLayout tooltip) {
+        if (sTooltipView != tooltip) return;
+        if (sAnchor != null) sAnchor.removeOnAttachStateChangeListener(ANCHOR_LIFETIME);
+        sHost = null;
+        sAnchor = null;
+        sOverlayHandle = null;
+        sTooltipView = null;
+        sTooltipLines.clear();
+    }
+
+    private static void ensureTooltipView(View anchor, ViewGroup host) {
+        if (sHost == host && sAnchor == anchor && sTooltipView != null) return;
+        hide();
         sHost = host;
-        if (sTooltipView == null) {
-            Context context = host.getContext();
-            sTooltipView = new LinearLayout(context);
-            sTooltipView.setOrientation(LinearLayout.VERTICAL);
-            sTooltipView.setPadding(dp(7), dp(5), dp(7), dp(5));
-            sTooltipView.setBackground(rect(COLOR_TOOLTIP_BG, 3.0f, 1, COLOR_TOOLTIP_BORDER));
-            sTooltipView.setVisibility(View.GONE);
-            sTooltipView.setEnabled(false);
-            sTooltipView.setClickable(false);
-            sTooltipView.setFocusable(false);
-        }
-        if (sTooltipView.getParent() != host) {
-            host.addView(sTooltipView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        sAnchor = anchor;
+        anchor.addOnAttachStateChangeListener(ANCHOR_LIFETIME);
+        LinearLayout tooltip = new LinearLayout(host.getContext());
+        sTooltipView = tooltip;
+        tooltip.setOrientation(LinearLayout.VERTICAL);
+        tooltip.setPadding(dp(7), dp(5), dp(7), dp(5));
+        tooltip.setBackground(rect(COLOR_TOOLTIP_BG, 3.0f, 1, COLOR_TOOLTIP_BORDER));
+        tooltip.setVisibility(View.GONE);
+        tooltip.setEnabled(false);
+        tooltip.setClickable(false);
+        tooltip.setFocusable(false);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sOverlayHandle = OverlayMount.tooltip(anchor, tooltip, params, reason -> clearReferences(tooltip));
+        if (sOverlayHandle == null && sTooltipView == tooltip) {
+            host.addView(tooltip, params);
         }
     }
 

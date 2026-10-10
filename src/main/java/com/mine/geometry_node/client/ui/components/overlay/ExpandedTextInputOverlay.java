@@ -3,6 +3,9 @@ package com.mine.geometry_node.client.ui.components.overlay;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.components.common.ColorPickerDialog;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -58,6 +61,8 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     private final Predicate<Object> valueValidator;
     private final Consumer<Object> commitHandler;
     private final EditText editor;
+    private OverlayHandle overlayHandle;
+    private boolean closed;
 
     private ExpandedTextInputOverlay(Context context, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
@@ -71,7 +76,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         UIUtils.syncFixedDensity();
 
         setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
-        setOnClickListener(v -> dismiss());
+        setOnClickListener(v -> dismiss(OverlayCloseReason.OUTSIDE_CLICK));
         setFocusable(true);
         setFocusableInTouchMode(true);
 
@@ -100,7 +105,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         editor.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
         editor.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ESCAPE) {
-                dismiss();
+                dismiss(OverlayCloseReason.ESCAPE);
                 return true;
             }
             return false;
@@ -207,9 +212,13 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
                 valueValidator,
                 commitHandler);
         closeOpenOverlay();
-        host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> false, overlay::onClosed);
+        if (overlay.overlayHandle == null) {
+            host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         sOpenOverlay = overlay;
         overlay.post(() -> {
+            if (overlay.closed) return;
             overlay.requestFocus();
             overlay.editor.requestFocus();
             overlay.editor.setSelection(overlay.editor.getText().length());
@@ -219,7 +228,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
-            dismiss();
+            dismiss(OverlayCloseReason.ESCAPE);
             return true;
         }
         return super.dispatchKeyEvent(event);
@@ -238,6 +247,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private void commit() {
+        if (closed) return;
         Object parsedValue = valueParser.parse(editor.getText());
         if (!valueValidator.test(parsedValue)) {
             return;
@@ -247,18 +257,33 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private void dismiss() {
-        if (sOpenOverlay == this) {
-            sOpenOverlay = null;
+        dismiss(OverlayCloseReason.PROGRAMMATIC);
+    }
+
+    private void dismiss(OverlayCloseReason reason) {
+        if (closed) return;
+        if (overlayHandle != null) {
+            overlayHandle.requestClose(reason);
+            return;
         }
+        onClosed(reason);
         if (getParent() instanceof ViewGroup parent) {
             parent.removeView(this);
             parent.requestFocus();
         }
     }
 
+    private void onClosed(OverlayCloseReason reason) {
+        closed = true;
+        overlayHandle = null;
+        if (sOpenOverlay == this) {
+            sOpenOverlay = null;
+        }
+    }
+
     private static void closeOpenOverlay() {
         if (sOpenOverlay != null) {
-            sOpenOverlay.dismiss();
+            sOpenOverlay.dismiss(OverlayCloseReason.REPLACED);
         }
     }
 
@@ -351,6 +376,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         }
         int initialColor = selectedColor(start, end);
         ColorPickerDialog.show(getContext(), editor, initialColor, color -> {
+            if (closed) return;
             applyStyle("color", String.format("#%06x", color & 0xFFFFFF), start, end);
             editor.requestFocus();
             editor.setSelection(start, end);

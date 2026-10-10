@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -45,6 +48,9 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     private final Runnable onDismissed;
     private final List<ItemStackView> itemSlots = new ArrayList<>();
     private ItemStackView hoveredSlot;
+    private OverlayHandle overlayHandle;
+    private boolean closed;
+    private boolean picking;
 
     private InventoryItemPickerOverlay(Context context, Consumer<ItemStack> onPicked, Runnable onDismissed) {
         super(context);
@@ -85,19 +91,14 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         lp.gravity = Gravity.CENTER;
         addView(window, lp);
 
-        post(this::requestFocus);
+        post(() -> { if (!closed && getParent() != null) requestFocus(); });
     }
 
     public static InventoryItemPickerOverlay showIn(ViewGroup parent, Consumer<ItemStack> onPicked, Runnable onDismissed) {
         if (parent == null) {
             return null;
         }
-        closeOpenOverlay();
-        InventoryItemPickerOverlay overlay = new InventoryItemPickerOverlay(parent.getContext(), onPicked, onDismissed);
-        parent.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        sOpenOverlay = overlay;
-        overlay.requestFocus();
-        return overlay;
+        return show(parent, parent, onPicked, onDismissed);
     }
 
     public static InventoryItemPickerOverlay showFor(View anchor, Consumer<ItemStack> onPicked, Runnable onDismissed) {
@@ -105,7 +106,24 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             return null;
         }
         ViewGroup host = findWindowHost(anchor);
-        return showIn(host, onPicked, onDismissed);
+        return host == null ? null : show(anchor, host, onPicked, onDismissed);
+    }
+
+    private static InventoryItemPickerOverlay show(View anchor, ViewGroup fallbackHost,
+                                                   Consumer<ItemStack> onPicked, Runnable onDismissed) {
+        closeOpenOverlay();
+        InventoryItemPickerOverlay overlay = new InventoryItemPickerOverlay(anchor.getContext(), onPicked, onDismissed);
+        sOpenOverlay = overlay;
+        overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> {
+            overlay.dismiss(OverlayCloseReason.ESCAPE);
+            return true;
+        }, reason -> overlay.finishClosed());
+        if (overlay.overlayHandle == null) {
+            fallbackHost.addView(overlay, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        if (!overlay.closed) overlay.requestFocus();
+        return overlay;
     }
 
     public static boolean hasVisibleOverlay() {
@@ -136,10 +154,13 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
                         : 9 + rowIndex * COLUMNS + col;
                 ItemStack stack = inventory.getItem(inventoryIndex).copy();
                 ItemStackView slot = new ItemStackView(context, stack, picked -> {
-                    if (onPicked != null) {
-                        onPicked.accept(picked.copy());
+                    if (closed || picking) return;
+                    picking = true;
+                    try {
+                        if (onPicked != null) onPicked.accept(picked.copy());
+                    } finally {
+                        dismiss();
                     }
-                    dismiss();
                 }, true);
                 itemSlots.add(slot);
                 LinearLayout.LayoutParams slotLp = new LinearLayout.LayoutParams(dp(SLOT_SIZE_DP), dp(SLOT_SIZE_DP));
@@ -152,7 +173,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
-            dismiss();
+            dismiss(OverlayCloseReason.ESCAPE);
             return true;
         }
         super.dispatchKeyEvent(event);
@@ -183,17 +204,37 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     }
 
     public void dismiss() {
+        dismiss(OverlayCloseReason.PROGRAMMATIC);
+    }
+
+    private void dismiss(OverlayCloseReason reason) {
+        if (closed) return;
+        if (overlayHandle != null) {
+            overlayHandle.requestClose(reason);
+            return;
+        }
+        if (getParent() instanceof ViewGroup parent) parent.removeView(this);
+        finishClosed();
+    }
+
+    private void finishClosed() {
+        if (closed) return;
+        closed = true;
+        hoveredSlot = null;
         ItemTooltipProxy.clearTooltipTask();
         ItemStackTooltipOverlay.hide();
         if (sOpenOverlay == this) {
             sOpenOverlay = null;
         }
-        if (getParent() instanceof ViewGroup parent) {
-            parent.removeView(this);
-        }
         if (onDismissed != null) {
             onDismissed.run();
         }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        finishClosed();
     }
 
     private void updateTooltipForPointer(MotionEvent event) {
@@ -225,6 +266,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     }
 
     private ItemStackView updateTooltipForRawPoint(float rawX, float rawY) {
+        if (closed) return null;
         ItemStackView slot = findSlotAtRaw(rawX, rawY);
         if (slot == null || slot.getStack().isEmpty()) {
             clearHoveredSlot();

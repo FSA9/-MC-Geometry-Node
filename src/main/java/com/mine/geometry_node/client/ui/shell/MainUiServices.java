@@ -32,6 +32,12 @@ public final class MainUiServices implements AutoCloseable {
 
     public static MainUiServices require(View anchor) {
         Objects.requireNonNull(anchor, "anchor");
+        MainUiServices services = find(anchor);
+        if (services != null) return services;
+        throw new IllegalStateException("View is not attached to a MainUiShell");
+    }
+
+    public static MainUiServices find(View anchor) {
         View current = anchor;
         while (current != null) {
             if (current instanceof MainUiShell shell) {
@@ -39,7 +45,7 @@ public final class MainUiServices implements AutoCloseable {
             }
             current = current.getParent() instanceof View parent ? parent : null;
         }
-        throw new IllegalStateException("View is not attached to a MainUiShell");
+        return null;
     }
 
     public MainUiLayerManager layerManager() {

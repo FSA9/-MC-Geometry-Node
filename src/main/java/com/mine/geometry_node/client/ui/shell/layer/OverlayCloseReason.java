@@ -6,5 +6,6 @@ public enum OverlayCloseReason {
     REPLACED,
     OUTSIDE_CLICK,
     ESCAPE,
-    HOST_DESTROYED
+    HOST_DESTROYED,
+    OWNER_CLOSED
 }

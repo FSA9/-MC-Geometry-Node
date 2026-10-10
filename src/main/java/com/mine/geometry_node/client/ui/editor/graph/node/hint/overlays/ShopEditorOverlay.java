@@ -4,6 +4,9 @@ import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.InputBinding;
@@ -80,6 +83,8 @@ public final class ShopEditorOverlay extends FrameLayout {
     private QuantityDialog mQuantityDialog;
     private SlotGesture mSlotGesture;
     private DropTarget mDropTarget;
+    private OverlayHandle mOverlayHandle;
+    private boolean mClosed;
 
     private ShopEditorOverlay(Context context, EditorContext editorContext, NodeData nodeData, String portId) {
         super(context);
@@ -91,7 +96,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
         setFocusable(true);
         setFocusableInTouchMode(true);
-        setOnClickListener(v -> dismiss());
+        setOnClickListener(v -> dismiss(OverlayCloseReason.OUTSIDE_CLICK));
 
         LinearLayout window = new LinearLayout(context);
         window.setOrientation(LinearLayout.VERTICAL);
@@ -123,7 +128,9 @@ public final class ShopEditorOverlay extends FrameLayout {
         addView(window, windowLp);
 
         loadExistingData();
-        post(this::requestFocus);
+        post(() -> {
+            if (!mClosed) requestFocus();
+        });
     }
 
     public static void show(View anchor, EditorContext editorContext, NodeData nodeData, PortRow row) {
@@ -140,7 +147,10 @@ public final class ShopEditorOverlay extends FrameLayout {
 
         ShopEditorOverlay overlay = new ShopEditorOverlay(anchor.getContext(), editorContext, nodeData, portId);
         closeOpenOverlay();
-        host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        overlay.mOverlayHandle = OverlayMount.modal(anchor, overlay, overlay::closeTopInternalOverlay, overlay::onClosed);
+        if (overlay.mOverlayHandle == null) {
+            host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         sOpenOverlay = overlay;
     }
 
@@ -153,26 +163,25 @@ public final class ShopEditorOverlay extends FrameLayout {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
-            if (mQuantityDialog != null) {
-                closeQuantityDialog();
-                return true;
-            }
-            if (mSlotMenu != null) {
-                closeSlotMenu();
-                return true;
-            }
-            if (mConditionMenu != null) {
-                closeConditionMenu();
-                return true;
-            }
-            if (mInventoryPicker != null) {
-                closeInventoryPicker();
-                return true;
-            }
-            dismiss();
+            if (!closeTopInternalOverlay()) dismiss(OverlayCloseReason.ESCAPE);
             return true;
         }
         super.dispatchKeyEvent(event);
+        return true;
+    }
+
+    private boolean closeTopInternalOverlay() {
+        if (mQuantityDialog != null) {
+            closeQuantityDialog();
+        } else if (mSlotMenu != null) {
+            closeSlotMenu();
+        } else if (mConditionMenu != null) {
+            closeConditionMenu();
+        } else if (mInventoryPicker != null) {
+            closeInventoryPicker();
+        } else {
+            return false;
+        }
         return true;
     }
 
@@ -277,6 +286,7 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private void commit() {
+        if (mClosed) return;
         Map<String, Object> shopData = new LinkedHashMap<>();
         List<String> conditionPorts = conditionPorts();
         List<Object> offers = new ArrayList<>();
@@ -319,6 +329,26 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private void dismiss() {
+        dismiss(OverlayCloseReason.PROGRAMMATIC);
+    }
+
+    private void dismiss(OverlayCloseReason reason) {
+        if (mClosed) return;
+        if (mOverlayHandle != null) {
+            mOverlayHandle.requestClose(reason);
+            return;
+        }
+        onClosed(reason);
+        if (getParent() instanceof ViewGroup parent) {
+            parent.removeView(this);
+            parent.requestFocus();
+        }
+    }
+
+    private void onClosed(OverlayCloseReason reason) {
+        if (mClosed) return;
+        mClosed = true;
+        mOverlayHandle = null;
         closeInventoryPicker();
         closeSlotMenu();
         closeConditionMenu();
@@ -327,15 +357,11 @@ public final class ShopEditorOverlay extends FrameLayout {
         if (sOpenOverlay == this) {
             sOpenOverlay = null;
         }
-        if (getParent() instanceof ViewGroup parent) {
-            parent.removeView(this);
-            parent.requestFocus();
-        }
     }
 
     private static void closeOpenOverlay() {
         if (sOpenOverlay != null) {
-            sOpenOverlay.dismiss();
+            sOpenOverlay.dismiss(OverlayCloseReason.REPLACED);
         }
     }
 
@@ -343,12 +369,12 @@ public final class ShopEditorOverlay extends FrameLayout {
         closeInventoryPicker();
         closeConditionMenu();
         mInventoryPicker = InventoryItemPickerOverlay.showIn(this, stack -> {
-            if (onPicked != null) {
+            if (!mClosed && onPicked != null) {
                 onPicked.accept(stack.copy());
             }
         }, () -> {
             mInventoryPicker = null;
-            requestFocus();
+            if (!mClosed) requestFocus();
         });
     }
 
@@ -358,7 +384,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
         mInventoryPicker.dismiss();
         mInventoryPicker = null;
-        requestFocus();
+        if (!mClosed) requestFocus();
     }
 
     private void showSlotMenu(StackEntryView entry, float rawX, float rawY) {
@@ -380,7 +406,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
         mSlotMenu.dismiss();
         mSlotMenu = null;
-        requestFocus();
+        if (!mClosed) requestFocus();
     }
 
     private void showConditionMenu(ConditionSelector selector) {
@@ -402,7 +428,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
         mConditionMenu.dismiss();
         mConditionMenu = null;
-        requestFocus();
+        if (!mClosed) requestFocus();
     }
 
     private void showQuantityDialog(StackEntryView entry) {
@@ -424,7 +450,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
         mQuantityDialog.dismiss();
         mQuantityDialog = null;
-        requestFocus();
+        if (!mClosed) requestFocus();
     }
 
     private String clearSlotShortcutText() {

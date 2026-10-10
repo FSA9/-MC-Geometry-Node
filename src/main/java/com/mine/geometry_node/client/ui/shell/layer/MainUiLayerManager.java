@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.shell.layer;
 
-import com.mine.geometry_node.GeometryNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
+import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import com.mine.geometry_node.client.ui.shell.layer.modal.MainUiModal;
 import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
 import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOptions;
@@ -15,6 +18,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -22,27 +26,54 @@ import java.util.Objects;
 
 /** Owns every global transient and modal overlay mounted in one MainUI. */
 public final class MainUiLayerManager implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MainUiLayerManager.class);
     private static final float MODAL_LAYER_Z = 100.0f;
     private static final float EPHEMERAL_LAYER_Z = 200.0f;
 
     private final Context context;
     private final MainUiLayerHost transientHost;
     private final MainUiLayerHost modalHost;
+    private final MainUiLayerHost tooltipHost;
     private final Map<MainUiOverlay, Entry> mounted = new IdentityHashMap<>();
     private final Deque<Entry> modalStack = new ArrayDeque<>();
 
     private Entry transientEntry;
+    private Entry tooltipEntry;
+    private int closingDepth;
+    private int replacementDepth;
     private boolean closed;
 
-    public MainUiLayerManager(Context context, MainUiLayerHost transientHost, MainUiLayerHost modalHost) {
+    public MainUiLayerManager(Context context, MainUiLayerHost transientHost, MainUiLayerHost modalHost,
+                              MainUiLayerHost tooltipHost) {
         this.context = Objects.requireNonNull(context, "context");
         this.transientHost = Objects.requireNonNull(transientHost, "transientHost");
         this.modalHost = Objects.requireNonNull(modalHost, "modalHost");
-        if (transientHost == modalHost) {
+        this.tooltipHost = Objects.requireNonNull(tooltipHost, "tooltipHost");
+        if (transientHost == modalHost || tooltipHost == modalHost || tooltipHost == transientHost) {
             throw new IllegalArgumentException("Transient and modal overlays require different hosts");
         }
         modalHost.setZ(MODAL_LAYER_Z);
         transientHost.setZ(EPHEMERAL_LAYER_Z);
+        tooltipHost.setZ(EPHEMERAL_LAYER_Z + 100);
+    }
+
+    /** Non-interactive hints coexist with the active menu and never receive focus. */
+    public OverlayHandle showTooltip(MainUiOverlay overlay, View owner) {
+        Core.checkUiThread();
+        ensureOpen();
+        ensureNotMounted(Objects.requireNonNull(overlay, "overlay"));
+        if (tooltipEntry != null) closeEntry(tooltipEntry, OverlayCloseReason.REPLACED, true);
+        Entry entry = mount(overlay, tooltipHost, false, false, false, owner, 0);
+        tooltipEntry = entry;
+        tooltipHost.setVisibility(View.VISIBLE);
+        notifyShown(entry);
+        return entry.handle;
+    }
+
+    /** Route before workspace shortcuts, even when focus was moved by a callback. */
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        Entry top = transientEntry != null ? transientEntry : modalStack.peekLast();
+        return top != null && top.container.dispatchKeyEvent(event);
     }
 
     public OverlayHandle showTransient(TransientOverlay overlay) {
@@ -79,6 +110,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         Objects.requireNonNull(modal, "modal");
         Objects.requireNonNull(options, "options");
         ensureNotMounted(modal);
+        if (tooltipEntry != null) closeEntry(tooltipEntry, OverlayCloseReason.REPLACED, true);
 
         if (transientEntry != null
                 && !closeEntry(transientEntry, OverlayCloseReason.REPLACED, false)) {
@@ -94,6 +126,8 @@ public final class MainUiLayerManager implements AutoCloseable {
             previousTop.container.setFocusable(false);
         }
         modalStack.addLast(entry);
+        entry.dragBlocker = WorkspaceDragDropRegistry.modalBlocker();
+        WorkspaceDragService.INSTANCE.cancel();
         modalHost.setVisibility(View.VISIBLE);
         notifyShown(entry);
         focusTopModal();
@@ -134,6 +168,8 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
         closed = true;
 
+        if (tooltipEntry != null) closeEntry(tooltipEntry, OverlayCloseReason.HOST_DESTROYED, true);
+
         if (transientEntry != null) {
             closeEntry(transientEntry, OverlayCloseReason.HOST_DESTROYED, true);
         }
@@ -144,6 +180,8 @@ public final class MainUiLayerManager implements AutoCloseable {
         transientHost.setVisibility(View.GONE);
         modalHost.removeAllViews();
         modalHost.setVisibility(View.GONE);
+        tooltipHost.removeAllViews();
+        tooltipHost.setVisibility(View.GONE);
         mounted.clear();
     }
 
@@ -156,6 +194,13 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
 
         Entry entry = new Entry(overlay, host, modal, closeOnOutsideClick, closeOnEscape, returnFocusTarget);
+        entry.owner = findOwner(returnFocusTarget);
+        if (entry.owner == null && host != tooltipHost) entry.owner = modalStack.peekLast();
+        while (entry.owner != null && !entry.owner.open) entry.owner = entry.owner.owner;
+        if (entry.returnFocusTarget == null && host != tooltipHost) {
+            entry.returnFocusTarget = entry.owner != null ? entry.owner.container.findFocus()
+                    : modalHost.getRootView().findFocus();
+        }
         OverlayContainer container = new OverlayContainer(context, entry);
         if (scrimColor != 0) {
             ShapeDrawable scrim = new ShapeDrawable();
@@ -191,11 +236,11 @@ public final class MainUiLayerManager implements AutoCloseable {
         try {
             entry.overlay.onShown(entry.handle);
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("Failed to show a MainUI overlay", exception);
+            LOGGER.error("Failed to show a MainUI overlay", exception);
             closeEntry(entry, OverlayCloseReason.PROGRAMMATIC, true);
             throw exception;
         }
-        if (entry.open && entry.container.findFocus() == null) {
+        if (entry.open && entry.host != tooltipHost && entry.container.findFocus() == null) {
             entry.container.setFocusable(true);
             entry.container.setFocusableInTouchMode(true);
             entry.container.requestFocus();
@@ -209,31 +254,55 @@ public final class MainUiLayerManager implements AutoCloseable {
         if (!force && !canClose(entry, reason)) {
             return false;
         }
+        if (!entry.open) return true;
 
         entry.open = false;
-        mounted.remove(entry.overlay);
-        if (entry == transientEntry) {
-            transientEntry = null;
+        closingDepth++;
+        if (reason == OverlayCloseReason.REPLACED) replacementDepth++;
+        try {
+            // Descendants cannot outlive their parent, even if they reject user dismissal.
+            for (Entry child : new ArrayList<>(mounted.values())) {
+                if (child.owner == entry) closeEntry(child, OverlayCloseReason.OWNER_CLOSED, true);
+            }
+            mounted.remove(entry.overlay);
+            if (entry == transientEntry) transientEntry = null;
+            if (entry == tooltipEntry) tooltipEntry = null;
+            if (entry.modal) modalStack.remove(entry);
+            if (entry.dragBlocker != null) {
+                entry.dragBlocker.close();
+                entry.dragBlocker = null;
+            }
+            try {
+                if (entry.container.getParent() == entry.host) entry.host.removeView(entry.container);
+            } catch (RuntimeException exception) {
+                LOGGER.error("MainUI overlay detach failed", exception);
+            }
+            try {
+                entry.container.removeAllViews();
+            } catch (RuntimeException exception) {
+                LOGGER.error("MainUI overlay content cleanup failed", exception);
+            }
+            repairEmptyModalHost();
+            updateHostVisibility(entry.host);
+            notifyClosed(entry, reason);
+        } finally {
+            if (reason == OverlayCloseReason.REPLACED) replacementDepth--;
+            closingDepth--;
         }
-        if (entry.modal) {
-            modalStack.remove(entry);
-        }
-        if (entry.container.getParent() == entry.host) {
-            entry.host.removeView(entry.container);
-        }
-        repairEmptyModalHost();
-        updateHostVisibility(entry.host);
-        notifyClosed(entry, reason);
-        restoreFocusAfterClose(entry);
+        if (!closed && closingDepth == 0 && entry.host != tooltipHost) restoreFocusAfterClose(entry);
         return true;
     }
 
     private boolean canClose(Entry entry, OverlayCloseReason reason) {
+        if (entry.checkingClose) return false;
+        entry.checkingClose = true;
         try {
             return entry.overlay.canClose(reason);
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("MainUI overlay close check failed", exception);
+            LOGGER.error("MainUI overlay close check failed", exception);
             return false;
+        } finally {
+            entry.checkingClose = false;
         }
     }
 
@@ -241,17 +310,21 @@ public final class MainUiLayerManager implements AutoCloseable {
         try {
             entry.overlay.onClosed(reason);
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("MainUI overlay close callback failed", exception);
+            LOGGER.error("MainUI overlay close callback failed", exception);
         }
         try {
             entry.overlay.onDestroyed();
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("MainUI overlay destroy callback failed", exception);
+            LOGGER.error("MainUI overlay destroy callback failed", exception);
         }
     }
 
     private void restoreFocusAfterClose(Entry entry) {
-        if (entry.modal && !modalStack.isEmpty()) {
+        if (transientEntry != null) {
+            if (transientEntry.container.findFocus() == null) transientEntry.container.requestFocus();
+            return;
+        }
+        if (!modalStack.isEmpty()) {
             focusTopModal();
             Entry top = modalStack.peekLast();
             if (top != null && entry.returnFocusTarget != null
@@ -276,6 +349,17 @@ public final class MainUiLayerManager implements AutoCloseable {
         return false;
     }
 
+    private Entry findOwner(View anchor) {
+        View current = anchor;
+        while (current != null) {
+            for (Entry entry : mounted.values()) {
+                if (entry.open && current == entry.content) return entry;
+            }
+            current = current.getParent() instanceof View parent ? parent : null;
+        }
+        return null;
+    }
+
     private void focusTopModal() {
         Entry top = modalStack.peekLast();
         if (top != null && top.open) {
@@ -294,7 +378,7 @@ public final class MainUiLayerManager implements AutoCloseable {
 
     private void repairEmptyModalHost() {
         if (!modalStack.isEmpty() || modalHost.getChildCount() == 0) return;
-        GeometryNode.LOGGER.error("Modal stack is empty but the modal host still has {} child views; clearing stale input layer",
+        LOGGER.error("Modal stack is empty but the modal host still has {} child views; clearing stale input layer",
                 modalHost.getChildCount());
         modalHost.removeAllViews();
     }
@@ -309,6 +393,9 @@ public final class MainUiLayerManager implements AutoCloseable {
         if (closed) {
             throw new IllegalStateException("MainUiLayerManager is closed");
         }
+        if (replacementDepth > 0) {
+            throw new IllegalStateException("Cannot present overlays from a replacement close callback");
+        }
     }
 
     private final class OverlayContainer extends FrameLayout {
@@ -318,11 +405,12 @@ public final class MainUiLayerManager implements AutoCloseable {
         private OverlayContainer(Context context, Entry entry) {
             super(context);
             this.entry = entry;
-            setClickable(true);
+            setClickable(entry.host != tooltipHost);
         }
 
         @Override
         public boolean dispatchKeyEvent(KeyEvent event) {
+            if (!entry.open || entry.host == tooltipHost) return false;
             if (entry.open && entry.closeOnEscape
                     && event.getAction() == KeyEvent.ACTION_DOWN
                     && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
@@ -339,6 +427,8 @@ public final class MainUiLayerManager implements AutoCloseable {
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent event) {
+            if (entry.host == tooltipHost) return false;
+            if (!entry.open || entry.modal && entry != modalStack.peekLast()) return true;
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 outsideGesture = !isInsideContent(event.getX(), event.getY());
@@ -359,6 +449,8 @@ public final class MainUiLayerManager implements AutoCloseable {
 
         @Override
         public boolean dispatchGenericMotionEvent(MotionEvent event) {
+            if (entry.host == tooltipHost) return false;
+            if (!entry.open || entry.modal && entry != modalStack.peekLast()) return true;
             if (consumeOverlayHover(entry, event.getRawX(), event.getRawY())) {
                 return true;
             }
@@ -393,7 +485,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         try {
             return entry.overlay.onEscapePressed();
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("MainUI overlay Escape handler failed", exception);
+            LOGGER.error("MainUI overlay Escape handler failed", exception);
             return false;
         }
     }
@@ -402,7 +494,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         try {
             return entry.overlay.onPointerHover(screenX, screenY);
         } catch (RuntimeException exception) {
-            GeometryNode.LOGGER.error("MainUI overlay hover handler failed", exception);
+            LOGGER.error("MainUI overlay hover handler failed", exception);
             return false;
         }
     }
@@ -413,12 +505,15 @@ public final class MainUiLayerManager implements AutoCloseable {
         private final boolean modal;
         private final boolean closeOnOutsideClick;
         private final boolean closeOnEscape;
-        private final View returnFocusTarget;
+        private View returnFocusTarget;
+        private WorkspaceDragDropRegistry.ModalBlocker dragBlocker;
         private final OverlayHandle handle = new EntryHandle(this);
 
         private OverlayContainer container;
         private View content;
+        private Entry owner;
         private boolean open = true;
+        private boolean checkingClose;
 
         private Entry(MainUiOverlay overlay, MainUiLayerHost host, boolean modal,
                       boolean closeOnOutsideClick, boolean closeOnEscape, View returnFocusTarget) {

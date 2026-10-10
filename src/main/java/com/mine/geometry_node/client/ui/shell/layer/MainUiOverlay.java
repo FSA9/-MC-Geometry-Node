@@ -38,6 +38,7 @@ public interface MainUiOverlay {
     default void onShown(OverlayHandle handle) {
     }
 
+    /** Cleanup callback. REPLACED and HOST_DESTROYED must not present another overlay. */
     default void onClosed(OverlayCloseReason reason) {
     }
 

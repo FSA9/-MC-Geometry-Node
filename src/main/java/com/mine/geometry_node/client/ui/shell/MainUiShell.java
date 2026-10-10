@@ -14,6 +14,7 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -25,6 +26,7 @@ public final class MainUiShell extends FrameLayout {
     private final MainUiServices services;
     private final MainUiLayerHost transientLayer;
     private final MainUiLayerHost modalLayer;
+    private final MainUiLayerHost tooltipLayer;
     private final AreaLayoutRoot areaRoot;
     private boolean destroyed;
 
@@ -38,7 +40,8 @@ public final class MainUiShell extends FrameLayout {
 
         transientLayer = new MainUiLayerHost(context);
         modalLayer = new MainUiLayerHost(context);
-        MainUiLayerManager layerManager = new MainUiLayerManager(context, transientLayer, modalLayer);
+        tooltipLayer = new MainUiLayerHost(context);
+        MainUiLayerManager layerManager = new MainUiLayerManager(context, transientLayer, modalLayer, tooltipLayer);
         MainMenuRegistry menuRegistry = new MainMenuRegistry();
         SettingsPageRegistry settingsPageRegistry = new SettingsPageRegistry();
         services = new MainUiServices(layerManager, menuRegistry, settingsPageRegistry);
@@ -64,10 +67,17 @@ public final class MainUiShell extends FrameLayout {
 
         addView(transientLayer, matchParentLayoutParams());
         addView(modalLayer, matchParentLayoutParams());
+        addView(tooltipLayer, matchParentLayoutParams());
     }
 
     public MainUiServices services() {
         return services;
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (services.layerManager().dispatchKeyEvent(event)) return true;
+        return super.dispatchKeyEvent(event);
     }
 
     public void persistNow() {
@@ -84,6 +94,7 @@ public final class MainUiShell extends FrameLayout {
             services.close();
             clearLayer(transientLayer);
             clearLayer(modalLayer);
+            clearLayer(tooltipLayer);
         } finally {
             areaRoot.close();
         }

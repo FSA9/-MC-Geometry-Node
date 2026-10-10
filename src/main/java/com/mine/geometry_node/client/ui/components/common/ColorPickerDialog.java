@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.components.common;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
+import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -62,6 +65,9 @@ public final class ColorPickerDialog extends FrameLayout {
     private int mDragStartTop;
     private boolean mDragging;
     private boolean mPointerDownInsideWindow;
+    private OverlayHandle mOverlayHandle;
+    private boolean mClosed;
+    private boolean mApplying;
 
     private ColorPickerDialog(Context context, int initialColor, View returnFocusTarget, OnColorSelected listener) {
         super(context);
@@ -153,7 +159,7 @@ public final class ColorPickerDialog extends FrameLayout {
         wireInputWatchers();
         setColor(ensureOpaque(initialColor), false);
         post(this::initializeWindowPosition);
-        post(this::requestFocus);
+        post(() -> { if (!mClosed && getParent() != null) requestFocus(); });
     }
 
     public static ColorPickerDialog show(Context context, View anchor, int initialColor, OnColorSelected listener) {
@@ -165,7 +171,7 @@ public final class ColorPickerDialog extends FrameLayout {
             return null;
         }
         ColorPickerDialog dialog = new ColorPickerDialog(context, initialColor, anchor, listener);
-        addFullscreen(host, dialog);
+        dialog.mount(anchor, host);
         return dialog;
     }
 
@@ -174,14 +180,14 @@ public final class ColorPickerDialog extends FrameLayout {
             return null;
         }
         ColorPickerDialog dialog = new ColorPickerDialog(parent.getContext(), initialColor, parent, listener);
-        addFullscreen(parent, dialog);
+        dialog.mount(parent, parent);
         return dialog;
     }
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
-            dismiss();
+            dismiss(OverlayCloseReason.ESCAPE);
             return true;
         }
         super.dispatchKeyEvent(event);
@@ -218,7 +224,7 @@ public final class ColorPickerDialog extends FrameLayout {
         }
 
         if (action == MotionEvent.ACTION_UP) {
-            dismiss();
+            dismiss(OverlayCloseReason.OUTSIDE_CLICK);
         } else if (action == MotionEvent.ACTION_CANCEL) {
             mPointerDownInsideWindow = false;
             mDragging = false;
@@ -246,6 +252,16 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     public void dismiss() {
+        dismiss(OverlayCloseReason.PROGRAMMATIC);
+    }
+
+    private void dismiss(OverlayCloseReason reason) {
+        if (mClosed) return;
+        if (mOverlayHandle != null) {
+            mOverlayHandle.requestClose(reason);
+            return;
+        }
+        finishClosed();
         if (getParent() instanceof ViewGroup parent) {
             parent.removeView(this);
         }
@@ -255,10 +271,33 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     private void applyAndDismiss() {
-        if (mListener != null) {
-            mListener.onColorSelected(mColor);
+        if (mClosed || mApplying) return;
+        mApplying = true;
+        try {
+            if (mListener != null) mListener.onColorSelected(mColor);
+        } finally {
+            dismiss();
         }
-        dismiss();
+    }
+
+    private void mount(View anchor, ViewGroup fallbackHost) {
+        mOverlayHandle = OverlayMount.modal(anchor, this, () -> {
+            dismiss(OverlayCloseReason.ESCAPE);
+            return true;
+        }, reason -> finishClosed());
+        if (mOverlayHandle == null) addFullscreen(fallbackHost, this);
+    }
+
+    private void finishClosed() {
+        mClosed = true;
+        mDragging = false;
+        mPointerDownInsideWindow = false;
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        finishClosed();
     }
 
     private void wireInputWatchers() {
