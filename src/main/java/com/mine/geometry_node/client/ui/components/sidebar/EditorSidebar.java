@@ -5,10 +5,10 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelConte
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -25,14 +25,14 @@ import java.util.function.Consumer;
  * Editor-owned, Blender-style registration with a content host and a vertical tab rail.
  */
 public final class EditorSidebar extends LinearLayout {
-    private static final int COLOR_BACKGROUND = 0xFF303030;
-    private static final int COLOR_HEADER = 0xFF292929;
-    private static final int COLOR_BORDER = 0xFF181818;
-    private static final int COLOR_TEXT = 0xFFE0E0E0;
-    private static final int COLOR_MUTED = 0xFFAAAAAA;
-    private static final int COLOR_HOVER = 0xFF454545;
-    private static final int COLOR_TAB_RAIL = 0xFF202020;
-    private static final int COLOR_TAB_SELECTED = 0xFF3A3A3A;
+    private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
+    private static final int COLOR_HEADER = UiTheme.Surface.HEADER;
+    private static final int COLOR_BORDER = UiTheme.Surface.CANVAS;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
+    private static final int COLOR_MUTED = UiTheme.Text.MUTED;
+    private static final int COLOR_HOVER = UiTheme.Control.ICON_HOVER;
+    private static final int COLOR_TAB_RAIL = UiTheme.Control.INPUT;
+    private static final int COLOR_TAB_SELECTED = UiTheme.Control.SELECTED;
     private static final int TAB_RAIL_WIDTH_DP = 30;
 
     private final Map<String, PanelEntry> mPanels = new LinkedHashMap<>();
@@ -132,10 +132,6 @@ public final class EditorSidebar extends LinearLayout {
             selectPanel(normalizedId);
             if (!mContentVisible && mOnExpandRequested != null) mOnExpandRequested.run();
         });
-        tab.setOnHoverListener((v, event) -> {
-            updateTabBackground(entry, event.getAction() == MotionEvent.ACTION_HOVER_ENTER);
-            return false;
-        });
         mPanels.put(normalizedId, entry);
         mTabStrip.addView(tab, new LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -229,8 +225,8 @@ public final class EditorSidebar extends LinearLayout {
         mTitleView.setText(next.title());
         if (mPanelsActive) next.panel().onSelected();
 
-        if (previous != null) updateTabBackground(previous, false);
-        updateTabBackground(next, false);
+        if (previous != null) previous.tab().setSelected(false);
+        next.tab().setSelected(true);
         if (isAttachedToWindow()) post(() -> mTabScroll.scrollToDescendant(next.tab()));
         if (notify && mOnSelectedPanelChanged != null) mOnSelectedPanelChanged.accept(next.id());
         return true;
@@ -246,11 +242,6 @@ public final class EditorSidebar extends LinearLayout {
         SidebarTabView tab = new SidebarTabView(getContext(), title);
         tab.setContentDescription(title);
         return tab;
-    }
-
-    private void updateTabBackground(PanelEntry entry, boolean hovered) {
-        boolean selected = entry == mSelected;
-        entry.tab().setTabState(selected, hovered);
     }
 
     private static String normalizeId(String id) {
@@ -320,12 +311,16 @@ public final class EditorSidebar extends LinearLayout {
             return mPreferredHeight;
         }
 
-        private void setTabState(boolean selected, boolean hovered) {
-            setSelected(selected);
-            mLabel.setTextColor(selected ? COLOR_TEXT : COLOR_MUTED);
-            setBackground(rect(
-                    selected ? COLOR_TAB_SELECTED : hovered ? COLOR_HOVER : 0x00000000,
-                    0.0f, 0, 0));
+        @Override
+        protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            if (mLabel == null) return;
+            mLabel.setTextColor(isSelected() ? COLOR_TEXT : COLOR_MUTED);
+            setAlpha(isEnabled() ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
+            setBackground(rect(isSelected() ? COLOR_TAB_SELECTED
+                            : isPressed() ? UiTheme.Control.ICON_PRESSED
+                            : isHovered() ? COLOR_HOVER : 0x00000000,
+                    0.0f, isFocused() ? 1 : 0, UiTheme.Control.FOCUS));
         }
     }
 }

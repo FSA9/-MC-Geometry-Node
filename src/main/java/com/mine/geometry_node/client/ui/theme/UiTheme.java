@@ -11,6 +11,7 @@ public final class UiTheme {
         public static final int HEADER = 0xFF2D2D2D;
         public static final int SIDEBAR = 0xFF303030;
         public static final int NODE = 0xE6303030;
+        public static final int OVERLAY_DIM = 0x99000000;
         private Surface() {}
     }
 
@@ -50,6 +51,7 @@ public final class UiTheme {
         public static final int ICON_DISABLED_BORDER = 0xFF383838;
         public static final int CHECKED = 0xFF3D6EA8;
         public static final int CHECK_BORDER = 0xFF3A3A3A;
+        public static final int SELECTED = 0xFF3A3A3A;
         private Control() {}
     }
 

@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
@@ -737,14 +741,15 @@ public final class ShopEditorOverlay extends FrameLayout {
     }
 
     private static EditText field(Context context, String value, int gravity) {
-        EditText input = new EditText(context);
+        EditText input = new UiTextInput(context, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
+                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         input.setSingleLine(true);
         input.setText(value == null ? "" : value);
         input.setTextColor(COLOR_TEXT);
         UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(gravity);
         input.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        input.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
         return input;
     }
 

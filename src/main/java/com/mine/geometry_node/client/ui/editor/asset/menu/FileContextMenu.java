@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.*;
@@ -13,10 +15,10 @@ import java.util.function.Consumer;
 public class FileContextMenu extends FrameLayout {
     private static final int MENU_WIDTH_DP = 160;
     private static final int MENU_ITEM_HEIGHT_DP = 26;
-    private static final int COLOR_TEXT = 0xFFCCCCCC;
-    private static final int COLOR_SHORTCUT_TEXT = 0xFF8B949E;
-    private static final int COLOR_HOVER_BG = 0xFF44AAFF;
-    private static final int COLOR_HOVER_TEXT = 0xFFFFFFFF;
+    private static final int COLOR_TEXT = UiTheme.Text.SECONDARY;
+    private static final int COLOR_SHORTCUT_TEXT = UiTheme.Text.MUTED;
+    private static final int COLOR_HOVER_BG = UiTheme.PRIMARY.hover();
+    private static final int COLOR_HOVER_TEXT = UiTheme.Text.STRONG;
 
     private final LinearLayout mContentLayout;
     private FileContextMenu mParentMenu;
@@ -37,8 +39,8 @@ public class FileContextMenu extends FrameLayout {
         mContentLayout.setOnClickListener(v -> {});
 
         ShapeDrawable bg = new ShapeDrawable();
-        bg.setColor(0xFF2D2D2D);
-        bg.setCornerRadius(4);
+        bg.setColor(UiTheme.Surface.HEADER);
+        bg.setCornerRadius(UIUtils.dp2px(UiTheme.Metrics.RADIUS_INPUT));
         mContentLayout.setBackground(bg);
         mContentLayout.setPadding(4, 4, 4, 4);
 
@@ -132,14 +134,14 @@ public class FileContextMenu extends FrameLayout {
     public void addTitle(String text) {
         TextView tv = new TextView(getContext());
         tv.setText(text);
-        tv.setTextColor(0xFF888888);
+        tv.setTextColor(UiTheme.Text.MUTED);
         tv.setPadding(UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(4));
         mContentLayout.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     public void addDivider() {
         View divider = new View(getContext());
-        ShapeDrawable line = new ShapeDrawable(); line.setColor(0xFF111111);
+        ShapeDrawable line = new ShapeDrawable(); line.setColor(UiTheme.Surface.ROOT);
         divider.setBackground(line);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1));
         lp.setMargins(0, 4, 0, 4);

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -19,8 +21,8 @@ public class TransferProgressDialog extends AssetDialogBase {
 
     public TransferProgressDialog(Context context, String title) {
         super(context, title);
-        mStatus = label(context, tr("geometry_node.asset_transfer.status.preparing"), 13, 0xFFDDDDDD);
-        mProgress = label(context, "0 / 0", 13, 0xFF9FD0FF);
+        mStatus = label(context, tr("geometry_node.asset_transfer.status.preparing"), 13, UiTheme.Text.NORMAL);
+        mProgress = label(context, "0 / 0", 13, UiTheme.Control.FOCUS);
         mPanel.addView(mStatus, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(32)));
         mPanel.addView(mProgress, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28)));
         LinearLayout actions = new LinearLayout(context);
@@ -43,7 +45,7 @@ public class TransferProgressDialog extends AssetDialogBase {
     public void fail(String message) {
         mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
         mStatus.setText(message == null || message.isEmpty() ? tr("geometry_node.common.operation_failed") : message);
-        mStatus.setTextColor(0xFFFF7777); mCancelButton.setText(tr("geometry_node.common.close"));
+        mStatus.setTextColor(UiTheme.Control.ERROR); mCancelButton.setText(tr("geometry_node.common.close"));
     }
     public void cancelled() {
         mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);

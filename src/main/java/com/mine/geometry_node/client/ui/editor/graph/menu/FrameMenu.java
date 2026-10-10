@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -33,8 +37,6 @@ public final class FrameMenu {
 
     private static final int COLOR_PANEL_BG = 0xF02B2D33;
     private static final int COLOR_PANEL_BORDER = 0xFF15171B;
-    private static final int COLOR_INPUT_BG = 0xFF181B20;
-    private static final int COLOR_INPUT_BORDER = 0xFF3A404A;
     private static final int COLOR_LABEL = 0xFF8F98A6;
     private static final int COLOR_TEXT = 0xFFE7EAF0;
 
@@ -77,7 +79,9 @@ public final class FrameMenu {
         titleLabelLp.topMargin = dp(4);
         panel.addView(titleLabel, titleLabelLp);
 
-        EditText titleInput = new EditText(uiContext);
+        EditText titleInput = new UiTextInput(uiContext, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
+                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         String oldTitle = frameData.title != null ? frameData.title : "";
         titleInput.setText(oldTitle);
         titleInput.setSingleLine(true);
@@ -85,7 +89,6 @@ public final class FrameMenu {
         titleInput.setTextSize(0, UIUtils.dp2px(12));
         titleInput.setGravity(Gravity.CENTER_VERTICAL);
         titleInput.setPadding(dp(9), 0, dp(9), 0);
-        titleInput.setBackground(rect(COLOR_INPUT_BG, 4.0f, 1, COLOR_INPUT_BORDER));
         panel.addView(titleInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(INPUT_H_DP)));
 
         TextView colorLabel = label(uiContext, "颜色", 10f, COLOR_LABEL, Gravity.CENTER_VERTICAL);

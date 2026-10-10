@@ -122,10 +122,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         statusBar.setOrientation(HORIZONTAL);
         statusBar.setGravity(Gravity.CENTER_VERTICAL);
         statusBar.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
-        statusBar.setBackground(colorDrawable(0xFF252526));
+        statusBar.setBackground(colorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.PANEL));
         statusView = UIUtils.createLockedTextView(context, "HIGH TRUST  PowerShell", 12f, 0xFFAAAAAA);
         statusBar.addView(statusView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-        actionView = UIUtils.createLockedTextView(context, "Start", 12f, 0xFF4FC1FF);
+        actionView = TerminalChrome.action(context, TerminalChrome.tr("action.start"));
         actionView.setGravity(Gravity.CENTER);
         actionView.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
         actionView.setOnClickListener(ignored -> toggleProcess());
@@ -651,7 +651,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private void updateStatus() {
         String detail = pendingError.isBlank() ? displayedState.name() : pendingError;
         String statusText = "HIGH TRUST  PowerShell  " + detail;
-        String actionText = displayedState.hasActiveBackend() ? "Stop" : startRequested ? "Cancel" : "Start";
+        String actionText = TerminalChrome.tr(displayedState.hasActiveBackend()
+                ? "action.stop" : startRequested ? "action.cancel" : "action.start");
         int statusColor = pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771;
         if (!statusText.equals(displayedStatusText)) {
             displayedStatusText = statusText;

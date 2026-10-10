@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
@@ -28,7 +31,6 @@ import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
-import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -45,7 +47,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 final class AssetBrowserActionController {
@@ -524,12 +525,10 @@ final class AssetBrowserActionController {
         int index = parent.indexOfChild(originalTextView);
         originalTextView.setVisibility(View.GONE);
 
-        EditText editInput = new EditText(mPanel.getContext());
-        editInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(TEXT_SIZE_LIST_ITEM));
-        editInput.setTextColor(0xFFFFFFFF);
-        editInput.setBackground(AssetFileBrowserPanel.createColorDrawable(0xFF444444));
+        EditText editInput = new UiTextInput(mPanel.getContext(), new UiTextInput.Style(
+                TEXT_SIZE_LIST_ITEM, 6, UiTheme.Metrics.RADIUS_SMALL, UiTheme.Metrics.BORDER,
+                UiTheme.Text.STRONG, UiTheme.Text.HINT, UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         editInput.setSingleLine(true);
-        editInput.setPadding(dp2pxInt(6), 0, dp2pxInt(6), 0);
         editInput.setText(targetEntry.name());
 
         parent.addView(editInput, index, new LinearLayout.LayoutParams(

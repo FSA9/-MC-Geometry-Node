@@ -28,7 +28,7 @@ public class PathHintRenderer implements UIHintRenderer {
         String portId = row.leftPort().id();
         Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
 
-        EditText input = new EditText(context);
+        EditText input = UIHintUtils.createInput(context);
         input.setText(val != null ? val.toString() : "");
         UIHintUtils.applyStandardInputStyle(input, PortType.PATH);
 

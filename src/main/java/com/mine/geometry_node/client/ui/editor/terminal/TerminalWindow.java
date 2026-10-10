@@ -9,6 +9,8 @@ import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
 import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
 import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ai.mcp.client.MinecraftClientMcpGateway;
@@ -33,8 +35,8 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private final HorizontalScrollView mTabScrollView;
     private final TerminalTabBar mTabBar;
     private final LinearLayout mModeBar;
-    private final TextView mCommandMode;
-    private final TextView mShellMode;
+    private final UiActionButton mCommandMode;
+    private final UiActionButton mShellMode;
     private final FrameLayout mContainer;
     private final List<TerminalTab> mTabs = new ArrayList<>();
     private int mCurrentIndex = -1;
@@ -61,7 +63,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mTabScrollView = new HorizontalScrollView(context);
         mTabScrollView.setFillViewport(true);
         mTabScrollView.setHorizontalScrollBarEnabled(false);
-        mTabScrollView.setBackground(colorDrawable(0xFF252526));
+        mTabScrollView.setBackground(colorDrawable(UiTheme.Surface.PANEL));
         mTabScrollView.setOnGenericMotionListener((view, event) -> {
             if (event.getAction() != MotionEvent.ACTION_SCROLL) return false;
             float verticalScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
@@ -81,9 +83,9 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mModeBar.setOrientation(HORIZONTAL);
         mModeBar.setGravity(Gravity.CENTER_VERTICAL);
         mModeBar.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(3));
-        mModeBar.setBackground(colorDrawable(0xFF202020));
-        mCommandMode = modeButton(context, "Command");
-        mShellMode = modeButton(context, "PowerShell");
+        mModeBar.setBackground(colorDrawable(UiTheme.Control.INPUT));
+        mCommandMode = TerminalChrome.action(context, TerminalChrome.tr("mode.command"));
+        mShellMode = TerminalChrome.action(context, TerminalChrome.tr("mode.shell"));
         mCommandMode.setOnClickListener(ignored -> switchMode(TerminalMode.COMMAND));
         mShellMode.setOnClickListener(ignored -> switchMode(TerminalMode.SHELL));
         mModeBar.addView(mCommandMode, new LayoutParams(UIUtils.dp2pxInt(92), ViewGroup.LayoutParams.MATCH_PARENT));
@@ -223,6 +225,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     @Override
     public void onDispose() {
         mWindowActive = false;
+        mTabBar.setListener(null);
         captureSessionState();
         for (TerminalTab tab : mTabs) {
             tab.close();
@@ -330,15 +333,9 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         });
     }
 
-    private static TextView modeButton(Context context, String text) {
-        TextView view = UIUtils.createLockedTextView(context, text, 12f, 0xFFB8B8B8);
-        view.setGravity(Gravity.CENTER);
-        return view;
-    }
-
-    private static void styleModeButton(TextView view, boolean selected) {
-        view.setTextColor(selected ? 0xFFFFFFFF : 0xFF999999);
-        view.setBackground(colorDrawable(selected ? 0xFF3A3A3A : 0x00000000));
+    private static void styleModeButton(UiActionButton view, boolean selected) {
+        view.setSelected(selected);
+        view.setPalette(TerminalChrome.palette(selected));
     }
 
     private static ShapeDrawable colorDrawable(int color) {

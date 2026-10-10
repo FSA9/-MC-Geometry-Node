@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
@@ -41,26 +43,31 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             Set.of(SidebarPanelScope.ASSET_BROWSER),
             AssetTransferPanel::create);
 
-    private static final int COLOR_BACKGROUND = 0xFF303030;
-    private static final int COLOR_SECTION = 0xFF292929;
-    private static final int COLOR_ROW = 0xFF333333;
-    private static final int COLOR_ROW_ALT = 0xFF303030;
-    private static final int COLOR_BORDER = 0xFF1D1D1D;
-    private static final int COLOR_TEXT = 0xFFE0E0E0;
-    private static final int COLOR_MUTED = 0xFF919191;
+    private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
+    private static final int COLOR_SECTION = UiTheme.Surface.PANEL;
+    private static final int COLOR_ROW = UiTheme.Surface.SIDEBAR;
+    private static final int COLOR_ROW_ALT = UiTheme.Surface.HEADER;
+    private static final int COLOR_BORDER = UiTheme.Surface.ROOT;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
+    private static final int COLOR_MUTED = UiTheme.Text.MUTED;
     private static final int COLOR_UPLOAD = 0xFF5793C1;
     private static final int COLOR_DOWNLOAD = 0xFF62A56B;
-    private static final int COLOR_ERROR = 0xFFD87575;
+    private static final int COLOR_ERROR = UiTheme.Control.ERROR;
     private static final int COLOR_WARNING = 0xFFE0B35B;
-    private static final int COLOR_HOVER = 0xFF4A4A4A;
+    private static final int COLOR_HOVER = UiTheme.Control.ICON_HOVER;
     private static final long UI_UPDATE_DELAY_MS = 100L;
 
     private final ScrollView scroll;
     private final LinearLayout content;
     private final Map<Section, Boolean> expandedSections = new EnumMap<>(Section.class);
     private ClientAssetTransferService.Subscription subscription;
+    private long subscriptionGeneration;
     private AssetTransferSnapshot pendingSnapshot = AssetTransferSnapshot.empty();
     private boolean renderScheduled;
+    private final Runnable renderPending = () -> {
+        renderScheduled = false;
+        if (subscription != null) render(pendingSnapshot);
+    };
 
     public AssetTransferPanel(Context context) {
         super(context);
@@ -85,13 +92,18 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     @Override
     public void onSelected() {
         if (subscription != null) return;
-        subscription = ClientAssetTransferService.INSTANCE.subscribe(this::acceptSnapshot);
+        long generation = ++subscriptionGeneration;
+        subscription = ClientAssetTransferService.INSTANCE.subscribe(snapshot -> post(() -> {
+            if (generation == subscriptionGeneration) acceptSnapshot(snapshot);
+        }));
     }
 
     @Override
     public void onDeselected() {
+        subscriptionGeneration++;
         if (subscription != null) subscription.close();
         subscription = null;
+        removeCallbacks(renderPending);
         renderScheduled = false;
     }
 
@@ -99,10 +111,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         pendingSnapshot = snapshot;
         if (renderScheduled) return;
         renderScheduled = true;
-        postDelayed(() -> {
-            renderScheduled = false;
-            if (subscription != null) render(pendingSnapshot);
-        }, UI_UPDATE_DELAY_MS);
+        postDelayed(renderPending, UI_UPDATE_DELAY_MS);
     }
 
     private void render(AssetTransferSnapshot snapshot) {

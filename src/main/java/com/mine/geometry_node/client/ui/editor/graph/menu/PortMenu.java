@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
@@ -31,12 +35,9 @@ public class PortMenu {
     private static final int INPUT_H_DP = 28;
     private static final int ITEM_H_DP = 24;
     private static final int ITEM_RADIUS_DP = 4;
-    private static final int SEARCH_RADIUS_DP = 5;
 
     private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
     private static final int COLOR_PANEL_BORDER = 0xFF151515;
-    private static final int COLOR_INPUT_BG = 0xFF1E1E1E;
-    private static final int COLOR_INPUT_BORDER = 0xFF3A3A3A;
     private static final int COLOR_DIVIDER = 0xFF171717;
     private static final int COLOR_SECTION_TEXT = 0xFF777777;
     private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
@@ -85,7 +86,9 @@ public class PortMenu {
         TextView section = sectionLabel(uiContext, "重命名端口");
         panel.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
 
-        EditText input = new EditText(uiContext);
+        EditText input = new UiTextInput(uiContext, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
+                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         input.setText(effectiveName);
         input.setHint("名称");
         input.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
@@ -94,7 +97,6 @@ public class PortMenu {
         input.setTextSize(0, UIUtils.dp2px(12));
         input.setGravity(Gravity.CENTER_VERTICAL);
         input.setPadding(dp(10), 0, dp(10), 0);
-        input.setBackground(rect(COLOR_INPUT_BG, SEARCH_RADIUS_DP, 1, COLOR_INPUT_BORDER));
 
         LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(INPUT_H_DP));
         inputLp.bottomMargin = dp(8);

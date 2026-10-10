@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -60,7 +61,7 @@ final class FileContentLayout extends ViewGroup {
         mSelectionBorderPaint.setColor(UIConstants.ViewPort.Selection.CLR_BORDER);
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
         mSelectionBorderPaint.setStrokeWidth(dp2px(UIConstants.ViewPort.Selection.STROKE_WIDTH));
-        setBackground(AssetFileBrowserPanel.createColorDrawable(0xFF1E1E1E));
+        setBackground(AssetFileBrowserPanel.createColorDrawable(UiTheme.Surface.ROOT));
     }
 
     void setViewMode(AssetViewMode mode) {

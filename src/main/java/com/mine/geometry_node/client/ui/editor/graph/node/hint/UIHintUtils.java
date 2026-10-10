@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import icyllis.modernui.core.Context;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -20,18 +23,25 @@ public class UIHintUtils {
         return UIConstants.Node.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
     }
 
+    public static EditText createInput(Context context) {
+        return new UiTextInput(context, new UiTextInput.Style(UIConstants.Node.TEXT_SIZE_LABEL, 8,
+                ConfigManager.INSTANCE.getConfig().node.cornerRadius, UiTheme.Metrics.BORDER,
+                UiTheme.Text.SECONDARY, UiTheme.Text.HINT, UiTheme.Surface.PANEL, 0xFF333333));
+    }
+
     public static void applyStandardInputStyle(EditText et, PortType expectedType) {
         et.setTextColor(UIConstants.CLR_GRAY_LABEL);
         UIUtils.setLockedTextSize(et, UIConstants.Node.TEXT_SIZE_LABEL);
         et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
         et.setSingleLine(true);
 
-        ShapeDrawable bgDrawable = new ShapeDrawable();
-        bgDrawable.setColor(0xFF252525);
-        bgDrawable.setCornerRadius(UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius));
-        bgDrawable.setStroke(UIUtils.dp2pxInt(1), 0xFF333333);
-
-        et.setBackground(bgDrawable);
+        if (!(et instanceof UiTextInput)) {
+            ShapeDrawable bgDrawable = new ShapeDrawable();
+            bgDrawable.setColor(UiTheme.Surface.PANEL);
+            bgDrawable.setCornerRadius(UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius));
+            bgDrawable.setStroke(UIUtils.dp2pxInt(1), 0xFF333333);
+            et.setBackground(bgDrawable);
+        }
 
         et.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 

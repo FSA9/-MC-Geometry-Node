@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.client.ui.components.input.UiNumericInput;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
@@ -16,9 +17,12 @@ public record NumericInputSpec(
         double step,
         int decimals,
         boolean showArrows
-) {
+) implements UiNumericInput.Spec {
     private static final double DEFAULT_FLOAT_STEP = 0.001d;
     private static final int DEFAULT_FLOAT_DECIMALS = 3;
+
+    @Override public boolean integerDragStep() { return type == PortType.INTEGER; }
+    @Override public boolean fractionalDisplay() { return type == PortType.FLOAT; }
 
     public static boolean supports(PortType type) {
         return type == PortType.INTEGER || type == PortType.LONG || type == PortType.FLOAT;

@@ -4,10 +4,12 @@ import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.SelectHintRenderer;
+import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
@@ -700,11 +702,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private EditText styledNameEditor(String value) {
-        EditText editor = new EditText(getContext());
+        EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(
+                EDITOR_TEXT_SIZE_DP, 2, 0, 0, TEXT, UiTheme.Text.HINT, 0, 0));
         editor.setSingleLine(true);
         editor.setText(value == null ? "" : value);
         editor.setTextColor(TEXT);
-        editor.setBackground(null);
         editor.setPadding(px(2), 0, px(2), 0);
         UIUtils.setLockedTextSize(editor, EDITOR_TEXT_SIZE_DP);
         return editor;
@@ -719,7 +721,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         Map<String, String> labels = new HashMap<>();
         for (PortType type : SUPPORTED_TYPES) labels.put(type.name(), displayTypeName(type));
         if (includeAll) labels.put("*", tr("geometry_node.data_library.all_types"));
-        SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
+        UiSearchableMenu menu = new UiSearchableMenu(
                 getContext(), tr("geometry_node.data_library.choose_type"), options, labels, value -> {
             if (consumer == null) return;
             consumer.accept("*".equals(value) ? null : PortType.valueOf(value));

@@ -51,7 +51,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     public ConsoleView(Context context) {
         super(context);
-        setBackground(createColorDrawable(0xFF1E1E1E));
+        setBackground(createColorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.ROOT));
 
         // 1. 底层主视图
         LinearLayout mainLayout = new LinearLayout(context);
@@ -67,7 +67,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         LinearLayout inputLayout = new LinearLayout(context);
         inputLayout.setOrientation(LinearLayout.HORIZONTAL);
         inputLayout.setGravity(Gravity.CENTER_VERTICAL);
-        inputLayout.setBackground(createColorDrawable(0xFF252526));
+        inputLayout.setBackground(createColorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.PANEL));
         inputLayout.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
         TextView prompt = UIUtils.createLockedTextView(context, "geom-node $ ", 14f, 0xFF00AAFF);

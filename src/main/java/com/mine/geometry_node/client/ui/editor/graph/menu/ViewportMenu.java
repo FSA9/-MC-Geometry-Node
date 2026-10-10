@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
@@ -32,7 +36,6 @@ public class ViewportMenu extends FrameLayout {
     private static final int MENU_PADDING_DP = 8;
     private static final int MENU_EDGE_MARGIN_DP = 6;
     private static final int SEARCH_HEIGHT_DP = 28;
-    private static final int SEARCH_RADIUS_DP = 5;
     private static final int SEARCH_BOTTOM_MARGIN_DP = 8;
     private static final int ITEM_HEIGHT_DP = 24;
     private static final int ITEM_RADIUS_DP = 4;
@@ -40,8 +43,6 @@ public class ViewportMenu extends FrameLayout {
 
     private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
     private static final int COLOR_PANEL_BORDER = 0xFF151515;
-    private static final int COLOR_SEARCH_BG = 0xFF1E1E1E;
-    private static final int COLOR_SEARCH_BORDER = 0xFF3A3A3A;
     private static final int COLOR_DIVIDER = 0xFF171717;
     private static final int COLOR_SECTION_TEXT = 0xFF777777;
     private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
@@ -95,7 +96,9 @@ public class ViewportMenu extends FrameLayout {
         lp.gravity = Gravity.TOP | Gravity.LEFT;
         mContentLayout.setLayoutParams(lp);
 
-        mSearchBox = new EditText(context);
+        mSearchBox = new UiTextInput(context, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
+                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
 
         mSearchBox.setTextSize(0, UIUtils.dp2px(12));
@@ -103,7 +106,6 @@ public class ViewportMenu extends FrameLayout {
         mSearchBox.setHintTextColor(0xFF777777);
         mSearchBox.setSingleLine(true);
         mSearchBox.setGravity(Gravity.CENTER_VERTICAL);
-        mSearchBox.setBackground(createRectDrawable(COLOR_SEARCH_BG, SEARCH_RADIUS_DP, 1, COLOR_SEARCH_BORDER));
         mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
 
         mSearchBox.addTextChangedListener(new TextWatcher() {

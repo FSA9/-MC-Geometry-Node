@@ -54,7 +54,7 @@ public class InputHintRenderer implements UIHintRenderer {
         Object val = UIHintValueBinder.getValue(nodeData, row.leftPort());
         final Object finalOldVal = val;
 
-        EditText et = new EditText(context);
+        EditText et = UIHintUtils.createInput(context);
         et.setText(displayText(val, expectedType));
 
         UIHintUtils.applyStandardInputStyle(et, expectedType);

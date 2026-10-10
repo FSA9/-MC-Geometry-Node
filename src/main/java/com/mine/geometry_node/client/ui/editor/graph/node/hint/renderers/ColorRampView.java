@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.input.UiSelectButton;
+import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
@@ -49,8 +52,8 @@ final class ColorRampView extends LinearLayout {
 
     private ColorGradientValue mGradient;
     private GradientBarView mGradientBar;
-    private SelectHintRenderer.SelectButtonView mModeSelect;
-    private SelectHintRenderer.SelectButtonView mInterpolationSelect;
+    private UiSelectButton mModeSelect;
+    private UiSelectButton mInterpolationSelect;
     private NumericInputView mIndexInput;
     private NumericInputView mPositionInput;
     private ColorSwatchView mColorSwatch;
@@ -76,7 +79,8 @@ final class ColorRampView extends LinearLayout {
         toolbar.addView(button(context, "▼", v -> showActionMenu(v)), fixed(TOOL_BUTTON_WIDTH_DP));
         addView(toolbar, fullRow());
 
-        mModeSelect = new SelectHintRenderer.SelectButtonView(context, mGradient.mode().id);
+        mModeSelect = new UiSelectButton(context, mGradient.mode().id, UIConstants.Node.TEXT_SIZE_LABEL,
+                () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         mModeSelect.setOnClickListener(v -> showMenu(mModeSelect, "颜色模式", List.of("RGB", "HSV", "HSL"), value -> {
             ColorMode mode = ColorMode.from(value);
             ColorGradientValue next = mGradient.withMode(mode);
@@ -84,7 +88,8 @@ final class ColorRampView extends LinearLayout {
         }));
         addView(mModeSelect, fullRow());
 
-        mInterpolationSelect = new SelectHintRenderer.SelectButtonView(context, interpolationLabel(mGradient.interpolation()));
+        mInterpolationSelect = new UiSelectButton(context, interpolationLabel(mGradient.interpolation()),
+                UIConstants.Node.TEXT_SIZE_LABEL, () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         mInterpolationSelect.setOnClickListener(v -> showMenu(mInterpolationSelect, "插值",
                 interpolationOptions(mGradient.mode()), value -> commit(mGradient.withInterpolation(interpolationFromLabel(value)))));
         addView(mInterpolationSelect, fullRow());
@@ -133,9 +138,11 @@ final class ColorRampView extends LinearLayout {
             parent = parent.getParent();
         }
         if (parent instanceof InteractionContext interactionContext) {
-            SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
+            UiSearchableMenu menu = new UiSearchableMenu(
                     getContext(), title, options, Map.of(), onSelect);
-            menu.showAt(anchor, interactionContext);
+            if (interactionContext instanceof ViewGroup host) {
+                menu.showAt(anchor, host, interactionContext.getCamera().getScale());
+            }
         }
     }
 

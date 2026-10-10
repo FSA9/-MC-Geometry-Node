@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.common;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
@@ -30,15 +31,13 @@ public final class ColorPickerDialog extends FrameLayout {
     private static final int PANEL_PADDING_DP = 14;
     private static final int FIELD_H_DP = 28;
 
-    private static final int COLOR_DIM = 0x66000000;
-    private static final int COLOR_WINDOW = 0xFF242832;
-    private static final int COLOR_TITLE = 0xFF1C2029;
-    private static final int COLOR_BORDER = 0xFF3C4658;
-    private static final int COLOR_FIELD = 0xFF151820;
-    private static final int COLOR_LABEL = 0xFFB8C0CC;
-    private static final int COLOR_TEXT = 0xFFE8EDF6;
-    private static final int COLOR_BUTTON = 0xFF3A3F4A;
-    private static final int COLOR_PRIMARY = 0xFF3D638D;
+    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
+    private static final int COLOR_TITLE = UiTheme.Surface.HEADER;
+    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
+    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
+    private static final int COLOR_LABEL = UiTheme.Text.SECONDARY;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
 
     private final OnColorSelected mListener;
     private final View mReturnFocusTarget;
@@ -419,13 +418,14 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     private EditText field(Context context) {
-        EditText input = new EditText(context);
+        EditText input = new UiTextInput(context, new UiTextInput.Style(
+                12.0f, 5.0f, UiTheme.Metrics.RADIUS_INPUT, 1.0f,
+                COLOR_TEXT, UiTheme.Text.HINT, COLOR_FIELD, UiTheme.Control.INPUT_BORDER));
         input.setSingleLine(true);
         input.setTextColor(COLOR_TEXT);
         UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(Gravity.CENTER);
         input.setPadding(dpPx(5), 0, dpPx(5), 0);
-        input.setBackground(rect(COLOR_FIELD, 4.0f, 1, 0xFF303846));
         return input;
     }
 

@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties;
 
 import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
 import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesSnapshot;
@@ -118,7 +121,9 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 ViewGroup.LayoutParams.WRAP_CONTENT));
 
         mCommentSectionTitle = addSectionTitle(tr("geometry_node.graph_properties.comment"), 10);
-        mCommentInput = new EditText(context);
+        mCommentInput = new UiTextInput(context, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, COLOR_TEXT, COLOR_MUTED,
+                COLOR_INPUT, COLOR_INPUT_BORDER));
         mCommentInput.setSingleLine(false);
         mCommentInput.setMinLines(4);
         mCommentInput.setTextColor(COLOR_TEXT);
@@ -131,7 +136,6 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 UIUtils.dp2pxInt(6),
                 UIUtils.dp2pxInt(8),
                 UIUtils.dp2pxInt(6));
-        mCommentInput.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
         mCommentInput.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) commitPendingEdits();
         });
@@ -154,14 +158,15 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         inputRowParams.topMargin = UIUtils.dp2pxInt(8);
         mContent.addView(inputRow, inputRowParams);
 
-        mTagInput = new EditText(context);
+        mTagInput = new UiTextInput(context, new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, COLOR_TEXT, COLOR_MUTED,
+                COLOR_INPUT, COLOR_INPUT_BORDER));
         mTagInput.setSingleLine(true);
         mTagInput.setTextColor(COLOR_TEXT);
         mTagInput.setHintTextColor(COLOR_MUTED);
         mTagInput.setHint(tr("geometry_node.graph_properties.tag_placeholder"));
         mTagInput.setTextSize(0, UIUtils.dp2px(11.0f));
         mTagInput.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        mTagInput.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
         mTagInput.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
                 addInputTags();
@@ -174,15 +179,9 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 1.0f));
 
-        TextView addTag = label(context, "+", 16.0f, COLOR_TEXT);
-        addTag.setGravity(Gravity.CENTER);
-        addTag.setBackground(rect(COLOR_BUTTON, 3.0f, 0, 0));
-        addTag.setOnHoverListener((v, event) -> {
-            addTag.setBackground(rect(
-                    event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? COLOR_BUTTON_HOVER : COLOR_BUTTON,
-                    3.0f, 0, 0));
-            return false;
-        });
+        TextView addTag = GraphPropertiesUi.button(context, "+", tr("geometry_node.graph_properties.tags"),
+                COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
+        UIUtils.setLockedTextSize(addTag, 16);
         addTag.setOnClickListener(v -> addInputTags());
         LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(30),
@@ -446,15 +445,8 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        TextView remove = label(getContext(), "x", 10.0f, 0xFFBBBBBB);
-        remove.setGravity(Gravity.CENTER);
-        remove.setBackground(rect(0x00000000, 2.0f, 0, 0));
-        remove.setOnHoverListener((v, event) -> {
-            remove.setBackground(rect(
-                    event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? COLOR_REMOVE_HOVER : 0x00000000,
-                    2.0f, 0, 0));
-            return false;
-        });
+        TextView remove = GraphPropertiesUi.button(getContext(), "x", tr("geometry_node.common.delete"),
+                0xFFBBBBBB, 0x00000000, COLOR_REMOVE_HOVER);
         remove.setOnClickListener(v -> removeTag(tag));
         chip.addView(remove, new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(18),

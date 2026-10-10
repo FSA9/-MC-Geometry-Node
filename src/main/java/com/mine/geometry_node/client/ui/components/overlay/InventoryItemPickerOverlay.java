@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
@@ -31,11 +32,11 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public final class InventoryItemPickerOverlay extends FrameLayout {
-    private static final int COLOR_DIM = 0x99000000;
-    private static final int COLOR_WINDOW = 0xFF20242C;
-    private static final int COLOR_FIELD = 0xFF12151B;
-    private static final int COLOR_BORDER = 0xFF3D4654;
-    private static final int COLOR_TEXT = 0xFFE8EDF6;
+    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
+    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
+    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
     private static final int COLOR_ACCENT = 0xFFE0A84E;
 
     private static final int COLUMNS = 9;

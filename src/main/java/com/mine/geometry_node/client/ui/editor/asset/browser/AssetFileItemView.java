@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
@@ -37,10 +40,10 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
-    private static final int COLOR_ITEM_SELECTED = 0xFF445566;
+    private static final int COLOR_ITEM_SELECTED = UiTheme.Control.SELECTED;
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
-    private static final int COLOR_TEXT = 0xFFDDDDDD;
-    private static final int COLOR_SUBTEXT = 0xFF888888;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
+    private static final int COLOR_SUBTEXT = UiTheme.Text.MUTED;
     private static final int COLOR_TAG_BG = 0xFF344458;
     private static final int COLOR_TAG_TEXT = 0xFFE6F0FF;
     private static final int COLOR_STAR_ON = 0xFFFFD166;
@@ -178,32 +181,25 @@ final class AssetFileItemView extends LinearLayout {
                 && mEntry.supports(AssetTypeAction.FAVORITE);
     }
 
-    private TextView createFavoriteButton() {
-        TextView star = UIUtils.createLockedTextView(getContext(), mFavorite ? "★" : "☆", 15.0f, mFavorite ? COLOR_STAR_ON : COLOR_STAR_OFF);
+    private UiIconButton createFavoriteButton() {
+        TextView star = UIUtils.createLockedTextView(getContext(), mFavorite ? "★" : "☆", 15.0f,
+                mFavorite ? COLOR_STAR_ON : COLOR_STAR_OFF);
         star.setGravity(Gravity.CENTER);
         star.setSingleLine(true);
         star.setPadding(0, 0, 0, 0);
-        star.setOnTouchListener((v, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                return true;
-            }
-            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                if (event.getX() >= 0 && event.getY() >= 0 && event.getX() < v.getWidth() && event.getY() < v.getHeight()) {
-                    mListener.onFavoriteToggled(mEntry);
-                }
-                return true;
-            }
-            return true;
-        });
-        star.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                star.setTextColor(COLOR_STAR_ON);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
+        UiIconButton button = new UiIconButton(getContext(), star, new UiIconButton.Style(
+                UiTheme.Metrics.RADIUS_SMALL, 0, 0, UiTheme.Control.ICON_HOVER,
+                UiTheme.Control.ICON_PRESSED, 0, 0, 20, UiTheme.Metrics.DISABLED_ALPHA))
+                .tooltip(Component.translatable("geometry_node.asset_library.action.favorite_toggle").getString());
+        button.setOnClickListener(view -> mListener.onFavoriteToggled(mEntry));
+        button.setOnHoverListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) star.setTextColor(COLOR_STAR_ON);
+            else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
                 star.setTextColor(mFavorite ? COLOR_STAR_ON : COLOR_STAR_OFF);
             }
             return false;
         });
-        return star;
+        return button;
     }
 
     private VectorIconView.Kind iconKind() {

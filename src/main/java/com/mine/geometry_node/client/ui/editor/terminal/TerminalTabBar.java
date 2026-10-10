@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -27,6 +30,7 @@ public class TerminalTabBar extends LinearLayout {
     private final List<String> mTabs = new ArrayList<>();
     private int mSelectedIndex = -1;
     private TabListener mListener;
+    private int generation;
     private final float mTouchSlop;
     private final int[] mScreenLocation = new int[2];
 
@@ -38,12 +42,12 @@ public class TerminalTabBar extends LinearLayout {
     public TerminalTabBar(Context context) {
         super(context);
         setOrientation(HORIZONTAL);
-        setBackground(createColorDrawable(0xFF252526));
+        setBackground(createColorDrawable(UiTheme.Surface.PANEL));
         setWillNotDraw(false);
 
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mIndicatorPaint = new Paint();
-        mIndicatorPaint.setColor(0xFF00AAFF);
+        mIndicatorPaint.setColor(UiTheme.Control.FOCUS);
     }
 
     public void setListener(TabListener listener) { mListener = listener; }
@@ -57,6 +61,8 @@ public class TerminalTabBar extends LinearLayout {
     }
 
     public void rebuildTabs(List<String> titles, int selectedIndex) {
+        generation++;
+        mIndicatorX = -1;
         removeAllViews();
         mTabs.clear();
         mTabs.addAll(titles);
@@ -70,19 +76,24 @@ public class TerminalTabBar extends LinearLayout {
             LinearLayout tabItem = new LinearLayout(context);
             tabItem.setOrientation(HORIZONTAL);
             tabItem.setGravity(Gravity.CENTER_VERTICAL);
-            tabItem.setBackground(createColorDrawable(isActive ? 0xFF1E1E1E : 0xFF2D2D2D));
+            tabItem.setBackground(createColorDrawable(isActive ? UiTheme.Surface.ROOT : UiTheme.Surface.HEADER));
 
             TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", 12f, 0xFF666666);
             dragHandle.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(2), 0);
+            dragHandle.setTooltipText(TerminalChrome.tr("tab.reorder"));
+            dragHandle.setContentDescription(TerminalChrome.tr("tab.reorder"));
             tabItem.addView(dragHandle);
 
-            TextView title = UIUtils.createLockedTextView(context, mTabs.get(i), 12f, isActive ? 0xFFFFFFFF : 0xFFAAAAAA);
+            TextView title = UIUtils.createLockedTextView(context, mTabs.get(i), 12f,
+                    isActive ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+            title.setSingleLine(true);
+            title.setSelected(isActive);
             tabItem.addView(title);
 
-            TextView closeBtn = UIUtils.createLockedTextView(context, " ×", 12f, 0xFF888888);
-            closeBtn.setPadding(0, 0, UIUtils.dp2pxInt(8), 0);
+            UiIconButton closeBtn = iconButton(context, SvgIconView.Icon.CLOSE, "tab.close");
+            closeBtn.setEnabled(mTabs.size() > 1);
             closeBtn.setOnClickListener(v -> { if (mListener != null) mListener.onTabClosed(index); });
-            tabItem.addView(closeBtn);
+            tabItem.addView(closeBtn, new LayoutParams(UIUtils.dp2pxInt(24), ViewGroup.LayoutParams.MATCH_PARENT));
 
             title.setOnClickListener(v -> { if (mListener != null) mListener.onTabSelected(index); });
 
@@ -92,10 +103,17 @@ public class TerminalTabBar extends LinearLayout {
         }
 
         // 添加 '+' 按钮
-        TextView addBtn = UIUtils.createLockedTextView(context, " ＋ ", 14f, 0xFFCCCCCC);
-        addBtn.setGravity(Gravity.CENTER);
+        UiIconButton addBtn = iconButton(context, SvgIconView.Icon.PLUS, "tab.create");
+        addBtn.setEnabled(mTabs.size() < 32);
         addBtn.setOnClickListener(v -> { if (mListener != null) mListener.onTabCreated(); });
-        addView(addBtn, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        addView(addBtn, new LayoutParams(UIUtils.dp2pxInt(28), ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private static UiIconButton iconButton(Context context, SvgIconView.Icon icon, String tooltip) {
+        return new UiIconButton(context, new SvgIconView(context, icon, UiTheme.Text.MUTED),
+                new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER,
+                        UiTheme.Control.ICON_PRESSED, 0, 0, 14, UiTheme.Metrics.DISABLED_ALPHA))
+                .tooltip(TerminalChrome.tr(tooltip));
     }
 
     private void attachDragListener(View handle, View tabLayout, int currentIndex) {
@@ -174,8 +192,21 @@ public class TerminalTabBar extends LinearLayout {
         if (targetIdx > currentIndex) targetIdx--;
         if (targetIdx != currentIndex && mListener != null) {
             final int finalTarget = targetIdx;
-            post(() -> mListener.onTabMoved(currentIndex, finalTarget));
+            final int requestedGeneration = generation;
+            final TabListener listener = mListener;
+            post(() -> {
+                if (requestedGeneration == generation && listener == mListener) {
+                    listener.onTabMoved(currentIndex, finalTarget);
+                }
+            });
         }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        generation++;
+        mIndicatorX = -1;
+        super.onDetachedFromWindow();
     }
 
     @Override

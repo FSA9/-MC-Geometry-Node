@@ -3,11 +3,13 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FilePickerDialog;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers.SelectHintRenderer;
+import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
@@ -21,7 +23,6 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.method.DigitsInputFilter;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
@@ -59,10 +60,10 @@ import static icyllis.modernui.widget.LinearLayout.VERTICAL;
 
 /** Value-specific controls, native previews and commits; the window owns card/draft lifetimes. */
 final class DataLibraryValueEditors {
-    private static final int INPUT_BG = 0xFF202020;
-    private static final int BORDER = 0xFF444444;
-    private static final int TEXT = 0xFFD2D2D2;
-    private static final int MUTED = 0xFF969696;
+    private static final int INPUT_BG = UiTheme.Control.INPUT;
+    private static final int BORDER = UiTheme.Control.INPUT_BORDER;
+    private static final int TEXT = UiTheme.Text.NORMAL;
+    private static final int MUTED = UiTheme.Text.MUTED;
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final int PREVIEW_SIZE_DP = 44;
     private static final int CARD_PREVIEW_SIZE_DP = 64;
@@ -251,14 +252,8 @@ final class DataLibraryValueEditors {
 
     private EditText createValueEditor(DataLibraryUiRepository.Entry entry,
                                        AtomicReference<DataLibraryUiRepository.Entry> current) {
-        EditText valueEditor = new EditText(getContext());
+        EditText valueEditor = styledValueEditor();
         valueEditor.setText(serializedValue(entry));
-        valueEditor.setTextColor(MUTED);
-        valueEditor.setSingleLine(true);
-        valueEditor.setGravity(Gravity.CENTER_VERTICAL);
-        valueEditor.setPadding(px(5), 0, px(5), 0);
-        valueEditor.setBackground(solid(INPUT_BG, 1, BORDER));
-        UIUtils.setLockedTextSize(valueEditor, EDITOR_TEXT_SIZE_DP);
         commitEditedTextOnBlur(valueEditor, json -> commitValue(current, json));
         return valueEditor;
     }
@@ -328,7 +323,7 @@ final class DataLibraryValueEditors {
         List<String> options = type == PortType.ITEM
                 ? RegistryDataManager.getAllItems()
                 : RegistryDataManager.getAllBlocks();
-        SelectHintRenderer.DropdownSearchMenu menu = new SelectHintRenderer.DropdownSearchMenu(
+        UiSearchableMenu menu = new UiSearchableMenu(
                 getContext(), tr(type == PortType.ITEM
                         ? "geometry_node.data_library.choose_item"
                         : "geometry_node.data_library.choose_block"),
@@ -404,13 +399,10 @@ final class DataLibraryValueEditors {
     }
 
     private EditText styledValueEditor() {
-        EditText editor = new EditText(getContext());
+        EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(
+                EDITOR_TEXT_SIZE_DP, 5, 2, 1, MUTED, MUTED, INPUT_BG, BORDER));
         editor.setSingleLine(true);
-        editor.setTextColor(MUTED);
         editor.setGravity(Gravity.CENTER_VERTICAL);
-        editor.setPadding(px(5), 0, px(5), 0);
-        editor.setBackground(solid(INPUT_BG, 1, BORDER));
-        UIUtils.setLockedTextSize(editor, EDITOR_TEXT_SIZE_DP);
         return editor;
     }
 
@@ -669,11 +661,4 @@ final class DataLibraryValueEditors {
 
     private static int px(float value) { return UIUtils.dp2pxInt(value); }
 
-    private static ShapeDrawable solid(int color, float radius, int border) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radius));
-        drawable.setStroke(Math.max(1, px(1)), border);
-        return drawable;
-    }
 }

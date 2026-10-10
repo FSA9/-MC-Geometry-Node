@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -13,7 +15,7 @@ public class ConfirmDialog extends AssetDialogBase {
     private final Runnable mOnConfirm;
     public ConfirmDialog(Context context, String title, String message, String confirmText, Runnable onConfirm) {
         super(context, title); mOnConfirm = onConfirm;
-        TextView messageView = label(context, message, 13, 0xFFDDDDDD);
+        TextView messageView = label(context, message, 13, UiTheme.Text.NORMAL);
         mPanel.addView(messageView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(46)));
         LinearLayout actions = new LinearLayout(context); actions.setGravity(Gravity.RIGHT);
         UiActionButton cancel = actionButton(context, Component.translatable("geometry_node.common.cancel").getString(), UiActionButton.Role.SECONDARY);

@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
@@ -38,19 +39,17 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public final class ExpandedTextInputOverlay extends FrameLayout {
-    private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
-    private static final int COLOR_WINDOW = DialogueHudTheme.PANEL;
-    private static final int COLOR_SURFACE = DialogueHudTheme.SURFACE;
-    private static final int COLOR_FIELD = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0xFF);
-    private static final int COLOR_BORDER = DialogueHudTheme.DIVIDER;
-    private static final int COLOR_FIELD_BORDER = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x44);
-    private static final int COLOR_TEXT = DialogueHudTheme.TEXT_PRIMARY;
-    private static final int COLOR_BUTTON = DialogueHudTheme.BUTTON;
-    private static final int COLOR_BUTTON_HOVER = DialogueHudTheme.BUTTON_HOVER;
-    private static final int COLOR_BUTTON_PRESSED = DialogueHudTheme.BUTTON_PRESSED;
-    private static final int COLOR_PRIMARY = DialogueHudTheme.ACCENT;
-    private static final int COLOR_PRIMARY_HOVER = DialogueHudTheme.ACCENT_HOVER;
-    private static final int COLOR_PRIMARY_PRESSED = DialogueHudTheme.ACCENT_PRESSED;
+    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
+    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
+    private static final int COLOR_SURFACE = UiTheme.Surface.HEADER;
+    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
+    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
+    private static final int COLOR_FIELD_BORDER = UiTheme.Control.INPUT_BORDER;
+    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
+    private static final int COLOR_BUTTON = UiTheme.SECONDARY.normal();
+    private static final int COLOR_BUTTON_HOVER = UiTheme.SECONDARY.hover();
+    private static final int COLOR_BUTTON_PRESSED = UiTheme.SECONDARY.pressed();
+    private static final int COLOR_PRIMARY = UiTheme.PRIMARY.normal();
     private static final int WINDOW_MARGIN_DP = 34;
 
     private static ExpandedTextInputOverlay sOpenOverlay;
@@ -91,7 +90,9 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         window.addView(divider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
-        editor = new EditText(context);
+        editor = new UiTextInput(context, new UiTextInput.Style(
+                14.0f, 14.0f, 2.0f, 1.0f, COLOR_TEXT, UiTheme.Text.HINT,
+                COLOR_FIELD, COLOR_FIELD_BORDER));
         if (richTextMode) {
             editor.setText(toEditable(RichTextValue.from(value)), TextView.BufferType.EDITABLE);
         } else {
@@ -103,7 +104,6 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         editor.setSingleLine(false);
         editor.setMinLines(12);
         editor.setPadding(dp(14), dp(12), dp(14), dp(12));
-        editor.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
         editor.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ESCAPE) {
                 dismiss(OverlayCloseReason.ESCAPE);
@@ -597,29 +597,19 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     private static TextView interactiveButton(Context context, String text, float textSize, int textColor,
                                               int normalColor, int hoverColor, int pressedColor,
                                               View.OnClickListener listener) {
-        TextView view = label(context, text, textSize, textColor, Gravity.CENTER);
-        view.setBackground(rect(normalColor, 2.0f, 0, 0));
+        UiActionButton view = UiActionButton.withPalette(context, text,
+                new UiActionButton.Palette(normalColor, hoverColor, pressedColor, textColor),
+                UiActionButton.Density.NORMAL,
+                new UiActionButton.Style(2.0f, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+        UIUtils.setLockedTextSize(view, textSize);
+        view.setMinWidth(0);
+        view.setMinHeight(0);
+        view.setMinimumWidth(0);
+        view.setMinimumHeight(0);
+        view.setPadding(0, 0, 0, 0);
+        // Formatting commands must keep the editor's focus and selection.
+        view.setFocusable(false);
         view.setOnClickListener(listener);
-        boolean[] hovered = {false};
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                hovered[0] = true;
-                v.setBackground(rect(hoverColor, 2.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                hovered[0] = false;
-                v.setBackground(rect(normalColor, 2.0f, 0, 0));
-            }
-            return false;
-        });
-        view.setOnTouchListener((v, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                v.setBackground(rect(pressedColor, 2.0f, 0, 0));
-            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
-                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                v.setBackground(rect(hovered[0] ? hoverColor : normalColor, 2.0f, 0, 0));
-            }
-            return false;
-        });
         return view;
     }
 

@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.asset.navigation;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
@@ -37,10 +40,10 @@ public class AssetNavigationPanel extends ScrollView {
     private static final float TEXT_SIZE_PATH = 14.0f;
     private static final float TEXT_SIZE_HANDLE = 12.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final int COLOR_LOCAL_NORMAL = 0xFF2A2A2A;
-    private static final int COLOR_LOCAL_HOVER = 0xFF343434;
-    private static final int COLOR_LOCAL_PRESSED = 0xFF3F4D5B;
-    private static final int COLOR_LOCAL_SELECTED = 0xFF33485E;
+    private static final int COLOR_LOCAL_NORMAL = UiTheme.Surface.PANEL;
+    private static final int COLOR_LOCAL_HOVER = UiTheme.Control.ICON_HOVER;
+    private static final int COLOR_LOCAL_PRESSED = UiTheme.Control.ICON_PRESSED;
+    private static final int COLOR_LOCAL_SELECTED = UiTheme.Control.SELECTED;
     private static final int COLOR_REMOTE_NORMAL = 0xFF263445;
     private static final int COLOR_REMOTE_HOVER = 0xFF2F4055;
     private static final int COLOR_REMOTE_PRESSED = 0xFF3C5874;
@@ -290,33 +293,15 @@ public class AssetNavigationPanel extends ScrollView {
 
         row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView btnDel = UIUtils.createLockedTextView(context, "－", TEXT_SIZE_NAV, 0xFFCC4444);
-        btnDel.setGravity(Gravity.CENTER);
-        btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
-
-        btnDel.setOnHoverListener((v, event) -> {
-            btnDel.setBackground(createColorDrawable(event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? 0xFF882222 : 0xFF3A3A3A));
-            return true;
-        });
-        btnDel.setOnTouchListener((v, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                btnDel.setBackground(createColorDrawable(0xFFAA3333));
-                return true;
-            }
-            if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                if (isInside(btnDel, event)) {
-                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.remove(pathStr));
-                    buildSidebar();
-                } else {
-                    btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
-                }
-                return true;
-            }
-            if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                btnDel.setBackground(createColorDrawable(0xFF3A3A3A));
-                return true;
-            }
-            return true;
+        UiIconButton btnDel = new UiIconButton(context,
+                new VectorIconView(context, VectorIconView.Kind.CLOSE, UiTheme.Control.ERROR),
+                new UiIconButton.Style(UiTheme.Metrics.RADIUS_SMALL, 0,
+                        UiTheme.Control.ICON, UiTheme.DANGER.hover(), UiTheme.DANGER.pressed(),
+                        UiTheme.Surface.PANEL, 0, 14, UiTheme.Metrics.DISABLED_ALPHA))
+                .tooltip(Component.translatable("geometry_node.asset_library.action.remove_quick_access").getString());
+        btnDel.setOnClickListener(view -> {
+            ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.remove(pathStr));
+            buildSidebar();
         });
 
         row.addView(btnDel, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
@@ -410,12 +395,6 @@ public class AssetNavigationPanel extends ScrollView {
                     return false;
             }
         });
-    }
-
-    private boolean isInside(View view, MotionEvent event) {
-        return event.getX() >= 0 && event.getY() >= 0
-                && event.getX() < view.getWidth()
-                && event.getY() < view.getHeight();
     }
 
     private ShapeDrawable createColorDrawable(int color) {

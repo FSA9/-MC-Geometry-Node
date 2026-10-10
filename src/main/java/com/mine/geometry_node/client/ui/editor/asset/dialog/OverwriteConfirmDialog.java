@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
@@ -32,7 +34,7 @@ public class OverwriteConfirmDialog extends AssetDialogBase {
         mConflicts = conflicts;
         mOnDecision = onDecision;
 
-        mMessage = label(context, "", 13, 0xFFDDDDDD);
+        mMessage = label(context, "", 13, UiTheme.Text.NORMAL);
         mPanel.addView(mMessage, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(42)));
 
         LinearLayout actions = new LinearLayout(context);

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
@@ -65,7 +67,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
         LinearLayout browserArea = new LinearLayout(context);
         browserArea.setOrientation(LinearLayout.HORIZONTAL);
-        browserArea.setBackground(rect(0xFF1F1F1F, 3));
+        browserArea.setBackground(rect(UiTheme.Surface.ROOT, UiTheme.Metrics.RADIUS_INPUT));
 
         mBrowser = AssetFileBrowserPanel.picker(context, this);
         mBrowser.setPickFileAction(this::chooseEntry);

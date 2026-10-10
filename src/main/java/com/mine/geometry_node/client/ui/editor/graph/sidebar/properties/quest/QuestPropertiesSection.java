@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+
+import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -22,8 +26,6 @@ import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.u
  */
 public final class QuestPropertiesSection extends LinearLayout {
     private static final int COLOR_SECTION = 0xFF292929;
-    private static final int COLOR_INPUT = 0xFF242424;
-    private static final int COLOR_INPUT_BORDER = 0xFF4A4A4A;
     private static final int COLOR_LABEL = 0xFFA8A8A8;
     private static final int COLOR_TEXT = 0xFFE3E3E3;
     private static final int COLOR_MUTED = 0xFF777777;
@@ -224,7 +226,9 @@ public final class QuestPropertiesSection extends LinearLayout {
     }
 
     private EditText questInput(boolean singleLine, String hint) {
-        EditText input = new EditText(getContext());
+        EditText input = new UiTextInput(getContext(), new UiTextInput.Style(11, 8,
+                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
+                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
         input.setSingleLine(singleLine);
         input.setTextColor(COLOR_TEXT);
         input.setHintTextColor(COLOR_MUTED);
@@ -235,7 +239,6 @@ public final class QuestPropertiesSection extends LinearLayout {
                 singleLine ? 0 : UIUtils.dp2pxInt(6),
                 UIUtils.dp2pxInt(8),
                 singleLine ? 0 : UIUtils.dp2pxInt(6));
-        input.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
         return input;
     }
 
