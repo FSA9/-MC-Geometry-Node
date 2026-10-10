@@ -24,7 +24,7 @@ final class DataLibraryValueChanges {
     static boolean equivalent(DataLibraryUiRepository.Entry current, Object candidate) {
         if (current == null) return candidate == null;
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) return java.util.Objects.equals(current.value(), candidate);
+        if (minecraft == null || minecraft.level == null) return java.util.Objects.equals(current.value(), candidate);
         try {
             var registries = minecraft.level.registryAccess();
             return DataLibraryValueCodec.encode(current.type(), current.value(), registries)
@@ -39,7 +39,7 @@ final class DataLibraryValueChanges {
     static String serialize(DataLibraryUiRepository.Entry entry) {
         if (entry == null) return "";
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) return String.valueOf(entry.value());
+        if (minecraft == null || minecraft.level == null) return String.valueOf(entry.value());
         try {
             return DataLibraryValueCodec.encode(entry.type(), entry.value(),
                     minecraft.level.registryAccess()).toString();

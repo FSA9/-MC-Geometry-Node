@@ -63,6 +63,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     private final EditText editor;
     private OverlayHandle overlayHandle;
     private boolean closed;
+    private Runnable onDismissed;
 
     private ExpandedTextInputOverlay(Context context, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
@@ -180,12 +181,19 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         if (anchor == null || valueParser == null || valueValidator == null || onSave == null) {
             return;
         }
-        showInternal(context, anchor, expectedType, value, valueParser, valueValidator, onSave);
+        showInternal(context, anchor, expectedType, value, valueParser, valueValidator, onSave, null);
     }
 
     public static void showRichText(Context context, View anchor, RichTextValue value,
                                     Consumer<RichTextValue> onSave) {
+        showRichText(context, anchor, value, onSave, null);
+    }
+
+    /** Notifies the owner on every closing path, including cancel and replacement. */
+    public static void showRichText(Context context, View anchor, RichTextValue value,
+                                    Consumer<RichTextValue> onSave, Runnable onDismissed) {
         if (anchor == null || onSave == null) {
+            if (onDismissed != null) onDismissed.run();
             return;
         }
         showInternal(context, anchor, PortType.RICH_TEXT, value, ExpandedTextInputOverlay::parseRichText,
@@ -193,14 +201,15 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             if (parsedValue instanceof RichTextValue richText) {
                 onSave.accept(richText);
             }
-        });
+        }, onDismissed);
     }
 
     private static void showInternal(Context context, View anchor, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
-                                     Consumer<Object> commitHandler) {
+                                     Consumer<Object> commitHandler, Runnable onDismissed) {
         ViewGroup host = findWindowHost(anchor);
         if (host == null) {
+            if (onDismissed != null) onDismissed.run();
             return;
         }
 
@@ -211,6 +220,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
                 valueParser,
                 valueValidator,
                 commitHandler);
+        overlay.onDismissed = onDismissed;
         closeOpenOverlay();
         overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> false, overlay::onClosed);
         if (overlay.overlayHandle == null) {
@@ -274,11 +284,21 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private void onClosed(OverlayCloseReason reason) {
+        if (closed) return;
         closed = true;
         overlayHandle = null;
         if (sOpenOverlay == this) {
             sOpenOverlay = null;
         }
+        Runnable completion = onDismissed;
+        onDismissed = null;
+        if (completion != null) completion.run();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        onClosed(OverlayCloseReason.OWNER_CLOSED);
     }
 
     private static void closeOpenOverlay() {
