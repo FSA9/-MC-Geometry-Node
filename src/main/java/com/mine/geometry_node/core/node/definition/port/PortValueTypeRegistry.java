@@ -80,6 +80,7 @@ public final class PortValueTypeRegistry {
         register(types, RichTextValue.class, PortType.RICH_TEXT);
         register(types, ColorValue.class, PortType.COLOR);
         register(types, GeometryValue.class, PortType.GEOMETRY);
+        register(types, com.mine.geometry_node.core.node.value.light.LightConfig.class, PortType.LIGHT_CONFIG);
         register(types, AreaRef.class, PortType.AREA);
         register(types, SlotRef.class, PortType.SLOT);
         register(types, Entity.class, PortType.ENTITY);

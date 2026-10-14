@@ -5,6 +5,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.ForceFieldResourceStore;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -30,7 +31,7 @@ public final class RemoveForceField extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.FORCE_FIELD_ID.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.FORCE_FIELD_ID.toInput("").withDisplayName("geometry_node.port.resource_id"), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.AREA.toInput(), UIHint.DEFAULT)
                 .build();
     }
@@ -40,11 +41,14 @@ public final class RemoveForceField extends BaseNode {
         ServerLevel hostLevel = context.getLevel();
         String fieldId = getInput(context, StandardPorts.FORCE_FIELD_ID.getId(), String.class);
         AreaRef area = getInput(context, StandardPorts.AREA.getId(), AreaRef.class);
-        if (hostLevel != null && area != null && fieldId != null && !fieldId.isBlank()) {
-            ForceFieldAddress address = ForceFieldAddress.tryCreate(area.address().dimension(), fieldId);
-            if (address != null) {
-                ForceFieldResourceStore.INSTANCE.remove(hostLevel.getServer(), address);
-            }
+        if (hostLevel != null && fieldId != null && !fieldId.isBlank()) {
+            try {
+                ForceFieldAddress address = GraphResourceReferences.resolveForceField(context, null, fieldId,
+                        area == null ? hostLevel.dimension() : area.address().dimension(), false);
+                if (address != null) {
+                    ForceFieldResourceStore.INSTANCE.remove(hostLevel.getServer(), address);
+                }
+            } catch (IllegalArgumentException ignored) { }
         }
         return next(StandardPorts.FLOW_OUT.getId());
     }

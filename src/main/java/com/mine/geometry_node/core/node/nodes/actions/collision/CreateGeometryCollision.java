@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValues;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
-import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -19,6 +19,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
@@ -31,7 +32,7 @@ public final class CreateGeometryCollision extends BaseNode {
     public static final PortDef WORLD_ROTATION = StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO).liveExpression();
     public static final PortDef PIVOT = StandardPorts.PIVOT.toInput(Vec3.ZERO).liveExpression();
     public static final PortDef TRANSLATION = StandardPorts.TRANSLATION.toInput(Vec3.ZERO).liveExpression();
-    public static final PortDef ROTATION = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef ROTATION = StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.local_rotation").liveExpression();
     public static final PortDef SCALE = StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)).liveExpression();
 
     @Override
@@ -45,18 +46,17 @@ public final class CreateGeometryCollision extends BaseNode {
                         .input(StandardPorts.TRANSLATION, "translation")
                         .input(StandardPorts.ROTATION, "rotation")
                         .input(StandardPorts.SIZE_3, "size_3")
-                        .input(StandardPorts.KEY, "key")
-                        .output(StandardPorts.RESOURCE_ID, "resource_id").build())
+                        .input(StandardPorts.KEY, "resource_id_input")
+                        .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.RESOURCE_ID.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(StandardPorts.GEOMETRY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(POSITION, UIHint.VECTOR)
                 .addPassthroughInput(WORLD_ROTATION, UIHint.VECTOR)
                 .addPassthroughInput(PIVOT, UIHint.VECTOR)
                 .addPassthroughInput(TRANSLATION, UIHint.VECTOR)
                 .addPassthroughInput(ROTATION, UIHint.VECTOR)
-                .addPassthroughInput(SCALE, UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT).build();
+                .addPassthroughInput(SCALE, UIHint.VECTOR).build();
     }
 
     @Override
@@ -66,9 +66,11 @@ public final class CreateGeometryCollision extends BaseNode {
         if (context.getLevel() == null || geometry == null || geometry.isEmpty())
             return next(StandardPorts.FLOW_OUT.getId());
         try {
-            String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-            var id = GraphResourceIds.forKey(context, stableNodeId(context), GraphResourceTypeRegistry.GEOMETRY_COLLISION, key);
-            GeometryCollisionService.INSTANCE.create(context.getLevel(), id, geometry, null,
+            String input = ResourceNodeSupport.read(context, StandardPorts.KEY.getId());
+            var id = GraphResourceReferences.resolveCreate(context, stableNodeId(context), GraphResourceTypeRegistry.GEOMETRY_COLLISION, input);
+            var target = context.getLevel().getServer().getLevel(id.scope().dimension());
+            if (target == null) return next(StandardPorts.FLOW_OUT.getId());
+            GeometryCollisionService.INSTANCE.create(target, id, geometry, null,
                     capture(context, POSITION), capture(context, WORLD_ROTATION), capture(context, PIVOT),
                     capture(context, TRANSLATION), capture(context, ROTATION), capture(context, SCALE));
             context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceIdCodec.encode(id));

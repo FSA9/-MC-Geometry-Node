@@ -39,7 +39,7 @@ public class SetDisplayTransform extends BaseNode {
                 .addPassthroughInput(StandardPorts.DISPLAY_ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.local_rotation"), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TICK.toInput(0)
                         .withDisplayName("geometry_node.port.tick.interpolation"), UIHint.INPUT)

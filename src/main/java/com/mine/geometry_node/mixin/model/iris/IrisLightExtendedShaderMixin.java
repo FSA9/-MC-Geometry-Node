@@ -15,5 +15,6 @@ public abstract class IrisLightExtendedShaderMixin {
     @Inject(method="iris$setupState",at=@At("TAIL"),remap=false)
     private void geometryNode$uploadLocalLighting(CallbackInfo callback) {
         ModelIrisHeldLight.uploadUniforms(((GlProgram)(Object)this).getProgramId());
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.upload(((GlProgram)(Object)this).getProgramId());
     }
 }

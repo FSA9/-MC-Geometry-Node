@@ -49,6 +49,7 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        com.mine.geometry_node.client.runtime.light.ClientLightStore.init();
 
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetFileResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
@@ -62,6 +63,8 @@ public final class ClientNetworkReceiverRegistry {
                 (payload, context) -> context.queue(() -> GeometryDebugRenderer.handleSnapshot(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketGeometryCollision.TYPE,
                 (payload, context) -> context.queue(() -> ClientGeometryCollisions.handle(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight.TYPE,
+                (payload, context) -> context.queue(() -> com.mine.geometry_node.client.runtime.light.ClientLightStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketBehaviorDebugSnapshot.TYPE,
                 (payload, context) -> context.queue(() -> ClientBehaviorDebugStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSchematicProjection.TYPE,

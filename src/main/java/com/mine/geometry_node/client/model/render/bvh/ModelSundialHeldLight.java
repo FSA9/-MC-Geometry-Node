@@ -157,7 +157,9 @@ public final class ModelSundialHeldLight {
                     int node = 0;
                     int pending[GEOMETRY_NODE_STACK_CAPACITY];
                     int pendingCount = 0;
-                    for (int visit = 0; visit < 2048; ++visit) {
+                    // Each node is visited at most once; a dynamic bound avoids driver loop expansion.
+                    int visitLimit = min(range.y, 2048);
+                    for (int visit = 0; visit < visitLimit; ++visit) {
                         if (node < 0) {
                             if (pendingCount <= 0) break;
                             node = pending[--pendingCount];
@@ -273,8 +275,7 @@ public final class ModelSundialHeldLight {
                     vec3 worldDirection = receiver - source;
                     vec3 worldInverseDirection = 1.0 / mix(worldDirection, vec3(1.0), lessThan(abs(worldDirection), vec3(1e-12)));
                     float transmission = 1.0;
-                    for (int instance = 0; instance < 8; ++instance) {
-                        if (instance >= geometry_node_lightCount) break;
+                    for (int instance = 0; instance < min(geometry_node_lightCount, 8); ++instance) {
                         ivec4 range = geometry_node_lightRange[instance];
                         if (range.y <= 0) continue;
                         if (!geometry_node_lightBox(source, worldDirection, worldInverseDirection,
@@ -300,7 +301,8 @@ public final class ModelSundialHeldLight {
                         int node = 0;
                         float hitDistances[16];
                         int hitCount = 0;
-                        for (int visit = 0; visit < 2048; ++visit) {
+                        int visitLimit = min(range.y, 2048);
+                        for (int visit = 0; visit < visitLimit; ++visit) {
                             if (node < 0 || node >= range.y) break;
                             int address = range.x + node * 2;
                             vec4 lower = geometry_node_lightFetch(address);

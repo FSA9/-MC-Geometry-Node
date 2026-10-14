@@ -28,7 +28,8 @@ public final class ModelIrisHeldLight {
                              int worldBoundsMin, int worldBoundsMax, int primaryGiEnabled, int secondaryGiEnabled,
                              int heldOcclusionEnabled, int worldOcclusionEnabled, int seusPlacedReady, int seusAreaQuality,
                              int autoQuality, int manualSamples,
-                             int receiverQuality, int globalLocal, int globalGi, int manualResolution, int receiverCount) {}
+                             int receiverQuality, int globalLocal, int globalGi, int manualResolution, int receiverCount,
+                             int blockOccupiedMin, int blockOccupiedMax) {}
     private record Region(ModelLightOcclusionScene scene, int base) {}
     private static final Map<Integer, Uniforms> PROGRAMS = new HashMap<>();
     private static final Map<Integer, Uniforms> NATIVE_PROGRAMS = new HashMap<>();
@@ -93,7 +94,9 @@ public final class ModelIrisHeldLight {
             int countLocation = GL20C.glGetUniformLocation(program, "geometry_node_lightCount");
             int inverse = GL20C.glGetUniformLocation(program, "geometry_node_lightInverse[0]");
             int range = GL20C.glGetUniformLocation(program, "geometry_node_lightRange[0]");
-            if (countLocation < 0 || inverse < 0 || range < 0) throw new IllegalStateException("Incomplete held-light uniform interface");
+            // Node-only composite receivers use their own count but share the same BVH atlas.
+            boolean nodeReceiver = GL20C.glGetUniformLocation(program, "nodeOccluderCount") >= 0;
+            if ((countLocation < 0 && !nodeReceiver) || inverse < 0 || range < 0) throw new IllegalStateException("Incomplete held-light uniform interface");
             Method add = Arrays.stream(type.getMethods()).filter(m -> m.getName().equals("addDynamicSampler")
                     && m.getParameterCount() == 3 && m.getParameterTypes()[0] == IntSupplier.class).findFirst().orElseThrow();
             boolean registered = (boolean) add.invoke(builder, (IntSupplier) () -> texture, null, new String[]{"geometry_node_lightBvh"});
@@ -136,13 +139,16 @@ public final class ModelIrisHeldLight {
             GL20C.glGetUniformLocation(program,"bvhGlobalLocalEnabled"),
             GL20C.glGetUniformLocation(program,"bvhGlobalGiEnabled"),
             GL20C.glGetUniformLocation(program,"bvhManualResolution"),
-            GL20C.glGetUniformLocation(program,"bvhReceiverCount"));
+            GL20C.glGetUniformLocation(program,"bvhReceiverCount"),
+            GL20C.glGetUniformLocation(program,"geometry_node_blockOccupiedMin[0]"),
+            GL20C.glGetUniformLocation(program,"geometry_node_blockOccupiedMax[0]"));
     }
     public static int receiverSlot(String id) {
         for (int i = 0; i < receiverCount; i++) if (Objects.equals(receiverIds[i], id)) return i;
         return -1;
     }
     public static int nativeTexture() {return texture;}
+    public static int nodeOccluderCount() {return ready ? count : 0;}
     static float autoMinimumScale() {
         float minimum = 1;
         for (int i = 0; i < receiverCount; i++) if (receiverVisible[i] && receiverQuality[i * 4 + 1] > 0)
@@ -243,17 +249,21 @@ public final class ModelIrisHeldLight {
         GL20C.glUniform4fv(uniforms.receiverQuality, receiverQuality);
         GL20C.glUniform1i(uniforms.receiverCount, receiverCount);
         // The world blocker snapshot is shared by held/provider queries even when placed reconstruction is off.
-        boolean placed = activeCount > 0 && ModelPlacedLightField.ready();
+        boolean placed = (activeCount > 0 || com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()) && ModelPlacedLightField.ready();
         GL20C.glUniform1i(uniforms.placedReady, placed ? 1 : 0);
         if (placed) {
             GL20C.glUniform1i(uniforms.placedCount, ModelPlacedLightField.fieldCount());
             GL20C.glUniform4fv(uniforms.placedSources, ModelPlacedLightField.sourceUniforms());
             GL20C.glUniform4fv(uniforms.blockOrigin, ModelPlacedLightField.originUniforms());
+            if (uniforms.blockOccupiedMin >= 0)
+                GL20C.glUniform4fv(uniforms.blockOccupiedMin, ModelPlacedLightField.occupiedMinUniforms());
+            if (uniforms.blockOccupiedMax >= 0)
+                GL20C.glUniform4fv(uniforms.blockOccupiedMax, ModelPlacedLightField.occupiedMaxUniforms());
             GL20C.glUniform2iv(uniforms.placedRanges, ModelPlacedLightField.rangeUniforms());
         }
         GL20C.glUniform1i(uniforms.dynamicCount, activeCount > 0 ? ModelLocalLightProviders.count() : 0);
         if (activeCount > 0 && ModelLocalLightProviders.count() > 0) GL20C.glUniform4fv(uniforms.dynamicSources, ModelLocalLightProviders.uniforms());
-        if (activeCount > 0) {
+        if (activeCount > 0 || com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()) {
             GL20C.glUniformMatrix4fv(uniforms.inverse, false, inverses);
             GL20C.glUniform4iv(uniforms.ranges, ranges);
             if (uniforms.boundsMin >= 0) GL20C.glUniform4fv(uniforms.boundsMin, boundsMin);
@@ -263,6 +273,7 @@ public final class ModelIrisHeldLight {
         }
     }
     public static void deleted(int program) {
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.deleted(program);
         PROGRAMS.remove(program); NATIVE_PROGRAMS.remove(program); SEUS_PROGRAMS.remove(program);
         ModelBvhLightResolution.deleted(program);
         if (lastSeusProgram == program) lastSeusProgram = 0;
@@ -276,7 +287,8 @@ public final class ModelIrisHeldLight {
                               java.util.function.Predicate<ModelRenderInstance> inFrustum) {
         receiverCount = excludedReceivers = 0;
         lastSeusProgram = 0;
-        if (!irisActive || PROGRAMS.isEmpty() || instances.isEmpty()) {
+        boolean nodeLights = com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active();
+        if ((!irisActive || PROGRAMS.isEmpty() || instances.isEmpty()) && !nodeLights) {
             ModelPlacedLightField.clear();
             ModelLocalLightProviders.resetFrame();
             if (texture != 0 || !keys.isEmpty()) clear();
@@ -285,7 +297,7 @@ public final class ModelIrisHeldLight {
                     : !irisActive || PROGRAMS.isEmpty() ? "NO_COMPATIBLE_PROGRAM" : "EMPTY";
             return;
         }
-        if (!lightingEnabled) {opaqueAnyHitInstances = transmissionInstances = 0; updateNanos=uploadBytes=0;status="DISABLED";return;}
+        if (!lightingEnabled && !nodeLights) {opaqueAnyHitInstances = transmissionInstances = 0; updateNanos=uploadBytes=0;status="DISABLED";return;}
         long start = System.nanoTime(); uploadBytes = 0; count = 0; excluded = 0; opaqueAnyHitInstances = transmissionInstances = 0;
         try {
             updateReceivers(instances, camera, inFrustum);
@@ -329,7 +341,7 @@ public final class ModelIrisHeldLight {
                         boundsMax[offset], boundsMax[offset + 1], boundsMax[offset + 2], worldBoundsMin, worldBoundsMax, offset);
                 count++;
             }
-            ModelPlacedLightField.update(camera, selected, ready && count > 0 && failure.isEmpty());
+            ModelPlacedLightField.update(camera, selected, nodeLights || ready && count > 0 && failure.isEmpty());
             ModelLocalLightProviders.update(instances, camera, ready && count > 0 && failure.isEmpty());
             updateHeldSource(camera);
             status = !failure.isEmpty() ? "DEGRADED" : next.isEmpty() ? "NO_ELIGIBLE_OCCLUDERS" : !ready ? "UPLOADING" : excluded > 0 ? "PARTIAL_UNVERIFIED" : "READY_UNVERIFIED";
@@ -572,6 +584,7 @@ public final class ModelIrisHeldLight {
         out.put("additionalDrawCalls", "ACTIVE".equals(resolutionStatus) || "AUTO_SPARSE".equals(resolutionStatus) ? 1 : 0);
         out.put("placedLight", ModelPlacedLightField.report());
         out.put("sourceProviders", ModelLocalLightProviders.report());
+        out.put("nodeLights", com.mine.geometry_node.client.runtime.light.NodeLightRenderer.report());
         out.put("transparentReceivers", ModelNativeLight.report());
         out.put("scope", "version-guarded pack light adapters; OPAQUE/MASK and scalar BLEND transmission; G-buffer model/terrain/entity and native forward transparent receivers; per-pack effects require visual verification");
         out.put("limits", "8 instances, 128MiB atlas, 2MiB/2ms sliced upload; 2048 node visits per instance/ray, exhaustion is fail-open and not GPU-counted; alpha coverage is bounded tessellation; additional sky occlusion is unsupported (fixed-direction approximation removed); pack sky and sun preserved; placed/provider scope separately reported");

@@ -154,6 +154,8 @@ public final class GraphValueCodecRegistry {
 
     static {
         registerNative(Number.class, GraphValueJsonCodecs.INTEGER, PortType.INTEGER);
+        var lightCodec = new com.mine.geometry_node.core.node.value.light.LightConfigCodec();
+        register(lightCodec, lightCodec, PortType.LIGHT_CONFIG);
         registerNative(Number.class, GraphValueJsonCodecs.LONG, PortType.LONG);
         registerNative(Number.class, GraphValueJsonCodecs.FLOAT, PortType.FLOAT);
         registerNative(Boolean.class, GraphValueJsonCodecs.BOOLEAN, PortType.BOOLEAN);

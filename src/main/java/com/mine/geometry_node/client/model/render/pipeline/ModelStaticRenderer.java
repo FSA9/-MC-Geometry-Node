@@ -196,14 +196,20 @@ public final class ModelStaticRenderer {
     public static void invalidateLightRegion(BlockPos center, int radius, String reason) { RenderSystem.assertOnRenderThread(); LIGHT_CACHE.invalidateRegion(Objects.requireNonNull(center), radius, reason); }
     public static void invalidateAllLight(String reason) { RenderSystem.assertOnRenderThread(); LIGHT_CACHE.invalidateAll(reason); }
 
-    public static void submit(PoseStack ignoredHostStack, SubmitNodeCollector collector, Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
+    public static void prepareLighting(Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
         RenderSystem.assertOnRenderThread();
         mainCameraPosition = camera;
+        com.mine.geometry_node.client.runtime.light.NativeTerrainLights.setEnabled(!(IRIS.available() && IRIS.active()));
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.prepare(camera);
         long lightingStarted = System.nanoTime();
         try { ModelIrisHeldLight.update(instances, camera, IRIS.available() && IRIS.active(), instance ->
                 !isOutsideFrustum(instance.asset().sceneBounds(instance.scene()),
                         instance.transform().relativeTo(camera.x, camera.y, camera.z), camera, frustum)); }
         finally { METRICS.recordLightingCpu(System.nanoTime() - lightingStarted); }
+    }
+
+    public static void submit(PoseStack ignoredHostStack, SubmitNodeCollector collector, Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
+        RenderSystem.assertOnRenderThread();
         var loaded = ClientModelService.INSTANCE.loadedCounts();
         METRICS.modelLodMetrics().setLoadedCounts(loaded.instances(), loaded.objects());
         if (instances.isEmpty()) { queuedIris = List.of(); queuedIrisImmediate = List.of(); queuedDirect = Map.of(); return; }
@@ -689,6 +695,8 @@ public final class ModelStaticRenderer {
                 bind(pass, minecraft, "Sampler1", binding.overlay());
                 pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
                 int transformIndex = 0;
+                try (var nodeLighting = !shadowPass && com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()
+                        ? com.mine.geometry_node.client.model.render.bvh.ModelNativeLight.nodeScope() : null) {
                 for (DirectDraw draw : entry.getValue()) {
                     pass.setUniform("DynamicTransforms", transforms.get(transformIndex++));
                     pass.setVertexBuffer(0, draw.mesh().vertices());
@@ -697,6 +705,7 @@ public final class ModelStaticRenderer {
                         pass.drawIndexed(0, range.firstIndex(), range.count(), 1);
                         if (shadowPass) { shadowDraws++; METRICS.opaqueDraw(); } else { opaqueSubmissions++; mainDrawCount++; METRICS.opaqueDraw(); }
                     }
+                }
                 }
                 } catch (RuntimeException error) { failed(error); }
             }

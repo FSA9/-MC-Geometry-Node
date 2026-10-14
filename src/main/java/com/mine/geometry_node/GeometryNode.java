@@ -178,6 +178,7 @@ public class GeometryNode {
         ServerEngineDriver.init();
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GeometryCollisionService.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.graph.light.GraphLightService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphEntityReferenceIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphBindingRuntimeIndex.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(ServerGraphRepository.INSTANCE);

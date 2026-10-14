@@ -20,6 +20,7 @@ import java.util.Map;
 /** Owns runtime image textures used by temporary world visuals. */
 public final class ClientImageAssetManager {
     private static final Map<Path, LocalAsset> LOCAL_TEXTURES = new HashMap<>();
+    private static final Map<String, String> RESOURCE_TEXTURES = new HashMap<>();
     private static final Map<String, TextureEntry> TEXTURES = new HashMap<>();
     private static final Map<String, PendingContent> PENDING_SERVER_ASSETS = new HashMap<>();
     private static final java.util.Set<String> REPORTED_FAILURES = new java.util.HashSet<>();
@@ -44,6 +45,29 @@ public final class ClientImageAssetManager {
 
     @Nullable
     public static synchronized TextureLease acquire(String source, String reference) {
+        if ("resource".equals(source)) {
+            String key = RESOURCE_TEXTURES.get(reference);
+            TextureEntry cached = TEXTURES.get(key);
+            if (cached != null) {
+                cached.references++;
+                return new TextureLease(key, cached.texture);
+            }
+            try {
+                var resource = Minecraft.getInstance().getResourceManager().getResource(Identifier.parse(reference))
+                        .orElseThrow(() -> new IOException("Missing resource image: " + reference));
+                byte[] data;
+                try (var stream = resource.open()) { data = stream.readNBytes(16 * 1024 * 1024 + 1); }
+                ImageAssetValidator.validateImage(data, 16 * 1024 * 1024, 8192, 16 * 1024 * 1024);
+                String contentId = ImageAssetValidator.contentId(data);
+                key = cacheKey(source, contentId);
+                TextureEntry entry = retainTexture(key, source, contentId, data);
+                RESOURCE_TEXTURES.put(reference, key);
+                return new TextureLease(key, entry.texture);
+            } catch (IOException | RuntimeException exception) {
+                reportOnce("resource:" + reference, exception);
+                return null;
+            }
+        }
         if ("server".equals(source)) {
             String cacheKey = cacheKey("server", reference);
             PendingContent pending = PENDING_SERVER_ASSETS.get(cacheKey);
@@ -72,6 +96,7 @@ public final class ClientImageAssetManager {
             }
 
             long size = Files.size(path);
+            if (size <= 0 || size > 16 * 1024 * 1024) throw new IOException("Local image exceeds 16 MiB byte budget");
             FileTime modified = Files.getLastModifiedTime(path);
             LocalAsset cached = LOCAL_TEXTURES.get(path);
             if (cached != null && cached.size == size && cached.modified.equals(modified)) {
@@ -82,7 +107,9 @@ public final class ClientImageAssetManager {
                 }
             }
 
-            byte[] data = Files.readAllBytes(path);
+            byte[] data;
+            try (var stream = Files.newInputStream(path)) { data = stream.readNBytes(16 * 1024 * 1024 + 1); }
+            ImageAssetValidator.validateImage(data, 16 * 1024 * 1024, 8192, 16 * 1024 * 1024);
             String contentId = ImageAssetValidator.contentId(data);
             String cacheKey = cacheKey("local", contentId);
             TextureEntry entry = retainTexture(cacheKey, "local", contentId, data);
@@ -100,6 +127,7 @@ public final class ClientImageAssetManager {
             minecraft.getTextureManager().release(entry.texture);
         }
         LOCAL_TEXTURES.clear();
+        RESOURCE_TEXTURES.clear();
         TEXTURES.clear();
         PENDING_SERVER_ASSETS.clear();
         REPORTED_FAILURES.clear();
@@ -139,6 +167,7 @@ public final class ClientImageAssetManager {
         TextureEntry entry = TEXTURES.get(cacheKey);
         if (entry == null || --entry.references > 0) return;
         TEXTURES.remove(cacheKey);
+        RESOURCE_TEXTURES.values().removeIf(cacheKey::equals);
         Minecraft.getInstance().getTextureManager().release(entry.texture);
         Iterator<Map.Entry<Path, LocalAsset>> iterator = LOCAL_TEXTURES.entrySet().iterator();
         while (iterator.hasNext()) {

@@ -48,6 +48,7 @@ public final class ModelBvhLightResolution {
 
     /** Called at the actual Iris draw, after all pack uniforms, samplers and element buffers are set. */
     public static void draw(String passName, Runnable draw) {
+        if (com.mine.geometry_node.client.runtime.light.NodeLightRenderer.inPrepass()) {draw.run();return;}
         // A fixed sparse target supports different qualities in the same frame without
         // reallocating storage or lowering another instance's requested resolution.
         boolean reduced = ModelIrisHeldLight.hasReducedAutoReceivers();

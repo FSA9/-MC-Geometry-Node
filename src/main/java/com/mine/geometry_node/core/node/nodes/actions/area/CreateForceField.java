@@ -14,6 +14,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValues;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -24,6 +25,7 @@ import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 
@@ -52,7 +54,7 @@ public final class CreateForceField extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.FORCE_FIELD_ID.toInput(""), UIHint.INPUT)
+                .addRow(ResourceNodeSupport.creationRow(StandardPorts.FORCE_FIELD_ID.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(StandardPorts.AREA.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(STRENGTH_PORT, UIHint.INPUT)
                 .build();
@@ -61,40 +63,50 @@ public final class CreateForceField extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         boolean success = false;
+        context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), "");
         ServerLevel hostLevel = context.getLevel();
         String fieldId = getInput(context, StandardPorts.FORCE_FIELD_ID.getId(), String.class);
         AreaRef area = getInput(context, StandardPorts.AREA.getId(), AreaRef.class);
-        if (hostLevel != null && fieldId != null && !fieldId.isBlank() && area != null
-                && AreaResourceStore.INSTANCE.get(hostLevel.getServer(), area) != null) {
-            ForceFieldAddress address = ForceFieldAddress.tryCreate(area.address().dimension(), fieldId);
-            if (address != null) {
+        try {
+            if (hostLevel != null && area != null
+                    && AreaResourceStore.INSTANCE.get(hostLevel.getServer(), area) != null) {
                 String stableId = context.getCurrentNodeStableId();
                 if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
-                GraphResourceId owner = GraphResourceIds.forKey(context, stableId,
-                        GraphResourceTypeRegistry.FORCE_FIELD, address.id());
-                Float rawStrength = getInput(context, StandardPorts.STRENGTH.getId(), Float.class);
-                float strengthSnapshot = rawStrength != null && Float.isFinite(rawStrength)
-                        ? rawStrength : DEFAULT_STRENGTH;
-                ExpressionSpec strengthExpression = ExpressionSpec.fromScalar(
-                        getInputExpression(context, StandardPorts.STRENGTH.getId()));
-                LiveValue<Float> strength = LiveValues.captureFloat(
-                        STRENGTH_PORT, strengthSnapshot, strengthExpression);
-                for (String diagnostic : strength.diagnostics()) {
-                    if (RateLimitedLog.acquire(context,
-                            "force_field_expression:" + address.id() + ':' + diagnostic)) {
-                        GeometryNode.LOGGER.warn("Invalid force field strength expression for '{}': {}",
-                                address.id(), diagnostic);
+                ForceFieldAddress address = GraphResourceReferences.resolveForceField(context,
+                        stableId, fieldId, area.address().dimension(), true);
+                if (!address.dimension().equals(area.address().dimension()))
+                    throw new IllegalArgumentException("Force field and area dimensions differ");
+                if (address != null) {
+                    GraphResourceId owner = GraphResourceIds.forKey(context, stableId,
+                            GraphResourceTypeRegistry.FORCE_FIELD, address.id());
+                    Float rawStrength = getInput(context, StandardPorts.STRENGTH.getId(), Float.class);
+                    float strengthSnapshot = rawStrength != null && Float.isFinite(rawStrength)
+                            ? rawStrength : DEFAULT_STRENGTH;
+                    ExpressionSpec strengthExpression = ExpressionSpec.fromScalar(
+                            getInputExpression(context, StandardPorts.STRENGTH.getId()));
+                    LiveValue<Float> strength = LiveValues.captureFloat(
+                            STRENGTH_PORT, strengthSnapshot, strengthExpression);
+                    for (String diagnostic : strength.diagnostics()) {
+                        if (RateLimitedLog.acquire(context,
+                                "force_field_expression:" + address.id() + ':' + diagnostic)) {
+                            GeometryNode.LOGGER.warn("Invalid force field strength expression for '{}': {}",
+                                    address.id(), diagnostic);
+                        }
                     }
+                    ServerLevel fieldLevel = hostLevel.getServer().getLevel(area.address().dimension());
+                    if (fieldLevel == null) {
+                        context.setNodeResult(StandardPorts.BOOL.getId(), false);
+                        return next(StandardPorts.FLOW_OUT.getId());
+                    }
+                    ForceFieldResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, owner, area.address(),
+                            fieldLevel.getGameTime(), strength);
+                    success = true;
+                    context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceReferences.encode(address));
                 }
-                ServerLevel fieldLevel = hostLevel.getServer().getLevel(area.address().dimension());
-                if (fieldLevel == null) {
-                    context.setNodeResult(StandardPorts.BOOL.getId(), false);
-                    return next(StandardPorts.FLOW_OUT.getId());
-                }
-                ForceFieldResourceStore.INSTANCE.upsert(hostLevel.getServer(), address, owner, area.address(),
-                        fieldLevel.getGameTime(), strength);
-                success = true;
             }
+        } catch (IllegalArgumentException failure) {
+            if (RateLimitedLog.acquire(context, "force_field_resource:" + failure.getMessage()))
+                GeometryNode.LOGGER.warn("Cannot create force field: {}", failure.getMessage());
         }
         context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
@@ -102,7 +114,8 @@ public final class CreateForceField extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
+        return (StandardPorts.BOOL.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName))
+                ? context.getNodeResult(portName) : null;
     }
 
 }

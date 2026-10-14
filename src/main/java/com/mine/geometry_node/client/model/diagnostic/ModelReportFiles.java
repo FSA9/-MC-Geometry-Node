@@ -10,12 +10,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-final class ModelReportFiles {
+public final class ModelReportFiles {
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS", Locale.ROOT);
 
     private ModelReportFiles() {}
 
-    static Path write(Path directory, Instant capturedAt, String json) throws IOException {
+    public static Path write(Path directory, Instant capturedAt, String json) throws IOException {
         Files.createDirectories(directory);
         String basename = "report-" + TIMESTAMP.format(capturedAt.atZone(ZoneId.systemDefault()));
         for (long sequence = 1; ; sequence++) {

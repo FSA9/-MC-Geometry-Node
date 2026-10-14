@@ -140,6 +140,15 @@ void main() {
         }
         vec3 indirectSpecular=nativeEnvironmentReflectance(f0,roughness,nv)*ao;
         rgb=(base.rgb*(1.0-metallic)*diffuse*ao+spec+indirectSpecular)*toLinear(clamp(lighting,0.0,1.0))+emission;
+        if(nodeLightCount>0) {
+            vec3 worldNormal=normalize(gl_FrontFacing ? modelWorldNormal : -modelWorldNormal);
+            if(mode==2 && metallic<0.5) {
+                rgb+=nodeTransparentSurface(modelRelativePosition,worldNormal,worldNormal,base.rgb,baseAlpha,roughness,0.04);
+            } else {
+                vec3 directLight=nodeSurface(modelRelativePosition,worldNormal,vec2(0.0));
+                rgb+=(base.rgb*(1.0-metallic)+f0)*directLight;
+            }
+        }
     }
     float outputAlpha = mode==2 ? baseAlpha : 1.0;
     vec4 outputColor=vec4(toDisplay(rgb),outputAlpha)*vec4(ColorModulator.rgb,1.0);

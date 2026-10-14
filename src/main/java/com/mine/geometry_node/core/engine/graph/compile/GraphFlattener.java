@@ -68,6 +68,7 @@ public final class GraphFlattener {
 
     private void flattenRecursive(String prefix, JsonObject nodesMap) {
         if (nodesMap == null) return;
+        Map<String, Set<String>> connectedPorts = connectedPorts(nodesMap);
 
         for (String localId : nodesMap.keySet()) {
             JsonObject nodeObj = asObject(nodesMap.get(localId));
@@ -81,6 +82,7 @@ public final class GraphFlattener {
             NodeData instanceData = GSON.fromJson(nodeObj, NodeData.class);
             instanceData.id = globalId;
             instanceData.restoreDocumentDefaults();
+            instanceData.connectedInputs.addAll(connectedPorts.getOrDefault(localId, Set.of()));
             nodeInstanceLookup.put(globalId, instanceData);
             NodeDef instanceDefinition = NodeRegistry.INSTANCE.resolveDefinition(instanceData);
             CanonicalNodeSchema schema = CanonicalNodeSchema.from(type, instanceDefinition);
@@ -111,6 +113,30 @@ public final class GraphFlattener {
                 flattenRecursive(globalId + "/", asObject(nodeObj.get("sub_nodes")));
             }
         }
+    }
+
+    /** Dynamic schemas must see authored connections before legacy ports are resolved. */
+    private static Map<String, Set<String>> connectedPorts(JsonObject nodesMap) {
+        Map<String, Set<String>> result = new HashMap<>();
+        for (JsonElement element : nodesMap.asMap().values()) {
+            JsonObject node = asObject(element);
+            if (node == null) continue;
+            JsonObject outputs = asObject(node.get("outputs"));
+            if (outputs == null) continue;
+            for (JsonElement links : outputs.asMap().values()) {
+                if (!links.isJsonArray()) continue;
+                for (JsonElement link : links.getAsJsonArray()) {
+                    JsonObject connection = asObject(link);
+                    if (connection == null) continue;
+                    String target = readString(connection, "target_node", "");
+                    String port = readString(connection, "target_port", "");
+                    if (!target.isBlank() && !port.isBlank()) {
+                        result.computeIfAbsent(target, ignored -> new HashSet<>()).add(port);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     private void parseStaticInputs(String globalId, CanonicalNodeSchema schema, JsonObject nodeObj) {
@@ -166,6 +192,10 @@ public final class GraphFlattener {
 
     /** Rebuilds only definitions whose schema is allowed to depend on instance inputs. */
     private void finalizeDynamicNodeSchemas() {
+        Map<String, Set<String>> connectedPorts = new HashMap<>();
+        for (InputKey key : inputLookup.keySet()) {
+            connectedPorts.computeIfAbsent(key.nodeId(), ignored -> new HashSet<>()).add(key.portName());
+        }
         for (String nodeId : dynamicSchemaNodeIds) {
             NodeData instance = nodeInstanceLookup.get(nodeId);
             if (instance == null) continue;
@@ -175,6 +205,8 @@ public final class GraphFlattener {
                 if (value != ExplicitNullInput.INSTANCE) definitionInputs.put(port, value);
             });
             instance.inputs = definitionInputs;
+            instance.connectedInputs.clear();
+            instance.connectedInputs.addAll(connectedPorts.getOrDefault(nodeId, Set.of()));
 
             NodeDef definition = NodeRegistry.INSTANCE.resolveDefinition(instance);
             CanonicalNodeSchema schema = CanonicalNodeSchema.from(instance.type, definition);

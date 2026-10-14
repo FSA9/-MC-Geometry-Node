@@ -27,6 +27,9 @@ public final class GraphResourceTypeRegistry {
     public static final GraphResourceType SCHEMATIC_PROJECTION = type("schematic_projection",
             Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
             GraphResourceType.TargetEntityPolicy.NONE);
+    public static final GraphResourceType LIGHT = type("light",
+            Set.of(GraphResourceSelector.Kind.NODE, GraphResourceSelector.Kind.NAMED),
+            GraphResourceType.TargetEntityPolicy.NONE);
 
     public static final GraphResourceTypeRegistry INSTANCE = new GraphResourceTypeRegistry();
 
@@ -41,6 +44,7 @@ public final class GraphResourceTypeRegistry {
         registerBuiltin(GEOMETRY_DEBUG);
         registerBuiltin(GEOMETRY_COLLISION);
         registerBuiltin(SCHEMATIC_PROJECTION);
+        registerBuiltin(LIGHT);
         publishSnapshot();
     }
 

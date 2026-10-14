@@ -9,12 +9,13 @@ import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElem
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
-import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -47,25 +48,24 @@ public class CreateGeometryDebugMesh extends BaseNode {
                         .input(StandardPorts.TRANSLATION, "translation")
                         .input(StandardPorts.ROTATION, "rotation")
                         .input(StandardPorts.SIZE_3, "size_3")
-                        .input(StandardPorts.KEY, "key")
-                        .output(StandardPorts.RESOURCE_ID, "resource_id")
+                        .input(StandardPorts.KEY, "resource_id_input")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.RESOURCE_ID.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(StandardPorts.GEOMETRY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.SOURCE_ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.WORLD_POSITION.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.WORLD_ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.local_rotation"), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), "");
         if (!(context.getLevel() instanceof ServerLevel level)) {
             return next(StandardPorts.FLOW_OUT.getId());
         }
@@ -85,9 +85,17 @@ public class CreateGeometryDebugMesh extends BaseNode {
         Vec3 translation = valueOr(getInput(context, StandardPorts.TRANSLATION.getId(), Vec3.class), Vec3.ZERO);
         Vec3 rotation = valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
         Vec3 scale = valueOr(getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1));
-        String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
-                GraphResourceTypeRegistry.GEOMETRY_DEBUG, key);
+        String input = ResourceNodeSupport.read(context, StandardPorts.KEY.getId());
+        GraphResourceId resourceId;
+        try {
+            resourceId = GraphResourceReferences.resolveCreate(context, stableNodeId(context),
+                    GraphResourceTypeRegistry.GEOMETRY_DEBUG, input);
+        } catch (IllegalArgumentException invalid) {
+            return next(StandardPorts.FLOW_OUT.getId());
+        }
+        ServerLevel target = level.getServer().getLevel(resourceId.scope().dimension());
+        if (target == null || (anchor != null && anchor.level() != target))
+            return next(StandardPorts.FLOW_OUT.getId());
         DebugSourceId sourceId = DebugSourceId.graph(DebugRenderChannel.GEOMETRY, resourceId);
 
         List<GeometryDebugElement> meshes = GeometryDebugMeshFactory.buildMeshes(
@@ -107,7 +115,7 @@ public class CreateGeometryDebugMesh extends BaseNode {
             meshes = meshes.stream().map(mesh -> mesh.withAnchor(anchor.getUUID(), anchor.getId())).toList();
         }
         if (!meshes.isEmpty()) {
-            DebugRendererSessionManager.replaceSourceGeometry(level, sourceId, meshes);
+            DebugRendererSessionManager.replaceSourceGeometry(target, sourceId, meshes);
             context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceIdCodec.encode(resourceId));
         }
         return next(StandardPorts.FLOW_OUT.getId());

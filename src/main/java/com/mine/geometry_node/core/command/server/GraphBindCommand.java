@@ -66,7 +66,7 @@ public class GraphBindCommand {
         for (Entity entity : targets) {
             Set<String> graphs = BlueprintRuntime.INSTANCE.getBoundGraphs(entity);
             context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.target_list",
-                    entity.getName().getString(), graphs.isEmpty() ? "无" : graphs), false);
+                    entity.getName().getString(), graphs.isEmpty() ? "无" : String.join(", ", graphs)), false);
         }
         return targets.size();
     }
@@ -87,7 +87,7 @@ public class GraphBindCommand {
     private static int handleGlobalList(CommandContext<CommandSourceStack> context) {
         Set<String> graphs = BlueprintRuntime.INSTANCE.getGlobalBoundGraphs(context.getSource().getLevel());
         context.getSource().sendSuccess(() -> Component.translatable("geometry_node.command.graph_bind.global_list",
-                graphs.isEmpty() ? "无" : graphs), false);
+                graphs.isEmpty() ? "无" : String.join(", ", graphs)), false);
         return 1;
     }
 

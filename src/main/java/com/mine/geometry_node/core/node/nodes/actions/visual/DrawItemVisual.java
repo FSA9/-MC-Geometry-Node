@@ -28,7 +28,7 @@ public class DrawItemVisual extends BaseNode {
     public static final String TYPE_ID = "draw_item_visual";
     public static final String PROPERTY_DISPLAY_CONTEXT = "item_display_context";
     public static final PortDef TRANSLATION_PORT = StandardPorts.TRANSLATION.toInput(Vec3.ZERO).liveExpression();
-    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.local_rotation").liveExpression();
     public static final PortDef SCALE_PORT = StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)).liveExpression();
 
     @Override

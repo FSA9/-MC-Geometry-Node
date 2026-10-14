@@ -43,6 +43,8 @@ public final class ClientboundPayloadRegistry {
         add(PacketVisualAssetData.TYPE, PacketVisualAssetData.STREAM_CODEC);
         add(PacketGeometryDebugSnapshot.TYPE, PacketGeometryDebugSnapshot.STREAM_CODEC);
         add(PacketGeometryCollision.TYPE, PacketGeometryCollision.STREAM_CODEC);
+        add(com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight.TYPE,
+                com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight.STREAM_CODEC);
         add(PacketBehaviorDebugSnapshot.TYPE, PacketBehaviorDebugSnapshot.STREAM_CODEC);
         add(PacketSchematicProjection.TYPE, PacketSchematicProjection.STREAM_CODEC);
         add(PacketRemoteAssetCapabilitiesResponse.TYPE, PacketRemoteAssetCapabilitiesResponse.STREAM_CODEC);

@@ -33,6 +33,40 @@ public final class GraphResourceIds {
         return create(context, type, selector, targetEntityId);
     }
 
+    public static GraphResourceId resolveCreate(GraphDataContext context, String stableNodeId,
+                                                 GraphResourceType type, String input) {
+        return resolveCreate(context, stableNodeId, type, input, null);
+    }
+
+    public static GraphResourceId resolveCreate(GraphDataContext context, String stableNodeId,
+                                                 GraphResourceType type, String input, UUID targetEntityId) {
+        String value = input == null ? "" : input.trim();
+        if (GraphResourceReferences.isEncoded(value)) return requireType(value, type);
+        return forKey(context, stableNodeId, type, value, targetEntityId);
+    }
+
+    public static GraphResourceId resolveExisting(GraphDataContext context, GraphResourceType type, String input) {
+        return resolveExisting(context, type, input, null);
+    }
+
+    public static GraphResourceId resolveExisting(GraphDataContext context, GraphResourceType type,
+                                                   String input, UUID targetEntityId) {
+        String value = input == null ? "" : input.trim();
+        if (value.isEmpty()) throw new IllegalArgumentException("Resource id cannot be empty");
+        if (GraphResourceReferences.isEncoded(value)) return requireType(value, type);
+        return create(context, type, new GraphResourceSelector.Named(value), targetEntityId);
+    }
+
+    private static GraphResourceId requireType(String encoded, GraphResourceType type) {
+        GraphResourceReferences.Reference reference = GraphResourceReferences.parse(encoded);
+        if (!(reference instanceof GraphResourceReferences.GraphReference graph)
+                || !graph.id().type().equals(type)) {
+            throw new IllegalArgumentException("Resource id does not refer to " + type.id());
+        }
+        // Explicit references retain their original owner and dimension; names use the caller's scope.
+        return graph.id();
+    }
+
     public static GraphResourceId create(GraphDataContext context, GraphResourceType type,
                                          GraphResourceSelector selector, UUID targetEntityId) {
         return create(context.getLevel(), context.getGraphOwnerEntity(), context.getGraphBindingKey(),

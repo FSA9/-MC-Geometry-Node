@@ -36,6 +36,18 @@ public record NodeDef(
         List<PortRow> normalizedRows = rows == null ? List.of() : new ArrayList<>(rows);
         validatePorts(typeId, normalizedRows);
         rows = List.copyOf(normalizedRows);
+        if (!nodeComment.outputs().isEmpty()) {
+            Set<String> passthroughIds = new HashSet<>();
+            for (PortRow row : rows) {
+                if (row.dataPassthrough()) passthroughIds.add(row.rightPort().id());
+            }
+            if (!passthroughIds.isEmpty()) {
+                nodeComment = new NodeComment(nodeComment.textKeys(), nodeComment.literalTexts(),
+                        nodeComment.outputs().stream()
+                                .filter(comment -> !passthroughIds.contains(comment.portId())).toList(),
+                        nodeComment.inputs());
+            }
+        }
     }
 
     /** Expands a built-in declaration ID while preserving explicit addon namespaces. */

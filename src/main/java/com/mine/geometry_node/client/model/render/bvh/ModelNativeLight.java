@@ -20,13 +20,21 @@ public final class ModelNativeLight {
         String declarations=ModelSundialHeldLight.declarations().replace(
                 "int modelLightingReceiverSlotAt(vec3 receiver) { return -1; }",
                 "uniform int modelLightingNativeReceiver;\nint modelLightingReceiverSlotAt(vec3 receiver) { return modelLightingNativeReceiver - 1; }");
-        return source.replace(marker,declarations);
+        return source.replace(marker,declarations + "\n"
+                + com.mine.geometry_node.client.runtime.light.NodeLightShader.declarations());
     }
     public static Scope scope() {
         if(active!=null)throw new IllegalStateException("nested native light draw scope");
-        return active=new Scope();
+        return active=new Scope(true);
+    }
+    /** Resident opaque models retain their existing lightmap and only add node lights. */
+    public static Scope nodeScope() {
+        if(active!=null)throw new IllegalStateException("nested native light draw scope");
+        return active=new Scope(false);
     }
     public static final class Scope implements AutoCloseable {
+        private final boolean legacyLighting;
+        private Scope(boolean legacyLighting){this.legacyLighting=legacyLighting;}
         private int packed, receiver;
         public void light(int packedLight){packed=packedLight;}
         public void receiver(String instanceId){receiver=ModelIrisHeldLight.receiverSlot(instanceId)+1;}
@@ -61,9 +69,9 @@ public final class ModelNativeLight {
             ModelIrisHeldLight.uploadNativeUniforms(program);
             GL20C.glUniform1i(uniforms[4],scope.receiver);
             GL20C.glUniform2f(uniforms[1],(scope.packed&65535)/240f,((scope.packed>>>16)&65535)/240f);
-            GL20C.glUniform1i(uniforms[0],1);
+            GL20C.glUniform1i(uniforms[0],scope.legacyLighting?1:0);
             GL13C.glActiveTexture(previousActive);
-            draw.run();draws++;failure="";
+            com.mine.geometry_node.client.runtime.light.NodeLightRenderer.drawNative(draw);draws++;failure="";
         } finally {
             GL20C.glUniform1i(uniforms[0],0);
             GL20C.glUniform1i(uniforms[4],0);

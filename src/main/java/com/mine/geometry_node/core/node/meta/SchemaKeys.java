@@ -2,6 +2,9 @@ package com.mine.geometry_node.core.node.meta;
 
 public class SchemaKeys {
 
+    /** Compatibility-only nodes remain loadable, but are not offered for new graphs. */
+    public static final MetaKey<Boolean> HIDDEN_FROM_MENU = new MetaKey<>("hidden_from_menu");
+
     /**
      * 节点 UI 宽度，单位为 dp。不设置时使用默认节点宽度。
      */

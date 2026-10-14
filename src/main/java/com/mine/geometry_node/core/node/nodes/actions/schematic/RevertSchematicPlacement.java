@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -37,14 +38,14 @@ public class RevertSchematicPlacement extends BaseNode {
                         .output(StandardPorts.COUNT, "count")
                         .output(StandardPorts.BLOCK_STATS, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
-                        .input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.KEY, "resource_id")
                         .input(StandardPorts.AFFECT_ENTITIES, "affect_entities")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BLOCK_STATS.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(ResourceNodeSupport.input(StandardPorts.KEY.getId()), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.AFFECT_ENTITIES.toInput(true), UIHint.CHECKBOX)
                 .build();
     }
@@ -53,9 +54,18 @@ public class RevertSchematicPlacement extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         OperationResult result = new OperationResult(false, 0, 0, 0, Map.of());
         if (context.getLevel() instanceof ServerLevel level) {
-            String key = getInput(context, StandardPorts.KEY.getId(), String.class);
+            String key = ResourceNodeSupport.read(context, StandardPorts.KEY.getId());
+            var target = _SchematicActionUtils.placementTarget(context, key);
+            if (target.level() == null) {
+                context.setNodeResult(StandardPorts.BOOL.getId(), false);
+                context.setNodeResult(StandardPorts.COUNT.getId(), 0);
+                context.setNodeResult(StandardPorts.BLOCK_STATS.getId(), Map.of());
+                return next(StandardPorts.FLOW_OUT.getId());
+            }
+            level = target.level();
+            key = target.key();
             _SchematicActionUtils.PlacementLookup lookup = _SchematicActionUtils.resolvePlacement(
-                    level, key, _SchematicActionUtils.eventBlockPos(context));
+                    level, key, target.exact() ? null : _SchematicActionUtils.eventBlockPos(context));
             SchematicPlacementRecord previousRecord = lookup.record();
             if (previousRecord == null) {
                 logMissing(level, lookup.requestedKey());

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.marker;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -34,7 +35,7 @@ public final class RemoveMarker extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addPassthroughInput(StandardPorts.KEY.toInput("").withDisplayName("geometry_node.port.resource_id"), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
                 .build();
@@ -66,11 +67,13 @@ public final class RemoveMarker extends BaseNode {
     }
 
     private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
-        if (!onlySelf) return MarkerAddress.all(key);
+        if (!onlySelf || GraphResourceReferences.isEncoded(key))
+            return GraphResourceReferences.resolveMarker(context, null, key, null, false);
         Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
         if (viewer == null) viewer = context.getGraphOwnerEntity();
         if (viewer == null) viewer = context.getEntity();
-        return viewer instanceof ServerPlayer player ? MarkerAddress.self(player.getUUID(), key) : null;
+        return viewer instanceof ServerPlayer player
+                ? GraphResourceReferences.resolveMarker(context, null, key, player.getUUID(), false) : null;
     }
 
 }

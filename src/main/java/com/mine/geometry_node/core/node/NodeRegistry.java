@@ -177,7 +177,8 @@ public class NodeRegistry {
         NodeCategory category = getOrCreateCategory(path);
         registeredNodes.put(typeId,
                 new RegisteredNode(node, def, behaviorExecutor, eventPrecheckFactory));
-        category.addNode(node);
+        if (!def.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, false))
+            category.addNode(node);
     }
 
     private static void logNodeRegistrationFailure(String path, @Nullable BaseNode node,
@@ -237,6 +238,7 @@ public class NodeRegistry {
     public Collection<NodeDef> getAllDefinitions() {
         return registeredNodes.values().stream()
                 .map(RegisteredNode::defaultDefinition)
+                .filter(def -> !def.getMetaOrDefault(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, false))
                 .toList();
     }
 

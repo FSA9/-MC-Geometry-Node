@@ -31,8 +31,8 @@ public final class DrawImageVisual extends BaseNode {
     public static final String TYPE_ID = "draw_image_visual";
     public static final String SIZE_MODE_STRETCH = "stretch";
     public static final String SIZE_MODE_FIT = "fit";
-    public static final PortDef POSITION_PORT = StandardPorts.XYZ.toInput(Vec3.ZERO).liveExpression();
-    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).liveExpression();
+    public static final PortDef POSITION_PORT = StandardPorts.XYZ.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.world_position").liveExpression();
+    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.world_rotation").liveExpression();
     public static final PortDef WIDTH_PORT = StandardPorts.WIDTH.toInput(1.0F).liveExpression();
     public static final PortDef HEIGHT_PORT = StandardPorts.HEIGHT.toInput(1.0F).liveExpression();
     public static final PortDef ALPHA_PORT = StandardPorts.ALPHA.toInput(1.0F).liveExpression();

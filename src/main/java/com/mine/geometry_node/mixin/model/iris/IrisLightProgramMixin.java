@@ -11,10 +11,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Upload only after Iris has activated and populated the composite program. */
 @Pseudo
 @Mixin(targets = "net.irisshaders.iris.gl.program.Program", remap = false)
-public abstract class IrisHeldLightProgramMixin {
+public abstract class IrisLightProgramMixin {
     @Shadow public abstract int getProgramId();
     @Inject(method = "use", at = @At("TAIL"), remap = false)
-    private void geometryNode$uploadHeldLight(CallbackInfo callback) {
+    private void geometryNode$uploadLighting(CallbackInfo callback) {
         ModelIrisHeldLight.uploadUniforms(getProgramId());
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.upload(getProgramId());
     }
 }

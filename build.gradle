@@ -18,14 +18,26 @@ repositories {
     maven {
         name = 'IzzelAliz Maven'
         url = 'https://maven.izzel.io/releases/'
+        content {
+            excludeGroup 'org.jetbrains.kotlin'
+        }
     }
     maven {
         url = "https://maven.architectury.dev/"
+        content {
+            excludeGroup 'org.jetbrains.kotlin'
+        }
     }
 }
 
 base {
     archivesName = mod_id
+}
+
+configurations.configureEach {
+    // Pin build resolution so JarJar compatibility ranges do not trigger version-list requests.
+    resolutionStrategy.force "org.jetbrains.pty4j:pty4j:${pty4j_version}"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_stdlib_version}"
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)

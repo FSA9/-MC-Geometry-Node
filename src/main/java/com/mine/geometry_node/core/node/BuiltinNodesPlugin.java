@@ -410,6 +410,14 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         registry.register("actions/geometry", new DeleteGeometryDebugMesh());
         registry.register("actions/collision", new CreateGeometryCollision());
         registry.register("actions/collision", new DeleteGeometryCollision());
+        registry.register("actions/resource", new com.mine.geometry_node.core.node.nodes.actions.resource.ResourceTagNode(true));
+        registry.register("actions/resource", new com.mine.geometry_node.core.node.nodes.actions.resource.ResourceTagNode(false));
+        for (var operation : com.mine.geometry_node.core.node.nodes.actions.light.LightActionNode.Operation.values())
+            registry.register("actions/light", new com.mine.geometry_node.core.node.nodes.actions.light.LightActionNode(operation));
+        for (var group : com.mine.geometry_node.core.node.nodes.actions.light.LightConfigurationNode.Group.values())
+            registry.register("actions/light", new com.mine.geometry_node.core.node.nodes.actions.light.LightConfigurationNode(group));
+        for (var property : com.mine.geometry_node.core.node.nodes.actions.light.SetLightPropertyNode.Property.values())
+            registry.register("actions/light", new com.mine.geometry_node.core.node.nodes.actions.light.SetLightPropertyNode(property));
 
         // --- DIALOGUE ---
         registry.register("dialogue", new BeginDialogue());

@@ -70,7 +70,7 @@ public class SpawnItemDisplayEntity extends BaseNode {
                         ))
                 .addPassthroughInput(StandardPorts.PIVOT.toInput(Vec3.ZERO), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.local_rotation"), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.SIZE_3.toInput(new Vec3(1, 1, 1)), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TICK.toInput(0)
                         .withDisplayName("geometry_node.port.tick.teleport"), UIHint.INPUT)

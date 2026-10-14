@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.marker;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -24,6 +25,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 
 public final class CreateMarker extends BaseNode {
     public static final String TYPE_ID = "create_marker";
@@ -51,7 +53,7 @@ public final class CreateMarker extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT)
+                .addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID))
                 .addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
@@ -73,12 +75,13 @@ public final class CreateMarker extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         boolean success = false;
+        context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), "");
         ServerLevel level = context.getLevel();
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
-        if (level != null && key != null && !key.isBlank()) {
+        if (level != null) {
             try {
                 boolean onlySelf = valueOr(getInput(context, StandardPorts.ONLY_SELF_VISIBLE.getId(), Boolean.class), true);
-                MarkerAddress address = resolveAddress(context, key.trim(), onlySelf);
+                MarkerAddress address = resolveAddress(context, key, onlySelf);
                 MarkerAnchor anchor = resolveAnchor(context, level);
                 if (address != null && anchor != null) {
                     String typeId = valueOr(getInput(context, StandardPorts.MARKER_TYPE.getId(), String.class),
@@ -88,6 +91,7 @@ public final class CreateMarker extends BaseNode {
                     int duration = Math.max(0, valueOr(getInput(context, StandardPorts.TICK.getId(), Integer.class), 0));
                     success = MarkerService.INSTANCE.upsert(level,
                             new MarkerRequest(address, typeId, anchor, text, showDistance, duration));
+                    if (success) context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceReferences.encode(address));
                 }
             } catch (IllegalArgumentException ignored) {
                 success = false;
@@ -99,15 +103,20 @@ public final class CreateMarker extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        return StandardPorts.BOOL.getId().equals(portName) ? context.getNodeResult(portName) : null;
+        return (StandardPorts.BOOL.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName))
+                ? context.getNodeResult(portName) : null;
     }
 
     private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
-        if (!onlySelf) return MarkerAddress.all(key);
+        String stableId = context.getCurrentNodeStableId();
+        if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
+        if (!onlySelf || GraphResourceReferences.isEncoded(key))
+            return GraphResourceReferences.resolveMarker(context, stableId, key, null, true);
         Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
         if (viewer == null) viewer = context.getGraphOwnerEntity();
         if (viewer == null) viewer = context.getEntity();
-        return viewer instanceof ServerPlayer player ? MarkerAddress.self(player.getUUID(), key) : null;
+        return viewer instanceof ServerPlayer player
+                ? GraphResourceReferences.resolveMarker(context, stableId, key, player.getUUID(), true) : null;
     }
 
     private MarkerAnchor resolveAnchor(ExecutionContext context, ServerLevel fallbackLevel) {

@@ -7,8 +7,8 @@ import java.time.Instant;
 import java.util.*;
 
 /** Capture the settings needed to compare performance measurements. */
-final class ModelReportContext {
-    static Map<String, Object> capture(Instant capturedAt) {
+public final class ModelReportContext {
+    public static Map<String, Object> capture(Instant capturedAt) {
         Minecraft minecraft = Minecraft.getInstance();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("capturedAt", capturedAt.toString());

@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceSto
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionSpec;
@@ -30,6 +31,7 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -96,7 +98,7 @@ public final class CreateArea extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.AREA.toOutput(), UIHint.DEFAULT, null, null))
-                .addPassthroughInput(areaIdPort(""), UIHint.INPUT)
+                .addRow(ResourceNodeSupport.creationRow(StandardPorts.AREA_ID.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(PortDef.create(ANCHOR_PORT, "geometry_node.port.area_anchor", PortType.STRING,
                                 AreaAnchor.WORLD.id()).hiddenPin(), UIHint.SELECT, null,
                         Map.of(PortMetaKeys.OPTIONS, AreaAnchor.OPTIONS));
@@ -128,6 +130,7 @@ public final class CreateArea extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         context.setNodeResult(StandardPorts.AREA.getId(), null);
+        context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), "");
         String areaId = getInput(context, StandardPorts.AREA_ID.getId(), String.class);
         ServerLevel hostLevel = context.getLevel();
         AreaAnchor anchor = AreaAnchor.fromId(getInput(context, ANCHOR_PORT, String.class));
@@ -139,45 +142,54 @@ public final class CreateArea extends BaseNode {
                     ? RegistryDataManager.resolveDimension(hostLevel.getServer(),
                             getInput(context, StandardPorts.DIMENSION.getId(), String.class))
                     : null;
-        if (areaLevel != null && areaId != null && !areaId.isBlank()) {
-            AreaShape shape = AreaShape.fromId(getInput(context, SHAPE_PORT, String.class));
-            Vec3 center = valueOr(getInput(context, StandardPorts.CENTER.getId(), Vec3.class), Vec3.ZERO);
-            Vec3 size = AreaEntityQuery.sanitizeSize(valueOr(
-                    getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1)));
-            float radius = positive(valueOr(getInput(context, StandardPorts.RADIUS.getId(), Float.class),
-                    (float) DEFAULT_RADIUS));
-            float height = positive(valueOr(getInput(context, HEIGHT_PORT, Float.class),
-                    (float) DEFAULT_HEIGHT));
-            Vec3 rotation = shape == AreaShape.SPHERE
-                    ? Vec3.ZERO
-                    : valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
-            UUID anchorId = anchor == AreaAnchor.OWNER ? owner.getUUID() : null;
-            String stableId = context.getCurrentNodeStableId();
-            if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
-            AreaAddress address = AreaAddress.tryCreate(areaLevel.dimension(), areaId);
-            if (address != null) {
-                GraphResourceId resourceOwner = GraphResourceIds.forKey(context, stableId,
-                        GraphResourceTypeRegistry.AREA, address.id(), anchorId);
-                LiveValue<Vec3> liveCenter = captureXyz(CENTER_PORT, center,
-                        getInputExpression(context, StandardPorts.CENTER.getId()));
-                LiveValue<Vec3> liveSize = captureXyz(SIZE_PORT, size,
-                        getInputExpression(context, StandardPorts.SIZE_3.getId()));
-                LiveValue<Vec3> liveRotation = captureXyz(ROTATION_PORT, rotation,
-                        getInputExpression(context, StandardPorts.ROTATION.getId()));
-                LiveValue<Float> liveRadius = LiveValues.captureFloat(RADIUS_PORT, radius,
-                        ExpressionSpec.fromScalar(getInputExpression(
-                                context, StandardPorts.RADIUS.getId())));
-                LiveValue<Float> liveHeight = LiveValues.captureFloat(HEIGHT_INPUT, height,
-                        ExpressionSpec.fromScalar(getInputExpression(context, HEIGHT_PORT)));
-                reportDiagnostics(context, address.id(), "center", liveCenter);
-                reportDiagnostics(context, address.id(), "size", liveSize);
-                reportDiagnostics(context, address.id(), "rotation", liveRotation);
-                reportDiagnostics(context, address.id(), "radius", liveRadius);
-                reportDiagnostics(context, address.id(), "height", liveHeight);
-                var resource = AreaResourceStore.INSTANCE.upsert(areaLevel.getServer(), address, resourceOwner,
-                        shape, areaLevel.getGameTime(), liveCenter, liveSize, liveRotation,
-                        liveRadius, liveHeight, anchorId);
-                context.setNodeResult(StandardPorts.AREA.getId(), resource.reference());
+        if (hostLevel != null && areaLevel != null) {
+            try {
+                AreaShape shape = AreaShape.fromId(getInput(context, SHAPE_PORT, String.class));
+                Vec3 center = valueOr(getInput(context, StandardPorts.CENTER.getId(), Vec3.class), Vec3.ZERO);
+                Vec3 size = AreaEntityQuery.sanitizeSize(valueOr(
+                        getInput(context, StandardPorts.SIZE_3.getId(), Vec3.class), new Vec3(1, 1, 1)));
+                float radius = positive(valueOr(getInput(context, StandardPorts.RADIUS.getId(), Float.class),
+                        (float) DEFAULT_RADIUS));
+                float height = positive(valueOr(getInput(context, HEIGHT_PORT, Float.class),
+                        (float) DEFAULT_HEIGHT));
+                Vec3 rotation = shape == AreaShape.SPHERE
+                        ? Vec3.ZERO
+                        : valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
+                UUID anchorId = anchor == AreaAnchor.OWNER ? owner.getUUID() : null;
+                String stableId = context.getCurrentNodeStableId();
+                if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
+                AreaAddress address = GraphResourceReferences.resolveArea(context, stableId, areaId, areaLevel.dimension(), true);
+                areaLevel = hostLevel.getServer().getLevel(address.dimension());
+                if (areaLevel == null || (anchor == AreaAnchor.OWNER && !ownerLevel.dimension().equals(address.dimension())))
+                    return next(StandardPorts.FLOW_OUT.getId());
+                if (address != null) {
+                    GraphResourceId resourceOwner = GraphResourceIds.forKey(context, stableId,
+                            GraphResourceTypeRegistry.AREA, address.id(), anchorId);
+                    LiveValue<Vec3> liveCenter = captureXyz(CENTER_PORT, center,
+                            getInputExpression(context, StandardPorts.CENTER.getId()));
+                    LiveValue<Vec3> liveSize = captureXyz(SIZE_PORT, size,
+                            getInputExpression(context, StandardPorts.SIZE_3.getId()));
+                    LiveValue<Vec3> liveRotation = captureXyz(ROTATION_PORT, rotation,
+                            getInputExpression(context, StandardPorts.ROTATION.getId()));
+                    LiveValue<Float> liveRadius = LiveValues.captureFloat(RADIUS_PORT, radius,
+                            ExpressionSpec.fromScalar(getInputExpression(
+                                    context, StandardPorts.RADIUS.getId())));
+                    LiveValue<Float> liveHeight = LiveValues.captureFloat(HEIGHT_INPUT, height,
+                            ExpressionSpec.fromScalar(getInputExpression(context, HEIGHT_PORT)));
+                    reportDiagnostics(context, address.id(), "center", liveCenter);
+                    reportDiagnostics(context, address.id(), "size", liveSize);
+                    reportDiagnostics(context, address.id(), "rotation", liveRotation);
+                    reportDiagnostics(context, address.id(), "radius", liveRadius);
+                    reportDiagnostics(context, address.id(), "height", liveHeight);
+                    var resource = AreaResourceStore.INSTANCE.upsert(areaLevel.getServer(), address, resourceOwner,
+                            shape, areaLevel.getGameTime(), liveCenter, liveSize, liveRotation,
+                            liveRadius, liveHeight, anchorId);
+                    context.setNodeResult(StandardPorts.AREA.getId(), resource.reference());
+                    context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceReferences.encode(address));
+                }
+            } catch (IllegalArgumentException failure) {
+                if (RateLimitedLog.acquire(context, "area_resource:" + failure.getMessage()))
+                    GeometryNode.LOGGER.warn("Cannot create area: {}", failure.getMessage());
             }
         }
         return next(StandardPorts.FLOW_OUT.getId());
@@ -185,7 +197,7 @@ public final class CreateArea extends BaseNode {
 
     @Override
     public Object compute(GraphDataContext context, String portName) {
-        return StandardPorts.AREA.getId().equals(portName)
+        return (StandardPorts.AREA.getId().equals(portName) || StandardPorts.RESOURCE_ID.getId().equals(portName))
                 ? context.getNodeResult(portName) : null;
     }
 
@@ -204,10 +216,6 @@ public final class CreateArea extends BaseNode {
                         areaId, property, diagnostic);
             }
         }
-    }
-
-    private static PortDef areaIdPort(String defaultValue) {
-        return StandardPorts.AREA_ID.toInput(defaultValue);
     }
 
     private static float positive(float value) {

@@ -7,12 +7,13 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
-import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIds;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -84,11 +85,9 @@ public class CreateSchematicProjection extends BaseNode {
         NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
                 .text("summary")
                 .output(StandardPorts.FLOW_OUT, "flow_out")
-                .output(StandardPorts.PATH, "path_out")
-                .output(StandardPorts.RESULT_RESOURCE_ID, "resource_id")
                 .input(StandardPorts.FLOW_IN, "flow_in")
                 .input(StandardPorts.PATH, "path")
-                .input(StandardPorts.KEY, "key")
+                .input(StandardPorts.KEY, "resource_id_input")
                 .input(StandardPorts.XYZ, "xyz")
                 .input(StandardPorts.DEBUG, "debug");
 
@@ -109,10 +108,8 @@ public class CreateSchematicProjection extends BaseNode {
                 .comment(comment.build());
 
         builder.addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
-        builder.addRow(new PortRow(null, StandardPorts.RESULT_RESOURCE_ID.toOutput(),
-                UIHint.DEFAULT, null, null));
+        builder.addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESULT_RESOURCE_ID.getId()));
         builder.addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH);
-        builder.addPassthroughInput(StandardPorts.KEY.toInput(""), UIHint.INPUT);
         builder.addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR);
         builder.addPassthroughInput(StandardPorts.DEBUG.toInput(debugMode), UIHint.CHECKBOX);
 
@@ -156,15 +153,16 @@ public class CreateSchematicProjection extends BaseNode {
         }
 
         boolean debugMode = boolOrDefault(getInput(context, StandardPorts.DEBUG.getId(), Boolean.class), true);
-        String configuredKey = getInput(context, StandardPorts.KEY.getId(), String.class);
-        configuredKey = configuredKey == null ? "" : configuredKey.trim();
+        String configuredKey = ResourceNodeSupport.read(context, StandardPorts.KEY.getId());
 
         try {
             String relativePath = SchematicPaths.normalizeSchematicPath(pathValue);
             SchematicExecutionRequest request;
             if (debugMode) {
-                GraphResourceId resourceId = GraphResourceIds.forKey(context, stableNodeId(context),
+                GraphResourceId resourceId = GraphResourceReferences.resolveCreate(context, stableNodeId(context),
                         GraphResourceTypeRegistry.SCHEMATIC_PROJECTION, configuredKey);
+                ServerLevel target = level.getServer().getLevel(resourceId.scope().dimension());
+                if (target == null) return next(StandardPorts.FLOW_OUT.getId());
                 int durationTicks = durationTicks(getInput(context, StandardPorts.TICK.getId(), Integer.class));
                 float alpha = clampFloat(getInput(context, StandardPorts.ALPHA.getId(), Float.class), DEFAULT_ALPHA, 0.05f, 1.0f);
                 float viewRange = clampFloat(getInput(context, StandardPorts.RADIUS.getId(), Float.class), DEFAULT_VIEW_RANGE, 1.0f, 4096.0f);
@@ -173,10 +171,22 @@ public class CreateSchematicProjection extends BaseNode {
                 UUID selfVisiblePlayerId = selfVisiblePlayer != null ? selfVisiblePlayer.getUUID() : null;
                 String graphId = context.getGraphId();
                 request = new SchematicExecutionRequest(relativePath, false, data ->
-                        new DebugProjectionTask(level, data, originValue, resourceId, graphId,
+                        new DebugProjectionTask(target, data, originValue, resourceId, graphId,
                                 durationTicks, alpha, viewRange, onlySelfVisible, selfVisiblePlayerId));
             } else {
-                String placementKey = configuredKey.isEmpty() ? defaultPlacementKey(context) : configuredKey;
+                var address = GraphResourceReferences.resolvePlacement(context, stableNodeId(context),
+                        configuredKey, level.dimension(), true);
+                if (configuredKey.isBlank()) {
+                    // Continue an existing legacy record series instead of abandoning its stable base key.
+                    String legacyKey = "schematic_projection/" + stableNodeId(context);
+                    var legacyRecord = SchematicPlacementManager.get(level, legacyKey).orElse(null);
+                    if (legacyRecord != null && legacyRecord.graphId().equals(context.getGraphId())) {
+                        address = new GraphResourceReferences.PlacementAddress(level.dimension(), legacyKey);
+                    }
+                }
+                ServerLevel target = level.getServer().getLevel(address.dimension());
+                if (target == null) return next(StandardPorts.FLOW_OUT.getId());
+                String placementKey = address.key();
                 boolean replaceAir = boolOrDefault(getInput(context, StandardPorts.REPLACE_AIR.getId(), Boolean.class), false);
                 boolean replaceBlocks = boolOrDefault(getInput(context, StandardPorts.REPLACE_BLOCKS.getId(), Boolean.class), true);
                 boolean uniqueIfExists = boolOrDefault(getInput(context, StandardPorts.UNIQUE_IF_EXISTS.getId(), Boolean.class), true);
@@ -186,8 +196,8 @@ public class CreateSchematicProjection extends BaseNode {
                         getInput(context, StandardPorts.MIRROR.getId(), Vec3.class));
                 request = new SchematicExecutionRequest(relativePath, replaceAir, data -> {
                     SchematicExecutionService.PlacementKeyReservation reservation =
-                            SchematicExecutionService.INSTANCE.reservePlacementKey(level, placementKey, uniqueIfExists);
-                    return new PlacementTask(graphId, level, data, originValue, reservation,
+                            SchematicExecutionService.INSTANCE.reservePlacementKey(target, placementKey, uniqueIfExists);
+                    return new PlacementTask(graphId, target, data, originValue, reservation,
                             replaceAir, replaceBlocks, transform.withDimensions(data.width(), data.length()));
                 });
             }
@@ -506,7 +516,8 @@ public class CreateSchematicProjection extends BaseNode {
 
         @Override
         public void complete(SchematicExecutionRequest.BlueprintResultSink sink) {
-            sink.set(StandardPorts.RESULT_RESOURCE_ID.getId(), key);
+            sink.set(StandardPorts.RESULT_RESOURCE_ID.getId(), GraphResourceReferences.encode(
+                    new GraphResourceReferences.PlacementAddress(level.dimension(), key)));
         }
 
         private enum Stage { BLOCKS, BLOCK_ENTITIES, ENTITIES, SNAPSHOTS, COMPLETE }
@@ -616,10 +627,6 @@ public class CreateSchematicProjection extends BaseNode {
             return player;
         }
         return null;
-    }
-
-    private static String defaultPlacementKey(ExecutionContext context) {
-        return "schematic_projection/" + stableNodeId(context);
     }
 
     private static String stableNodeId(ExecutionContext context) {

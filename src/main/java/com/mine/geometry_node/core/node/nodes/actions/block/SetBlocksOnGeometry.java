@@ -41,7 +41,7 @@ public class SetBlocksOnGeometry extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.GEOMETRY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.BLOCK_STATE.toInput(), UIHint.DEFAULT)
-                .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO), UIHint.VECTOR)
+                .addPassthroughInput(StandardPorts.TRANSLATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.world_offset"), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.VOXEL_MODE.toInput(GeometryValue.VoxelMode.SURFACE.id()).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.OPTIONS, VOXEL_MODE_OPTIONS))
                 .addPassthroughInput(StandardPorts.MAX_BLOCKS.toInput(DEFAULT_MAX_BLOCKS), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.REPLACE_EXISTING.toInput(true), UIHint.CHECKBOX)

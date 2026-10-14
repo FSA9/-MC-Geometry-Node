@@ -11,10 +11,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Uses the pass labels and actual fullscreen draw in the inspected Iris renderAll path. */
+/** Runs lighting passes, tracks GPU timings and releases resources with the composite renderer. */
 @Pseudo
 @Mixin(targets = "net.irisshaders.iris.pipeline.CompositeRenderer", remap = false)
-public abstract class IrisCompositeGpuTimingMixin {
+public abstract class IrisLightCompositeMixin {
     @Unique private String geometryNode$gpuPassName;
 
     @Inject(method = "renderAll", at = @At("HEAD"), remap = false, require = 0)
@@ -33,14 +33,16 @@ public abstract class IrisCompositeGpuTimingMixin {
 
     @WrapOperation(method = "renderAll", at = @At(value = "INVOKE", target =
             "Lcom/mojang/blaze3d/opengl/GlStateManager;_drawElements(IIIJ)V"), remap = false, require = 0)
-    private void geometryNode$timeFullscreenDraw(int mode, int count, int type, long offset, Operation<Void> original) {
-        ModelBvhLightResolution.draw(geometryNode$gpuPassName, () -> original.call(mode, count, type, offset));
+    private void geometryNode$drawLighting(int mode, int count, int type, long offset, Operation<Void> original) {
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.draw(() ->
+                ModelBvhLightResolution.draw(geometryNode$gpuPassName, () -> original.call(mode, count, type, offset)));
     }
 
     @Inject(method = "destroy", at = @At("TAIL"), remap = false, require = 0)
-    private void geometryNode$releaseGpuQueries(CallbackInfo callback) {
+    private void geometryNode$releaseLighting(CallbackInfo callback) {
         geometryNode$gpuPassName = null;
         ModelBvhLightResolution.clear();
+        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.clear();
         ModelShaderGpuTimings.clear();
     }
 }

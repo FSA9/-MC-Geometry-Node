@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.nodes.actions.area;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
@@ -28,11 +29,13 @@ public final class RemoveArea extends BaseNode {
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .output(StandardPorts.BOOL, "bool")
                         .input(StandardPorts.AREA, "area")
+                        .input(StandardPorts.RESOURCE_ID, "geometry_node.resource.help.existing")
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.AREA.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.RESOURCE_ID.toInput(""), UIHint.INPUT)
                 .build();
     }
 
@@ -41,8 +44,18 @@ public final class RemoveArea extends BaseNode {
         boolean success = false;
         ServerLevel hostLevel = context.getLevel();
         AreaRef reference = getInput(context, StandardPorts.AREA.getId(), AreaRef.class);
-        success = hostLevel != null && reference != null
-                && AreaResourceStore.INSTANCE.remove(hostLevel.getServer(), reference);
+        String resourceId = getInput(context, StandardPorts.RESOURCE_ID.getId(), String.class);
+        if (hostLevel != null) {
+            if (resourceId != null && !resourceId.isBlank()) {
+                try {
+                    var address = GraphResourceReferences.resolveArea(context, null, resourceId,
+                            reference == null ? hostLevel.dimension() : reference.address().dimension(), false);
+                    success = AreaResourceStore.INSTANCE.remove(hostLevel.getServer(), address);
+                } catch (IllegalArgumentException ignored) { }
+            } else if (reference != null) {
+                success = AreaResourceStore.INSTANCE.remove(hostLevel.getServer(), reference);
+            }
+        }
         context.setNodeResult(StandardPorts.BOOL.getId(), success);
         return next(StandardPorts.FLOW_OUT.getId());
     }
