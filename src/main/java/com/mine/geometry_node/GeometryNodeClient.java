@@ -79,6 +79,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientTick(ClientTickEvent.Post event) {
+        com.mine.geometry_node.client.runtime.game.GameViewportInput.tick();
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {
             icyllis.modernui.mc.MuiModApi.openScreen(new MainUI());
         }
@@ -105,6 +106,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.mine.geometry_node.client.runtime.game.GameViewportInput.reset();
         ClientBlueprintInputManager.reset();
         ClientQuestScreenState.reset();
         ClientDialogueState.reset();

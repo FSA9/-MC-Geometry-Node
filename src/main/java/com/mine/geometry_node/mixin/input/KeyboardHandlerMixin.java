@@ -1,6 +1,8 @@
 package com.mine.geometry_node.mixin.input;
 
 import com.mine.geometry_node.client.ui.MainUI;
+import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
@@ -40,6 +42,10 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void geometryNode$interceptBlueprintKey(long handle, int action, KeyEvent event, CallbackInfo ci) {
+        if (GameViewportInput.handleEscape(action, event.key())) {
+            ci.cancel();
+            return;
+        }
         if (ClientBlueprintInputManager.interceptKeyboard(action, event)) {
             ci.cancel();
         }
@@ -55,6 +61,7 @@ public abstract class KeyboardHandlerMixin {
             cancellable = true
     )
     private void geometryNode$routeMainUiKey(long handle, int action, KeyEvent event, CallbackInfo ci) {
+        if (GameViewportInput.isGameInputActive()) return;
         if (DataLibraryEntityPickerController.handleKey(action, event)) {
             ci.cancel();
             return;
@@ -72,6 +79,17 @@ public abstract class KeyboardHandlerMixin {
         updateLastInputType(event);
         dispatchToScreen(screen, action, event);
         ci.cancel();
+    }
+
+    @ModifyExpressionValue(method = "keyPress", at = @At(value = "FIELD",
+            target = "Lnet/minecraft/client/Minecraft;screen:Lnet/minecraft/client/gui/screens/Screen;"))
+    private Screen geometryNode$gameInputScreen(Screen original) {
+        return GameViewportInput.screenForGameInput(original);
+    }
+
+    @Inject(method = {"charTyped", "preeditCallback"}, at = @At("HEAD"), cancellable = true)
+    private void geometryNode$muteCapturedText(CallbackInfo ci) {
+        if (GameViewportInput.isGameInputActive()) ci.cancel();
     }
 
     private void updateLastInputType(KeyEvent event) {

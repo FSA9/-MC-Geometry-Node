@@ -86,7 +86,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     @Override
     protected void onDetachedFromWindow() {
-        closeEditorMenu();
+        closeEditorMenu(true);
         if (mCurrentWindow != null) {
             hideWindow(mCurrentWindow);
             mCurrentWindow = null;
@@ -224,10 +224,15 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     }
 
     private void closeEditorMenu() {
+        closeEditorMenu(false);
+    }
+
+    private void closeEditorMenu(boolean ownerDetaching) {
         if (mEditorMenu != null) {
             AreaEditorMenu menu = mEditorMenu;
             mEditorMenu = null;
-            menu.dismiss();
+            if (ownerDetaching) menu.dismissAfterOwnerDetached();
+            else menu.dismiss();
         }
     }
 

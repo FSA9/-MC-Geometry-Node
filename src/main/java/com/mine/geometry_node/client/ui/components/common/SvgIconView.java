@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 public class SvgIconView extends View {
     public enum Icon {
         GRAPH_EDITOR("graph_editor.svg"),
+        GAME("game.svg"),
         ASSET_LIBRARY("asset_library.svg"),
         DATA_LIBRARY("data_library.svg"),
         TERMINAL("console.svg"),

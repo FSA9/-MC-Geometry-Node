@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 
 public enum AreaEditorType {
     GRAPH_EDITOR(SvgIconView.Icon.GRAPH_EDITOR),
+    GAME_VIEWPORT(SvgIconView.Icon.GAME),
     ASSET_BROWSER(SvgIconView.Icon.ASSET_LIBRARY),
     DATA_LIBRARY(SvgIconView.Icon.DATA_LIBRARY),
     TERMINAL(SvgIconView.Icon.TERMINAL),
@@ -18,6 +19,7 @@ public enum AreaEditorType {
     public String translationKey() {
         return switch (this) {
             case GRAPH_EDITOR -> "geometry_node.workspace.area.graph_editor";
+            case GAME_VIEWPORT -> "geometry_node.workspace.area.game_viewport";
             case ASSET_BROWSER -> "geometry_node.workspace.area.asset_browser";
             case DATA_LIBRARY -> "geometry_node.workspace.area.data_library";
             case TERMINAL -> "geometry_node.workspace.area.terminal";

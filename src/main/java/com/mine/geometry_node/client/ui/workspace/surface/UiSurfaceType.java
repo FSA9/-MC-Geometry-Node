@@ -6,6 +6,7 @@ import java.util.Set;
 /** Public UI surface kinds and their unique human-readable prefixes. */
 public enum UiSurfaceType {
     VIEWPORT("V"),
+    GAME_VIEWPORT("GV"),
     TERMINAL("T"),
     ASSET_BROWSER("A"),
     DATA_LIBRARY("D"),

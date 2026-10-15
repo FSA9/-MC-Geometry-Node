@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.input;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mine.geometry_node.client.runtime.game.GameViewportInput;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;
@@ -37,7 +38,7 @@ public class ClientBlueprintInputManager {
     /** Returns true when vanilla processing for this world key event must be cancelled. */
     public static boolean interceptKeyboard(int action, KeyEvent event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null || interceptionMask == 0) return false;
+        if (mc.player == null || (mc.screen != null && !GameViewportInput.isGameInputActive()) || interceptionMask == 0) return false;
 
         boolean intercept = matchesInterceptedDirectKey(event.key());
         boolean[] matchingSkills = new boolean[PlayerInputKeys.skillCount()];
@@ -60,7 +61,7 @@ public class ClientBlueprintInputManager {
     /** Returns true when vanilla processing for this world mouse event must be cancelled. */
     public static boolean interceptMouse(int action, MouseButtonInfo buttonInfo) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null || interceptionMask == 0) return false;
+        if (mc.player == null || (mc.screen != null && !GameViewportInput.isGameInputActive()) || interceptionMask == 0) return false;
 
         MouseButtonEvent event = new MouseButtonEvent(0.0D, 0.0D, buttonInfo);
         boolean intercept = false;
@@ -99,7 +100,7 @@ public class ClientBlueprintInputManager {
 
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.screen != null) return;
+        if (mc.player == null || (mc.screen != null && !GameViewportInput.isGameInputActive())) return;
 
         for (int i = 0; i < TOTAL_TRACKED; i++) {
             boolean isCurrentlyDown;
@@ -141,6 +142,23 @@ public class ClientBlueprintInputManager {
 
             lastStates[i] = isCurrentlyDown;
         }
+    }
+
+    /** Release the session's held inputs without discarding the server interception policy. */
+    public static void releasePressedInputs() {
+        Minecraft mc = Minecraft.getInstance();
+        for (int i = 0; i < lastStates.length; i++) {
+            if (lastStates[i] && mc.player != null && mc.getConnection() != null) {
+                String keyId = i < PlayerInputKeys.DIRECT_KEYS.size()
+                        ? PlayerInputKeys.DIRECT_KEYS.get(i)
+                        : i < PlayerInputKeys.skillOffset()
+                        ? PlayerInputKeys.MODIFIER_KEYS.get(i - PlayerInputKeys.DIRECT_KEYS.size())
+                        : PlayerInputKeys.skillId(i - PlayerInputKeys.skillOffset());
+                sendInputPacket(keyId, "RELEASE", mc.player.getDeltaMovement());
+            }
+            lastStates[i] = false;
+        }
+        for (KeyMapping mapping : KeyBindings.BLUEPRINT_KEYS) mapping.setDown(false);
     }
 
     private static void sendInputPacket(String keyId, String action, Vec3 clientVelocity) {

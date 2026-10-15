@@ -21,6 +21,16 @@
     "scoreboard.ServerScoreboardMixin"
   ],
   "client": [
+    "game.GameViewRendererMixin",
+    "game.GameViewGuiRendererAccessor",
+    "game.GameViewLevelRendererAccessor",
+    "game.GameViewGuiRendererMixin",
+    "game.GameViewModernUiHudMixin",
+    "game.GameViewportMinecraftMixin",
+    "game.GameViewportModernUiInputMixin",
+    "game.GameViewportKeyConflictContextMixin",
+    "game.GameViewportLocalPlayerMixin",
+    "game.GameViewportScreenMixin",
     "input.KeyboardHandlerMixin",
     "input.MouseHandlerMixin",
     "model.render.NativeLightDrawMixin",

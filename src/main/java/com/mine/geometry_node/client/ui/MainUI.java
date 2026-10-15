@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui;
 
 import com.mine.geometry_node.client.ui.shell.MainUiShell;
+import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import icyllis.modernui.mc.ScreenCallback;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import icyllis.modernui.ModernUI;
@@ -13,8 +15,19 @@ import icyllis.modernui.view.ViewGroup;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
 
-public class MainUI extends Fragment {
+public class MainUI extends Fragment implements ScreenCallback {
     private MainUiShell shell;
+
+    @Override
+    public boolean isPauseScreen() {
+        return !GameViewportInput.hasVisibleViews();
+    }
+
+    @Override
+    public boolean hasDefaultBackground() { return false; }
+
+    @Override
+    public boolean shouldBlurBackground() { return false; }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
@@ -25,6 +38,7 @@ public class MainUI extends Fragment {
 
     @Override
     public void onDestroyView() {
+        GameViewportInput.releaseAll();
         if (shell != null) {
             shell.destroy();
             shell = null;

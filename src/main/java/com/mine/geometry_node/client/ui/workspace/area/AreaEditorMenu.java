@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.workspace.area;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.core.Handler;
+import icyllis.modernui.core.Looper;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
@@ -29,6 +31,7 @@ final class AreaEditorMenu extends FrameLayout {
     private final AreaEditorType mCurrentType;
     private final Consumer<AreaEditorType> mOnSelect;
     private final Runnable mOnDismiss;
+    private boolean mDismissed;
 
     AreaEditorMenu(Context context, AreaEditorType currentType, Consumer<AreaEditorType> onSelect, Runnable onDismiss) {
         super(context);
@@ -101,9 +104,29 @@ final class AreaEditorMenu extends FrameLayout {
 
     void dismiss() {
         dismissExistingParent();
-        if (mOnDismiss != null) {
-            mOnDismiss.run();
+        notifyDismissed();
+    }
+
+    /** The menu is a sibling of the detaching leaf. Removing it synchronously
+     * would mutate the ancestor's child array while ModernUI iterates that array.
+     */
+    void dismissAfterOwnerDetached() {
+        if (mDismissed) return;
+        setVisibility(GONE);
+        if (getParent() instanceof ViewGroup parent) {
+            new Handler(Looper.myLooper()).post(() -> {
+                if (getParent() == parent) parent.removeView(this);
+            });
         }
+        // Clear owner state now. A later callback could otherwise clear a newly
+        // opened menu after this leaf has been reattached by a layout change.
+        notifyDismissed();
+    }
+
+    private void notifyDismissed() {
+        if (mDismissed) return;
+        mDismissed = true;
+        if (mOnDismiss != null) mOnDismiss.run();
     }
 
     private LinearLayout createRow(Context context, AreaEditorType type) {

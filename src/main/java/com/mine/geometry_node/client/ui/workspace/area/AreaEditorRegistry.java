@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryWindow;
 import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.ui.editor.terminal.TerminalWindow;
 import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
+import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
@@ -25,6 +26,7 @@ final class AreaEditorRegistry {
             Runnable sessionChanged) {
         AreaEditorWindow window = switch (type) {
             case GRAPH_EDITOR -> new GraphEditorWindow(context);
+            case GAME_VIEWPORT -> new GameViewportWindow(context);
             case ASSET_BROWSER -> new AssetBrowserWindow(context, sessionState.assetBrowser, sessionChanged);
             case DATA_LIBRARY -> new DataLibraryWindow(context, ClientDataLibraryRepository.INSTANCE);
             case TERMINAL -> new TerminalWindow(context, sessionState.terminal, sessionChanged);
@@ -37,6 +39,7 @@ final class AreaEditorRegistry {
     private static UiSurfaceType surfaceType(AreaEditorType type) {
         return switch (type) {
             case GRAPH_EDITOR -> UiSurfaceType.VIEWPORT;
+            case GAME_VIEWPORT -> UiSurfaceType.GAME_VIEWPORT;
             case ASSET_BROWSER -> UiSurfaceType.ASSET_BROWSER;
             case DATA_LIBRARY -> UiSurfaceType.DATA_LIBRARY;
             case TERMINAL -> UiSurfaceType.TERMINAL;

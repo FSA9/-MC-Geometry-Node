@@ -23,6 +23,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /** Owns every global transient and modal overlay mounted in one MainUI. */
 public final class MainUiLayerManager implements AutoCloseable {
@@ -42,6 +43,17 @@ public final class MainUiLayerManager implements AutoCloseable {
     private int closingDepth;
     private int replacementDepth;
     private boolean closed;
+    private Consumer<Boolean> interactionBlockedListener = ignored -> {};
+
+    /** Lets the workspace release exclusive input without coupling overlays to Minecraft. */
+    public void setInteractionBlockedListener(Consumer<Boolean> listener) {
+        interactionBlockedListener = Objects.requireNonNull(listener, "listener");
+        notifyInteractionBlocked();
+    }
+
+    private void notifyInteractionBlocked() {
+        interactionBlockedListener.accept(hasModalOverlay() || hasTransientOverlay());
+    }
 
     public MainUiLayerManager(Context context, MainUiLayerHost transientHost, MainUiLayerHost modalHost,
                               MainUiLayerHost tooltipHost) {
@@ -95,6 +107,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         Entry entry = mount(overlay, transientHost, false,
                 options.closeOnOutsideClick(), options.closeOnEscape(), options.returnFocusTarget(), 0);
         transientEntry = entry;
+        notifyInteractionBlocked();
         transientHost.setVisibility(View.VISIBLE);
         notifyShown(entry);
         return entry.handle;
@@ -126,6 +139,7 @@ public final class MainUiLayerManager implements AutoCloseable {
             previousTop.container.setFocusable(false);
         }
         modalStack.addLast(entry);
+        notifyInteractionBlocked();
         entry.dragBlocker = WorkspaceDragDropRegistry.modalBlocker();
         WorkspaceDragService.INSTANCE.cancel();
         modalHost.setVisibility(View.VISIBLE);
@@ -268,6 +282,7 @@ public final class MainUiLayerManager implements AutoCloseable {
             if (entry == transientEntry) transientEntry = null;
             if (entry == tooltipEntry) tooltipEntry = null;
             if (entry.modal) modalStack.remove(entry);
+            notifyInteractionBlocked();
             if (entry.dragBlocker != null) {
                 entry.dragBlocker.close();
                 entry.dragBlocker = null;

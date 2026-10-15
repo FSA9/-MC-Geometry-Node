@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.shell;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.runtime.game.GameViewportInput;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLayoutRoot;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerHost;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
@@ -42,6 +43,7 @@ public final class MainUiShell extends FrameLayout {
         modalLayer = new MainUiLayerHost(context);
         tooltipLayer = new MainUiLayerHost(context);
         MainUiLayerManager layerManager = new MainUiLayerManager(context, transientLayer, modalLayer, tooltipLayer);
+        layerManager.setInteractionBlockedListener(blocked -> GameViewportInput.setWorkspaceBlocked(this, blocked));
         MainMenuRegistry menuRegistry = new MainMenuRegistry();
         SettingsPageRegistry settingsPageRegistry = new SettingsPageRegistry();
         services = new MainUiServices(layerManager, menuRegistry, settingsPageRegistry);
@@ -96,7 +98,11 @@ public final class MainUiShell extends FrameLayout {
             clearLayer(modalLayer);
             clearLayer(tooltipLayer);
         } finally {
-            areaRoot.close();
+            try {
+                areaRoot.close();
+            } finally {
+                GameViewportInput.setWorkspaceBlocked(this, false);
+            }
         }
     }
 
