@@ -18,9 +18,6 @@ uniform int nodeEntityBoundsCount;
 uniform vec4 nodeEntityBounds[32];
 #endif
 uniform vec4 nodeSurfaceRects[8];
-uniform vec4 nodeVolumeRects[8];
-uniform vec4 nodeVolumeSegmentRects[8];
-uniform vec4 nodeVolumeSegmentDepthRects[8];
 #ifdef NODE_LIGHT_PIXEL_DIAGNOSTICS
 uniform int nodeVolumeProbeMode;
 int nodeVolumeProbeFlags=0;
@@ -675,9 +672,16 @@ vec3 nodeDirectGeo(int index,vec3 p,vec3 normal,vec3 geometryNormal) {
     if(dot(nodeLights[index*12].xyz-p,n)+nodeLights[index*12+5].y< -0.0001)return vec3(0.0);
     int samples=nodeEmitterSamples(index);
     NodeEmitterDomain domain=nodeEmitterDomain(index,p);
+    if(domain.ratio<=0.0)return vec3(0.0);
     vec3 centerDelta=p-nodeLights[index*12].xyz;
     float centerDistanceSquared=dot(centerDelta,centerDelta);
     float attenuation=nodeRangeAttenuation(index,centerDistanceSquared);
+    bool prepared=false,worldClear=false;
+    int tiles=0,worldTile=-1,modelMask=255;
+    ivec2 entities=ivec2(0);
+#ifndef NODE_LIGHT_NO_ENTITY_SHADOWS
+    entities.y=nodeEntityRange.x;
+#endif
     vec3 sum=vec3(0.0);
     for(int s=0;s<samples;s++) {
         vec3 source;float weight;nodeEmitterSample(index,p,s,samples,domain,source,weight);
@@ -686,8 +690,22 @@ vec3 nodeDirectGeo(int index,vec3 p,vec3 normal,vec3 geometryNormal) {
         float cosine=max(dot(n,delta)*inversesqrt(max(dot(delta,delta),1e-12)),0.0);
         if(cosine<=0.0)continue;
         vec3 light=nodeSampleRadiancePrepared(index,p,source,centerDistanceSquared,attenuation)*(weight*cosine);
-        if(max(light.r,max(light.g,light.b))>0.000001)
-            sum+=light*nodeSampleTransmission(index,receiver,source);
+        if(max(light.r,max(light.g,light.b))>0.000001) {
+            // Prepare only for the first contributing sample. The biased receiver
+            // and enclosing emitter sphere cover every subsequent shadow ray.
+            if(!prepared && nodeLights[index*12+5].x>=0.5) {
+                tiles=nodeWorldTileLimit();
+                if(samples>1) {
+                    float radius=nodeLights[index*12+5].y;
+                    vec3 center=nodeLights[index*12].xyz;
+                    worldClear=nodeVolumeWorldClear(center,receiver,receiver,radius,tiles,worldTile);
+                    modelMask=nodeVolumeModelMask(center,receiver,receiver,radius);
+                    entities=nodeVolumeEntityRange(center,receiver,receiver,radius);
+                }
+                prepared=true;
+            }
+            sum+=light*nodeSampleTransmission(index,receiver,source,entities,tiles,worldClear,worldTile,modelMask);
+        }
     }
     return sum/float(samples);
 }
@@ -724,190 +742,30 @@ bool nodeVolumeCone(vec3 origin,vec3 ray,vec3 axis,float outer,inout float start
     return finish>start;
 }
 
-vec3 nodeVolumeInterval(int index,vec3 endpoint,float nearDistance,bool cameraTransmission) {
-    if(nodeVolumeCostSkip(16) || nodeVolumeCostSkip(32))return vec3(0.0);
-    int b=index*12;
-    if(nodeLights[b+6].x<0.5 || nodeLights[b+6].y<=0.0 || nodeLights[b+6].z<=0.0)return vec3(0);
-    nodeVolumeProbeRecord(nodeLightPass==0?3:1);
-    float endpointDistance=length(endpoint-nodeEyeOffset);
-    vec3 ray=(endpoint-nodeEyeOffset)/max(endpointDistance,0.0001),source=nodeLights[b].xyz-nodeEyeOffset;
-    // Restrict marching to the light's bounding sphere instead of the whole camera ray.
-    float center=dot(source,ray);
-    vec3 closest=ray*center-source;
-    float discriminant=nodeLights[b].w*nodeLights[b].w-dot(closest,closest);
-    if(discriminant<=0.0)return vec3(0);
-    float nearPoint=max(0.0,center-sqrt(discriminant)),farPoint=min(endpointDistance,center+sqrt(discriminant));
-    if(farPoint<=max(nearPoint,nearDistance))return vec3(0);
-    // Solve near the closest point to the light, keeping distant-camera terms small.
-    float coneNear=nearPoint-center,coneFar=farPoint-center;
-    float sourceRadius=nodeLights[b+5].y;
-    bool area=nodeAreaEmitter(index);
-    // The union of translated disk cones fits a cone whose apex is behind the disk.
-    vec3 coneOrigin=closest;
-    if(!area && nodeLights[b+1].w>= -1.0)
-        coneOrigin+=nodeLights[b+1].xyz*(sourceRadius/max(nodeLights[b+4].w,0.0001));
-    if(!nodeVolumeCone(coneOrigin,ray,nodeLights[b+1].xyz,nodeLights[b+1].w,coneNear,coneFar))return vec3(0);
-    if(sourceRadius>0.0 && nodeLights[b+1].w>= -1.0) {
-        float axial=dot(closest,nodeLights[b+1].xyz),slope=dot(ray,nodeLights[b+1].xyz);
-        if(abs(slope)<1e-7) {if(axial<=0.0)return vec3(0.0);}
-        else if(slope>0.0)coneNear=max(coneNear,-axial/slope);
-        else coneFar=min(coneFar,-axial/slope);
-        if(coneFar<=coneNear)return vec3(0.0);
-    }
-    coneNear+=center;coneFar+=center;
-    if(coneFar<=nearDistance)return vec3(0);
-    // Diagnostic replays count geometric work without executing the expensive march.
-    if(nodeVolumeProbeActive()) {nodeVolumeProbeRecord(4);return vec3(0.0);}
-    bool shadows=nodeLights[b+5].x>=0.5;
-    vec3 firstPoint=nodeEyeOffset+ray*max(coneNear,nearDistance),lastPoint=nodeEyeOffset+ray*coneFar;
-    // Reuse conservative visibility proofs across every step and emitter sample.
-    int tileLimit=shadows || cameraTransmission?nodeWorldTileLimit():0;
-    int worldTile=-1;
-    bool worldClear=shadows && nodeVolumeWorldClear(nodeLights[b].xyz,firstPoint,lastPoint,sourceRadius,tileLimit,worldTile);
-    int modelMask=shadows?nodeVolumeModelMask(nodeLights[b].xyz,firstPoint,lastPoint,sourceRadius):0;
-    ivec2 entityNodes=shadows?nodeVolumeEntityRange(nodeLights[b].xyz,firstPoint,lastPoint,sourceRadius):ivec2(0);
-    int steps=clamp(int(nodeLights[b+9].x),4,64);
-    int emitterSamples=nodeLights[b+5].y<=0.0?1:clamp(int(nodeLights[b+9].w),4,16);
-    bool disk=!area && sourceRadius>0.0 && nodeLights[b+1].w>=-1.0;
-    float phaseG=nodeLights[b+6].w;
-    float phaseNumerator=(1.0-phaseG*phaseG)/12.5663706;
-    float phaseBase=1.0+phaseG*phaseG;
-    bool uniformFog=nodeLights[b+6].x<=1.5;
-    // Equal steps across the entire range sphere miss the small, bright region
-    // next to the emitter. An asinh mapping concentrates the existing budget
-    // there and approaches uniform spacing for rays far from the light.
-    float marchScale=max(max(sourceRadius,length(closest)),0.125);
-    float marchNear=asinh((nearPoint-center)/marchScale);
-    float marchFar=asinh((farPoint-center)/marchScale);
-    vec3 sum=vec3(0),cameraDepth=vec3(0.0),previousPoint=nodeEyeOffset;float transmittance=1.0;
-    int firstStep=0;
-    if(uniformFog && max(coneNear,nearDistance)>nearPoint && marchFar>marchNear) {
-        // Uniform foreground extinction is analytic, so cells before this
-        // interval need no visits. Keep one guard cell and the original lattice.
-        float firstMarch=asinh((max(coneNear,nearDistance)-center)/marchScale);
-        firstStep=clamp(int(floor((firstMarch-marchNear)/(marchFar-marchNear)*float(steps)))-1,0,steps-1);
-    }
-    float cellStart=firstStep==0?nearPoint:
-        center+marchScale*sinh(mix(marchNear,marchFar,float(firstStep)/float(steps)));
-    for(int stepIndex=firstStep;stepIndex<steps;stepIndex++) {
-        if(cellStart>=coneFar || transmittance<=0.0)break;
-        float cellEnd=center+marchScale*sinh(mix(marchNear,marchFar,float(stepIndex+1)/float(steps)));
-        float stepLength=cellEnd-cellStart;
-        float density=nodeLights[b+6].z;
-        if(!uniformFog) {
-            vec3 p=nodeEyeOffset+ray*((cellStart+cellEnd)*0.5);
-            vec3 noisePosition=p/nodeLights[b+7].y+nodeLights[b+11].xyz+vec3(nodeLights[b+7].w);
-            noisePosition+=nodeLightTime*nodeLights[b+10].xyz/nodeLights[b+7].y;
-            density*=mix(1.0,2.0*nodeNoise(noisePosition),nodeLights[b+7].x);
-        }
-        // Preserve foreground extinction (including noisy fog), but only trace lighting
-        // for the requested interval. Never subtract two independently sampled integrals.
-        float litStart=max(cellStart,max(coneNear,nearDistance));
-        float litEnd=min(cellEnd,coneFar);
-        if(litEnd>litStart) {
-            vec3 litPoint=nodeEyeOffset+ray*((litStart+litEnd)*0.5);
-            // A rounded density onset hides the disk-plane cut in the fog only;
-            // surface lighting and emitter visibility retain their physical geometry.
-            float onset=1.0;
-            if(disk) {
-                vec3 local=litPoint-nodeLights[b].xyz;
-                float axial=dot(local,nodeLights[b+1].xyz);
-                float cap=1.0-length(local-nodeLights[b+1].xyz*sourceRadius)/sourceRadius;
-                onset=smoothstep(0.0,0.25,axial/sourceRadius)
-                    *mix(smoothstep(-0.2,0.2,cap),1.0,smoothstep(0.5,1.0,axial/sourceRadius));
-            }
-            if(cameraTransmission) {
-                // Consecutive lit samples advance monotonically along the camera ray.
-                cameraDepth+=nodeCameraOpticalDepth(previousPoint,litPoint,tileLimit);previousPoint=litPoint;
-            }
-            vec3 scattered=vec3(0.0);
-            // Uniform extinction has an exact distance integral. Unlit cells need
-            // no exponentials; noisy fog retains its original per-cell integration.
-            float foreground=uniformFog?exp(-density*(litStart-nearPoint)):
-                transmittance*exp(-density*(litStart-cellStart));
-            float cellContribution=foreground*(1.0-exp(-density*(litEnd-litStart)));
-            vec3 centerDelta=litPoint-nodeLights[b].xyz;
-            float centerDistanceSquared=dot(centerDelta,centerDelta);
-            float attenuation=nodeRangeAttenuation(index,centerDistanceSquared);
-            NodeEmitterDomain domain=nodeEmitterDomain(index,litPoint);
-            for(int s=0;s<emitterSamples && onset>0.0 && cellContribution>0.0 && domain.ratio>0.0;s++) {
-                vec3 emitter;float weight;
-                if(area)nodeAreaEmitterSample(index,litPoint,s,emitterSamples,false,emitter,weight);
-                else nodeEmitterSample(index,litPoint,s,emitterSamples,domain,emitter,weight);
-                if(weight<=0.0)continue;
-                // The shared interval already clips the fixed point-source cone.
-                // Disk samples move with the receiver and use that same midpoint.
-                vec3 fromLight=litPoint-emitter;
-                vec3 radiance=nodeSampleRadiancePrepared(index,litPoint,emitter,centerDistanceSquared,attenuation)*weight;
-                if(max(radiance.r,max(radiance.g,radiance.b))<=0.000001)continue;
-                float cosine=clamp(dot(fromLight*inversesqrt(max(dot(fromLight,fromLight),1e-12)),-ray),-1.0,1.0);
-                float phaseDenominator=max(phaseBase-2.0*phaseG*cosine,0.001);
-                float phase=phaseNumerator*inversesqrt(phaseDenominator)/phaseDenominator;
-                scattered+=cellContribution*phase*radiance*nodeSampleTransmission(index,litPoint,emitter,entityNodes,tileLimit,worldClear,worldTile,modelMask);
-            }
-            sum+=onset*scattered/float(emitterSamples)
-                *(cameraTransmission?exp(-cameraDepth):vec3(1.0));
-        }
-        if(!uniformFog)transmittance*=exp(-density*stepLength);
-        cellStart=cellEnd;
-    }
-    return sum*nodeLights[b+6].y;
-}
+// NODE_LIGHT_FROXELS_INCLUDE
 
-vec3 nodeVolumeSegment(int index,vec3 endpoint,float nearDistance) {return nodeVolumeInterval(index,endpoint,nearDistance,false);}
-vec3 nodeVolumeTransmitted(int index,vec3 endpoint) {return nodeVolumeInterval(index,endpoint,0.0,true);}
+vec3 nodeVolumeSegment(int index,vec3 endpoint,float nearDistance) {
+    return nodeFroxelSegment(index,endpoint,nearDistance,length(endpoint-nodeEyeOffset));
+}
+vec3 nodeVolumeTransmitted(int index,vec3 endpoint) {return nodeFroxelSample(index,endpoint);}
+vec3 nodeVolume(int index,vec3 endpoint) {return nodeFroxelSample(index,endpoint);}
 
 vec3 nodeVolumeTransmittedResult(vec3 endpoint) {
+    if(nodeLightCount<=0)return vec3(0.0);
     vec3 sum=vec3(0.0);
-    for(int i=0;i<min(nodeLightCount,8);i++)sum+=nodeVolumeTransmitted(i,endpoint);
+    for(int i=0;i<min(nodeLightCount,8);i++)sum+=nodeFroxelSample(i,endpoint);
     return sum;
 }
 
-vec3 nodeVolume(int index,vec3 endpoint) {return nodeVolumeSegment(index,endpoint,0.0);}
-
 vec3 nodeVolumeBetween(vec3 front,vec3 back) {
-    float nearDistance=length(front-nodeEyeOffset);
+    if(nodeLightCount<=0)return vec3(0.0);
     vec3 sum=vec3(0.0);
-    for(int i=0;i<min(nodeLightCount,8);i++)sum+=nodeVolumeSegment(i,back,nearDistance);
+    for(int i=0;i<min(nodeLightCount,8);i++)sum+=nodeFroxelBetween(i,front,back);
     return sum;
 }
 
 vec3 nodeVolumeBetweenResult(vec3 front,vec3 back,vec2 uv) {
-    if(nodeVolumeCostSkip(32))return vec3(0.0);
-    vec3 sum=vec3(0.0);
-    vec2 depths=vec2(length(front-nodeEyeOffset),length(back-nodeEyeOffset));
-    for(int i=0;i<min(nodeLightCount,8);i++) {
-        int b=i*12;
-        if(nodeLights[b+6].x<0.5 || nodeLights[b+6].y<=0.0 || nodeLights[b+6].z<=0.0)continue;
-        nodeVolumeProbeRecord(1);
-        vec4 rect=nodeVolumeSegmentRects[i],depthRect=nodeVolumeSegmentDepthRects[i];
-        vec3 value=vec3(-1.0);
-        if(nodeLightResolved!=0 && rect.x>0.0 && rect.y>0.0) {
-            vec2 size=vec2(textureSize(nodeLightVolumeAtlas,0));
-            vec2 pixel=uv*rect.xy*size-0.5,base=floor(pixel),fraction=fract(pixel);
-            // Both interval ends must match. Never reuse foreground fog as a
-            // replacement for the differently attenuated glass background.
-            float limit=length(nodeLights[b].xyz-nodeEyeOffset)+nodeLights[b].w;
-            vec2 target=min(depths,vec2(limit));
-            vec2 tolerance=max(vec2(0.05),target*0.002);
-            vec3 color=vec3(0.0);float weights=0.0;
-            for(int y=0;y<2;y++)for(int x=0;x<2;x++) {
-                vec2 offset=vec2(x,y),p=clamp(base+offset,vec2(0.0),rect.xy*size-1.0);
-                vec4 metadata=texelFetch(nodeLightVolumeAtlas,ivec2(p+depthRect.zw*size),0);
-                if(metadata.b<0.5)continue;
-                if(limit>=65504.0 && (metadata.r>=65504.0 || metadata.g>=65504.0))continue;
-                vec2 error=abs(min(metadata.rg,vec2(limit))-target)/tolerance;
-                float weight=(x==0?1.0-fraction.x:fraction.x)*(y==0?1.0-fraction.y:fraction.y);
-                weight*=exp(-max(error.x,error.y));
-                color+=texelFetch(nodeLightVolumeAtlas,ivec2(p+rect.zw*size),0).rgb*weight;
-                weights+=weight;
-            }
-            if(weights>0.00001)value=color/weights;
-            if(value.x<0.0)nodeVolumeProbeRecord(8);
-        }
-        sum+=value.x>=0.0?value:nodeVolumeSegment(i,back,depths.x);
-    }
-    return sum;
+    return nodeVolumeBetween(front,back);
 }
 
 vec3 nodeReconstruct(sampler2D atlas,vec4 rect,vec2 uv,float depth,float depthLimit) {
@@ -927,37 +785,33 @@ vec3 nodeReconstruct(sampler2D atlas,vec4 rect,vec2 uv,float depth) {
     return nodeReconstruct(atlas,rect,uv,depth,1e30);
 }
 vec3 nodeVolumeReconstruct(int index,vec3 p,vec2 uv) {
-    if(nodeVolumeCostSkip(32))return vec3(0.0);
-    // Every contributing point lies inside this camera-relative radial bound.
-    // Scene depths beyond it truncate no fog, so their differences must not
-    // force another full march. Keep strict depth rejection inside the bound.
-    float depthLimit=length(nodeLights[index*12].xyz)+nodeLights[index*12].w;
-    // With an eye outside the bound, an endpoint can precede the light while
-    // still exceeding it; retain the original test for that coordinate setup.
-    if(length(nodeEyeOffset)>depthLimit)depthLimit=1e30;
-    vec3 value=nodeReconstruct(nodeLightVolumeAtlas,nodeVolumeRects[index],uv,length(p),depthLimit);
-    nodeVolumeProbeRecord(value.x<0.0?9:1);
-    return value;
+    return nodeFroxelSample(index,p);
 }
 vec3 nodeSurfacePassGeo(vec3 p,vec3 normal,vec3 geo,vec2 uv,bool prepass) {
+    if(nodeLightCount<=0 || (!prepass && nodeVolumeCostSkip(128)))return vec3(0.0);
     vec3 sum=vec3(0);
     int first=prepass?nodeLightIndex:0;
     int end=prepass?first+1:min(nodeLightCount,8);
     for(int i=first;i<end;i++) {
-        vec3 value=!prepass && nodeLightResolved!=0 && nodeLights[i*12+5].w<1.0?nodeReconstruct(nodeLightSurfaceAtlas,nodeSurfaceRects[i],uv,length(p)):vec3(-1);
-        sum+=value.x>=0.0?value:nodeDirectGeo(i,p,normal,geo);
+        bool reconstruct=!prepass && nodeLightResolved!=0 && nodeLights[i*12+5].w<1.0;
+        if(reconstruct)nodeVolumeProbeRecord(2);
+        vec3 value=reconstruct?nodeReconstruct(nodeLightSurfaceAtlas,nodeSurfaceRects[i],uv,length(p)):vec3(-1);
+        if(value.x>=0.0)sum+=value;
+        else {
+            if(reconstruct)nodeVolumeProbeRecord(4);
+            if(!reconstruct || !nodeVolumeCostSkip(256))sum+=nodeDirectGeo(i,p,normal,geo);
+        }
     }
     return sum;
 }
 vec3 nodeSurfaceGeo(vec3 p,vec3 normal,vec3 geo,vec2 uv) {return nodeSurfacePassGeo(p,normal,geo,uv,false);}
 vec3 nodeSurface(vec3 p,vec3 normal,vec2 uv) {return nodeSurfaceGeo(p,normal,normal,uv);}
 vec3 nodeVolumeResult(vec3 p,vec2 uv) {
-    if(nodeVolumeCostSkip(32))return vec3(0.0);
+    if(nodeLightCount<=0 || nodeVolumeCostSkip(32))return vec3(0.0);
     vec3 sum=vec3(0);
     for(int i=0;i<min(nodeLightCount,8);i++) {
         if(nodeLights[i*12+6].x<0.5 || nodeLights[i*12+6].y<=0.0 || nodeLights[i*12+6].z<=0.0)continue;
-        vec3 value=nodeLightResolved!=0?nodeVolumeReconstruct(i,p,uv):vec3(-1);
-        sum+=value.x>=0.0?value:nodeVolume(i,p);
+        sum+=nodeFroxelSample(i,p);
     }
     return sum;
 }
@@ -965,7 +819,7 @@ vec3 nodeVolumeResult(vec3 p,vec2 uv) {
 // Intersect the view ray with the emitting disk, bounded by the scene depth.
 // This is independent of shadow enablement and is never evaluated in prepasses.
 vec3 nodeSourceInterval(vec3 endpoint,bool sky,float nearDistance,bool cameraTransmission) {
-    if(nodeVolumeProbeActive() || nodeVolumeCostSkip(64))return vec3(0.0);
+    if(nodeLightCount<=0 || nodeVolumeProbeActive() || nodeVolumeCostSkip(64))return vec3(0.0);
     vec3 offset=endpoint-nodeEyeOffset;
     float distanceToScene=length(offset);
     if(distanceToScene<0.000001)return vec3(0);

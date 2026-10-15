@@ -42,7 +42,12 @@ public final class GraphResourceIds {
                                                  GraphResourceType type, String input, UUID targetEntityId) {
         String value = input == null ? "" : input.trim();
         if (GraphResourceReferences.isEncoded(value)) return requireType(value, type);
+        if (value.isEmpty()) value = automaticKey();
         return forKey(context, stableNodeId, type, value, targetEntityId);
+    }
+
+    static String automaticKey() {
+        return "auto-" + UUID.randomUUID();
     }
 
     public static GraphResourceId resolveExisting(GraphDataContext context, GraphResourceType type, String input) {

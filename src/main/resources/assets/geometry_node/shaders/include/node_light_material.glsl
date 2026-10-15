@@ -1,7 +1,7 @@
 // Thin dielectric response for receivers without a shaderpack material BRDF.
 // Returns unpremultiplied linear RGB; the host retains its original alpha blending.
 vec3 nodeTransparentSurface(vec3 p,vec3 normal,vec3 geo,vec3 albedo,float opacity,float roughness,float f0) {
-    if(opacity<=0.0001)return vec3(0.0);
+    if(nodeLightCount<=0 || opacity<=0.0001)return vec3(0.0);
     vec3 eye=nodeEyeOffset-p;
     float normalLength=dot(normal,normal),geoLength=dot(geo,geo),eyeLength=dot(eye,eye);
     if(!(normalLength>1e-12) || !(geoLength>1e-12) || !(eyeLength>1e-12)

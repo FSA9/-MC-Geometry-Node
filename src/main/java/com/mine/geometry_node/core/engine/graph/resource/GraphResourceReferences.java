@@ -166,31 +166,9 @@ public final class GraphResourceReferences {
         }
         if (key.isEmpty()) {
             if (!create) throw new IllegalArgumentException("Resource id cannot be empty");
-            key = automaticKey(context, stableNodeId, kind);
+            key = GraphResourceIds.automaticKey();
         }
         return new PublicReference(kind, dimension, viewer, key);
-    }
-
-    private static String automaticKey(GraphDataContext context, String stableNodeId, PublicKind kind) {
-        // Length-prefixed components avoid ambiguous concatenations without coupling to a graph resource type.
-        StringBuilder identity = new StringBuilder();
-        append(identity, kind.name());
-        append(identity, context.getLevel().dimension().identifier().toString());
-        append(identity, context.getGraphOwnerEntity() == null ? ""
-                : context.getGraphOwnerEntity().getUUID().toString());
-        append(identity, context.getGraphBindingKey().kind().id());
-        append(identity, context.getGraphBindingKey().graphId());
-        String nodeId = stableNodeId == null || stableNodeId.isBlank()
-                ? context.getCurrentNodeStableId() : stableNodeId;
-        if (nodeId == null || nodeId.isBlank()) {
-            throw new IllegalArgumentException("Automatic resource id requires a stable node id");
-        }
-        append(identity, nodeId);
-        return "auto-" + UUID.nameUUIDFromBytes(identity.toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void append(StringBuilder builder, String value) {
-        builder.append(value.length()).append(':').append(value);
     }
 
     private static String part(String value) {

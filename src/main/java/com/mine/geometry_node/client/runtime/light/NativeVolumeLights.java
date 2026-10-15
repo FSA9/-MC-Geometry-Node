@@ -35,21 +35,16 @@ public final class NativeVolumeLights {
                 uniform int nodeTerrainReceiver;
                 out vec4 fragColor;
                 void main() {
-                    vec2 uv=nodeLightPass==2 ? (gl_FragCoord.xy-nodePassViewport.xy)/nodePassViewport.zw : gl_FragCoord.xy/nodeOriginalSize;
+                    vec2 uv=gl_FragCoord.xy/nodeOriginalSize;
                     float depth=texture(nativeDepth,uv).r;
                     vec4 view=nativeProjectionInverse*vec4(uv*2.0-1.0,depth*2.0-1.0,1.0);
                     vec3 viewPosition=abs(view.w)>1e-7?view.xyz/view.w:normalize(view.xyz)*1024.0;
                     vec3 p=(gbufferModelViewInverse*vec4(viewPosition,1.0)).xyz;
-                    if(nodeLightPass==2) {
-                        fragColor=vec4(nodeVolumeTransmitted(nodeLightIndex,p),length(p));
-                        return;
-                    }
                     vec4 scene=texture(nativeColor,uv);
                     vec3 volume=vec3(0.0);
                     if(nodeTerrainReceiver!=0)for(int i=0;i<min(nodeLightCount,8);i++) {
                         if(nodeLights[i*12+6].x<0.5 || nodeLights[i*12+6].y<=0.0 || nodeLights[i*12+6].z<=0.0)continue;
-                        vec3 value=nodeLightResolved!=0?nodeVolumeReconstruct(i,p,uv):vec3(-1.0);
-                        volume+=value.x>=0.0?value:nodeVolumeTransmitted(i,p);
+                        volume+=nodeVolumeTransmitted(i,p);
                     }
                     fragColor=vec4(pow(pow(max(scene.rgb,vec3(0.0)),vec3(2.2))+volume,vec3(1.0/2.2)),scene.a);
                 }
@@ -94,7 +89,7 @@ public final class NativeVolumeLights {
             NativeTerrainLights.beginVolume();
             try {
                 NodeLightTargets.draw(program,uniforms,()->{
-                    if(GL20C.glGetUniformi(program,uniforms.pass)!=0 || NodeLightPixelDiagnostics.isDrawing()) {GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,3);return;}
+                    if(uniforms.pass>=0 && GL20C.glGetUniformi(program,uniforms.pass)!=0 || NodeLightPixelDiagnostics.isDrawing()) {GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,3);return;}
                     int timer=com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_composite");
                     try {GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,3);}
                     finally {com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.end(timer);}
@@ -138,21 +133,9 @@ public final class NativeVolumeLights {
         try {
             String vertexSource="#version 330 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
             String fragmentSource=fragmentSource();
-            var cachePath=NodeLightProgramCache.path(vertexSource,fragmentSource);
-            program=NodeLightProgramCache.load(cachePath);
-            if(program==0) {
-                int vertex=compile(GL20C.GL_VERTEX_SHADER,vertexSource);
-                int fragment=0;
-                try {
-                    fragment=compile(GL20C.GL_FRAGMENT_SHADER,fragmentSource);
-                    program=GL20C.glCreateProgram();
-                    if(cachePath!=null)GL41C.glProgramParameteri(program,GL41C.GL_PROGRAM_BINARY_RETRIEVABLE_HINT,GL11C.GL_TRUE);
-                    GL20C.glAttachShader(program,vertex);GL20C.glAttachShader(program,fragment);GL20C.glLinkProgram(program);
-                    if(GL20C.glGetProgrami(program,GL20C.GL_LINK_STATUS)==0)throw new IllegalStateException(GL20C.glGetProgramInfoLog(program));
-                    programBuilds++;
-                    NodeLightProgramCache.save(cachePath,program);
-                } finally {GL20C.glDeleteShader(vertex);if(fragment!=0)GL20C.glDeleteShader(fragment);}
-            }
+            var linked=NodeLightPrograms.link(vertexSource,fragmentSource);
+            program=linked.id();
+            if(!linked.cached())programBuilds++;
             uniforms=new NodeLightRenderer.Interface(program);
             colorUniform=GL20C.glGetUniformLocation(program,"nativeColor");
             depthUniform=GL20C.glGetUniformLocation(program,"nativeDepth");
@@ -174,14 +157,6 @@ public final class NativeVolumeLights {
         return id;
     }
 
-    private static int compile(int type,String source) {
-        int shader=GL20C.glCreateShader(type);GL20C.glShaderSource(shader,source);GL20C.glCompileShader(shader);
-        if(GL20C.glGetShaderi(shader,GL20C.GL_COMPILE_STATUS)==0) {
-            String log=GL20C.glGetShaderInfoLog(shader);GL20C.glDeleteShader(shader);throw new IllegalStateException(log);
-        }
-        return shader;
-    }
-
     public static void clear() {
         int s=sourceFbo,c=copyFbo,o=outputFbo,a=color,b=depth;long freed=bytes;
         sourceFbo=copyFbo=outputFbo=color=depth=width=height=0;bytes=0;retryAfter=0;
@@ -194,6 +169,7 @@ public final class NativeVolumeLights {
 
     /** The shader is independent of world, shaderpack, and framebuffer dimensions. */
     public static void close() {
+        NodeLightFroxels.close();
         clear();
         int p=program,v=vao;program=vao=0;uniforms=null;
         if(p!=0)com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight.deleted(p);

@@ -100,12 +100,14 @@ public final class ClientLightStore {
             if (t.entityId() != null) {
                 Entity entity = level.getEntity(entry.entityId);
                 if (entity == null || entity.isRemoved() || !t.entityId().equals(entity.getUUID())) continue;
-                float yaw = entity.getViewYRot(alpha);
-                float pitch = t.followView() ? entity.getViewXRot(alpha) : 0;
+                float entityAlpha = level.tickRateManager().isEntityFrozen(entity)
+                        ? Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false) : alpha;
+                float yaw = entity.getViewYRot(entityAlpha);
+                float pitch = t.followView() ? entity.getViewXRot(entityAlpha) : 0;
                 if (!t.followView() && entity instanceof LivingEntity living)
-                    yaw = net.minecraft.util.Mth.rotLerp(alpha, living.yBodyRotO, living.yBodyRot);
+                    yaw = net.minecraft.util.Mth.rotLerp(entityAlpha, living.yBodyRotO, living.yBodyRot);
                 anchorRotation.rotationYXZ((float) Math.toRadians(-yaw), (float) Math.toRadians(pitch), 0);
-                Vec3 base = t.eyeAnchor() ? entity.getEyePosition(alpha) : entity.getPosition(alpha);
+                Vec3 base = t.eyeAnchor() ? entity.getEyePosition(entityAlpha) : entity.getPosition(entityAlpha);
                 position = base.add(rotate(anchorRotation, offset));
             }
             Quaternionf orientation = anchorRotation.mul(entry.baseRotation).mul(entry.localRotation);

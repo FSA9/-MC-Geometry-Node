@@ -1,9 +1,6 @@
 package com.mine.geometry_node.client.runtime.light;
 
 import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
-import com.mojang.blaze3d.opengl.GlTexture;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.opengl.*;
@@ -19,12 +16,6 @@ public final class NodeLightRenderer {
     private static final Map<Integer, Interface> NATIVE = new HashMap<>();
     private static List<ClientLightStore.ResolvedLight> lights = List.of();
     private static final float[] data = new float[8*12*4];
-    private static final int[] imageIds = new int[8];
-    private static final GlTexture[] cookieSources = new GlTexture[8];
-    private static final net.minecraft.resources.Identifier[] imageKeys = new net.minecraft.resources.Identifier[8];
-    private static final Map<net.minecraft.resources.Identifier,Long> failedImages = new LinkedHashMap<>();
-    private static long cookieBytes,cookieRetryAfter;
-    private static int cookieTexture, cookieFramebuffer;
     private static long generation, preparedNanos;
     private static long cookieGeneration = Long.MIN_VALUE;
     private static long nativeDraws, frameNativeDraws, packDraws, framePackDraws;
@@ -35,7 +26,6 @@ public final class NodeLightRenderer {
     private static Vec3 camera = Vec3.ZERO;
     private static boolean drawing;
     private static Object world;
-    private static final int COOKIE_SIZE = 256;
 
     private NodeLightRenderer() {}
     public static void prepare(Vec3 eye) {
@@ -48,9 +38,7 @@ public final class NodeLightRenderer {
         if(world!=mc.level) {clear();world=mc.level;}
         camera=eye;
         var resolved=ClientLightStore.resolved(mc.getDeltaTracker().getGameTimeDeltaPartialTick(true));
-        lights=resolved.stream().filter(l->l.position().distanceToSqr(eye)<Math.pow(l.definition().range()+l.definition().emitterRadius()+128,2))
-                .sorted(Comparator.comparingDouble((ClientLightStore.ResolvedLight l)->l.position().distanceToSqr(eye)).thenComparing(ClientLightStore.ResolvedLight::id))
-                .limit(MAX_VISIBLE_LIGHTS).toList();
+        lights=nearest(resolved,eye);
         rejected=resolved.size()-lights.size();
         Arrays.fill(data,0);
         for(int i=0;i<lights.size();i++) {
@@ -78,7 +66,7 @@ public final class NodeLightRenderer {
         } else {
             NodeLightEntityShadows.clear();
         }
-        if(lights.isEmpty()) { NodeLightTargets.clear();clearCookies();status="IDLE"; }
+        if(lights.isEmpty()) { NodeLightTargets.clear();NodeLightCookies.clear();status="IDLE"; }
         else {
             status=PROGRAMS.isEmpty()?(registrationFailure.isEmpty()?"WAITING_FOR_RECEIVER":"REGISTRATION_FAILED"):"PREPARED";
             // Forward transparent receivers run before composite passes bind the projection atlas.
@@ -91,13 +79,37 @@ public final class NodeLightRenderer {
     private static void put(int index,int row,Vec3 value,float w) {
         int b=(index*12+row)*4;data[b]=(float)value.x;data[b+1]=(float)value.y;data[b+2]=(float)value.z;data[b+3]=w;
     }
+
+    static List<ClientLightStore.ResolvedLight> nearest(List<ClientLightStore.ResolvedLight> resolved, Vec3 eye) {
+        if(resolved.isEmpty())return List.of();
+        var selected=new ArrayList<ClientLightStore.ResolvedLight>(MAX_VISIBLE_LIGHTS);
+        double[] distances=new double[MAX_VISIBLE_LIGHTS];
+        for(var light:resolved) {
+            double distance=light.position().distanceToSqr(eye);
+            double reach=light.definition().range()+light.definition().emitterRadius()+128;
+            if(!(distance<reach*reach))continue;
+            int index=selected.size();
+            // Keep only the nearest eight, with the same deterministic ID tie-break as a full sort.
+            while(index>0) {
+                int order=Double.compare(distance,distances[index-1]);
+                if(order>0 || order==0 && light.id().compareTo(selected.get(index-1).id())>=0)break;
+                index--;
+            }
+            if(index==MAX_VISIBLE_LIGHTS)continue;
+            if(selected.size()==MAX_VISIBLE_LIGHTS)selected.remove(MAX_VISIBLE_LIGHTS-1);
+            for(int i=selected.size();i>index;i--)distances[i]=distances[i-1];
+            distances[index]=distance;
+            selected.add(index,light);
+        }
+        return List.copyOf(selected);
+    }
     public static boolean active() {return !lights.isEmpty();}
     public static List<ClientLightStore.ResolvedLight> lights() {return lights;}
     public static Vec3 camera() {return camera;}
     public static long generation() {return generation;}
     public static boolean inPrepass() {
         // Diagnostic replays must bypass nested model-light FBO passes as well.
-        if(NodeLightPixelDiagnostics.isDrawing())return true;
+        if(NodeLightPixelDiagnostics.isDrawing() || NodeLightFroxels.rendering())return true;
         if(!drawing)return false;
         int program=GL11C.glGetInteger(GL20C.GL_CURRENT_PROGRAM);
         var u=PROGRAMS.get(program);
@@ -111,7 +123,7 @@ public final class NodeLightRenderer {
             if(PROGRAMS.containsKey(program)||GL20C.glGetUniformLocation(program,"nodeLightCount")<0)return;
             var add=Arrays.stream(type.getMethods()).filter(m->m.getName().equals("addDynamicSampler")&&m.getParameterCount()==3&&m.getParameterTypes()[0]==IntSupplier.class).findFirst().orElseThrow();
             for(var entry:Map.<String,IntSupplier>of("nodeLightSurfaceAtlas",NodeLightTargets::surfaceTexture,
-                    "nodeLightVolumeAtlas",NodeLightTargets::volumeTexture,"nodeLightCookies",()->cookieTexture).entrySet()) {
+                    "nodeLightVolumeAtlas",NodeLightTargets::volumeTexture,"nodeLightCookies",NodeLightCookies::texture).entrySet()) {
                 if(GL20C.glGetUniformLocation(program,entry.getKey())<0)continue;
                 if(!(boolean)add.invoke(builder,entry.getValue(),null,new String[]{entry.getKey()}))
                     throw new IllegalStateException("Cannot allocate light sampler: "+entry.getKey());
@@ -132,16 +144,28 @@ public final class NodeLightRenderer {
     public static void upload(int program) {
         Interface u=PROGRAMS.get(program);if(u==null)return;
         upload(program,u);
-        if(u.pass<0 && active()){forwardActivations++;frameForwardActivations++;}
+        if(u.pass<0 && u.froxelReady<0 && active()){forwardActivations++;frameForwardActivations++;}
     }
     public static void uploadForward(int program) {
         Interface u=PROGRAMS.get(program);
-        if(u==null || u.pass>=0)return;
+        if(u==null || u.pass>=0 || u.froxelReady>=0)return;
         ModelIrisHeldLight.uploadUniforms(program);
         upload(program,u);
         if(active()){forwardActivations++;frameForwardActivations++;}
     }
     static void upload(int program,Interface u) {
+        if (!active()) {
+            if (!u.idleUploaded) {
+                GL20C.glUniform1i(u.count,0);
+                GL20C.glUniform1i(u.pass,0);
+                GL20C.glUniform1i(u.resolved,0);
+                GL20C.glUniform1i(u.froxelReady,0);
+                u.idleUploaded=true;
+            }
+            return;
+        }
+        u.idleUploaded=false;
+        GL20C.glUniform1i(u.cameraAbsorption,1);
         GL20C.glUniform1i(u.packJitter,u.jitterEnabled?1:0);
         GL20C.glUniform1i(u.count,lights.size());GL20C.glUniform1i(u.pass,0);GL20C.glUniform1i(u.resolved,0);
         GL20C.glUniform1i(u.occluders,ModelIrisHeldLight.nodeOccluderCount());
@@ -153,7 +177,7 @@ public final class NodeLightRenderer {
         if(u.uploadedGeneration!=generation) {
             GL20C.glUniform4fv(u.entityBounds,NodeLightEntityShadows.bounds());
             var level=Minecraft.getInstance().level;
-            float time=level==null?0:(level.getGameTime()%240000)+Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
+            float time=level==null?0:(level.getGameTime()%240000)+Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
             GL20C.glUniform1f(u.time,time/20f);
             GL20C.glUniform3f(u.origin,(float)(camera.x%4096),(float)(camera.y%4096),(float)(camera.z%4096));
             if(active())GL20C.glUniform4fv(u.data,data);
@@ -166,15 +190,16 @@ public final class NodeLightRenderer {
     }
 
     public static void draw(Runnable draw) {
+        if (!active()) {draw.run();return;}
         int program=GL11C.glGetInteger(GL20C.GL_CURRENT_PROGRAM);
         Interface u=PROGRAMS.get(program);
-        if(u==null||!active()) {draw.run();return;}
+        if(u==null) {draw.run();return;}
         try {
             updateCookies();
             // Program.use occurs before its sampler layout is finalized. Upload at the draw as well.
             upload(program,u);
             drawing=true;
-            try {if(u.pass<0)draw.run();else NodeLightTargets.draw(program,u,draw);} finally {drawing=false;}
+            try {if(u.pass<0 && u.froxelReady<0)draw.run();else NodeLightTargets.draw(program,u,draw);} finally {drawing=false;}
             packDraws++;framePackDraws++;
             if(u.draws++==0)LOGGER.info("Node light pack surface draw reached: program={}, lights={}",program,lights.size());
             status="ACTIVE";failure="";
@@ -227,7 +252,7 @@ public final class NodeLightRenderer {
         GL13C.glActiveTexture(GL13C.GL_TEXTURE0+13);
         oldTexture=GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);oldSampler=GL30C.glGetIntegeri(GL33C.GL_SAMPLER_BINDING,13);
         oldCookie=u.cookies<0?0:GL20C.glGetUniformi(program,u.cookies);
-            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,cookieTexture);GL33C.glBindSampler(13,0);
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,NodeLightCookies.texture());GL33C.glBindSampler(13,0);
             GL20C.glUniform1i(u.cookies,13);GL13C.glActiveTexture(activeUnit);
         }
         @Override public void close() {
@@ -244,105 +269,21 @@ public final class NodeLightRenderer {
 
     private static void updateCookies() {
         if(cookieGeneration==generation)return;
-        if(lights.stream().noneMatch(light -> light.projectionTexture()!=null)) {
-            if(cookieTexture!=0)clearCookies();
-            cookieRetryAfter=0;
-            cookieGeneration=generation;
-            return;
-        }
-        if(System.nanoTime()<cookieRetryAfter)throw new IllegalStateException("Node light image allocation is awaiting retry");
-        boolean changed=cookieTexture==0;
+        NodeLightCookies.prepare(lights);
         for(int i=0;i<lights.size();i++) {
-            var key=lights.get(i).projectionTexture();
-            if(key==null) {imageIds[i]=-1;imageKeys[i]=null;cookieSources[i]=null;continue;}
-            var texture=Minecraft.getInstance().getTextureManager().getTexture(key).getTexture();
-            if(!(texture instanceof GlTexture gl))throw new IllegalStateException("Node light projection requires an OpenGL texture");
-            cookieSources[i]=gl;
+            if(lights.get(i).projectionTexture()==null)continue;
             data[(i*12+8)*4]=1;
-            data[(i*12+11)*4+3]=(float)texture.getHeight(0)/texture.getWidth(0);
-            changed|=imageIds[i]!=gl.glId()||!key.equals(imageKeys[i]);
+            data[(i*12+11)*4+3]=NodeLightCookies.aspect(i);
         }
-        if(!changed) {cookieGeneration=generation;return;}
-        int activeTexture=GL11C.glGetInteger(GL13C.GL_ACTIVE_TEXTURE);
-        int binding=GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
-        int read=GL11C.glGetInteger(GL30C.GL_READ_FRAMEBUFFER_BINDING);
-        int unpack=GL11C.glGetInteger(GL21C.GL_PIXEL_UNPACK_BUFFER_BINDING);
-        try {
-            if(cookieTexture==0) {
-                long required=(long)COOKIE_SIZE*COOKIE_SIZE*8*4;
-                if(!ModelRenderAsset.residency().reserveTransientGpu(required))throw new IllegalStateException("Node light image GPU budget exhausted");
-                cookieBytes=required;
-                try {
-                cookieTexture=GL11C.glGenTextures();GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,cookieTexture);
-                GL15C.glBindBuffer(GL21C.GL_PIXEL_UNPACK_BUFFER,0);
-                GL11C.glTexImage2D(GL11C.GL_TEXTURE_2D,0,GL11C.GL_RGBA8,COOKIE_SIZE,COOKIE_SIZE*8,0,GL11C.GL_RGBA,GL11C.GL_UNSIGNED_BYTE,0L);
-                GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D,GL11C.GL_TEXTURE_MIN_FILTER,GL11C.GL_LINEAR);
-                GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D,GL11C.GL_TEXTURE_MAG_FILTER,GL11C.GL_LINEAR);
-                GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D,GL12C.GL_TEXTURE_MAX_LEVEL,0);
-                if(cookieTexture==0||GL11C.glGetTexLevelParameteri(GL11C.GL_TEXTURE_2D,0,GL11C.GL_TEXTURE_WIDTH)!=COOKIE_SIZE
-                        ||GL11C.glGetTexLevelParameteri(GL11C.GL_TEXTURE_2D,0,GL11C.GL_TEXTURE_HEIGHT)!=COOKIE_SIZE*8)
-                    throw new IllegalStateException("Node light image texture allocation failed");
-                cookieFramebuffer=GL30C.glGenFramebuffers();Arrays.fill(imageIds,-1);
-                Arrays.fill(imageKeys,null);
-                if(cookieFramebuffer==0)throw new IllegalStateException("Node light image framebuffer allocation failed");
-                } catch(RuntimeException exception) {clearCookies();throw exception;}
-            }
-            for(int i=0;i<lights.size();i++) {
-                var light=lights.get(i);if(light.projectionTexture()==null) {imageIds[i]=-1;imageKeys[i]=null;continue;}
-                var key=light.projectionTexture();
-                if(System.nanoTime()<failedImages.getOrDefault(key,0L))throw new IllegalStateException("Node light projection awaiting retry: "+key);
-                var texture=cookieSources[i];
-                int id=texture.glId();
-                if(imageIds[i]==id&&key.equals(imageKeys[i]))continue;
-                // Blit resamples once when a projection resource changes, never read pixels back.
-                int draw=GL11C.glGetInteger(GL30C.GL_DRAW_FRAMEBUFFER_BINDING);
-                int temp=GL30C.glGenFramebuffers();
-                try {
-                    GL30C.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER,cookieFramebuffer);
-                    GL30C.glFramebufferTexture2D(GL30C.GL_READ_FRAMEBUFFER,GL30C.GL_COLOR_ATTACHMENT0,GL11C.GL_TEXTURE_2D,id,0);
-                    GL11C.glReadBuffer(GL30C.GL_COLOR_ATTACHMENT0);
-                    GL30C.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER,temp);
-                    GL30C.glFramebufferTexture2D(GL30C.GL_DRAW_FRAMEBUFFER,GL30C.GL_COLOR_ATTACHMENT0,GL11C.GL_TEXTURE_2D,cookieTexture,0);
-                    GL20C.glDrawBuffers(GL30C.GL_COLOR_ATTACHMENT0);
-                    if(GL30C.glCheckFramebufferStatus(GL30C.GL_READ_FRAMEBUFFER)!=GL30C.GL_FRAMEBUFFER_COMPLETE
-                            ||GL30C.glCheckFramebufferStatus(GL30C.GL_DRAW_FRAMEBUFFER)!=GL30C.GL_FRAMEBUFFER_COMPLETE)
-                        throw new IllegalStateException("Node light projection framebuffer is incomplete");
-                    boolean scissor=GL11C.glIsEnabled(GL11C.GL_SCISSOR_TEST);GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
-                    try {GL30C.glBlitFramebuffer(0,0,texture.getWidth(0),texture.getHeight(0),0,i*COOKIE_SIZE,COOKIE_SIZE,(i+1)*COOKIE_SIZE,GL11C.GL_COLOR_BUFFER_BIT,GL11C.GL_LINEAR);}
-                    finally {if(scissor)GL11C.glEnable(GL11C.GL_SCISSOR_TEST);}
-                    imageIds[i]=id;imageKeys[i]=key;failedImages.remove(key);
-                }catch(RuntimeException exception) {
-                    failedImages.put(key,System.nanoTime()+1_000_000_000L);
-                    while(failedImages.size()>32)failedImages.remove(failedImages.keySet().iterator().next());
-                    throw exception;
-                }finally {GL30C.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER,draw);GL30C.glDeleteFramebuffers(temp);}
-            }
-            cookieGeneration=generation;
-        }catch(RuntimeException exception) {
-            cookieRetryAfter=System.nanoTime()+1_000_000_000L;throw exception;
-        }finally {
-            GL30C.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER,read);
-            GL15C.glBindBuffer(GL21C.GL_PIXEL_UNPACK_BUFFER,unpack);
-            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D,binding);GL13C.glActiveTexture(activeTexture);
-        }
+        cookieGeneration=generation;
     }
-    static int cookies() {return cookieTexture;}
-    public static void deleted(int program) {PROGRAMS.remove(program);NATIVE.remove(program);NativeTerrainLights.deleted(program);}
+    static int cookies() {return NodeLightCookies.texture();}
+    public static void deleted(int program) {PROGRAMS.remove(program);NATIVE.remove(program);NativeTerrainLights.deleted(program);NodeLightFroxels.deleted(program);}
     public static void clear() {
         cookieGeneration=Long.MIN_VALUE;
-        lights=List.of();NodeLightTargets.clear();clearCookies();failedImages.clear();cookieRetryAfter=0;
+        lights=List.of();NodeLightTargets.clear();NodeLightCookies.clear();
         NodeLightEntityShadows.clear();
         NativeVolumeLights.clear();
-    }
-    private static void clearCookies() {
-        Arrays.fill(imageIds,-1);Arrays.fill(imageKeys,null);
-        Arrays.fill(cookieSources,null);
-        int tex=cookieTexture,fbo=cookieFramebuffer;cookieTexture=cookieFramebuffer=0;
-        long released=cookieBytes;cookieBytes=0;
-        if(tex!=0||fbo!=0||released!=0)RenderSystem.queueFencedTask(()->{
-            if(tex!=0)GL11C.glDeleteTextures(tex);if(fbo!=0)GL30C.glDeleteFramebuffers(fbo);
-            ModelRenderAsset.residency().releaseTransientGpu(released);
-        });
     }
     public static Map<String,Object> report() {
         var out=new LinkedHashMap<String,Object>();out.put("status",status);out.put("failure",failure);
@@ -355,12 +296,12 @@ public final class NodeLightRenderer {
         out.put("packDraws",packDraws);out.put("framePackDraws",framePackDraws);
         out.put("forwardActivations",forwardActivations);out.put("frameForwardActivations",frameForwardActivations);
         out.put("packReceivers",PROGRAMS.entrySet().stream().map(e->Map.of("program",e.getKey(),"draws",e.getValue().draws,
-                "path",e.getValue().pass<0?"direct":"atlas", "surfaceAtlas",e.getValue().surface>=0,"volumeAtlas",e.getValue().volume>=0)).toList());
+                "path",e.getValue().froxelReady>=0?"froxel":e.getValue().pass<0?"direct":"surface_atlas", "surfaceAtlas",e.getValue().surface>=0,"volumeAtlas",e.getValue().volume>=0)).toList());
         out.put("terrain",NativeTerrainLights.report());
         out.put("nativeVolume",NativeVolumeLights.report());
         out.put("entityShadows",NodeLightEntityShadows.report());
         out.put("prepareNanos",preparedNanos);out.put("prepass",NodeLightTargets.report());
-        out.put("projectionGpuBytes",cookieBytes);out.put("failedProjections",failedImages.size());
+        out.put("projectionGpuBytes",NodeLightCookies.bytes());out.put("failedProjections",NodeLightCookies.failures());
         out.put("limits","8 nearest lights; range <=32; shared 8-model BVH and 8 world tiles; uncovered world segments are shadowed");
         out.put("nativeScope","vanilla/Sodium terrain and resident model surfaces; native depth-limited volumetrics with per-light resolution; no entity or model collector fallback surface receivers; reduced surface evaluation requires supported Iris pack");
         out.put("lights",lights.stream().map(l->Map.of("id",l.id(),"config",l.definition().config().toString(),"position",l.position().toString())).toList());
@@ -375,30 +316,30 @@ public final class NodeLightRenderer {
             var config=l.definition().config();var volume=config.volume();
             boolean enabled=!volume.mode().equals("off") && volume.strength()>0 && volume.density()>0;
             int emitters=l.definition().emitterRadius()<=0?1:config.quality().volumeEmitterSamples();
-            long pixels=(long)Math.ceil(Minecraft.getInstance().getWindow().getWidth()*config.quality().volumeResolution())
-                    *(long)Math.ceil(Minecraft.getInstance().getWindow().getHeight()*config.quality().volumeResolution());
+            var grid=NodeLightFroxelQuality.report(Minecraft.getInstance().getWindow().getWidth(),
+                    Minecraft.getInstance().getWindow().getHeight(),config.quality());
             return Map.of("id",l.id(),"mode",volume.mode(),"enabled",enabled,"strength",volume.strength(),
-                    "density",volume.density(),"samples",config.quality().volumeSamples(),
-                    "resolution",config.quality().volumeResolution(),"emitterSamples",emitters,
-                    "maxEmitterEvaluationsPerPixel",enabled?config.quality().volumeSamples()*emitters:0,
-                    "estimatedAtlasPixels",enabled?pixels:0L);
+                    "density",volume.density(),"requestedGrid",grid,"emitterSamplesPerFroxel",emitters,
+                    "configuredEmitterEvaluationUpperBound",enabled?((Number)grid.get("froxelCount")).longValue()*emitters:0L);
         }).toList());
-        out.put("workEstimateScope","Configured upper bounds, not measured ray counts; early exits reduce work, full-resolution reconstruction fallback adds work. Off/zero-density volumes do not integrate.");
+        out.put("workEstimateScope","Configured per-light froxel-grid bounds, not measured ray counts. Runtime allocation limits and active-light state are reported separately. Lighting is evaluated once per froxel and shared by depth interval lookups. Off/zero-density volumes do not integrate.");
         return out;
-    }
-    static boolean hasVolumeSegments() {
-        return PROGRAMS.values().stream().anyMatch(program -> program.volumeSegmentRects >= 0);
     }
     static final class Interface {
         long draws;
+        boolean idleUploaded;
         long uploadedGeneration=Long.MIN_VALUE;
         final float[] inverseScratch=new float[16];
         final int packJitter;
+        final int cameraAbsorption;
+        final int froxelReady;
         final int entityBoundsCount,entityBounds;
         final int[] occupiedMin=new int[8],occupiedMax=new int[8];
         final boolean jitterEnabled;
-        final int count,pass,index,resolved,data,occluders,time,origin,eye,inverseView,viewport,originalSize,surface,volume,cookies,surfaceRects,volumeRects,volumeSegmentRects,volumeSegmentDepthRects,entityBvh,entityRange;
+        final int count,pass,index,resolved,data,occluders,time,origin,eye,inverseView,viewport,originalSize,surface,volume,cookies,surfaceRects,entityBvh,entityRange;
         Interface(int p) {
+            cameraAbsorption=location(p,"nodeFroxelCameraAbsorption");
+            froxelReady=location(p,"nodeFroxelReady");
             packJitter=location(p,"nodePackJitter");
             jitterEnabled=packJitter>=0 && com.mine.geometry_node.client.runtime.light.shader.adapter.LightShaderOptions.booleanValue("taaEnabled",true);
             count=location(p,"nodeLightCount");pass=location(p,"nodeLightPass");index=location(p,"nodeLightIndex");resolved=location(p,"nodeLightResolved");
@@ -406,8 +347,7 @@ public final class NodeLightRenderer {
             eye=location(p,"nodeEyeOffset");inverseView=location(p,"gbufferModelViewInverse");
             viewport=location(p,"nodePassViewport");originalSize=location(p,"nodeOriginalSize");
             surface=location(p,"nodeLightSurfaceAtlas");volume=location(p,"nodeLightVolumeAtlas");cookies=location(p,"nodeLightCookies");
-            surfaceRects=location(p,"nodeSurfaceRects[0]");volumeRects=location(p,"nodeVolumeRects[0]");
-            volumeSegmentRects=location(p,"nodeVolumeSegmentRects[0]");volumeSegmentDepthRects=location(p,"nodeVolumeSegmentDepthRects[0]");
+            surfaceRects=location(p,"nodeSurfaceRects[0]");
             entityBvh=location(p,"nodeEntityBvh");entityRange=location(p,"nodeEntityRange");
             entityBoundsCount=location(p,"nodeEntityBoundsCount");entityBounds=location(p,"nodeEntityBounds[0]");
             for(int i=0;i<8;i++) {

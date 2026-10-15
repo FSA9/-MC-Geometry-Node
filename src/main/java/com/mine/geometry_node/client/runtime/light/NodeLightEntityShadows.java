@@ -49,6 +49,11 @@ public final class NodeLightEntityShadows {
     private static int[] cachedMasks = new int[0];
     private static int cachedNodes, cachedOffset, cachedTriangles;
     private static long builds, reuses;
+    private static long contentRevision, revisionBuilds = -1;
+    private static int revisionTexture = -1, revisionNodes, revisionOffset, revisionTriangles, revisionBoundsCount;
+    private static final float[] revisionBounds = new float[MAX_ENTITIES * 4];
+    private static long captureBudgetOmissions, buildBudgetFailures;
+    private static int frameCaptureBudgetOmissions, frameBuildBudgetFailures;
     private static final long CAPTURE_NANOS = 4_000_000L;
     private static String failure = "";
     private static LivingEntityRenderer<?, ?, ?> capturingRenderer;
@@ -59,6 +64,7 @@ public final class NodeLightEntityShadows {
     public static void prepare(Vec3 camera, List<ClientLightStore.ResolvedLight> lights, float partialTick) {
         long started = System.nanoTime();
         nodeCount = triangleOffset = triangles = entities = omitted = 0;
+        frameCaptureBudgetOmissions = frameBuildBudgetFailures = 0;
         boundsCount = 0;
         failure = "";
         var mc = Minecraft.getInstance();
@@ -73,7 +79,11 @@ public final class NodeLightEntityShadows {
             if (!(entity instanceof LivingEntity living) || entity.isRemoved() || entity.isInvisible() || entity.isSpectator()) continue;
             double distance = Double.POSITIVE_INFINITY;
             int excluded = 0;
-            var interpolatedBounds = entity.getBoundingBox().move(entity.getPosition(partialTick).subtract(entity.position()));
+            // Match LevelRenderer: frozen entities use their frozen pose, while
+            // players and entities exempt from the freeze keep interpolating.
+            float entityPartialTick = mc.level.tickRateManager().isEntityFrozen(entity)
+                    ? mc.getDeltaTracker().getGameTimeDeltaPartialTick(false) : partialTick;
+            var interpolatedBounds = entity.getBoundingBox().move(entity.getPosition(entityPartialTick).subtract(entity.position()));
             var bounds = entity.getBoundingBox().minmax(interpolatedBounds).inflate(0.5);
             for (int i = 0; i < lights.size(); i++) {
                 var light = lights.get(i);
@@ -84,21 +94,25 @@ public final class NodeLightEntityShadows {
                 var owner = light.definition().config().transform().entityId();
                 if (entity.getUUID().equals(owner) && interpolatedBounds.inflate(0.15).contains(light.position())) excluded |= 1 << i;
             }
-            if (Double.isFinite(distance)) candidates.add(new Candidate(living, distance, excluded));
+            if (Double.isFinite(distance)) candidates.add(new Candidate(living, distance, excluded, entityPartialTick));
         }
         candidates.sort(Comparator.comparingDouble(Candidate::distance).thenComparingInt(c -> c.entity.getId()));
         var dispatcher = mc.getEntityRenderDispatcher();
         long captureStarted = System.nanoTime();
         int attempted = 0;
         for (var candidate : candidates) {
-            if (attempted >= MAX_ENTITIES || (attempted > 0 && System.nanoTime() - captureStarted > CAPTURE_NANOS)) { omitted++; continue; }
+            if (attempted >= MAX_ENTITIES) { omitted++; continue; }
+            if (attempted > 0 && System.nanoTime() - captureStarted > CAPTURE_NANOS) {
+                omitted++; frameCaptureBudgetOmissions++; captureBudgetOmissions++;
+                continue;
+            }
             if (!(dispatcher.getRenderer(candidate.entity) instanceof LivingEntityRenderer<?, ?, ?> renderer)) continue;
             attempted++;
             int before = COLLECTOR.vertices.size;
             var previousModel = renderer.getModel();
             COLLECTOR.begin(candidate.excluded);
             try {
-                var state = (LivingEntityRenderState) dispatcher.extractEntity(candidate.entity, partialTick);
+                var state = (LivingEntityRenderState) dispatcher.extractEntity(candidate.entity, candidate.partialTick);
                 prepareBody(renderer, state, camera);
                 if (COLLECTOR.vertices.overflow) {
                     COLLECTOR.vertices.size = before;
@@ -160,6 +174,9 @@ public final class NodeLightEntityShadows {
                 cachedTriangles = triangles;
                 builds++;
             } catch (IOException | RuntimeException e) {
+                if (e instanceof ModelLightOcclusionBvh.BudgetExceeded) {
+                    frameBuildBudgetFailures++; buildBudgetFailures++;
+                }
                 failure = e.getClass().getSimpleName() + ": " + e.getMessage();
             }
         }
@@ -306,6 +323,24 @@ public final class NodeLightEntityShadows {
     public static int textureWidth() { return WIDTH; }
     public static int boundsCount() { return nodeCount > 0 ? boundsCount : 0; }
     public static float[] bounds() { return BOUNDS; }
+    /** Exact GPU geometry and broad-phase inputs, including empty and failed capture frames. */
+    static long contentRevision() {
+        int count = boundsCount();
+        int length = count * 4;
+        if (revisionBuilds != builds || revisionTexture != texture || revisionNodes != nodeCount
+                || revisionOffset != triangleOffset || revisionTriangles != triangles || revisionBoundsCount != count
+                || !Arrays.equals(revisionBounds, 0, length, BOUNDS, 0, length)) {
+            contentRevision++;
+            revisionBuilds = builds;
+            revisionTexture = texture;
+            revisionNodes = nodeCount;
+            revisionOffset = triangleOffset;
+            revisionTriangles = triangles;
+            revisionBoundsCount = count;
+            System.arraycopy(BOUNDS, 0, revisionBounds, 0, length);
+        }
+        return contentRevision;
+    }
     public static Map<String, Object> report() {
         var out = new java.util.LinkedHashMap<String, Object>(Map.of("entities", entities, "triangles", triangles, "nodes", nodeCount, "omittedEntities", omitted,
                 "prepareMs", nanos / 1_000_000.0, "gpuBytes", gpuBytes,
@@ -313,12 +348,19 @@ public final class NodeLightEntityShadows {
                 "scope", "living_body_geometry; excludes equipment, skin overlays and custom geometry; body alpha treated opaque"));
         out.put("bvhBuilds", builds);
         out.put("identicalGeometryReuses", reuses);
+        out.put("contentRevision", contentRevision());
+        out.put("captureBudgetOmissions", captureBudgetOmissions);
+        out.put("buildBudgetFailures", buildBudgetFailures);
+        out.put("frameCaptureBudgetOmissions", frameCaptureBudgetOmissions);
+        out.put("frameBuildBudgetFailures", frameBuildBudgetFailures);
+        out.put("budgetCounterScope", "Lifetime totals and current prepare-frame counts. Capture omissions count entities skipped by the 4 ms deadline, excluding the entity/triangle count caps. Build failures count BVH budget exceptions, including time, memory and upload limits; failure contains the latest reason. No stale geometry fallback.");
         return out;
     }
     public static void clear() {
         retire(texture, gpuBytes);
         gpuBytes = 0;
         texture = allocatedHeight = nodeCount = triangleOffset = triangles = entities = omitted = 0;
+        frameCaptureBudgetOmissions = frameBuildBudgetFailures = 0;
         boundsCount = 0;
         cachedSoup = new float[0];
         cachedMasks = new int[0];
@@ -331,7 +373,7 @@ public final class NodeLightEntityShadows {
         });
     }
 
-    private record Candidate(LivingEntity entity, double distance, int excluded) {}
+    private record Candidate(LivingEntity entity, double distance, int excluded, float partialTick) {}
     private record SavedPart(ModelPart part, PartPose pose, boolean visible, boolean skipDraw) {
         void restore() { part.loadPose(pose); part.visible = visible; part.skipDraw = skipDraw; }
     }

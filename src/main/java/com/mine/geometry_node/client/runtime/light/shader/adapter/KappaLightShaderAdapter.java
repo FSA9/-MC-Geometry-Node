@@ -23,17 +23,16 @@ public final class KappaLightShaderAdapter implements LightShaderAdapter {
             if (!main.find()) return null;
             result = result.substring(0, main.start()) + result.substring(main.start()).replaceAll("\\bsceneColor\\b", "nodeKappaOutput.rgb");
             result = LightShaderPatch.replace(result, "bool translucent = sceneDepth.x < sceneDepth.y;",
-                    "bool translucent = sceneDepth.x < sceneDepth.y;\nnodeKappaOutput.a=1.0;\n"
-                    + "if(nodeLightPass!=0){nodeKappaOutput=vec4(nodeVolume(nodeLightIndex,scenePos0),length(scenePos0));return;}\n");
+                    "bool translucent = sceneDepth.x < sceneDepth.y;\nnodeKappaOutput.a=1.0;\n");
             result = LightShaderPatch.replace(result, "if (water && isEyeInWater == 0)",
-                    "nodeKappaOutput.rgb += (nodeSourceSegment(scenePos1,sceneDepth.y>=1.0,length(scenePos0-nodeEyeOffset))+nodeVolumeBetween(scenePos0,scenePos1))*" + conversion + ";\n"
+                    "if(nodeLightCount>0) nodeKappaOutput.rgb += (nodeSourceSegment(scenePos1,sceneDepth.y>=1.0,length(scenePos0-nodeEyeOffset))+nodeVolumeBetween(scenePos0,scenePos1))*" + conversion + ";\n"
                     + "if (water && isEyeInWater == 0)");
             return LightShaderPatch.replace(result, "nodeKappaOutput.rgb = drawbufferClamp(nodeKappaOutput.rgb);",
-                    "nodeKappaOutput.rgb += (nodeVolumeResult(scenePos0,uv)+nodeSourceResult(scenePos0,sceneDepth.x>=1.0))*" + conversion + ";\nnodeKappaOutput.rgb = drawbufferClamp(nodeKappaOutput.rgb);");
+                    "if(nodeLightCount>0) nodeKappaOutput.rgb += (nodeVolumeResult(scenePos0,uv)+nodeSourceResult(scenePos0,sceneDepth.x>=1.0))*" + conversion + ";\nnodeKappaOutput.rgb = drawbufferClamp(nodeKappaOutput.rgb);");
         }
         if (source.contains("fakeBounceDiff")) {
             return LightShaderPatch.replace(source, "translucentColor = clamp(sceneColor,0.0,65535.0);",
-                    "sceneColor.rgb += nodeTransparentSurface(scenePos,sceneNormal,normal,vec3(0.0),sceneColor.a,max(1.0-specularData.x,0.05),matID==102?0.02:0.04)*" + conversion + ";\n"
+                    "if(nodeLightCount>0) sceneColor.rgb += nodeTransparentSurface(scenePos,sceneNormal,normal,vec3(0.0),sceneColor.a,max(1.0-specularData.x,0.05),matID==102?0.02:0.04)*" + conversion + ";\n"
                     + "translucentColor = clamp(sceneColor,0.0,65535.0);");
         }
         if (vertex == null) return null;
@@ -50,16 +49,19 @@ public final class KappaLightShaderAdapter implements LightShaderAdapter {
             result = LightShaderPatch.replace(result, "void main()", "uniform vec2 taaOffset;\nvoid main()");
         result = LightShaderPatch.replace(result, "void main()", "uniform int nodePackJitter;\nvoid main()");
         result = LightShaderPatch.replace(result, "vec3 albedo = vec3(1.0);", """
+                vec3 nodePosition=vec3(0.0),nodeNormal=vec3(0.0),nodeGeo=vec3(0.0);
+                if(nodeLightCount>0){
                 vec2 nodeScreen = (uv * 2.0 - (nodePackJitter!=0 ? taaOffset : vec2(0.0))) / NODE_KAPPA_SCALE - 1.0;
                 vec4 nodeView = gbufferProjectionInverse * vec4(nodeScreen, sceneDepth * 2.0 - 1.0, 1.0);
-                vec3 nodePosition = (gbufferModelViewInverse * vec4(nodeView.xyz / nodeView.w, 1.0)).xyz;
-                vec3 nodeNormal = decodeNormal(texture(colortex1,uv).xy);
-                vec3 nodeGeo = normalize(cross(dFdx(nodePosition),dFdy(nodePosition)));
+                nodePosition = (gbufferModelViewInverse * vec4(nodeView.xyz / nodeView.w, 1.0)).xyz;
+                nodeNormal = decodeNormal(texture(colortex1,uv).xy);
+                nodeGeo = normalize(cross(dFdx(nodePosition),dFdy(nodePosition)));
                 nodeGeo = faceforward(nodeGeo,nodePosition-gbufferModelViewInverse[3].xyz,nodeGeo);
+                }
                 """.replace("NODE_KAPPA_SCALE", scale) + LightShaderPatch.surfacePrepass("sceneColor", "nodePosition", "nodeNormal", "nodeGeo", "sceneDepth>=1.0")
                 + "vec3 albedo = vec3(1.0);");
         result = LightShaderPatch.replace(result, "sceneColor.rgb *= directLight + indirectLight + emission;",
-                "sceneColor.rgb *= directLight + indirectLight + emission;\nsceneColor.rgb += albedo*(nodeSurfaceGeo(nodePosition,nodeNormal,nodeGeo,gl_FragCoord.xy/nodeOriginalSize)*" + conversion + ");");
+                "sceneColor.rgb *= directLight + indirectLight + emission;\nif(nodeLightCount>0) sceneColor.rgb += albedo*(nodeSurfaceGeo(nodePosition,nodeNormal,nodeGeo,gl_FragCoord.xy/nodeOriginalSize)*" + conversion + ");");
         return result;
     }
 }

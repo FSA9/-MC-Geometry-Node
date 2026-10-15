@@ -41,7 +41,10 @@ final class NodeLightPixelDiagnostics {
 
     static void draw(int program, int pass, int light, int width, int height, Runnable draw) {
         if (!capturing || drawing) return;
-        int[] modes = pass == 0 ? new int[]{1, 2, 4, 8} : new int[]{4};
+        boolean surface = GL20C.glGetUniformLocation(program, "nodeSurfaceRects[0]") >= 0;
+        boolean volume = GL20C.glGetUniformLocation(program, "nodeFroxelReady") >= 0;
+        int[] modes = pass != 0 ? new int[0] : surface
+                ? (volume ? new int[]{1, 2, 4} : new int[]{2, 4}) : new int[]{1};
         try {
             int location = GL20C.glGetUniformLocation(program, "nodeVolumeProbeMode");
             String unavailable = location < 0 ? "shader_uninstrumented" : queryUnavailable();
@@ -185,10 +188,9 @@ final class NodeLightPixelDiagnostics {
             var row = new LinkedHashMap<String, Object>();
             row.put("program", counts.program); row.put("pass", counts.pass); row.put("light", counts.light);
             row.put("mode", switch (counts.mode) {
-                case 1 -> "volumeRequestedPixels";
-                case 2 -> "fullResolutionIntegrationRequestedPixels";
-                case 8 -> "reconstructionRejectedPixels";
-                default -> "intersectingIntegrationPixels";
+                case 2 -> "surfaceReconstructionAttemptPixels";
+                case 4 -> "surfaceReconstructionFallbackPixels";
+                default -> "volumeRequestedPixels";
             });
             row.put("viewportWidth", counts.width); row.put("viewportHeight", counts.height);
             row.put("submittedQueries", counts.submitted); row.put("completedQueries", counts.completed);
@@ -202,7 +204,7 @@ final class NodeLightPixelDiagnostics {
             rows.add(row);
         }
         result.put("groups", rows);
-        result.put("scope", "Profile-only single-sample fullscreen replays with all color/depth/stencil writes disabled. Counts are unique pixels satisfying a predicate, not march steps, emitter evaluations or rays. Receiver predicates combine all lights; atlas predicates refer to one light. Intersecting integration pixels have at least one integration request passing geometric bounds; this is not cached volume coverage or proof of nonzero scattering. Full-resolution integration includes uncached paths; reconstruction rejected counts only failed enabled-cache reads. Query results drain asynchronously. Compare groups only for matching program/pass/light and viewport; different diagnostic draws may see different temporal jitter.");
+        result.put("scope", "Profile-only single-sample receiver replays with all color/depth/stencil writes disabled. Counts are unique pixels requesting volume evaluation, attempting surface-atlas reconstruction, or requiring direct surface fallback after reconstruction rejection. Predicates combine all lights: fallback/attempt is a pixel fraction, not a per-light rejection rate. Counts are not froxels, emitter evaluations, ray queries or proof of nonzero lighting. Query results drain asynchronously. Compare groups only for matching program/pass/light and viewport; different diagnostic draws may see different temporal jitter.");
         return result;
     }
 

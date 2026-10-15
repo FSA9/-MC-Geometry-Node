@@ -12,7 +12,8 @@ import java.util.regex.Pattern;
 
 /** Signature-guarded adapters. Shaderpack files are never modified on disk. */
 public final class NodeLightShader {
-    private static final String SOURCE = load("node_lights.glsl");
+    private static final String SOURCE = load("node_lights.glsl")
+            .replace("// NODE_LIGHT_FROXELS_INCLUDE", load("node_light_froxels.glsl"));
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
     private static final Pattern MAIN = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(?:void\\s*)?\\)\\s*\\{");
     private static final Map<String, Integer> MATCHES = new LinkedHashMap<>();
@@ -122,7 +123,8 @@ public final class NodeLightShader {
             FAILURES.remove(pack);
         }
         return result.contains("nodeVolumeResult(") || result.contains("nodeVolumeBetween(")
-                || result.contains("nodeVolumeTransmitted(") ? withVolumeDiagnostics(declared) : declared;
+                || result.contains("nodeVolumeTransmitted(") || result.contains("nodeSurfaceGeo(")
+                || result.contains("nodeSurfacePassGeo(") ? withVolumeDiagnostics(declared) : declared;
     }
 
     /** Pixel diagnostics replay only pure framebuffer receivers, with all framebuffer writes disabled. */

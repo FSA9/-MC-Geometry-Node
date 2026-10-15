@@ -40,6 +40,9 @@ public final class ModelPlacedLightField {
     private static final float[] sources=new float[MAX_FIELDS*ModelPlacedLightVolume.MAX_SOURCES*4];
     private static final float[] origins=new float[MAX_FIELDS*4];
     private static final float[] occupiedMin=new float[MAX_FIELDS*4],occupiedMax=new float[MAX_FIELDS*4];
+    private static final float[] revisionOrigins=new float[MAX_FIELDS*4],revisionMin=new float[MAX_FIELDS*4],revisionMax=new float[MAX_FIELDS*4];
+    private static long contentRevision,revisionUploaded=-1;
+    private static int revisionTexture=-1;
     private static final int[] sourceRanges=new int[MAX_FIELDS*2];
     private static java.util.List<ModelLightFieldLayout.Tile> desired=java.util.List.of();
     private static int instanceCount;
@@ -91,6 +94,19 @@ public final class ModelPlacedLightField {
         }
     }
     public static int texture() {return texture;}
+    /** Exact shader-visible blocker state, including unavailable/retired tiles without a new upload. */
+    public static long contentRevision() {
+        if(revisionUploaded!=uploadedBytes || revisionTexture!=texture
+                || !java.util.Arrays.equals(revisionOrigins,origins)
+                || !java.util.Arrays.equals(revisionMin,occupiedMin)
+                || !java.util.Arrays.equals(revisionMax,occupiedMax)) {
+            revisionUploaded=uploadedBytes;revisionTexture=texture;contentRevision++;
+            System.arraycopy(origins,0,revisionOrigins,0,origins.length);
+            System.arraycopy(occupiedMin,0,revisionMin,0,occupiedMin.length);
+            System.arraycopy(occupiedMax,0,revisionMax,0,occupiedMax.length);
+        }
+        return contentRevision;
+    }
     static void update(Vec3 eye,java.util.List<ModelRenderInstance> instances,boolean enabled) {
         ClientLevel next=Minecraft.getInstance().level;
         if(!enabled||next==null) {if(level!=null||texture!=0)clear();return;}
