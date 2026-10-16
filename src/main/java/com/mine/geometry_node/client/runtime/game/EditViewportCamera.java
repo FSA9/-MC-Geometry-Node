@@ -5,6 +5,17 @@ package com.mine.geometry_node.client.runtime.game;
  * Yaw and pitch use Minecraft conventions: yaw 0 faces +Z, positive pitch looks down.
  */
 public final class EditViewportCamera {
+    /** Axis denotes the side from which the camera looks toward its target. */
+    public enum Axis {
+        POSITIVE_X(1, 0, 0), NEGATIVE_X(-1, 0, 0),
+        POSITIVE_Y(0, 1, 0), NEGATIVE_Y(0, -1, 0),
+        POSITIVE_Z(0, 0, 1), NEGATIVE_Z(0, 0, -1);
+
+        public final int x, y, z;
+        Axis(int x, int y, int z) { this.x = x; this.y = y; this.z = z; }
+        public boolean positive() { return x + y + z > 0; }
+        public Axis opposite() { return values()[ordinal() ^ 1]; }
+    }
     private static final double MIN_DISTANCE = 0.05;
     private static final double MAX_DISTANCE = 4096.0;
     private static final double INITIAL_DISTANCE = 10.0;
@@ -44,6 +55,26 @@ public final class EditViewportCamera {
     public synchronized boolean isOrthographic() { return orthographic; }
     public synchronized void setOrthographic(boolean orthographic) { this.orthographic = orthographic; }
     public synchronized void toggleOrthographic() { orthographic = !orthographic; }
+
+    /** Exact axis alignment. Orbit retains the pivot; flight retains the eye.
+     * Clicking the already-facing side flips it, including overlapping pole buttons.
+     */
+    public synchronized void alignToAxis(Axis axis, boolean keepEye) {
+        if (!initialized || axis == null) return;
+        Snapshot eye = snapshot();
+        double y = Math.toRadians(yaw), p = Math.toRadians(pitch);
+        double facing = Math.sin(y) * Math.cos(p) * axis.x + Math.sin(p) * axis.y
+                - Math.cos(y) * Math.cos(p) * axis.z;
+        if (facing > 1.0 - 1.0e-8) axis = axis.opposite();
+        // Retain heading at poles to keep the image's horizontal orientation stable.
+        if (axis.y == 0) yaw = axis.x != 0 ? axis.x * 90f : axis.z > 0 ? -180f : 0f;
+        pitch = axis.y * 90f;
+        if (keepEye) {
+            pivotX = clampCoordinate(eye.x() - axis.x * distance);
+            pivotY = clampCoordinate(eye.y() - axis.y * distance);
+            pivotZ = clampCoordinate(eye.z() - axis.z * distance);
+        }
+    }
 
     /** Synchronize the perspective field of view with the chosen viewport projection.
      * Orthographic height matches perspective scale at the orbit pivot.

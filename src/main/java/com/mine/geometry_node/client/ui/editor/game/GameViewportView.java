@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.runtime.game.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.GameViewTiming;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Matrix;
@@ -27,6 +28,9 @@ final class GameViewportView extends View {
     private final Runnable onSizeChanged;
     private final Rect visibleBounds = new Rect();
     private final Matrix localToRoot = new Matrix();
+    private final ViewportOrientationOverlay orientation = new ViewportOrientationOverlay();
+    private boolean orientationPressed;
+    private EditViewportCamera.Axis pressedAxis;
     private boolean activationPressed;
     private boolean navigating;
     private boolean panning;
@@ -102,6 +106,10 @@ final class GameViewportView extends View {
         activationPressed = false;
         navigating = false;
         panning = false;
+        orientationPressed = false;
+        pressedAxis = null;
+        orientation.hovered = null;
+        orientation.geometry.visible = false;
     }
 
     @Override
@@ -121,6 +129,7 @@ final class GameViewportView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        orientation.geometry.visible = false;
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
         if (!isFrameAvailable()) {
             cancelInteraction();
@@ -140,6 +149,11 @@ final class GameViewportView extends View {
                 : GameFrameImage.draw(canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
         if (drawn) {
             displayedBounds = bounds;
+            if (editing()) {
+                var pose = editCamera.snapshot();
+                orientation.geometry.layout(bounds, UIUtils.dp2px(1), pose.yaw(), pose.pitch());
+                orientation.draw(canvas);
+            }
             GameViewTiming.finish("activation to first UI frame recording", firstFrameStart, true);
             firstFrameStart = 0;
         }
@@ -152,6 +166,7 @@ final class GameViewportView extends View {
             cancelInteraction();
             return true;
         }
+        if (handleOrientationTouch(event)) return true;
         if (inputOwner.mode() == ViewportMode.EDIT) return handleEditTouch(event);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
@@ -179,6 +194,53 @@ final class GameViewportView extends View {
             }
             default -> { return super.onTouchEvent(event); }
         }
+    }
+
+    /** Consume the entire overlay gesture so a flight-mode click never captures the mouse. */
+    private boolean handleOrientationTouch(MotionEvent event) {
+        float x = event.getX(), y = event.getY();
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN -> {
+                if (!canNavigate() || !orientation.geometry.contains(x, y)) return false;
+                orientationPressed = true;
+                pressedAxis = event.isButtonPressed(MotionEvent.BUTTON_PRIMARY)
+                        ? orientation.geometry.hit(x, y) : null;
+                activationPressed = false;
+                requestFocus();
+                onInteraction.run();
+                return true;
+            }
+            case MotionEvent.ACTION_MOVE -> {
+                if (!orientationPressed) return false;
+                if (orientation.geometry.hit(x, y) != pressedAxis) pressedAxis = null;
+                return true;
+            }
+            case MotionEvent.ACTION_UP -> {
+                if (!orientationPressed) return false;
+                var axis = pressedAxis;
+                orientationPressed = false;
+                pressedAxis = null;
+                if (axis != null && canNavigate() && orientation.geometry.hit(x, y) == axis) {
+                    editCamera.alignToAxis(axis, inputOwner.mode() == ViewportMode.FLY);
+                    onInteraction.run();
+                    invalidate();
+                    performClick();
+                }
+                return true;
+            }
+            default -> { return false; }
+        }
+    }
+
+    @Override
+    public boolean onHoverEvent(MotionEvent event) {
+        var hovered = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT || !canNavigate()
+                ? null : orientation.geometry.hit(event.getX(), event.getY());
+        if (orientation.hovered != hovered) {
+            orientation.hovered = hovered;
+            invalidate();
+        }
+        return super.onHoverEvent(event) || hovered != null;
     }
 
     private boolean handleEditTouch(MotionEvent event) {
@@ -229,6 +291,8 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
+        if (editing() && orientation.geometry.contains(event.getX(), event.getY())
+                && event.getActionMasked() == MotionEvent.ACTION_SCROLL) return true;
         if (inputOwner.mode() == ViewportMode.EDIT
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL && canNavigate()
                 && displayedBounds.contains(event.getX(), event.getY())) {
