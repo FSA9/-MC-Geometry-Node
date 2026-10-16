@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.document;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
+import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import java.nio.file.Path;
 import java.util.ArrayList;

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
@@ -10,9 +12,9 @@ import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
 import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
@@ -976,14 +978,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
         KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
         KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
-        if (copy != null && copy.matches(event)) {
+        if (copy != null && UiInputBindings.matches(copy, event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 clipboardEntry = selected.size() == 1
                         ? repository.findEntry(selected.iterator().next().id()) : null;
             }
             return true;
         }
-        if (paste != null && paste.matches(event)) {
+        if (paste != null && UiInputBindings.matches(paste, event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && clipboardEntry != null && selected.size() == 1) {
                 DataLibraryUiRepository.Entry target = repository.findEntry(selected.iterator().next().id());
                 if (target != null && target.type() == clipboardEntry.type()) valueEditors.updateValue(

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.game.input;
 
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import org.lwjgl.glfw.GLFW;
 import java.util.function.Consumer;
 

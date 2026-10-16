@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.properties.session;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdSetGraphMetadata;
+import com.mine.geometry_node.client.ui.UICommand.commands.document.CmdSetGraphMetadata;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.ui.document.GraphSession;

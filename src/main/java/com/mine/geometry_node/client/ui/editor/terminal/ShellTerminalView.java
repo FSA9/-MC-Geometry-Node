@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.terminal.TerminalExit;
 import com.mine.geometry_node.client.terminal.TerminalRunState;
 import com.mine.geometry_node.client.terminal.TerminalSize;
@@ -60,6 +61,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private static final ThreadPoolExecutor RENDER_EXECUTOR = createRenderExecutor();
 
     private final ShellTerminalCoordinator coordinator;
+    private final TerminalRuntime runtime;
     private final TerminalScrollView scrollView;
     private final TextView screenView;
     private final EditText inputSink;
@@ -72,7 +74,6 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private final AtomicBoolean dirty = new AtomicBoolean();
     private final AtomicBoolean renderInFlight = new AtomicBoolean();
-    private final AtomicLong startupGeneration = new AtomicLong();
     private final AtomicLong activationGeneration = new AtomicLong();
     private final Runnable refreshTask = this::drainRefresh;
     private final Runnable resizeTask = this::applyPendingResize;
@@ -98,22 +99,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private volatile boolean startRequested;
     private volatile boolean active;
     private volatile boolean disposed;
-    private final ShellStartAction shellStartAction;
-
-    @FunctionalInterface
-    public interface ShellStartAction {
-        void start(TerminalSize size, long generation);
-    }
-
-    public ShellTerminalView(Context context, ShellTerminalCoordinator coordinator) {
-        this(context, coordinator, null);
-    }
-
-    public ShellTerminalView(Context context, ShellTerminalCoordinator coordinator,
-                             ShellStartAction shellStartAction) {
+    public ShellTerminalView(Context context, TerminalRuntime runtime) {
         super(context);
-        this.coordinator = coordinator;
-        this.shellStartAction = shellStartAction;
+        this.runtime = runtime;
+        this.coordinator = runtime.coordinator();
         coordinator.setObserver(this);
         setOrientation(VERTICAL);
         setBackground(colorDrawable(TerminalStyle.DEFAULT_BACKGROUND));
@@ -192,22 +181,14 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         followOutput = true;
         startRequested = true;
         pendingError = "";
-        if (shellStartAction == null) {
-            reportError("PowerShell starter is unavailable");
-            return;
-        }
-        shellStartAction.start(pendingSize, startupGeneration.incrementAndGet());
+        runtime.start(pendingSize, this::onTrustedToolEvent, this::reportError);
         requestRefresh();
     }
 
     public void reportError(String message) { onError(message); }
 
     public boolean isStartPending() {
-        return startRequested && !displayedState.hasActiveBackend();
-    }
-
-    public boolean acceptsShellStart(long generation) {
-        return !disposed && startRequested && startupGeneration.get() == generation;
+        return runtime.isStartPending();
     }
 
     public void onTrustedToolEvent(McpToolEvent event) {
@@ -253,7 +234,6 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         disposed = true;
         active = false;
         activationGeneration.incrementAndGet();
-        startupGeneration.incrementAndGet();
         removeCallbacks(refreshTask);
         removeCallbacks(resizeTask);
         removeCallbacks(selectionReleaseTask);
@@ -637,9 +617,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private void toggleProcess() {
         if (displayedState.hasActiveBackend()) {
-            coordinator.stop();
+            runtime.stop();
         } else if (startRequested) {
-            startupGeneration.incrementAndGet();
+            runtime.stop();
             startRequested = false;
             pendingError = "启动已取消";
             requestRefresh();

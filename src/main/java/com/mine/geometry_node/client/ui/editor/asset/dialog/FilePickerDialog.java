@@ -13,7 +13,7 @@ import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryO
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;

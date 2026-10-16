@@ -22,11 +22,11 @@ import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnai
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
+import com.mine.geometry_node.client.graph.persistence.file.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.network.NetworkHandler;

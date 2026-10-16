@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
@@ -8,10 +10,10 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelConte
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.graph.properties.session.GraphSessionPropertiesTarget;
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.document.GraphSession;
@@ -136,7 +138,7 @@ public class GraphEditorWindow extends LinearLayout
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             KeyBinding saveBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SAVE));
-            if (saveBinding != null && saveBinding.matches(event)) {
+            if (saveBinding != null && UiInputBindings.matches(saveBinding, event)) {
                 mPropertiesPanel.commitPendingEdits();
                 mGraphViewportPanel.saveCurrentSession();
                 return true;
@@ -144,7 +146,7 @@ public class GraphEditorWindow extends LinearLayout
 
             if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
             KeyBinding binding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.VIEWPORT_TOGGLE_SIDEBAR));
-            if (binding != null && binding.matches(event)) {
+            if (binding != null && UiInputBindings.matches(binding, event)) {
                 mSidebarLayout.toggle();
                 return true;
             }

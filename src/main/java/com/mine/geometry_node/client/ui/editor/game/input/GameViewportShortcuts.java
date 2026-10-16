@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.game.input;
 
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigEntry;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedAction;
 import net.minecraft.network.chat.Component;
 

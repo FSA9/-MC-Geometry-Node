@@ -1,19 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.ai.mcp.McpPowerShellRun;
-import com.mine.geometry_node.client.ai.command.CommandCatalog;
+import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
+import com.mine.geometry_node.client.integration.terminal.TerminalRuntimeFactory;
 import com.mine.geometry_node.client.terminal.TerminalSession;
 import com.mine.geometry_node.client.terminal.TerminalMode;
-import com.mine.geometry_node.client.terminal.TerminalSize;
 import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
-import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
-import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
-import com.mine.geometry_node.client.ai.mcp.client.MinecraftClientMcpGateway;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -43,20 +39,19 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private int mNextTerminalNumber = 1;
     private final EditorSessionState.TerminalState mSessionState;
     private final Runnable mSessionChanged;
+    private final TerminalRuntimeFactory mRuntimeFactory;
     private boolean mInitializing;
     private boolean mWindowActive;
-
-    public TerminalWindow(Context context) {
-        this(context, new EditorSessionState.TerminalState(), null);
-    }
 
     public TerminalWindow(
             Context context,
             EditorSessionState.TerminalState sessionState,
-            Runnable sessionChanged) {
+            Runnable sessionChanged,
+            TerminalRuntimeFactory runtimeFactory) {
         super(context);
         mSessionState = sessionState == null ? new EditorSessionState.TerminalState() : sessionState;
         mSessionChanged = sessionChanged;
+        mRuntimeFactory = java.util.Objects.requireNonNull(runtimeFactory, "runtimeFactory");
         mInitializing = true;
         setOrientation(VERTICAL);
 
@@ -243,16 +238,9 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         TerminalMode mode = parseMode(saved == null ? null : saved.mode);
         String profileId = saved == null || saved.profileId == null || saved.profileId.isBlank()
                 ? PowerShellProfile.ID : saved.profileId;
-        ShellTerminalCoordinator coordinator = new ShellTerminalCoordinator(
-                new TerminalSize(80, 24), new Pty4jProcessFactory());
-        TerminalSession session = new TerminalSession(id, title, mode, profileId, coordinator);
-        coordinator.bind(session);
-        ShellTerminalView[] viewHolder = new ShellTerminalView[1];
-        ShellTerminalView shellView = new ShellTerminalView(getContext(), coordinator,
-                (size, generation) -> startMcpPowerShell(
-                        coordinator, viewHolder[0], size, generation));
-        viewHolder[0] = shellView;
-        return new TerminalTab(session, new ConsoleView(getContext()), shellView);
+        TerminalRuntime runtime = mRuntimeFactory.create(id, title, mode, profileId);
+        ShellTerminalView shellView = new ShellTerminalView(getContext(), runtime);
+        return new TerminalTab(runtime, new ConsoleView(getContext()), shellView);
     }
 
     private void captureSessionState() {
@@ -308,31 +296,6 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         styleModeButton(mShellMode, mode == TerminalMode.SHELL);
     }
 
-    private static void startMcpPowerShell(ShellTerminalCoordinator coordinator,
-                                           ShellTerminalView view,
-                                           TerminalSize size, long generation) {
-        var gateway = new MinecraftClientMcpGateway(CommandCatalog.registry());
-        Thread.ofVirtual().name("geometry-node-mcp-powershell-start").start(() -> {
-            McpPowerShellRun run = null;
-            try {
-                run = McpPowerShellRun.start(CommandCatalog.registry(), gateway,
-                        view::onTrustedToolEvent, size);
-                if (!view.acceptsShellStart(generation)) {
-                    run.close();
-                    return;
-                }
-                coordinator.startManaged(run.launchSpec(), run);
-                if (!view.acceptsShellStart(generation)) coordinator.stop();
-            } catch (Exception failure) {
-                if (run != null) run.close();
-                if (!view.acceptsShellStart(generation)) return;
-                String message = failure.getMessage();
-                view.reportError(message == null || message.isBlank()
-                        ? failure.getClass().getSimpleName() : message);
-            }
-        });
-    }
-
     private static void styleModeButton(UiActionButton view, boolean selected) {
         view.setSelected(selected);
         view.setPalette(TerminalChrome.palette(selected));
@@ -346,11 +309,13 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     private static final class TerminalTab implements AutoCloseable {
         private final TerminalSession session;
+        private final TerminalRuntime runtime;
         private final ConsoleView commandView;
         private final ShellTerminalView shellView;
 
-        private TerminalTab(TerminalSession session, ConsoleView commandView, ShellTerminalView shellView) {
-            this.session = session;
+        private TerminalTab(TerminalRuntime runtime, ConsoleView commandView, ShellTerminalView shellView) {
+            this.runtime = runtime;
+            this.session = runtime.session();
             this.commandView = commandView;
             this.shellView = shellView;
         }
@@ -365,7 +330,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         @Override
         public void close() {
             shellView.dispose();
-            session.close();
+            runtime.close();
         }
     }
 

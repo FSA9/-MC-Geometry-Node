@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.settings.page.builtin;
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
@@ -108,7 +108,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
     }
 
     private void addEditor(SettingsPageContext context,
-                           com.mine.geometry_node.client.ui.persistence.config.ConfigEntry<?> entry) {
+                           com.mine.geometry_node.client.config.ConfigEntry<?> entry) {
         ConfigEntryEditor<?> editor = context.editorFactory().create(context.uiContext(), context.draft(), entry,
                 context.editorEnvironment());
         editor.setOnStateChangedListener(context.onStateChanged());

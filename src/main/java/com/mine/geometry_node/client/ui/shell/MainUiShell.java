@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.shell;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLayoutRoot;
+import com.mine.geometry_node.client.ui.workspace.area.AreaEditorRegistry;
+import com.mine.geometry_node.client.ui.shell.registration.BuiltinAreaEditors;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerHost;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
 import com.mine.geometry_node.client.ui.shell.menu.MainMenuController;
@@ -59,7 +61,9 @@ public final class MainUiShell extends FrameLayout {
                 UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_HEADER)
         ));
 
-        areaRoot = new AreaLayoutRoot(context);
+        AreaEditorRegistry editorRegistry = new AreaEditorRegistry();
+        BuiltinAreaEditors.register(editorRegistry);
+        areaRoot = new AreaLayoutRoot(context, editorRegistry);
         LinearLayout.LayoutParams areaParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0

@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.dialog;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;

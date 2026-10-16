@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddBranch;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdAddGroupVirtualPort;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveBranch;
-import com.mine.geometry_node.client.ui.UICommand.commands.CmdRemoveGroupVirtualPort;
+import com.mine.geometry_node.client.ui.UICommand.commands.port.CmdAddBranch;
+import com.mine.geometry_node.client.ui.UICommand.commands.group.CmdAddGroupVirtualPort;
+import com.mine.geometry_node.client.ui.UICommand.commands.port.CmdRemoveBranch;
+import com.mine.geometry_node.client.ui.UICommand.commands.group.CmdRemoveGroupVirtualPort;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;

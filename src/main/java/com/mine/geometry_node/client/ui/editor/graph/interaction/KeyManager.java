@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.interaction;
 
-import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRegistry;

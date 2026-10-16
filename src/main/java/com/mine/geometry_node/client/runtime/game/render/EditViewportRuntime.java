@@ -6,8 +6,8 @@ import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraObservers;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;

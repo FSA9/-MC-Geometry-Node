@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
@@ -21,15 +23,15 @@ import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutControll
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
@@ -319,7 +321,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             KeyBinding saveBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SAVE));
-            if (saveBinding != null && saveBinding.matches(event)) {
+            if (saveBinding != null && UiInputBindings.matches(saveBinding, event)) {
                 mPropertiesPanel.commitPendingEdits();
                 return true;
             }
@@ -327,7 +329,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
             if (mBrowserPanel != null && mBrowserPanel.handleShortcut(event)) return true;
             KeyBinding sidebarBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.VIEWPORT_TOGGLE_SIDEBAR));
-            if (sidebarBinding != null && sidebarBinding.matches(event)) {
+            if (sidebarBinding != null && UiInputBindings.matches(sidebarBinding, event)) {
                 mSidebarLayout.toggle();
                 return true;
             }

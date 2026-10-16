@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsChoice;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsEditorEnvironment;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;

@@ -1,0 +1,54 @@
+package com.mine.geometry_node.client.ui.shortcut;
+
+import com.mine.geometry_node.client.input.binding.InputBinding;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
+import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MotionEvent;
+
+/** Converts ModernUI events at the UI boundary; binding semantics stay framework independent. */
+public final class UiInputBindings {
+    private UiInputBindings() {}
+
+    public static InputBinding fromEvent(KeyEvent event) {
+        return event == null ? null : InputBinding.fromKey(event.getKeyCode(), event.isCtrlPressed(),
+                event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
+    }
+
+    public static InputBinding fromEvent(MotionEvent event) {
+        return event == null ? null : InputBinding.fromMouse(mouseButton(event.getActionButton()),
+                event.isCtrlPressed(), event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
+    }
+
+    public static boolean matches(KeyBinding binding, KeyEvent event) {
+        return binding != null && event != null && binding.matches(event.getKeyCode(), event.isCtrlPressed(),
+                event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
+    }
+
+    public static boolean matches(InputBinding binding, KeyEvent event) {
+        return binding != null && event != null && binding.matchesKey(event.getKeyCode(), event.isCtrlPressed(),
+                event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
+    }
+
+    public static boolean matches(InputBinding binding, MotionEvent event) {
+        return binding != null && event != null && binding.matchesMouse(mouseButton(event.getActionButton()),
+                mouseButtons(event.getButtonState()), event.isCtrlPressed(), event.isShiftPressed(),
+                event.isAltPressed(), event.isSuperPressed());
+    }
+
+    private static int mouseButton(int button) {
+        return switch (button) {
+            case MotionEvent.BUTTON_PRIMARY -> InputBinding.BUTTON_PRIMARY;
+            case MotionEvent.BUTTON_SECONDARY -> InputBinding.BUTTON_SECONDARY;
+            case MotionEvent.BUTTON_TERTIARY -> InputBinding.BUTTON_TERTIARY;
+            default -> 0;
+        };
+    }
+
+    private static int mouseButtons(int buttons) {
+        int result = 0;
+        if ((buttons & MotionEvent.BUTTON_PRIMARY) != 0) result |= InputBinding.BUTTON_PRIMARY;
+        if ((buttons & MotionEvent.BUTTON_SECONDARY) != 0) result |= InputBinding.BUTTON_SECONDARY;
+        if ((buttons & MotionEvent.BUTTON_TERTIARY) != 0) result |= InputBinding.BUTTON_TERTIARY;
+        return result;
+    }
+}

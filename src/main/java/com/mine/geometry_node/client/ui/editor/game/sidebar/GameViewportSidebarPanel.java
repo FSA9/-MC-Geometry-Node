@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;

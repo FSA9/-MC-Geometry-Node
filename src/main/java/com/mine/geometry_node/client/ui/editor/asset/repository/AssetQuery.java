@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.repository;
 
-import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;

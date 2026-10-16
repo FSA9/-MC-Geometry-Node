@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
@@ -11,9 +13,9 @@ import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOv
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.InputBinding;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.input.binding.InputBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -463,7 +465,7 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private boolean matchesClearSlotShortcut(MotionEvent event) {
         InputBinding binding = InputBinding.parse(clearSlotShortcutText());
-        return binding != null && binding.matches(event);
+        return binding != null && UiInputBindings.matches(binding, event);
     }
 
     private boolean beginSlotGesture(StackEntryView entry, MotionEvent event) {

@@ -202,7 +202,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         float w = UIUtils.dp2px(mWidth);
         float h = UIUtils.dp2px(mTotalHeight);
 
-        float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+        float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.config.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         float scaledHeaderH = UIUtils.dp2px(UIConstants.Node.HEADER_HEIGHT);
 
         // 画节点背景

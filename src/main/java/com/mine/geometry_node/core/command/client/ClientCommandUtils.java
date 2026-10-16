@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.client;
 
-import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
+import com.mine.geometry_node.client.graph.persistence.LocalDraftManager;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.SharedSuggestionProvider;

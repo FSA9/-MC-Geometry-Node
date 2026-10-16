@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.asset.preview;
 
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewCachePaths;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
-import com.mine.geometry_node.client.ui.persistence.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.config.ConfigManager;
 import dev.architectury.platform.Platform;
 
 import java.nio.charset.StandardCharsets;

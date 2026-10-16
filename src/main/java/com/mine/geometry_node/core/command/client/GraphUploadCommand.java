@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.command.client;
 
-import com.mine.geometry_node.client.ui.persistence.LocalDraftManager;
+import com.mine.geometry_node.client.graph.persistence.LocalDraftManager;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;

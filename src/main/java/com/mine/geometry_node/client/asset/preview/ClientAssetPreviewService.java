@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescr
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.config.ConfigManager;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;

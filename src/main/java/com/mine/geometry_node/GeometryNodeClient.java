@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.ui.workspace.registration.BuiltinSidebarPanels;
+import com.mine.geometry_node.client.ui.shell.registration.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
 import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
@@ -148,7 +148,7 @@ public class GeometryNodeClient {
         GeometryNode.LOGGER.info("HELLO FROM CLIENT SETUP");
         GeometryNode.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
-        com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.initOrLoad();
+        com.mine.geometry_node.client.config.ConfigManager.INSTANCE.initOrLoad();
         com.mine.geometry_node.core.node.NodeRegistry.INSTANCE.init();
     }
 }

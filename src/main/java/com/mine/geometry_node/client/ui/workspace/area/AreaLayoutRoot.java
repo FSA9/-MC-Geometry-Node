@@ -5,8 +5,8 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionStore;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionStore;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -14,12 +14,13 @@ import icyllis.modernui.widget.FrameLayout;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public final class AreaLayoutRoot extends FrameLayout {
     private static final long SAVE_DELAY_MS = 300L;
     private static final int MAX_LEAVES = 32;
 
-    private final AreaEditorRegistry mEditorRegistry = new AreaEditorRegistry();
+    private final AreaEditorRegistry mEditorRegistry;
     private final Map<AreaNode, View> mNodeViews = new IdentityHashMap<>();
     private AreaNode mRootNode;
     private AreaLeafNode mActiveLeaf;
@@ -31,8 +32,9 @@ public final class AreaLayoutRoot extends FrameLayout {
     private boolean mClosed;
     private final WorkspaceDragDropRegistry.DropTarget mDragTarget = this::acceptLeafDrop;
 
-    public AreaLayoutRoot(Context context) {
+    public AreaLayoutRoot(Context context, AreaEditorRegistry editorRegistry) {
         super(context);
+        mEditorRegistry = Objects.requireNonNull(editorRegistry, "editorRegistry");
         setBackground(AreaStyle.rect(AreaStyle.COLOR_ROOT));
         int padding = UIUtils.dp2pxInt(AreaStyle.ROOT_PADDING_DP);
         setPadding(padding, padding, padding, padding);

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.menu;
 
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import icyllis.modernui.view.KeyEvent;
 
 /** Keeps a held menu from reopening on repeats, even after dismissal or selection. */
@@ -26,7 +28,7 @@ public final class HeldMenuKey {
             }
             return true;
         }
-        if (canOpen && event.getAction() == KeyEvent.ACTION_DOWN && binding != null && binding.matches(event)) {
+        if (canOpen && event.getAction() == KeyEvent.ACTION_DOWN && binding != null && UiInputBindings.matches(binding, event)) {
             if (event.getRepeatCount() == 0) {
                 begin(event.getKeyCode());
                 open.run();

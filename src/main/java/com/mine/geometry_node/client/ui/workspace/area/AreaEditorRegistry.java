@@ -1,76 +1,45 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserWindow;
-import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryWindow;
-import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
-import com.mine.geometry_node.client.ui.editor.terminal.TerminalWindow;
-import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
-import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.TextView;
-import net.minecraft.network.chat.Component;
 
-final class AreaEditorRegistry {
+import java.util.EnumMap;
+import java.util.Map;
+import java.util.Objects;
+
+/** Editor factories supplied by the host, with workspace-owned surface lifetimes. */
+public final class AreaEditorRegistry {
+    private final Map<AreaEditorType, Entry> entries = new EnumMap<>(AreaEditorType.class);
+
+    public void register(AreaEditorType type, UiSurfaceType surfaceType, AreaEditorFactory factory) {
+        Objects.requireNonNull(type, "type");
+        Entry entry = new Entry(Objects.requireNonNull(surfaceType, "surfaceType"),
+                Objects.requireNonNull(factory, "factory"));
+        if (entries.putIfAbsent(type, entry) != null) {
+            throw new IllegalArgumentException("Area editor already registered: " + type);
+        }
+    }
+
     AreaEditorWindow create(
             Context context,
             AreaEditorType type,
             EditorSessionState.AreaState sessionState,
             Runnable sessionChanged) {
-        AreaEditorWindow window = switch (type) {
-            case GRAPH_EDITOR -> new GraphEditorWindow(context);
-            case GAME_VIEWPORT -> new GameViewportWindow(context);
-            case ASSET_BROWSER -> new AssetBrowserWindow(context, sessionState.assetBrowser, sessionChanged);
-            case DATA_LIBRARY -> new DataLibraryWindow(context, ClientDataLibraryRepository.INSTANCE);
-            case TERMINAL -> new TerminalWindow(context, sessionState.terminal, sessionChanged);
-            case PERFORMANCE -> createPlaceholder(context,
-                    Component.translatable(type.translationKey()).getString());
-        };
-        return new RegisteredWindow(window, surfaceType(type));
+        Entry entry = entries.get(type);
+        if (entry == null) {
+            throw new IllegalStateException("Area editor is not registered: " + type);
+        }
+        AreaEditorWindow window = Objects.requireNonNull(
+                entry.factory().create(context, sessionState, sessionChanged),
+                "Area editor factory returned no window: " + type);
+        return new RegisteredWindow(window, entry.surfaceType());
     }
 
-    private static UiSurfaceType surfaceType(AreaEditorType type) {
-        return switch (type) {
-            case GRAPH_EDITOR -> UiSurfaceType.VIEWPORT;
-            case GAME_VIEWPORT -> UiSurfaceType.GAME_VIEWPORT;
-            case ASSET_BROWSER -> UiSurfaceType.ASSET_BROWSER;
-            case DATA_LIBRARY -> UiSurfaceType.DATA_LIBRARY;
-            case TERMINAL -> UiSurfaceType.TERMINAL;
-            case PERFORMANCE -> UiSurfaceType.PERFORMANCE;
-        };
-    }
-
-    private AreaEditorWindow createPlaceholder(Context context, String title) {
-        FrameLayout layout = new FrameLayout(context);
-        TextView label = new TextView(context);
-        label.setText(title);
-        label.setTextColor(0xFF777777);
-        label.setGravity(Gravity.CENTER);
-        layout.addView(label, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        return new AreaEditorWindow() {
-            @Override
-            public View getView() {
-                return layout;
-            }
-
-            @Override
-            public void onShow() {
-            }
-
-            @Override
-            public void onHide() {
-            }
-        };
-    }
+    private record Entry(UiSurfaceType surfaceType, AreaEditorFactory factory) {}
 
     private static final class RegisteredWindow implements AreaEditorWindow {
         private final AreaEditorWindow delegate;

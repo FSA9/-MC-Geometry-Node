@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigRegistry;
+import com.mine.geometry_node.client.config.ConfigDraft;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.config.ConfigRegistry;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsEditorFactory;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;

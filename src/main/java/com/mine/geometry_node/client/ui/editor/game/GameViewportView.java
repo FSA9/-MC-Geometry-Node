@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.client.runtime.game.render.GameFrameImage;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
-import com.mine.geometry_node.client.ui.shortcut.KeyScope;
+import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;

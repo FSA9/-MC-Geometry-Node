@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;

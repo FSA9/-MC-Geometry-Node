@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.page.api;
 
-import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigRegistry;
+import com.mine.geometry_node.client.config.ConfigDraft;
+import com.mine.geometry_node.client.config.ConfigRegistry;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsEditorEnvironment;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsEditorFactory;
 import icyllis.modernui.core.Context;

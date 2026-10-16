@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
-import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
+import com.mine.geometry_node.client.config.ConfigEntry;
 import icyllis.modernui.view.View;
 
 public interface ConfigEntryEditor<T> {

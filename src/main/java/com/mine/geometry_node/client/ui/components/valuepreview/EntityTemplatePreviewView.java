@@ -1,9 +1,11 @@
 package com.mine.geometry_node.client.ui.components.valuepreview;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.components.nativepreview.ViewportNativePreviewView;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
@@ -330,12 +332,12 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (isFocused()) {
             KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
-            if (copy != null && copy.matches(event)) {
+            if (copy != null && UiInputBindings.matches(copy, event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) sClipboardTemplate = mDisplayTemplate;
                 return true;
             }
             KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
-            if (paste != null && paste.matches(event)) {
+            if (paste != null && UiInputBindings.matches(paste, event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN && sClipboardTemplate != null) {
                     commitTemplate(sClipboardTemplate);
                 }

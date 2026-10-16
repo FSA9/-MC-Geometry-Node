@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
 import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;

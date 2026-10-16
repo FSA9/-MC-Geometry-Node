@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.client.ui.persistence.session.EditorSessionState;
+import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
 import icyllis.modernui.core.Context;
 
 import java.util.EnumMap;

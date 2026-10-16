@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetType;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
-import com.mine.geometry_node.client.ui.persistence.GraphTagIO;
+import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
 
 import java.io.File;
 import java.nio.file.Files;

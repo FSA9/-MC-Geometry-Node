@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.runtime.game.input;
 
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportFlight;
 
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.ControlKeyBinding;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.input.binding.ControlKeyBinding;
 
 import java.util.EnumMap;
 import java.util.Set;

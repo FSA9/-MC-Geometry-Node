@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.persistence.PathUtils;
+import com.mine.geometry_node.client.platform.ClientPaths;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.arc3d.core.ColorInfo;
@@ -235,7 +235,7 @@ final class ViewportImageExporter {
         }
         if (baseName.isBlank()) baseName = "graph";
         String fileName = baseName + "_" + FILE_TIME.format(LocalDateTime.now()) + ".png";
-        return PathUtils.resolveWorkspacePath("geometry_nodes/screenshot").toPath().resolve(fileName);
+        return ClientPaths.resolveWorkspacePath("geometry_nodes/screenshot").toPath().resolve(fileName);
     }
 
     private static String sanitizeFileName(String value) {

@@ -5,8 +5,8 @@ import com.mine.geometry_node.client.runtime.game.camera.EditViewportFlight;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;

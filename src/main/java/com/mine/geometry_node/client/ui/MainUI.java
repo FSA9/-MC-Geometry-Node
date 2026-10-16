@@ -52,7 +52,7 @@ public class MainUI extends Fragment implements ScreenCallback {
         System.setProperty("gn.standalone", "true");
         Configurator.setRootLevel(Level.DEBUG);
 
-        com.mine.geometry_node.client.ui.persistence.config.ConfigManager.INSTANCE.initOrLoad();
+        com.mine.geometry_node.client.config.ConfigManager.INSTANCE.initOrLoad();
         NodeRegistry.INSTANCE.init();
 
         try (ModernUI app = new ModernUI()) {

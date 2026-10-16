@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

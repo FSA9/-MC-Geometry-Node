@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.shortcut;
 
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.input.binding.KeyScope;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.ConfigEntry;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 
 public class ScopedAction<T> {
     public interface EnabledReader<S> {

@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.shortcut;
 
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.input.binding.KeyScope;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.ConfigChangeListener;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import icyllis.modernui.view.KeyEvent;
 
 import java.util.Collection;
@@ -83,6 +84,6 @@ public class ScopedKeyManager<T, S> {
     }
 
     private static boolean matches(KeyBinding binding, KeyEvent event) {
-        return binding != null && binding.matches(event);
+        return UiInputBindings.matches(binding, event);
     }
 }

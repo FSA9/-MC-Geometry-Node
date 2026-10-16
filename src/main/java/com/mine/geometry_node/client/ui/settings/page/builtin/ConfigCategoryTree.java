@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
-import com.mine.geometry_node.client.ui.persistence.config.ConfigCategory;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
+import com.mine.geometry_node.client.config.ConfigCategory;
+import com.mine.geometry_node.client.config.ConfigEntry;
 
 import java.util.ArrayList;
 import java.util.Comparator;

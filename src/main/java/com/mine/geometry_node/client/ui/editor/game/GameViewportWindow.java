@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
 
@@ -19,9 +21,9 @@ import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
@@ -378,7 +380,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
             // belong to this window, not only to its image child.
             if (viewport.dispatchShortcut(event)) return true;
             KeyBinding binding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_SIDEBAR));
-            if (binding != null && binding.matches(event)) {
+            if (binding != null && UiInputBindings.matches(binding, event)) {
                 if (event.getRepeatCount() == 0) sidebarLayout.toggle();
                 return true;
             }

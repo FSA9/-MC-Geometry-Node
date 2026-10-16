@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
@@ -12,9 +14,9 @@ import com.mine.geometry_node.client.ui.editor.asset.dialog.FilePickerDialog;
 import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
-import com.mine.geometry_node.client.ui.persistence.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
-import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
@@ -529,7 +531,7 @@ final class DataLibraryValueEditors {
             AtomicReference<DataLibraryUiRepository.Entry> current
     ) {
         KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
-        if (copy != null && copy.matches(event)) {
+        if (copy != null && UiInputBindings.matches(copy, event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 Object value = current.get().value();
                 entityReferenceClipboard = value instanceof UUID entityId ? entityId : null;
@@ -538,7 +540,7 @@ final class DataLibraryValueEditors {
             return true;
         }
         KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
-        if (paste != null && paste.matches(event)) {
+        if (paste != null && UiInputBindings.matches(paste, event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && hasEntityReferenceClipboard) {
                 updateValue(current, entityReferenceClipboard);
             }

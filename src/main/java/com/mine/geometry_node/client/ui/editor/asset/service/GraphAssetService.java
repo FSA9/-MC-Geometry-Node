@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.ui.editor.asset.service;
 
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
-import com.mine.geometry_node.client.ui.persistence.GraphJsonIO;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphDocumentStore;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileReference;
-import com.mine.geometry_node.client.ui.persistence.graphfile.GraphFileRegistry;
+import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
+import com.mine.geometry_node.client.graph.persistence.file.GraphDocumentStore;
+import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
+import com.mine.geometry_node.client.graph.persistence.file.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 

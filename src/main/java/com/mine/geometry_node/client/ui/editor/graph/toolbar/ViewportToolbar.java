@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.toolbar;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.persistence.config.AppConfig;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigChangeListener;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.ConfigChangeListener;
+import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRegistry;

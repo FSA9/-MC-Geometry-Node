@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
+import com.mine.geometry_node.client.config.ConfigManager;
 
 import java.io.File;
 import java.util.ArrayList;

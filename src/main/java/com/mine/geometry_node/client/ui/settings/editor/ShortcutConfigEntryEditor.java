@@ -1,11 +1,12 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
-import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
-import com.mine.geometry_node.client.ui.persistence.config.InputBinding;
-import com.mine.geometry_node.client.ui.persistence.config.ControlKeyRecorder;
+import com.mine.geometry_node.client.config.ConfigDraft;
+import com.mine.geometry_node.client.config.ConfigEntry;
+import com.mine.geometry_node.client.input.binding.InputBinding;
+import com.mine.geometry_node.client.ui.shortcut.ControlKeyRecorder;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
@@ -132,7 +133,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
             }
             if (!mCapturing) return super.dispatchKeyEvent(event);
             if (mEntry.captureControlKeys()) {
-                InputBinding binding = InputBinding.fromEvent(event);
+                InputBinding binding = UiInputBindings.fromEvent(event);
                 String result = mControlRecorder.accept(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN,
                         binding != null ? binding.text() : null);
                 if (result != null) {
@@ -143,7 +144,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
             }
             if (event.getAction() != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event);
             if (event.getKeyCode() == KeyEvent.KEY_ESCAPE) { cancelCapture(); mConsumedKey = event.getKeyCode(); return true; }
-            InputBinding binding = InputBinding.fromEvent(event);
+            InputBinding binding = UiInputBindings.fromEvent(event);
             if (binding != null) { setBinding(binding.text()); mConsumedKey = event.getKeyCode(); }
             return true;
         }
@@ -151,7 +152,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         @Override public boolean onTouchEvent(MotionEvent event) {
             if (mCapturing && mEntry.editorType() == ConfigEntry.EditorType.SHORTCUT
                     && event.getAction() == MotionEvent.ACTION_DOWN) {
-                InputBinding binding = InputBinding.fromEvent(event);
+                InputBinding binding = UiInputBindings.fromEvent(event);
                 if (binding != null) {
                     mSuppressClick = true;
                     setBinding(binding.text());
