@@ -17,10 +17,8 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.Predicate;
 
 /** Shared renderer for pages that are projections of the config registry. */
@@ -55,20 +53,11 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        Map<ConfigCategory, List<ConfigEntry<?>>> groups = new LinkedHashMap<>();
-        for (ConfigCategory category : context.configRegistry().categories()) {
-            if (retainedCategory.test(category)) {
-                groups.put(category, new ArrayList<>());
-            }
-        }
-        for (ConfigEntry<?> entry : context.configRegistry().entries()) {
-            if (entry.isVisibleInSettings() && filter.test(entry)) {
-                groups.computeIfAbsent(entry.category(), ignored -> new ArrayList<>()).add(entry);
-            }
-        }
+        var groups = ConfigCategoryTree.build(context.configRegistry().categories(),
+                context.configRegistry().entries(), retainedCategory, filter);
         try {
-            for (Map.Entry<ConfigCategory, List<ConfigEntry<?>>> group : groups.entrySet()) {
-                GroupBinding binding = createGroup(context, group.getKey(), group.getValue());
+            for (var group : groups) {
+                GroupBinding binding = createGroup(context, group, 0);
                 groupBindings.add(binding);
                 content.addView(binding.view(), groupParams());
             }
@@ -92,18 +81,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
     public final boolean applySearch(String query) {
         String normalized = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         boolean pageMatch = false;
-        for (GroupBinding group : groupBindings) {
-            boolean categoryMatch = !normalized.isEmpty() && group.searchText().contains(normalized);
-            boolean groupMatch = normalized.isEmpty() && group.entries().isEmpty();
-            for (EntryBinding entry : group.entries()) {
-                boolean visible = normalized.isEmpty() || categoryMatch || entry.searchText().contains(normalized);
-                entry.editor().getView().setVisibility(visible ? View.VISIBLE : View.GONE);
-                groupMatch |= visible;
-            }
-            group.view().setVisibility(groupMatch ? View.VISIBLE : View.GONE);
-            group.setSearchExpanded(!normalized.isEmpty() && groupMatch);
-            pageMatch |= groupMatch;
-        }
+        for (GroupBinding group : groupBindings) pageMatch |= group.applySearch(normalized, false);
         return pageMatch;
     }
 
@@ -121,11 +99,11 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         root.removeAllViews();
     }
 
-    private GroupBinding createGroup(SettingsPageContext context, ConfigCategory category,
-                                     List<ConfigEntry<?>> entries) {
+    private GroupBinding createGroup(SettingsPageContext context, ConfigCategoryTree.Group specification, int depth) {
+        ConfigCategory category = specification.category();
         LinearLayout group = new LinearLayout(context.uiContext());
         group.setOrientation(LinearLayout.VERTICAL);
-        group.setBackground(groupBackground());
+        if (depth == 0) group.setBackground(groupBackground());
 
         LinearLayout header = new LinearLayout(context.uiContext());
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -150,7 +128,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         titleParams.leftMargin = UIUtils.dp2pxInt(3);
         header.addView(title, titleParams);
         group.addView(header, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
+                ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(depth == 0 ? 30 : 28)));
 
         LinearLayout entriesHost = new LinearLayout(context.uiContext());
         entriesHost.setOrientation(LinearLayout.VERTICAL);
@@ -161,7 +139,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         List<EntryBinding> entryBindings = new ArrayList<>();
-        for (ConfigEntry<?> entry : entries) {
+        for (ConfigEntry<?> entry : specification.entries()) {
             ConfigEntryEditor<?> editor = context.editorFactory().create(
                     context.uiContext(), context.draft(), entry, context.editorEnvironment());
             editor.setOnStateChangedListener(() -> {
@@ -175,8 +153,26 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
                     ViewGroup.LayoutParams.WRAP_CONTENT
             ));
         }
+        String description = category.descriptionTranslationKey() == null ? ""
+                : Component.translatable(category.descriptionTranslationKey()).getString();
+        TextView help = null;
+        if (!description.isEmpty()) {
+            help = UIUtils.createLockedTextView(context.uiContext(), description, 10.5f, COLOR_DISCLOSURE);
+            help.setPadding(0, UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6));
+            entriesHost.addView(help, new LinearLayout.LayoutParams(-1, -2));
+        }
+        List<GroupBinding> children = new ArrayList<>();
+        for (var child : specification.children()) {
+            GroupBinding binding = createGroup(context, child, depth + 1);
+            children.add(binding);
+            LinearLayout.LayoutParams params = groupParams();
+            params.topMargin = UIUtils.dp2pxInt(3);
+            params.bottomMargin = UIUtils.dp2pxInt(3);
+            entriesHost.addView(binding.view(), params);
+        }
         GroupBinding binding = new GroupBinding(group, entriesHost, disclosure, List.copyOf(entryBindings),
-                Component.translatable(category.titleTranslationKey()).getString().toLowerCase(Locale.ROOT));
+                List.copyOf(children), help, (Component.translatable(category.titleTranslationKey()).getString()
+                + "\n" + description).toLowerCase(Locale.ROOT));
         header.setOnClickListener(view -> binding.toggle());
         header.setOnHoverListener((view, event) -> {
             switch (event.getAction()) {
@@ -235,23 +231,39 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         private final LinearLayout entriesHost;
         private final SvgIconView disclosure;
         private final List<EntryBinding> entries;
+        private final List<GroupBinding> children;
+        private final TextView help;
         private final String searchText;
         private boolean expanded;
         private boolean searchExpanded;
 
         private GroupBinding(LinearLayout view, LinearLayout entriesHost, SvgIconView disclosure,
-                             List<EntryBinding> entries, String searchText) {
+                             List<EntryBinding> entries, List<GroupBinding> children, TextView help, String searchText) {
             this.view = view;
             this.entriesHost = entriesHost;
             this.disclosure = disclosure;
             this.entries = entries;
+            this.children = children;
+            this.help = help;
             this.searchText = searchText;
             updateExpansion();
         }
 
         private LinearLayout view() { return view; }
-        private List<EntryBinding> entries() { return entries; }
-        private String searchText() { return searchText; }
+        private boolean applySearch(String query, boolean ancestorMatches) {
+            boolean categoryMatch = ancestorMatches || (!query.isEmpty() && searchText.contains(query));
+            boolean matches = query.isEmpty() || categoryMatch;
+            for (EntryBinding entry : entries) {
+                boolean visible = query.isEmpty() || categoryMatch || entry.searchText().contains(query);
+                entry.editor().getView().setVisibility(visible ? View.VISIBLE : View.GONE);
+                matches |= visible;
+            }
+            for (GroupBinding child : children) matches |= child.applySearch(query, categoryMatch);
+            if (help != null) help.setVisibility(query.isEmpty() || categoryMatch ? View.VISIBLE : View.GONE);
+            view.setVisibility(matches ? View.VISIBLE : View.GONE);
+            setSearchExpanded(!query.isEmpty() && matches);
+            return matches;
+        }
 
         private void toggle() {
             expanded = !expanded;

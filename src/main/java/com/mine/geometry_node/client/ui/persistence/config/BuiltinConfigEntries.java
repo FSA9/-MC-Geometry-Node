@@ -12,12 +12,19 @@ import java.util.Map;
 public final class BuiltinConfigEntries {
     public static final ConfigCategory VIEWPORT = category("viewport", 100);
     public static final ConfigCategory GAME_VIEW = category("game_view", 150);
+    public static final ConfigCategory GAME_VIEW_GENERAL = childCategory("game_view_general", 100, GAME_VIEW);
     public static final ConfigCategory NODE = category("node", 200);
     public static final ConfigCategory ASSET_BROWSER = category("asset_browser", 300);
     public static final ConfigCategory PREVIEW_CACHE = category("preview_cache", 375);
     public static final ConfigCategory SHORTCUT_GLOBAL = category("shortcut_global", 400);
     public static final ConfigCategory SHORTCUT_VIEWPORT = category("shortcut_viewport", 500);
     public static final ConfigCategory SHORTCUT_GAME_VIEW = category("shortcut_game_view", 550);
+    public static final ConfigCategory SHORTCUT_GAME_VIEW_GENERAL = childCategory("shortcut_game_view_general", 100, SHORTCUT_GAME_VIEW);
+    public static final ConfigCategory SHORTCUT_GAME_VIEW_GAME = new ConfigCategory(
+            "shortcut_game_view_game", "geometry_node.settings.category.shortcut_game_view_game", 200,
+            SHORTCUT_GAME_VIEW, "geometry_node.settings.category.shortcut_game_view_game.description");
+    public static final ConfigCategory SHORTCUT_GAME_VIEW_EDIT = childCategory("shortcut_game_view_edit", 300, SHORTCUT_GAME_VIEW);
+    public static final ConfigCategory SHORTCUT_GAME_VIEW_FLIGHT = childCategory("shortcut_game_view_flight", 400, SHORTCUT_GAME_VIEW);
     public static final ConfigCategory SHORTCUT_SHOP = category("shortcut_shop", 600);
 
     public static final ConfigEntry<Integer> VIEWPORT_GRID_SIZE = integer(
@@ -30,7 +37,7 @@ public final class BuiltinConfigEntries {
             "viewport.showGridAndAxis", VIEWPORT, 300, ConfigEntry.SettingsVisibility.HIDDEN,
             config -> config.viewport.showGridAndAxis, (config, value) -> config.viewport.showGridAndAxis = value);
     public static final ConfigEntry<Integer> GAME_VIEW_BACKGROUND_FPS = integer(
-            "gameView.backgroundFps", GAME_VIEW, 100, 1, 120, ConfigEntry.SettingsVisibility.VISIBLE,
+            "gameView.backgroundFps", GAME_VIEW_GENERAL, 100, 1, 120, ConfigEntry.SettingsVisibility.VISIBLE,
             config -> config.gameView.backgroundFps, (config, value) -> config.gameView.backgroundFps = value);
     public static final ConfigEntry<Float> NODE_CORNER_RADIUS = floating(
             "node.cornerRadius", NODE, 100, 0.0f, 24.0f, 0.5f, ConfigEntry.SettingsVisibility.HIDDEN,
@@ -108,11 +115,11 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.viewport.groupIntoFrame, (config, value) -> config.keyBindings.viewport.groupIntoFrame = value);
     public static final ConfigEntry<String> VIEWPORT_GROUP_NODE = key("keyBindings.viewport.groupIntoNodeGroup", SHORTCUT_VIEWPORT, 700, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.groupIntoNodeGroup, (config, value) -> config.keyBindings.viewport.groupIntoNodeGroup = value);
-    public static final ConfigEntry<String> GAME_VIEW_FLY = key("keyBindings.gameView.fly", SHORTCUT_GAME_VIEW, 100, KeyScope.GAME_VIEW,
+    public static final ConfigEntry<String> GAME_VIEW_FLY = key("keyBindings.gameView.fly", SHORTCUT_GAME_VIEW_FLIGHT, 100, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.fly, (config, value) -> config.keyBindings.gameView.fly = value);
-    public static final ConfigEntry<String> GAME_VIEW_PROJECTION = key("keyBindings.gameView.toggleProjection", SHORTCUT_GAME_VIEW, 200, KeyScope.GAME_VIEW,
+    public static final ConfigEntry<String> GAME_VIEW_PROJECTION = key("keyBindings.gameView.toggleProjection", SHORTCUT_GAME_VIEW_EDIT, 200, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.toggleProjection, (config, value) -> config.keyBindings.gameView.toggleProjection = value);
-    public static final ConfigEntry<String> GAME_VIEW_SIDEBAR = key("keyBindings.gameView.toggleSidebar", SHORTCUT_GAME_VIEW, 300, KeyScope.GAME_VIEW,
+    public static final ConfigEntry<String> GAME_VIEW_SIDEBAR = key("keyBindings.gameView.toggleSidebar", SHORTCUT_GAME_VIEW_GENERAL, 300, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.toggleSidebar, (config, value) -> config.keyBindings.gameView.toggleSidebar = value);
 
     public static final ConfigEntry<String> GAME_FLIGHT_FORWARD = controlKey("keyBindings.gameView.forward", 400, true,
@@ -155,10 +162,14 @@ public final class BuiltinConfigEntries {
 
     static void register(ConfigRegistry registry) {
         for (ConfigCategory category : List.of(VIEWPORT, GAME_VIEW, NODE, ASSET_BROWSER, PREVIEW_CACHE,
-                SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_GAME_VIEW, SHORTCUT_SHOP)) {
+                SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_GAME_VIEW, SHORTCUT_GAME_VIEW_GAME, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }
         for (ConfigEntry<?> entry : ALL) registerUnchecked(registry, entry);
+    }
+
+    private static ConfigCategory childCategory(String id, int order, ConfigCategory parent) {
+        return new ConfigCategory(id, "geometry_node.settings.category." + id, order, parent);
     }
 
     private static ConfigCategory category(String id, int order) {
@@ -210,7 +221,7 @@ public final class BuiltinConfigEntries {
     private static ConfigEntry<String> controlKey(String id, int order, boolean allowUnassigned,
                                                    java.util.function.Function<AppConfig, String> getter,
                                                    java.util.function.BiConsumer<AppConfig, String> setter) {
-        return ConfigEntry.builder(id, SHORTCUT_GAME_VIEW, ConfigEntry.EditorType.KEY_BINDING, getter, setter)
+        return ConfigEntry.builder(id, SHORTCUT_GAME_VIEW_FLIGHT, ConfigEntry.EditorType.KEY_BINDING, getter, setter)
                 .label(labelKey(id)).description(descriptionKey(id)).order(order)
                 .keyScope(KeyScope.GAME_VIEW_FLIGHT).captureControlKeys(true)
                 .normalize(value -> {

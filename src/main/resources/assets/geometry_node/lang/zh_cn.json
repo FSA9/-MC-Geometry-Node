@@ -1959,5 +1959,11 @@
     "geometry_node.game_view.sidebar.shared_basic_help": "存在可见编辑视图时，游戏预览也暂停光影效果。游戏与编辑视图轮流刷新；所有游戏预览仍共享同一个玩家视角。",
     "geometry_node.settings.category.game_view": "游戏视图",
     "geometry_node.settings.entry.gameView.backgroundFps.label": "非活动视图帧率上限",
-    "geometry_node.settings.entry.gameView.backgroundFps.description": "限制未选中游戏/编辑视图的刷新频率，默认 20 FPS，可设为 1–120。当前活动视图不受此限制；游戏窗口共用一份画面。应用设置后立即生效。"
+    "geometry_node.settings.entry.gameView.backgroundFps.description": "限制未选中游戏/编辑视图的刷新频率，默认 20 FPS，可设为 1–120。当前活动视图不受此限制；游戏窗口共用一份画面。应用设置后立即生效。",
+    "geometry_node.settings.category.game_view_general": "通用",
+    "geometry_node.settings.category.shortcut_game_view_general": "通用",
+    "geometry_node.settings.category.shortcut_game_view_game": "游戏模式",
+    "geometry_node.settings.category.shortcut_game_view_edit": "编辑模式",
+    "geometry_node.settings.category.shortcut_game_view_flight": "飞行模式",
+    "geometry_node.settings.category.shortcut_game_view_game.description": "游戏操作沿用 Minecraft 的“选项 → 控制 → 按键绑定”。点击画面接管输入，Esc 释放控制并返回编辑器。"
 }

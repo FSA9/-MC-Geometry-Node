@@ -1959,5 +1959,11 @@
     "geometry_node.game_view.sidebar.shared_basic_help": "A visible edit view pauses shader effects in this game preview too. Game and edit views refresh in rotation; all game previews still share one player view.",
     "geometry_node.settings.category.game_view": "Game View",
     "geometry_node.settings.entry.gameView.backgroundFps.label": "Inactive View FPS Limit",
-    "geometry_node.settings.entry.gameView.backgroundFps.description": "Limits refreshes of inactive game/edit views. Default: 20 FPS; range: 1–120. The active view is exempt; game views share one frame. Takes effect as soon as settings are applied."
+    "geometry_node.settings.entry.gameView.backgroundFps.description": "Limits refreshes of inactive game/edit views. Default: 20 FPS; range: 1–120. The active view is exempt; game views share one frame. Takes effect as soon as settings are applied.",
+    "geometry_node.settings.category.game_view_general": "General",
+    "geometry_node.settings.category.shortcut_game_view_general": "General",
+    "geometry_node.settings.category.shortcut_game_view_game": "Game Mode",
+    "geometry_node.settings.category.shortcut_game_view_edit": "Edit Mode",
+    "geometry_node.settings.category.shortcut_game_view_flight": "Fly Mode",
+    "geometry_node.settings.category.shortcut_game_view_game.description": "Game controls use Minecraft Options → Controls → Key Binds. Click the viewport to capture input; press Esc to release control and return to the editor."
 }

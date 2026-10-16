@@ -22,6 +22,7 @@ public final class ConfigRegistry {
 
     public synchronized void registerCategory(ConfigCategory category) {
         Objects.requireNonNull(category, "category");
+        if (category.parent() != null) registerCategory(category.parent());
         ConfigCategory previous = mCategories.putIfAbsent(category.id(), category);
         if (previous != null && !previous.equals(category)) {
             throw new IllegalArgumentException("Duplicate config category id: " + category.id());
@@ -51,9 +52,10 @@ public final class ConfigRegistry {
         return sortedEntries(mEntries.values());
     }
 
+    /** Entries in the category and its descendants (also used by category reset). */
     public synchronized List<ConfigEntry<?>> entries(ConfigCategory category) {
         if (category == null) return List.of();
-        return sortedEntries(mEntries.values().stream().filter(entry -> entry.category().id().equals(category.id())).toList());
+        return sortedEntries(mEntries.values().stream().filter(entry -> entry.category().isWithin(category)).toList());
     }
 
     /** Applies every registered entry's canonical validation contract in place. */
