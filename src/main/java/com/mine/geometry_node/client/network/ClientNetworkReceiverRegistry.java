@@ -49,6 +49,10 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        ClientboundPayloadRegistry.registerClientReceiver(
+                com.mine.geometry_node.core.network.packet.s2c.PacketEditCameraView.TYPE,
+                (payload, context) -> context.queue(() ->
+                        com.mine.geometry_node.client.runtime.game.EditCameraChunkClient.accept(payload)));
         com.mine.geometry_node.client.runtime.light.ClientLightStore.init();
 
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetFileResponse.TYPE,

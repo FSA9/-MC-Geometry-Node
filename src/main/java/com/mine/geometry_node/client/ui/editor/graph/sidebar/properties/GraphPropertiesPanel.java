@@ -48,7 +48,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
             "geometry_node.graph_properties.title",
             100,
             Set.of(SidebarPanelScope.GRAPH_EDITOR, SidebarPanelScope.ASSET_BROWSER),
-            GraphPropertiesPanel::create);
+            GraphPropertiesPanel::create, com.mine.geometry_node.client.ui.components.common.SvgIconView.Icon.PROPERTIES);
 
     private static final int COLOR_BACKGROUND = 0xFF303030;
     private static final int COLOR_SECTION = 0xFF292929;

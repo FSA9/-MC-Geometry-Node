@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Rect;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -15,7 +16,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
-final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink {
+final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink, AreaLifecycle.Owner {
     private final AreaLayoutRoot mRoot;
     private final AreaLeafNode mNode;
     private final AreaIconButton mEditorSelector;
@@ -25,12 +26,16 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     private AreaEditorMenu mEditorMenu;
     private AreaEditorWindow mCurrentWindow;
     private boolean mWindowShown;
+    private final AreaLifecycle mLifecycle = new AreaLifecycle();
+    private boolean mDragTargetHighlighted;
 
     AreaLeafView(Context context, AreaLayoutRoot root, AreaLeafNode node) {
         super(context);
         mRoot = root;
         mNode = node;
         setOrientation(VERTICAL);
+        setFocusableInTouchMode(true);
+        setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
         setPadding(
                 UIUtils.dp2pxInt(AreaStyle.PANE_GAP_DP),
                 UIUtils.dp2pxInt(AreaStyle.PANE_GAP_DP),
@@ -86,6 +91,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     @Override
     protected void onDetachedFromWindow() {
+        mLifecycle.emit(AreaLifecycle.Event.DETACHED);
         closeEditorMenu(true);
         if (mCurrentWindow != null) {
             hideWindow(mCurrentWindow);
@@ -93,6 +99,15 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         }
         super.onDetachedFromWindow();
     }
+
+    @Override public AreaLifecycle areaLifecycle() { return mLifecycle; }
+
+    @Override public void onVisibilityAggregated(boolean visible) {
+        super.onVisibilityAggregated(visible);
+        if (!visible && mLifecycle != null) mLifecycle.emit(AreaLifecycle.Event.HIDDEN);
+    }
+
+    void disposeLifecycle() { mLifecycle.emit(AreaLifecycle.Event.DISPOSED); }
 
     @Override
     public void showButtonHint(AreaIconButton button, String hint) {
@@ -115,6 +130,39 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         return mNode;
     }
 
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            mRoot.activateLeaf(mNode);
+            // Clicking a non-focusable header/blank area must not leave keyboard
+            // input in a different pane. Let the clicked child refine focus next.
+            if (!hasFocus()) focusEditor();
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public void requestChildFocus(View child, View focused) {
+        super.requestChildFocus(child, focused);
+        mRoot.activateLeaf(mNode);
+    }
+
+    @Override
+    protected void onFocusChanged(boolean gainFocus, int direction, Rect previouslyFocusedRect) {
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect);
+        if (gainFocus) mRoot.activateLeaf(mNode);
+    }
+
+    void focusEditor() {
+        if (!mContentFrame.requestFocus()) requestFocus();
+    }
+
+    void setActive(boolean active) {
+        if (mLifecycle.isActive() == active) return;
+        mLifecycle.setActive(active);
+        updateBorder();
+    }
+
     void refreshChrome() {
         mHintButton = null;
         closeEditorMenu();
@@ -127,16 +175,24 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
     }
 
     void prepareForContentSwap() {
+        mLifecycle.emit(AreaLifecycle.Event.CONTENT_CHANGED);
         mCurrentWindow = null;
         mWindowShown = false;
     }
 
     void setDragTargetHighlighted(boolean highlighted) {
+        if (mDragTargetHighlighted == highlighted) return;
+        mDragTargetHighlighted = highlighted;
+        updateBorder();
+    }
+
+    private void updateBorder() {
         setBackground(AreaStyle.rounded(
                 AreaStyle.COLOR_PANE,
                 AreaStyle.PANE_RADIUS_DP,
-                highlighted ? 2 : 1,
-                highlighted ? AreaStyle.COLOR_ACCENT : AreaStyle.COLOR_PANE_BORDER
+                mDragTargetHighlighted ? 2 : 1,
+                mDragTargetHighlighted ? AreaStyle.COLOR_ACCENT
+                        : mLifecycle.isActive() ? AreaStyle.COLOR_ACTIVE_BORDER : AreaStyle.COLOR_PANE_BORDER
         ));
     }
 
@@ -204,9 +260,12 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         if (type == null || type == mNode.editorType()) {
             return;
         }
+        mLifecycle.emit(AreaLifecycle.Event.CONTENT_CHANGED);
         mNode.setEditorType(type);
         updateHeaderState();
         attachEditor();
+        mRoot.activateLeaf(mNode);
+        focusEditor();
         mRoot.requestSessionSave();
     }
 

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.asset.menu;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -27,6 +29,7 @@ public class FileContextMenu extends FrameLayout {
     private ViewGroup mHostParent;
     private Runnable mOnDismissListener;
     private boolean mDismissed;
+    private AreaLifecycle.Subscription areaBinding = AreaLifecycle.Subscription.NONE;
 
     public FileContextMenu(Context context) {
         super(context);
@@ -153,10 +156,13 @@ public class FileContextMenu extends FrameLayout {
     }
 
     public void showAt(float x, float y, ViewGroup parent) {
+        areaBinding.close();
         mDismissed = false;
+        setVisibility(VISIBLE);
         mHostParent = parent;
         parent.addView(this);
         layoutPanel(mContentLayout, x, y, parent);
+        areaBinding = AreaTransientUi.bind(parent, this, this::dismiss);
     }
 
     public void setOnDismissListener(Runnable listener) {
@@ -170,6 +176,8 @@ public class FileContextMenu extends FrameLayout {
     public void dismiss() {
         if (mDismissed) return;
         mDismissed = true;
+        areaBinding.close();
+        areaBinding = AreaLifecycle.Subscription.NONE;
         dismissChildMenu();
         if (getParent() != null) {
             ((ViewGroup) getParent()).removeView(this);

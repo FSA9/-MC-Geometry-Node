@@ -3,6 +3,11 @@
   "package": "com.mine.geometry_node.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "viewport.CameraChunkMapAccess",
+    "viewport.CameraChunkMapMixin",
+    "viewport.CameraChunkSenderMixin",
+    "viewport.CameraChunkTrackingMixin",
+    "viewport.CameraEntityTrackingMixin",
     "model.collision.ModelEntityCollisionMixin",
     "model.collision.ModelCollisionSupportMixin",
     "model.collision.ModelPlayerCollisionMixin",
@@ -21,7 +26,13 @@
     "scoreboard.ServerScoreboardMixin"
   ],
   "client": [
+    "game.EditClientChunkCacheMixin",
+    "game.EditClientChunkStorageMixin",
     "game.GameViewRendererMixin",
+    "game.EditViewportRendererMixin",
+    "game.EditViewportIrisPipelineMixin",
+    "game.EditViewportSodiumFacesMixin",
+    "game.EditViewFrustumMixin",
     "game.GameViewGuiRendererAccessor",
     "game.GameViewLevelRendererAccessor",
     "game.GameViewGuiRendererMixin",

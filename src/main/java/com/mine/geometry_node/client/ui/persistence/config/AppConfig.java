@@ -89,12 +89,14 @@ public class AppConfig {
     public static class KeyBindingsConfig {
         public GlobalKeyBindingsConfig global = new GlobalKeyBindingsConfig();
         public ViewportKeyBindingsConfig viewport = new ViewportKeyBindingsConfig();
+        public GameViewKeyBindingsConfig gameView = new GameViewKeyBindingsConfig();
         public ShopEditorKeyBindingsConfig shopEditor = new ShopEditorKeyBindingsConfig();
 
         KeyBindingsConfig copy() {
             KeyBindingsConfig copy = new KeyBindingsConfig();
             copy.global = global != null ? global.copy() : null;
             copy.viewport = viewport != null ? viewport.copy() : null;
+            copy.gameView = gameView != null ? gameView.copy() : null;
             copy.shopEditor = shopEditor != null ? shopEditor.copy() : null;
             return copy;
         }
@@ -144,6 +146,35 @@ public class AppConfig {
             copy.groupIntoNodeGroup = groupIntoNodeGroup;
             copy.moveSelection = moveSelection;
             copy.toggleRightSidebar = toggleRightSidebar;
+            return copy;
+        }
+    }
+
+    public static class GameViewKeyBindingsConfig {
+        public String fly = "SHIFT+GRAVE_ACCENT";
+        public String toggleProjection = "KP_5";
+        public String toggleSidebar = "N";
+
+        public String forward = "W";
+        public String backward = "S";
+        public String left = "A";
+        public String right = "D";
+        public String up = "SPACE";
+        public String down = "CTRL";
+        public String exit = "ESCAPE";
+
+        GameViewKeyBindingsConfig copy() {
+            GameViewKeyBindingsConfig copy = new GameViewKeyBindingsConfig();
+            copy.fly = fly;
+            copy.toggleProjection = toggleProjection;
+            copy.toggleSidebar = toggleSidebar;
+            copy.forward = forward;
+            copy.backward = backward;
+            copy.left = left;
+            copy.right = right;
+            copy.up = up;
+            copy.down = down;
+            copy.exit = exit;
             return copy;
         }
     }

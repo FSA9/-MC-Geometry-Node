@@ -16,6 +16,7 @@ public final class BuiltinConfigEntries {
     public static final ConfigCategory PREVIEW_CACHE = category("preview_cache", 375);
     public static final ConfigCategory SHORTCUT_GLOBAL = category("shortcut_global", 400);
     public static final ConfigCategory SHORTCUT_VIEWPORT = category("shortcut_viewport", 500);
+    public static final ConfigCategory SHORTCUT_GAME_VIEW = category("shortcut_game_view", 550);
     public static final ConfigCategory SHORTCUT_SHOP = category("shortcut_shop", 600);
 
     public static final ConfigEntry<Integer> VIEWPORT_GRID_SIZE = integer(
@@ -103,6 +104,28 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.viewport.groupIntoFrame, (config, value) -> config.keyBindings.viewport.groupIntoFrame = value);
     public static final ConfigEntry<String> VIEWPORT_GROUP_NODE = key("keyBindings.viewport.groupIntoNodeGroup", SHORTCUT_VIEWPORT, 700, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.groupIntoNodeGroup, (config, value) -> config.keyBindings.viewport.groupIntoNodeGroup = value);
+    public static final ConfigEntry<String> GAME_VIEW_FLY = key("keyBindings.gameView.fly", SHORTCUT_GAME_VIEW, 100, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.fly, (config, value) -> config.keyBindings.gameView.fly = value);
+    public static final ConfigEntry<String> GAME_VIEW_PROJECTION = key("keyBindings.gameView.toggleProjection", SHORTCUT_GAME_VIEW, 200, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.toggleProjection, (config, value) -> config.keyBindings.gameView.toggleProjection = value);
+    public static final ConfigEntry<String> GAME_VIEW_SIDEBAR = key("keyBindings.gameView.toggleSidebar", SHORTCUT_GAME_VIEW, 300, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.toggleSidebar, (config, value) -> config.keyBindings.gameView.toggleSidebar = value);
+
+    public static final ConfigEntry<String> GAME_FLIGHT_FORWARD = controlKey("keyBindings.gameView.forward", 400, true,
+            config -> config.keyBindings.gameView.forward, (config, value) -> config.keyBindings.gameView.forward = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_BACKWARD = controlKey("keyBindings.gameView.backward", 500, true,
+            config -> config.keyBindings.gameView.backward, (config, value) -> config.keyBindings.gameView.backward = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_LEFT = controlKey("keyBindings.gameView.left", 600, true,
+            config -> config.keyBindings.gameView.left, (config, value) -> config.keyBindings.gameView.left = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_RIGHT = controlKey("keyBindings.gameView.right", 700, true,
+            config -> config.keyBindings.gameView.right, (config, value) -> config.keyBindings.gameView.right = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_UP = controlKey("keyBindings.gameView.up", 800, true,
+            config -> config.keyBindings.gameView.up, (config, value) -> config.keyBindings.gameView.up = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_DOWN = controlKey("keyBindings.gameView.down", 900, true,
+            config -> config.keyBindings.gameView.down, (config, value) -> config.keyBindings.gameView.down = value);
+    public static final ConfigEntry<String> GAME_FLIGHT_EXIT = controlKey("keyBindings.gameView.exit", 1000, false,
+            config -> config.keyBindings.gameView.exit, (config, value) -> config.keyBindings.gameView.exit = value);
+
     public static final ConfigEntry<String> SHOP_CLEAR_SLOT = ConfigEntry
             .<String>builder("keyBindings.shopEditor.clearSlot", SHORTCUT_SHOP, ConfigEntry.EditorType.SHORTCUT,
                     config -> config.keyBindings.shopEditor.clearSlot,
@@ -120,13 +143,15 @@ public final class BuiltinConfigEntries {
             PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
-            VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT);
+            VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
+            GAME_VIEW_FLY, GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR,
+            GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}
 
     static void register(ConfigRegistry registry) {
         for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, PREVIEW_CACHE,
-                SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_SHOP)) {
+                SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_GAME_VIEW, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }
         for (ConfigEntry<?> entry : ALL) registerUnchecked(registry, entry);
@@ -175,6 +200,19 @@ public final class BuiltinConfigEntries {
                     if (value != null && value.isBlank()) return "";
                     KeyBinding binding = KeyBinding.parse(value);
                     return binding != null ? binding.text : null;
+                }).build();
+    }
+
+    private static ConfigEntry<String> controlKey(String id, int order, boolean allowUnassigned,
+                                                   java.util.function.Function<AppConfig, String> getter,
+                                                   java.util.function.BiConsumer<AppConfig, String> setter) {
+        return ConfigEntry.builder(id, SHORTCUT_GAME_VIEW, ConfigEntry.EditorType.KEY_BINDING, getter, setter)
+                .label(labelKey(id)).description(descriptionKey(id)).order(order)
+                .keyScope(KeyScope.GAME_VIEW_FLIGHT).captureControlKeys(true)
+                .normalize(value -> {
+                    if (value != null && value.isBlank()) return allowUnassigned ? "" : null;
+                    ControlKeyBinding binding = ControlKeyBinding.parse(value);
+                    return binding != null ? binding.text() : null;
                 }).build();
     }
 

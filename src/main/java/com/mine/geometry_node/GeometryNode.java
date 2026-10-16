@@ -164,6 +164,7 @@ public class GeometryNode {
     public GeometryNode(IEventBus modEventBus, ModContainer modContainer) {
         NeoForge.EVENT_BUS.register(this);
         modEventBus.addListener(EntityChunkLoadingService::registerTicketController);
+        com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService.register(modEventBus);
         modContainer.registerConfig(ModConfig.Type.SERVER, GeometryNodeServerConfig.SPEC,
                 "geometry_node-server.toml");
 

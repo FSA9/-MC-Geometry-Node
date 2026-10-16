@@ -44,7 +44,7 @@ public final class GameViewportInput {
         if (blocked) releaseAll();
     }
 
-    private static boolean isWorkspaceBlocked() {
+    public static boolean isWorkspaceBlocked() {
         synchronized (BLOCKING_WORKSPACES) { return !BLOCKING_WORKSPACES.isEmpty(); }
     }
 
@@ -54,7 +54,7 @@ public final class GameViewportInput {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> {
             synchronized (VISIBLE) { if (!VISIBLE.contains(owner)) return; }
-            if (isWorkspaceBlocked() || !isEditor(mc.screen) || mc.player == null || mc.level == null
+            if (EditViewportRuntime.hasVisibleViews() || isWorkspaceBlocked() || !isEditor(mc.screen) || mc.player == null || mc.level == null
                     || mc.player.isDeadOrDying() || !mc.isWindowActive() || mc.getOverlay() != null) return;
             releaseNow(mc);
             capturedOwner = owner;
@@ -71,13 +71,14 @@ public final class GameViewportInput {
     public static void release(Object owner) {
         if (owner == null || Boolean.getBoolean("gn.standalone")) return;
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> { if (capturedOwner == owner) releaseNow(mc); });
+        ViewportInputDispatch.run(mc, () -> { if (capturedOwner == owner) releaseNow(mc); });
     }
 
     public static void releaseAll() {
         if (Boolean.getBoolean("gn.standalone")) return;
+        EditViewportFlightInput.releaseAll();
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> releaseNow(mc));
+        ViewportInputDispatch.run(mc, () -> releaseNow(mc));
     }
 
     private static void releaseNow(Minecraft mc) {
@@ -98,7 +99,7 @@ public final class GameViewportInput {
     }
 
     public static boolean isGameInputActive() {
-        if (capturedOwner == null) return false;
+        if (capturedOwner == null || EditViewportRuntime.hasVisibleViews()) return false;
         Minecraft mc = Minecraft.getInstance();
         return isEditor(mc.screen) && mc.player != null && mc.level != null
                 && !isWorkspaceBlocked() && mc.isWindowActive() && mc.getOverlay() == null;
@@ -130,6 +131,8 @@ public final class GameViewportInput {
     }
 
     public static void tick() {
+        EditViewportFlightInput.validate();
+        EditCameraChunkClient.tick();
         Minecraft mc = Minecraft.getInstance();
         if (capturedOwner != null && !isGameInputActive()) releaseNow(mc);
         if (isEditor(mc.screen) && hasVisibleViews() && mc.player != null && mc.level != null
@@ -149,6 +152,7 @@ public final class GameViewportInput {
     /** Called at setScreen's argument boundary; never changes Minecraft.screen directly. */
     public static Screen prepareScreenChange(Screen requested) {
         Minecraft mc = Minecraft.getInstance();
+        if (requested != mc.screen) EditViewportFlightInput.releaseAll();
         if (suspendedEditor != null) {
             if (requested == null && mc.level != null && mc.player != null && !mc.player.isDeadOrDying()) {
                 return suspendedEditor;
@@ -181,11 +185,12 @@ public final class GameViewportInput {
 
     /** ModernUI otherwise forwards global mouse events to its retained fragment. */
     public static boolean suppressModernUiInput() {
-        return isGameInputActive() || suspendedEditor != null;
+        return isGameInputActive() || EditViewportFlightInput.isCaptured() || suspendedEditor != null;
     }
 
     public static void reset() {
         releaseAll();
+        EditViewportRuntime.close();
         consumeEscapeRelease = false;
         discardSuspendedEditor();
     }

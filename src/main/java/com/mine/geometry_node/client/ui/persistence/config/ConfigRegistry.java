@@ -68,7 +68,7 @@ public final class ConfigRegistry {
             ConfigEntry<String> target, String candidate, AppConfig config) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(config, "config");
-        InputBinding binding = InputBinding.parse(candidate);
+        String binding = bindingText(target, candidate);
         if (binding == null || target.keyScope() == null) return List.of();
 
         List<ConfigEntry<String>> conflicts = new ArrayList<>();
@@ -77,12 +77,21 @@ public final class ConfigRegistry {
             if (raw.editorType() != ConfigEntry.EditorType.KEY_BINDING
                     && raw.editorType() != ConfigEntry.EditorType.SHORTCUT) continue;
             @SuppressWarnings("unchecked") ConfigEntry<String> entry = (ConfigEntry<String>) raw;
-            InputBinding existing = InputBinding.parse(entry.get(config));
-            if (existing != null && binding.device() == existing.device() && binding.text().equals(existing.text())) {
+            String existing = bindingText(entry, entry.get(config));
+            if (binding.equals(existing)) {
                 conflicts.add(entry);
             }
         }
         return List.copyOf(conflicts);
+    }
+
+    private static String bindingText(ConfigEntry<String> entry, String value) {
+        if (entry.captureControlKeys()) {
+            ControlKeyBinding binding = ControlKeyBinding.parse(value);
+            return binding != null ? binding.text() : null;
+        }
+        InputBinding binding = InputBinding.parse(value);
+        return binding != null ? binding.text() : null;
     }
 
     private static List<ConfigEntry<?>> sortedEntries(Iterable<ConfigEntry<?>> source) {

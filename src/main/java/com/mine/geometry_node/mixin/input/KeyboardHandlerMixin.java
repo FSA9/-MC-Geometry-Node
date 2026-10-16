@@ -2,6 +2,7 @@ package com.mine.geometry_node.mixin.input;
 
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
@@ -42,6 +43,10 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void geometryNode$interceptBlueprintKey(long handle, int action, KeyEvent event, CallbackInfo ci) {
+        if (handle == minecraft.getWindow().handle() && EditViewportFlightInput.handleKey(action, event.key())) {
+            ci.cancel();
+            return;
+        }
         if (GameViewportInput.handleEscape(action, event.key())) {
             ci.cancel();
             return;
@@ -89,7 +94,7 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = {"charTyped", "preeditCallback"}, at = @At("HEAD"), cancellable = true)
     private void geometryNode$muteCapturedText(CallbackInfo ci) {
-        if (GameViewportInput.isGameInputActive()) ci.cancel();
+        if (GameViewportInput.isGameInputActive() || EditViewportFlightInput.isCaptured()) ci.cancel();
     }
 
     private void updateLastInputType(KeyEvent event) {

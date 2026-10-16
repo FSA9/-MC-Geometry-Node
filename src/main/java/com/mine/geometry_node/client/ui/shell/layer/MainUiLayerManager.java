@@ -429,6 +429,7 @@ public final class MainUiLayerManager implements AutoCloseable {
             if (entry.open && entry.closeOnEscape
                     && event.getAction() == KeyEvent.ACTION_DOWN
                     && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
+                if (findFocus() instanceof OverlayEscapeCapture capture && capture.captureEscape(event)) return true;
                 if (!consumeOverlayEscape(entry)) {
                     closeEntry(entry, OverlayCloseReason.ESCAPE, false);
                 }

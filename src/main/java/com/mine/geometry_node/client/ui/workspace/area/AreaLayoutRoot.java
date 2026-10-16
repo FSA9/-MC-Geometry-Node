@@ -22,6 +22,8 @@ public final class AreaLayoutRoot extends FrameLayout {
     private final AreaEditorRegistry mEditorRegistry = new AreaEditorRegistry();
     private final Map<AreaNode, View> mNodeViews = new IdentityHashMap<>();
     private AreaNode mRootNode;
+    private AreaLeafNode mActiveLeaf;
+    private boolean mChangingActiveLeaf;
     private AreaLeafNode mDragSourceNode;
     private AreaLeafView mDragTargetView;
     private final Runnable mSaveRunnable = this::persistNow;
@@ -67,6 +69,9 @@ public final class AreaLayoutRoot extends FrameLayout {
         mClosing = true;
         removeCallbacks(mSaveRunnable);
         try {
+            for (View view : mNodeViews.values()) {
+                if (view instanceof AreaLeafView leaf) leaf.disposeLifecycle();
+            }
             if (mRootNode != null) {
                 mRootNode.dispose();
             }
@@ -76,6 +81,7 @@ public final class AreaLayoutRoot extends FrameLayout {
             } finally {
                 mClosed = true;
                 mClosing = false;
+                mActiveLeaf = null;
                 mNodeViews.clear();
                 removeAllViews();
             }
@@ -97,7 +103,22 @@ public final class AreaLayoutRoot extends FrameLayout {
             view = new FrameLayout(getContext());
         }
         mNodeViews.put(node, view);
+        if (view instanceof AreaLeafView leafView) leafView.setActive(node == mActiveLeaf);
         return view;
+    }
+
+    void activateLeaf(AreaLeafNode leaf) {
+        if (mClosing || mClosed || mChangingActiveLeaf || mActiveLeaf == leaf) return;
+        mChangingActiveLeaf = true;
+        try {
+            AreaLeafView previous = leafView(mActiveLeaf);
+            mActiveLeaf = leaf;
+            if (previous != null) previous.setActive(false);
+            AreaLeafView current = leafView(leaf);
+            if (current != null) current.setActive(true);
+        } finally {
+            mChangingActiveLeaf = false;
+        }
     }
 
     void splitLeaf(AreaLeafNode leaf, AreaSplitDirection direction) {
@@ -106,6 +127,7 @@ public final class AreaLayoutRoot extends FrameLayout {
         }
 
         AreaSplitNode oldParent = leaf.parent();
+        boolean wasActive = mActiveLeaf == leaf;
         AreaLeafNode newLeaf = new AreaLeafNode(leaf.editorType());
         AreaSplitNode split = new AreaSplitNode(direction, 0.5f, leaf, newLeaf);
         if (oldParent == null) {
@@ -116,6 +138,11 @@ public final class AreaLayoutRoot extends FrameLayout {
         }
         replaceNodeView(leaf, split);
         refreshLeafChrome(mRootNode);
+        if (wasActive) {
+            activateLeaf(leaf);
+            AreaLeafView activeView = leafView(leaf);
+            if (activeView != null) activeView.focusEditor();
+        }
         requestSessionSave();
     }
 
@@ -135,6 +162,7 @@ public final class AreaLayoutRoot extends FrameLayout {
         }
 
         AreaSplitNode grandParent = parent.parent();
+        boolean wasActive = mActiveLeaf == leaf;
 
         if (grandParent == null) {
             sibling.setParent(null);
@@ -149,6 +177,12 @@ public final class AreaLayoutRoot extends FrameLayout {
         parent.setParent(null);
         removeNodeView(parent);
         removeNodeView(leaf);
+        if (wasActive) {
+            AreaLeafNode next = firstLeaf(sibling);
+            activateLeaf(next);
+            AreaLeafView nextView = leafView(next);
+            if (nextView != null) nextView.focusEditor();
+        }
         refreshLeafChrome(mRootNode);
         requestSessionSave();
     }
@@ -211,6 +245,8 @@ public final class AreaLayoutRoot extends FrameLayout {
                 sourceView.refreshFromNode();
             }
             targetView.refreshFromNode();
+            activateLeaf(targetNode);
+            targetView.focusEditor();
             requestSessionSave();
         }
     }
@@ -240,6 +276,9 @@ public final class AreaLayoutRoot extends FrameLayout {
 
     private void rebuild() {
         cancelLeafDrag();
+        for (View view : mNodeViews.values()) {
+            if (view instanceof AreaLeafView leaf) leaf.disposeLifecycle();
+        }
         mNodeViews.clear();
         removeAllViews();
         installRootView(createNodeView(mRootNode));
@@ -300,7 +339,9 @@ public final class AreaLayoutRoot extends FrameLayout {
     }
 
     private void removeNodeView(AreaNode node) {
+        if (mActiveLeaf == node) activateLeaf(null);
         View view = mNodeViews.remove(node);
+        if (view instanceof AreaLeafView leaf) leaf.disposeLifecycle();
         if (view != null) {
             detachFromParent(view);
         }
@@ -411,6 +452,11 @@ public final class AreaLayoutRoot extends FrameLayout {
             return countLeaves(split.first()) + countLeaves(split.second());
         }
         return 0;
+    }
+
+    private static AreaLeafNode firstLeaf(AreaNode node) {
+        if (node instanceof AreaLeafNode leaf) return leaf;
+        return node instanceof AreaSplitNode split ? firstLeaf(split.first()) : null;
     }
 
 }

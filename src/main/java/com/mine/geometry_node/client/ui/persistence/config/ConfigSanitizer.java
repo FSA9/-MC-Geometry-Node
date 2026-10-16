@@ -302,6 +302,7 @@ final class ConfigSanitizer {
         JsonObject global = readObject(keyBindings, "global");
         JsonObject viewport = readObject(keyBindings, "viewport");
         JsonObject shopEditor = readObject(keyBindings, "shopEditor");
+        JsonObject gameView = readObject(keyBindings, "gameView");
         JsonObject legacy = keyBindings;
 
         changed |= global == null || viewport == null || shopEditor == null;
@@ -372,6 +373,33 @@ final class ConfigSanitizer {
         config.keyBindings.viewport.toggleRightSidebar = toggleRightSidebar.value;
         changed |= toggleRightSidebar.changed;
 
+        ReadKeyBinding fly = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.fly)
+                : readKeyBinding(gameView, "fly", defaults.keyBindings.gameView.fly);
+        config.keyBindings.gameView.fly = fly.value;
+        changed |= fly.changed;
+
+        ReadKeyBinding toggleProjection = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleProjection)
+                : readKeyBinding(gameView, "toggleProjection", defaults.keyBindings.gameView.toggleProjection);
+        config.keyBindings.gameView.toggleProjection = toggleProjection.value;
+        changed |= toggleProjection.changed;
+
+        ReadKeyBinding toggleSidebar = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleSidebar)
+                : readKeyBinding(gameView, "toggleSidebar", defaults.keyBindings.gameView.toggleSidebar);
+        config.keyBindings.gameView.toggleSidebar = toggleSidebar.value;
+        changed |= toggleSidebar.changed;
+
+        // Control bindings include standalone modifiers, so use their registered validator.
+        for (ConfigEntry<String> entry : List.of(
+                BuiltinConfigEntries.GAME_FLIGHT_FORWARD, BuiltinConfigEntries.GAME_FLIGHT_BACKWARD,
+                BuiltinConfigEntries.GAME_FLIGHT_LEFT, BuiltinConfigEntries.GAME_FLIGHT_RIGHT,
+                BuiltinConfigEntries.GAME_FLIGHT_UP, BuiltinConfigEntries.GAME_FLIGHT_DOWN,
+                BuiltinConfigEntries.GAME_FLIGHT_EXIT)) {
+            String field = entry.id().substring(entry.id().lastIndexOf('.') + 1);
+            ReadString raw = gameView != null ? readString(gameView, field) : ReadString.invalid();
+            entry.set(config, raw.valid ? raw.value : null);
+            changed |= !raw.valid || raw.changed || !java.util.Objects.equals(raw.value, entry.get(config));
+        }
+
         ReadString clearSlot = readShortcutTextWithLegacy(shopEditor, legacy, "clearSlot", "shopEditorClearSlot", defaults.keyBindings.shopEditor.clearSlot);
         config.keyBindings.shopEditor.clearSlot = clearSlot.value;
         changed |= clearSlot.changed;
@@ -389,6 +417,11 @@ final class ConfigSanitizer {
 
         if (keyBindings.viewport == null) {
             keyBindings.viewport = defaults.viewport;
+            changed = true;
+        }
+
+        if (keyBindings.gameView == null) {
+            keyBindings.gameView = defaults.gameView;
             changed = true;
         }
 

@@ -31,24 +31,26 @@ import java.util.regex.Pattern;
 
 public class SvgIconView extends View {
     public enum Icon {
-        GRAPH_EDITOR("graph_editor.svg"),
-        GAME("game.svg"),
-        ASSET_LIBRARY("asset_library.svg"),
-        DATA_LIBRARY("data_library.svg"),
-        TERMINAL("console.svg"),
-        PERFORMANCE("analysis.svg"),
-        SEARCH("function/search.svg"),
-        PLUS("function/plus.svg"),
-        CLEAR("function/clear.svg"),
-        RESET("function/refresh.svg"),
-        CLOSE("function/close.svg"),
-        EXPAND("function/chevrons-up-down-64px.svg"),
-        COLLAPSE("function/chevrons-down-up-64px.svg"),
-        SQUARE_CHECK("function/square-check-64px.svg"),
-        SQUARE_PLUS("function/square-plus-64px.svg"),
-        BLUEPRINT("graph_editor.svg", "blueprint"),
-        QUEST("quest.svg", "quest"),
-        BEHAVIOR_TREE("behavior_tree.svg", "behavior_tree");
+        GRAPH_EDITOR("editors/graph_editor.svg"),
+        GAME("editors/game.svg"),
+        PROPERTIES("panels/sliders.svg"),
+        TRANSFERS("panels/transfer.svg"),
+        ASSET_LIBRARY("editors/asset_library.svg"),
+        DATA_LIBRARY("editors/data_library.svg"),
+        TERMINAL("editors/console.svg"),
+        PERFORMANCE("editors/analysis.svg"),
+        SEARCH("actions/search.svg"),
+        PLUS("actions/plus.svg"),
+        CLEAR("actions/clear.svg"),
+        RESET("actions/refresh.svg"),
+        CLOSE("actions/close.svg"),
+        EXPAND("navigation/chevrons-up-down-64px.svg"),
+        COLLAPSE("navigation/chevrons-down-up-64px.svg"),
+        SQUARE_CHECK("actions/square-check-64px.svg"),
+        SQUARE_PLUS("actions/square-plus-64px.svg"),
+        BLUEPRINT("editors/graph_editor.svg", "blueprint"),
+        QUEST("graph_types/quest.svg", "quest"),
+        BEHAVIOR_TREE("graph_types/behavior_tree.svg", "behavior_tree");
 
         private final String mFileName;
         private final String mGraphTypeId;

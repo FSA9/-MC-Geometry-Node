@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigDraft;
 import com.mine.geometry_node.client.ui.persistence.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.persistence.config.InputBinding;
+import com.mine.geometry_node.client.ui.persistence.config.ControlKeyRecorder;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
@@ -18,7 +19,9 @@ import java.util.List;
 final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> {
     private final CaptureView mCapture;
     private boolean mCapturing;
+    private final ControlKeyRecorder mControlRecorder = new ControlKeyRecorder();
     private boolean mSuppressClick;
+    private int mConsumedKey = -1;
 
     private ShortcutConfigEntryEditor(Context context, ConfigDraft draft, ConfigEntry<String> entry,
                                       SettingsEditorEnvironment environment) {
@@ -33,6 +36,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         mControlHost.addView(mCapture, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(26), 1.0f));
         FrameLayout clear = SettingsEditorStyle.iconButton(context, SvgIconView.Icon.CLEAR,
                 tr("geometry_node.settings.action.clear"));
+        clear.setEnabled(entry.accepts(""));
         clear.setOnClickListener(view -> setBinding(""));
         LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(26), UIUtils.dp2pxInt(26));
@@ -48,6 +52,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
 
     @Override public void refresh() {
         mCapturing = false;
+        mControlRecorder.reset();
         String binding = mDraft.get(mEntry);
         mCapture.setText(binding == null || binding.isBlank()
                 ? tr("geometry_node.settings.value.unassigned") : binding);
@@ -64,9 +69,11 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
             mSuppressClick = false;
             return;
         }
+        mControlRecorder.reset();
         mCapturing = true;
         mCapture.requestFocus();
-        mCapture.setText(tr("geometry_node.settings.value.press_binding"));
+        mCapture.setText(tr(mEntry.captureControlKeys()
+                ? "geometry_node.settings.value.press_control_binding" : "geometry_node.settings.value.press_binding"));
         mCapture.setBackground(SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL_HOVER, 2.0f,
                 SettingsEditorStyle.ACCENT));
     }
@@ -106,14 +113,38 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         setValidationSilently(valid, message);
     }
 
-    private final class CaptureView extends TextView {
+    private final class CaptureView extends TextView implements com.mine.geometry_node.client.ui.shell.layer.OverlayEscapeCapture {
         CaptureView(Context context) { super(context); }
 
+        @Override public boolean captureEscape(KeyEvent event) {
+            return (mCapturing || mConsumedKey == event.getKeyCode()) && dispatchKeyEvent(event);
+        }
+
+        @Override protected void onFocusChanged(boolean focused, int direction, icyllis.modernui.graphics.Rect previouslyFocusedRect) {
+            super.onFocusChanged(focused, direction, previouslyFocusedRect);
+            if (!focused && mCapturing) cancelCapture();
+        }
+
         @Override public boolean dispatchKeyEvent(KeyEvent event) {
-            if (!mCapturing || event.getAction() != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event);
-            if (event.getKeyCode() == KeyEvent.KEY_ESCAPE) { cancelCapture(); return true; }
+            if (mConsumedKey == event.getKeyCode()) {
+                if (event.getAction() == KeyEvent.ACTION_UP) mConsumedKey = -1;
+                return true;
+            }
+            if (!mCapturing) return super.dispatchKeyEvent(event);
+            if (mEntry.captureControlKeys()) {
+                InputBinding binding = InputBinding.fromEvent(event);
+                String result = mControlRecorder.accept(event.getKeyCode(), event.getAction() == KeyEvent.ACTION_DOWN,
+                        binding != null ? binding.text() : null);
+                if (result != null) {
+                    setBinding(result);
+                    if (event.getAction() == KeyEvent.ACTION_DOWN) mConsumedKey = event.getKeyCode();
+                }
+                return true;
+            }
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event);
+            if (event.getKeyCode() == KeyEvent.KEY_ESCAPE) { cancelCapture(); mConsumedKey = event.getKeyCode(); return true; }
             InputBinding binding = InputBinding.fromEvent(event);
-            if (binding != null) setBinding(binding.text());
+            if (binding != null) { setBinding(binding.text()); mConsumedKey = event.getKeyCode(); }
             return true;
         }
 

@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.shortcut;
 public enum KeyScope {
     GLOBAL("global"),
     VIEWPORT("viewport"),
+    GAME_VIEW("gameView"),
+    GAME_VIEW_FLIGHT("gameViewFlight"),
     ASSET_LIBRARY("assetLibrary"),
     SHOP_EDITOR("shopEditor");
 

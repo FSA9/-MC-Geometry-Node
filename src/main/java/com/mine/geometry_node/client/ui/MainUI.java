@@ -20,7 +20,8 @@ public class MainUI extends Fragment implements ScreenCallback {
 
     @Override
     public boolean isPauseScreen() {
-        return !GameViewportInput.hasVisibleViews();
+        return !GameViewportInput.hasVisibleViews()
+                && !com.mine.geometry_node.client.runtime.game.EditViewportRuntime.hasVisibleViews();
     }
 
     @Override

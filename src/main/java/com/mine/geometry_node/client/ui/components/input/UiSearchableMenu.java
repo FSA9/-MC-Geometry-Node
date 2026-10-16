@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.ui.components.input;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
 import net.minecraft.network.chat.Component;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -64,14 +66,11 @@ public class UiSearchableMenu extends FrameLayout {
     private ViewGroup mContext;
     private float mAnchorScale = 1.0f;
     private boolean mIsTracking = false;
+    private AreaLifecycle.Subscription areaBinding = AreaLifecycle.Subscription.NONE;
     private final Runnable focusSearch = () -> {
-        if (getParent() == null || mAnchor == null || !anchorInHost()) return;
+        if (getVisibility() != VISIBLE || getParent() == null || mAnchor == null || !anchorInHost()) return;
         mSearchBox.setText("");
         mSearchBox.requestFocus();
-    };
-    private final View.OnAttachStateChangeListener anchorLifecycle = new View.OnAttachStateChangeListener() {
-        @Override public void onViewAttachedToWindow(View view) {}
-        @Override public void onViewDetachedFromWindow(View view) { dismiss(); }
     };
 
     public UiSearchableMenu(Context context, String title, List<String> options,
@@ -239,6 +238,7 @@ public class UiSearchableMenu extends FrameLayout {
     public void showAt(View anchor, ViewGroup context, float anchorScale) {
         if (anchor == null || context == null) return;
         dismiss();
+        setVisibility(VISIBLE);
         this.mAnchor = anchor;
         this.mContext = context;
         this.mAnchorScale = anchorScale;
@@ -249,7 +249,7 @@ public class UiSearchableMenu extends FrameLayout {
         if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
 
         context.addView(this);
-        anchor.addOnAttachStateChangeListener(anchorLifecycle);
+        areaBinding = AreaTransientUi.bind(anchor, this, this::dismiss);
         mSearchBox.post(focusSearch);
 
         if (!mIsTracking) {
@@ -261,7 +261,7 @@ public class UiSearchableMenu extends FrameLayout {
     private final Runnable mTrackTask = new Runnable() {
         @Override
         public void run() {
-            if (getParent() == null || !anchorInHost()) {
+            if (getVisibility() != VISIBLE || getParent() == null || !anchorInHost()) {
                 mIsTracking = false;
                 dismiss();
                 return;
@@ -320,8 +320,12 @@ public class UiSearchableMenu extends FrameLayout {
     }
 
     public void dismiss() {
+        areaBinding.close();
+        areaBinding = AreaLifecycle.Subscription.NONE;
         stopTracking();
         if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
+        mAnchor = null;
+        mContext = null;
     }
 
     @Override
@@ -334,7 +338,6 @@ public class UiSearchableMenu extends FrameLayout {
         mIsTracking = false;
         removeCallbacks(mTrackTask);
         mSearchBox.removeCallbacks(focusSearch);
-        if (mAnchor != null) mAnchor.removeOnAttachStateChangeListener(anchorLifecycle);
     }
 
     private boolean anchorInHost() {

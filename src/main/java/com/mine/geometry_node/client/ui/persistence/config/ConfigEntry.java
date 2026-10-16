@@ -42,6 +42,7 @@ public final class ConfigEntry<T> {
     private final List<String> mChoices;
     private final Map<String, String> mChoiceTranslationKeys;
     private final KeyScope mKeyScope;
+    private final boolean mCaptureControlKeys;
     private final Function<AppConfig, T> mGetter;
     private final BiConsumer<AppConfig, T> mSetter;
     private final UnaryOperator<T> mNormalizer;
@@ -60,6 +61,7 @@ public final class ConfigEntry<T> {
         mChoices = List.copyOf(builder.mChoices);
         mChoiceTranslationKeys = Map.copyOf(builder.mChoiceTranslationKeys);
         mKeyScope = builder.mKeyScope;
+        mCaptureControlKeys = builder.mCaptureControlKeys;
         mGetter = Objects.requireNonNull(builder.mGetter, "getter");
         mSetter = Objects.requireNonNull(builder.mSetter, "setter");
         mNormalizer = Objects.requireNonNull(builder.mNormalizer, "normalizer");
@@ -92,6 +94,7 @@ public final class ConfigEntry<T> {
     public List<String> choices() { return mChoices; }
     public String choiceTranslationKey(String value) { return mChoiceTranslationKeys.getOrDefault(value, ""); }
     public KeyScope keyScope() { return mKeyScope; }
+    public boolean captureControlKeys() { return mCaptureControlKeys; }
 
     public T get(AppConfig config) {
         return copy(mGetter.apply(Objects.requireNonNull(config, "config")));
@@ -150,6 +153,7 @@ public final class ConfigEntry<T> {
         private List<String> mChoices = List.of();
         private Map<String, String> mChoiceTranslationKeys = Map.of();
         private KeyScope mKeyScope;
+        private boolean mCaptureControlKeys;
         private UnaryOperator<T> mNormalizer = UnaryOperator.identity();
 
         private Builder(String id, ConfigCategory category, EditorType editorType,
@@ -171,6 +175,7 @@ public final class ConfigEntry<T> {
         public Builder<T> choiceTranslationKeys(Map<String, String> translationKeys) {
             mChoiceTranslationKeys = translationKeys != null ? translationKeys : Map.of(); return this;
         }
+        public Builder<T> captureControlKeys(boolean capture) { mCaptureControlKeys = capture; return this; }
         public Builder<T> keyScope(KeyScope scope) { mKeyScope = scope; return this; }
         public Builder<T> settingsVisibility(SettingsVisibility visibility) {
             mSettingsVisibility = visibility != null ? visibility : SettingsVisibility.VISIBLE;

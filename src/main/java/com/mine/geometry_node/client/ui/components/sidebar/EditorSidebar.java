@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelConte
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -33,7 +35,7 @@ public final class EditorSidebar extends LinearLayout {
     private static final int COLOR_HOVER = UiTheme.Control.ICON_HOVER;
     private static final int COLOR_TAB_RAIL = UiTheme.Control.INPUT;
     private static final int COLOR_TAB_SELECTED = UiTheme.Control.SELECTED;
-    private static final int TAB_RAIL_WIDTH_DP = 30;
+    private static final int TAB_RAIL_WIDTH_DP = 36;
 
     private final Map<String, PanelEntry> mPanels = new LinkedHashMap<>();
     private final LinearLayout mPanelColumn;
@@ -66,6 +68,14 @@ public final class EditorSidebar extends LinearLayout {
         mTitleView = label(context, "", 12.0f, COLOR_TEXT);
         header.addView(mTitleView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
+        TextView collapseIcon = label(context, "›", 18.0f, COLOR_MUTED);
+        collapseIcon.setGravity(Gravity.CENTER);
+        UiIconButton collapse = new UiIconButton(context, collapseIcon).tooltip(tr("geometry_node.sidebar.collapse"));
+        collapse.setOnClickListener(v -> {
+            if (mOnCollapseRequested != null) mOnCollapseRequested.run();
+        });
+        header.addView(collapse, new LayoutParams(UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24)));
+
         mPanelColumn.addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
 
         mContentHost = new FrameLayout(context);
@@ -73,9 +83,10 @@ public final class EditorSidebar extends LinearLayout {
 
         mTabScroll = new ScrollView(context);
         mTabScroll.setVerticalScrollBarEnabled(false);
-        mTabScroll.setBackground(rect(COLOR_TAB_RAIL, 0.0f, 1, COLOR_BORDER));
+        mTabScroll.setBackground(rect(COLOR_TAB_RAIL, 0.0f, 0, 0));
         mTabStrip = new LinearLayout(context);
         mTabStrip.setOrientation(VERTICAL);
+        mTabStrip.setPadding(UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(4));
         mTabScroll.addView(mTabStrip, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -102,7 +113,7 @@ public final class EditorSidebar extends LinearLayout {
             registerPanel(
                     definition.id(),
                     tr(definition.titleTranslationKey()),
-                    definition.create(context));
+                    definition.create(context), definition.icon());
         }
     }
 
@@ -117,6 +128,10 @@ public final class EditorSidebar extends LinearLayout {
     }
 
     public void registerPanel(String id, String title, SidebarPanel panel) {
+        registerPanel(id, title, panel, null);
+    }
+
+    public void registerPanel(String id, String title, SidebarPanel panel, SvgIconView.Icon icon) {
         String normalizedId = normalizeId(id);
         if (panel == null || panel.getView() == null) {
             throw new IllegalArgumentException("Sidebar panel cannot be null");
@@ -126,16 +141,16 @@ public final class EditorSidebar extends LinearLayout {
         }
 
         String resolvedTitle = title != null && !title.isBlank() ? title : normalizedId;
-        SidebarTabView tab = createTab(resolvedTitle);
+        SidebarTabView tab = new SidebarTabView(getContext(), resolvedTitle, icon);
         PanelEntry entry = new PanelEntry(normalizedId, resolvedTitle, panel, tab);
         tab.setOnClickListener(v -> {
             selectPanel(normalizedId);
             if (!mContentVisible && mOnExpandRequested != null) mOnExpandRequested.run();
         });
         mPanels.put(normalizedId, entry);
-        mTabStrip.addView(tab, new LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                tab.getPreferredHeight()));
+        LayoutParams tabParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30));
+        tabParams.bottomMargin = UIUtils.dp2pxInt(4);
+        mTabStrip.addView(tab, tabParams);
 
         if (mSelected == null) selectPanel(normalizedId, false);
     }
@@ -238,12 +253,6 @@ public final class EditorSidebar extends LinearLayout {
         if (mSelected != null) post(() -> mTabScroll.scrollToDescendant(mSelected.tab()));
     }
 
-    private SidebarTabView createTab(String title) {
-        SidebarTabView tab = new SidebarTabView(getContext(), title);
-        tab.setContentDescription(title);
-        return tab;
-    }
-
     private static String normalizeId(String id) {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("Sidebar panel id cannot be blank");
         return id.trim();
@@ -275,52 +284,49 @@ public final class EditorSidebar extends LinearLayout {
     }
 
     private static final class SidebarTabView extends FrameLayout {
-        private final TextView mLabel;
-        private final int mPreferredHeight;
+        private final View mIcon;
+        private final View mIndicator;
 
-        private SidebarTabView(Context context, String title) {
+        private SidebarTabView(Context context, String title, SvgIconView.Icon icon) {
             super(context);
-            setBackground(rect(0x00000000, 0.0f, 0, 0));
-
-            mLabel = new TextView(context);
-            mLabel.setText(title);
-            mLabel.setTextSize(0, UIUtils.dp2px(10.5f));
-            mLabel.setTextColor(COLOR_MUTED);
-            mLabel.setGravity(Gravity.CENTER);
-            mLabel.setSingleLine(true);
-
-            float textWidth = mLabel.getPaint().measureTextRun(
-                    title,
-                    0,
-                    title.length(),
-                    false,
-                    null);
-            mPreferredHeight = Math.max(
-                    UIUtils.dp2pxInt(TAB_RAIL_WIDTH_DP),
-                    (int) Math.ceil(textWidth) + UIUtils.dp2pxInt(8));
-
-            FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
-                    mPreferredHeight,
-                    UIUtils.dp2pxInt(TAB_RAIL_WIDTH_DP));
-            labelParams.gravity = Gravity.CENTER;
-            addView(mLabel, labelParams);
-            mLabel.setRotation(-90.0f);
-        }
-
-        private int getPreferredHeight() {
-            return mPreferredHeight;
+            setClickable(true);
+            setFocusable(true);
+            setTooltipText(title);
+            setContentDescription(title);
+            if (icon != null) {
+                mIcon = new SvgIconView(context, icon, COLOR_MUTED);
+            } else {
+                // Third-party panels without an icon keep a readable, unrotated initial.
+                TextView initial = label(context, title.substring(0, title.offsetByCodePoints(0, 1)), 12, COLOR_MUTED);
+                initial.setGravity(Gravity.CENTER);
+                mIcon = initial;
+            }
+            FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(16), UIUtils.dp2pxInt(16));
+            iconParams.gravity = Gravity.CENTER;
+            addView(mIcon, iconParams);
+            mIndicator = new View(context);
+            mIndicator.setBackground(rect(UiTheme.Control.FOCUS, 1, 0, 0));
+            FrameLayout.LayoutParams indicatorParams = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(16));
+            indicatorParams.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
+            addView(mIndicator, indicatorParams);
+            updateStyle();
         }
 
         @Override
         protected void drawableStateChanged() {
             super.drawableStateChanged();
-            if (mLabel == null) return;
-            mLabel.setTextColor(isSelected() ? COLOR_TEXT : COLOR_MUTED);
+            if (mIcon != null) updateStyle();
+        }
+
+        private void updateStyle() {
+            int color = isSelected() ? UiTheme.Control.FOCUS : isHovered() ? COLOR_TEXT : COLOR_MUTED;
+            if (mIcon instanceof SvgIconView svg) svg.setIconColor(color);
+            if (mIcon instanceof TextView text) text.setTextColor(color);
+            if (mIndicator != null) mIndicator.setVisibility(isSelected() ? View.VISIBLE : View.INVISIBLE);
             setAlpha(isEnabled() ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
-            setBackground(rect(isSelected() ? COLOR_TAB_SELECTED
-                            : isPressed() ? UiTheme.Control.ICON_PRESSED
-                            : isHovered() ? COLOR_HOVER : 0x00000000,
-                    0.0f, isFocused() ? 1 : 0, UiTheme.Control.FOCUS));
+            setBackground(rect(isPressed() ? UiTheme.Control.ICON_PRESSED
+                            : isSelected() ? COLOR_TAB_SELECTED : isHovered() ? COLOR_HOVER : 0x00000000,
+                    3.0f, isFocused() ? 1 : 0, UiTheme.Control.FOCUS));
         }
     }
 }

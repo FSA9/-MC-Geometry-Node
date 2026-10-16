@@ -138,6 +138,7 @@ public class ViewportMenu extends FrameLayout {
         if (parent != null) layoutPanel(parent, x, y);
 
         mSearchBox.post(() -> {
+            if (getParent() == null || getVisibility() != VISIBLE) return;
             mSearchBox.setText("");
             mSearchBox.requestFocus();
         });

@@ -52,6 +52,13 @@ import java.util.Set;
 public class NetworkHandler {
     public static void init() {
         ClientboundPayloadRegistry.registerDedicatedServerTypes();
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S,
+                com.mine.geometry_node.core.network.packet.c2s.PacketEditCamera.TYPE,
+                com.mine.geometry_node.core.network.packet.c2s.PacketEditCamera.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player)
+                        com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService.receive(player, payload);
+                }));
         GraphEngineServices.INSTANCE.setVisualSink(NetworkHandler::broadcastVisualEffect);
         ServerAssetPreviewService.INSTANCE.init();
         RemoteDataLibraryService.INSTANCE.init();

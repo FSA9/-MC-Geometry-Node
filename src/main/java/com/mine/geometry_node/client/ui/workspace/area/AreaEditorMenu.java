@@ -32,6 +32,7 @@ final class AreaEditorMenu extends FrameLayout {
     private final Consumer<AreaEditorType> mOnSelect;
     private final Runnable mOnDismiss;
     private boolean mDismissed;
+    private AreaLifecycle.Subscription areaBinding = AreaLifecycle.Subscription.NONE;
 
     AreaEditorMenu(Context context, AreaEditorType currentType, Consumer<AreaEditorType> onSelect, Runnable onDismiss) {
         super(context);
@@ -69,6 +70,9 @@ final class AreaEditorMenu extends FrameLayout {
             return;
         }
         dismissExistingParent();
+        areaBinding.close();
+        mDismissed = false;
+        setVisibility(VISIBLE);
 
         host.addView(this, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -100,6 +104,7 @@ final class AreaEditorMenu extends FrameLayout {
             panelParams.topMargin = Math.max(edge, aboveY);
             mPanel.setLayoutParams(panelParams);
         }
+        areaBinding = AreaTransientUi.bind(anchor, this, this::dismiss);
     }
 
     void dismiss() {
@@ -126,6 +131,8 @@ final class AreaEditorMenu extends FrameLayout {
     private void notifyDismissed() {
         if (mDismissed) return;
         mDismissed = true;
+        areaBinding.close();
+        areaBinding = AreaLifecycle.Subscription.NONE;
         if (mOnDismiss != null) mOnDismiss.run();
     }
 

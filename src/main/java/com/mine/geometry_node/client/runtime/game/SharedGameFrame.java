@@ -20,7 +20,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** One GPU game frame (world and HUD) shared by every visible game view.
+/** One scheduled world frame: shared player+HUD, or the sole E1 editor camera.
  * GPU operations and GUI extraction run on Minecraft's render thread. Only visibility
  * and the small published status are accessed from ModernUI's UI thread.
  */
@@ -33,6 +33,7 @@ public final class SharedGameFrame {
     // item atlases and picture-in-picture caches still belong to the same renderer.
     private static final Map<VertexFormat, MappableRingBuffer> HUD_VERTEX_BUFFERS = new Object2ObjectOpenHashMap<>();
     private static GpuTexture texture;
+    private static Object textureOwner;
     private static boolean editorFrame;
     private static boolean opaqueEditorFrame;
     private static boolean consumersThisFrame;
@@ -54,7 +55,7 @@ public final class SharedGameFrame {
     }
 
     public static boolean isAvailable() { return available; }
-    public static boolean capturesGameHud() { return captureThisFrame; }
+    public static boolean capturesGameHud() { return captureThisFrame && !EditViewportRuntime.isRendering(); }
     public static int width() { return frameWidth; }
     public static int height() { return frameHeight; }
 
@@ -73,7 +74,7 @@ public final class SharedGameFrame {
         Minecraft minecraft = Minecraft.getInstance();
         editorFrame = minecraft.screen instanceof MuiScreen screen && screen.getFragment() instanceof MainUI;
         opaqueEditorFrame = editorFrame && (UIConstants.MainUI.BG_ROOT >>> 24) == 255;
-        consumersThisFrame = hasConsumers();
+        consumersThisFrame = hasConsumers() || EditViewportRuntime.isRendering();
     }
 
     /** This changes only GameRenderer.render's world branch. Camera updates, world
@@ -95,7 +96,8 @@ public final class SharedGameFrame {
             releaseTexture();
             return;
         }
-        if (texture == null || frameWidth != width || frameHeight != height) {
+        Object owner = EditViewportRuntime.frameOwner();
+        if (texture == null || textureOwner != owner || frameWidth != width || frameHeight != height) {
             long allocationStart = GameViewTiming.start();
             releaseTexture();
             var source = minecraft.getMainRenderTarget().getColorTexture();
@@ -108,12 +110,14 @@ public final class SharedGameFrame {
                     GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT,
                     source.getFormat(), width, height, 1, 1);
             RenderSystem.getDevice().createCommandEncoder().clearColorTexture(texture, 0xFF000000);
-            if (!GameFrameImage.publish(texture)) {
+            boolean published = owner == null ? GameFrameImage.publish(texture) : EditViewportRuntime.image().publish(texture);
+            if (!published) {
                 texture.close();
                 texture = null;
                 captureThisFrame = false;
                 return;
             }
+            textureOwner = owner;
             frameWidth = width;
             frameHeight = height;
             GameViewTiming.finish("allocate shared frame " + width + "x" + height, allocationStart, true);
@@ -142,7 +146,7 @@ public final class SharedGameFrame {
                 access.geometryNode$setRenderState(HUD);
                 access.geometryNode$setVertexBuffers(HUD_VERTEX_BUFFERS);
                 long hudStart = GameViewTiming.start();
-                renderer.render(fog);
+                if (!EditViewportRuntime.isRendering()) renderer.render(fog);
                 GameViewTiming.finish("HUD submission", hudStart);
             } finally {
                 hudPassRenderer = previousHudPass;
@@ -192,6 +196,7 @@ public final class SharedGameFrame {
         // These buffers were restored out of that renderer, so we own their close.
         for (MappableRingBuffer buffer : HUD_VERTEX_BUFFERS.values()) buffer.close();
         HUD_VERTEX_BUFFERS.clear();
+        EditViewportRuntime.close();
     }
 
     private static void releaseTexture() {
@@ -202,6 +207,8 @@ public final class SharedGameFrame {
         // Arc3D recordings can still reference retired frames. The image bridge owns
         // texture destruction and releases the GPU allocation after the last use.
         GameFrameImage.clear();
+        EditViewportRuntime.image().clear();
+        textureOwner = null;
         texture = null;
         frameWidth = 0;
         frameHeight = 0;

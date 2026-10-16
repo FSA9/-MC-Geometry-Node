@@ -5,5 +5,6 @@ package com.mine.geometry_node.client.ui.components.sidebar.api;
  */
 public enum SidebarPanelScope {
     GRAPH_EDITOR,
-    ASSET_BROWSER
+    ASSET_BROWSER,
+    GAME_VIEWPORT
 }

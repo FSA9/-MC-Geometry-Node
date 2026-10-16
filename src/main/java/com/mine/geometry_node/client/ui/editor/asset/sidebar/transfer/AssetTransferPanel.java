@@ -41,7 +41,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             "geometry_node.asset_transfer.panel.title",
             200,
             Set.of(SidebarPanelScope.ASSET_BROWSER),
-            AssetTransferPanel::create);
+            AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.common.SvgIconView.Icon.TRANSFERS);
 
     private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
     private static final int COLOR_SECTION = UiTheme.Surface.PANEL;

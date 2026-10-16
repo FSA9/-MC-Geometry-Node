@@ -1,7 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
-/** Game mode shares the player's camera; edit mode will own a camera per view. */
+/** Game uses the player camera; edit and fly share this window's independent camera. */
 public enum ViewportMode {
     GAME,
-    EDIT
+    EDIT,
+    FLY;
+
+    public boolean usesEditorCamera() { return this != GAME; }
 }

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 
@@ -9,6 +10,7 @@ final class AreaStyle {
     static final int COLOR_PLATE = 0xFF171717;
     static final int COLOR_PANE = 0xFF202020;
     static final int COLOR_PANE_BORDER = 0xFF101010;
+    static final int COLOR_ACTIVE_BORDER = UiTheme.Control.FOCUS;
     static final int COLOR_HEADER = 0xFF2A2A2A;
     static final int COLOR_HEADER_ACTIVE = 0xFF30343A;
     static final int COLOR_CONTENT = UIConstants.CLR_BG_DARK_1;

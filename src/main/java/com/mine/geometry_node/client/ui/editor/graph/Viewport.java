@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
+
 import com.mine.geometry_node.client.ui.components.nativepreview.NativePreviewHost;
 import com.mine.geometry_node.client.ui.components.nativepreview.ViewportNativePreview;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.*;
@@ -51,6 +54,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     private final ViewportController mController;
     private final ViewportSelection mSelection = new ViewportSelection();
     private ViewportMenu mActiveMenu;
+    private AreaLifecycle.Subscription mMenuAreaBinding = AreaLifecycle.Subscription.NONE;
 
     private final BackgroundLayer mBackgroundLayer;
     private final ConnectionLayer mConnectionLayer;
@@ -562,6 +566,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
         mActiveMenu = new ViewportMenu(getContext());
         addView(mActiveMenu);
         mActiveMenu.showAt(screenX, screenY, this, mController);
+        mMenuAreaBinding = AreaTransientUi.bind(this, mActiveMenu, () -> closeMenu(false));
     }
 
     @Override
@@ -570,6 +575,8 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     }
 
     private void closeMenu(boolean restoreFocus) {
+        mMenuAreaBinding.close();
+        mMenuAreaBinding = AreaLifecycle.Subscription.NONE;
         if (mActiveMenu != null) {
             if (mActiveMenu.getParent() == this) removeView(mActiveMenu);
             mActiveMenu = null;

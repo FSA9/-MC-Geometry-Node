@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.sidebar.api;
 
 import java.util.Objects;
 import java.util.Set;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 
 /**
  * Registration metadata and factory for one registration tab panel.
@@ -11,7 +12,13 @@ public record SidebarPanelDefinition(
         String titleTranslationKey,
         int order,
         Set<SidebarPanelScope> scopes,
-        SidebarPanelFactory factory) {
+        SidebarPanelFactory factory,
+        SvgIconView.Icon icon) {
+
+    public SidebarPanelDefinition(String id, String titleTranslationKey, int order,
+                                  Set<SidebarPanelScope> scopes, SidebarPanelFactory factory) {
+        this(id, titleTranslationKey, order, scopes, factory, null);
+    }
 
     public SidebarPanelDefinition {
         id = normalizeId(id);
