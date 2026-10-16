@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ai.command;
 
 import com.google.gson.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.mine.geometry_node.client.ai.protocol.ToolContract;
 import com.mine.geometry_node.client.ai.protocol.ToolSchemaValidator;
 
@@ -15,6 +17,7 @@ import java.util.Optional;
 
 /** Ordered command catalog shared by CLI and model tool adapters. */
 public final class CommandRegistry {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommandRegistry.class);
     public record Suggestion(String displayText, String completedInput) {}
 
     private final Map<String, CommandSpec> commands = new LinkedHashMap<>();
@@ -86,6 +89,7 @@ public final class CommandRegistry {
             }
             return result;
         } catch (RuntimeException exception) {
+            LOGGER.error("Command execution failed: command={}", spec.name(), exception);
             return CommandResult.failure("COMMAND_INTERNAL_ERROR", "指令执行时发生内部错误");
         }
     }

@@ -5,7 +5,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.GeometryNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.mine.geometry_node.client.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.ai.command.CommandResult;
 import com.mine.geometry_node.client.ai.graph.GraphPatch;
@@ -68,6 +69,7 @@ import java.util.function.Supplier;
 
 /** Plans a patch against a snapshot, revalidates its revision, and commits it as one undoable command. */
 public final class GraphPatchTransactionService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GraphPatchTransactionService.class);
     private static final Duration UI_HANDOFF_TIMEOUT = Duration.ofSeconds(30);
     private static final Gson GSON = new Gson();
 
@@ -552,10 +554,10 @@ public final class GraphPatchTransactionService {
             throw fail("REVISION_CONFLICT", "事务执行期间蓝图内容已变化，请重新读取并规划");
         }
         String changeId = UUID.randomUUID().toString();
-        boolean executed = session.editorContext.getCommandManager().executeAsNewBaseline(new CmdReplaceGraphState(
+        boolean executed = session.editorContext.getCommandManager().execute(new CmdReplaceGraphState(
                 session.editorContext, plan.beforeJson, plan.afterJson, changeId));
         if (!executed) throw fail("PATCH_NO_CHANGES", "GraphPatch 提交未产生变化");
-        GeometryNode.LOGGER.info("Graph patch committed: change={}, revision={}, operations={}",
+        LOGGER.info("Graph patch committed: change={}, revision={}, operations={}",
                 changeId, session.revision(), plan.patch.operations().size());
         JsonObject data = new JsonObject();
         data.addProperty("patch_hash", plan.patchHash);
@@ -1064,7 +1066,7 @@ public final class GraphPatchTransactionService {
         if (cause instanceof PatchFailure patchFailure) {
             return CommandResult.failure(patchFailure.code, patchFailure.getMessage());
         }
-        GeometryNode.LOGGER.error("GraphPatch execution failed", cause);
+        LOGGER.error("GraphPatch execution failed", cause);
         return CommandResult.failure("GRAPH_PATCH_INTERNAL_ERROR", "GraphPatch 执行失败");
     }
 

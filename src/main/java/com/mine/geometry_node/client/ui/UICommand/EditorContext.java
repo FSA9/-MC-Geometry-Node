@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
-import com.mine.geometry_node.GeometryNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -18,6 +19,7 @@ import java.util.function.Consumer;
  * 连接 UI 层（viewport, Properties 等）与数据层的核心枢纽。
  */
 public class EditorContext {
+    private static final Logger LOGGER = LoggerFactory.getLogger(EditorContext.class);
 
     // --- 核心模块 ---
     private final NodeGraph mGraph;
@@ -33,7 +35,7 @@ public class EditorContext {
         // 如果传入 null，则默认创建一个空的新图
         this.mGraph = (graph != null) ? graph : new NodeGraph();
         this.mCurrentGraph = this.mGraph;
-        this.mCommandManager = new CommandManager();
+        this.mCommandManager = new CommandManager(this);
         this.mGraphController = new GraphController(this);
     }
 
@@ -45,16 +47,22 @@ public class EditorContext {
     public CommandManager getCommandManager() { return mCommandManager; }
     public GraphController getGraphController() { return mGraphController; }
     public boolean enterGroupScope(NodeData groupNode) {
-        if (groupNode == null || !groupNode.isGroupNode()) {
+        if (groupNode == null || !groupNode.isGroupNode()
+                || getCurrentGraph().getNode(groupNode.id) != groupNode) {
             return false;
         }
 
         boolean boundariesMissing = groupNode.subNodes == null
                 || !groupNode.subNodes.containsKey(GroupNodeTypes.GROUP_IN_ID)
                 || !groupNode.subNodes.containsKey(GroupNodeTypes.GROUP_OUT_ID);
-        GroupNodeFactory.ensureBoundaryNodes(groupNode);
         if (boundariesMissing) {
-            mCommandManager.recordExternalMutation();
+            // Repairing a legacy/incomplete group is a real document edit, not an untracked side
+            // effect of navigation. The manager captures its complete reversible state.
+            var previousChildren = groupNode.subNodes == null ? null : new LinkedHashMap<>(groupNode.subNodes);
+            mCommandManager.execute(new ICommand() {
+                @Override public void execute() { GroupNodeFactory.ensureBoundaryNodes(groupNode); }
+                @Override public void undo() { groupNode.subNodes = previousChildren; }
+            });
         }
         mCurrentGroupNode = groupNode;
         mCurrentGraph = createGroupScopeGraph(groupNode);
@@ -84,7 +92,7 @@ public class EditorContext {
         graph.comment = mGraph.comment;
         graph.quest = mGraph.quest;
         graph.version = mGraph.version;
-        graph.nodes = groupNode.ensureSubNodes();
+        graph.nodes = groupNode.subNodes;
         graph.frames = new LinkedHashMap<String, FrameData>();
         return graph;
     }
@@ -165,8 +173,11 @@ public class EditorContext {
     }
 
     public void replaceGraphState(NodeGraph replacement) {
+        replaceGraphState(replacement, currentGroupPath());
+    }
+
+    void replaceGraphState(NodeGraph replacement, List<String> groupPath) {
         if (replacement == null) throw new IllegalArgumentException("replacement graph cannot be null");
-        List<String> groupPath = currentGroupPath();
         mGraph.graphKind = replacement.graphKind;
         mGraph.tags = replacement.tags;
         mGraph.comment = replacement.comment;
@@ -178,7 +189,7 @@ public class EditorContext {
         notifyListeners("reloading graph", EditorListener::onGraphReloaded);
     }
 
-    private List<String> currentGroupPath() {
+    List<String> currentGroupPath() {
         ArrayList<String> reversed = new ArrayList<>();
         for (NodeData node = mCurrentGroupNode; node != null; node = node.parentGroupNode) {
             reversed.add(node.id);
@@ -192,11 +203,11 @@ public class EditorContext {
         java.util.Map<String, NodeData> nodes = mGraph.nodes;
         for (String id : groupPath) {
             group = nodes == null ? null : nodes.get(id);
-            if (group == null || !group.isGroupNode()) {
+            if (group == null || !group.isGroupNode() || group.subNodes == null) {
                 group = null;
                 break;
             }
-            nodes = group.ensureSubNodes();
+            nodes = group.subNodes;
         }
         mCurrentGroupNode = group;
         mCurrentGraph = group == null ? mGraph : createGroupScopeGraph(group);
@@ -234,7 +245,7 @@ public class EditorContext {
             try {
                 notification.accept(listener);
             } catch (RuntimeException failure) {
-                GeometryNode.LOGGER.error("Editor listener failed while {}: listener={}",
+                LOGGER.error("Editor listener failed while {}: listener={}",
                         event, listener.getClass().getName(), failure);
             }
         }

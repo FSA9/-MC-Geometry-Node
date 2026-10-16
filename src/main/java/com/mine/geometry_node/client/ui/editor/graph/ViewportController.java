@@ -219,14 +219,8 @@ public class ViewportController implements EditorContext.EditorListener,
         if (node == null || !node.isGroupNode()) return;
 
         if (mEditorContext.enterGroupScope(node)) {
-            mEditorContext.getCommandManager().clearHistory();
-            mViewport.clearSelection();
-            mViewport.prepareLayers();
-            rebuildScopeVisuals(mEditorContext.getCurrentGraph());
-            rebuildVisualConnections();
+            onGraphReloaded();
             mViewport.getCamera().setPosition(mViewport.getWidth() / 2.0f, mViewport.getHeight() / 2.0f);
-            mViewport.updateTransform();
-            mViewport.invalidate();
         }
     }
 
@@ -234,13 +228,7 @@ public class ViewportController implements EditorContext.EditorListener,
         if (mEditorContext == null || !mEditorContext.isInsideGroupScope()) return;
 
         if (mEditorContext.exitGroupScope()) {
-            mEditorContext.getCommandManager().clearHistory();
-            mViewport.clearSelection();
-            mViewport.prepareLayers();
-            rebuildScopeVisuals(mEditorContext.getCurrentGraph());
-            rebuildVisualConnections();
-            mViewport.updateTransform();
-            mViewport.invalidate();
+            onGraphReloaded();
         }
     }
 
@@ -702,6 +690,8 @@ public class ViewportController implements EditorContext.EditorListener,
 
     @Override public void onGraphConnectionsRebuildRequested() { rebuildVisualConnections(); }
     @Override public void onGraphReloaded() {
+        // Reloads replace node identities; discard gestures and menus holding old visuals.
+        mViewport.cancelTransientUi();
         mViewport.clearSelection();
         mViewport.prepareLayers();
         rebuildScopeVisuals(mEditorContext.getCurrentGraph());

@@ -1,111 +1,134 @@
 package com.mine.geometry_node.client.ui.UICommand;
 
-import com.mine.geometry_node.GeometryNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.mine.geometry_node.client.ui.UICommand.history.GraphHistorySnapshot;
 
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
 /**
- * 历史记录管理器
+ * Per-document history. Commands perform the initial mutation; history stores detached before/after
+ * states, so restoring a group or replacing a graph never replays a command holding stale objects.
  */
 public class CommandManager {
-
-    // 设置最大历史记录步数
     private static final int MAX_HISTORY_STEPS = 50;
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommandManager.class);
 
+    private final EditorContext context;
     private final LinkedList<HistoryEntry> mUndoStack = new LinkedList<>();
     private final LinkedList<HistoryEntry> mRedoStack = new LinkedList<>();
+    private GraphHistorySnapshot currentSnapshot;
+    private boolean executing;
     private Runnable mDirtyListener;
     private long mRevision;
     private String mLastChangeId = "";
 
-    public void setDirtyListener(Runnable dirtyListener) {
-        mDirtyListener = dirtyListener;
+    public CommandManager(EditorContext context) {
+        this.context = Objects.requireNonNull(context, "context");
     }
 
-    public long revision() {
-        return mRevision;
-    }
+    public void setDirtyListener(Runnable dirtyListener) { mDirtyListener = dirtyListener; }
+    public long revision() { return mRevision; }
+    public String lastChangeId() { return mLastChangeId; }
 
-    public String lastChangeId() {
-        return mLastChangeId;
-    }
+    public boolean execute(ICommand command) { return execute(command, false); }
 
-    /**
-     * 提交并执行一个新命令
-     */
-    public boolean execute(ICommand command) {
-        if (command == null || !command.canExecute()) {
-            return false;
-        }
+    /** Explicit document reset only; ordinary UI edits and MCP patches must use {@link #execute}. */
+    public boolean executeAsNewBaseline(ICommand command) { return execute(command, true); }
+
+    private boolean execute(ICommand command, boolean replaceHistory) {
+        requireIdle();
+        if (command == null || !command.canExecute()) return false;
         requireRevisionCapacity();
-        HistoryEntry entry = new HistoryEntry(command, changeId(command));
-        command.execute();
-
-        mUndoStack.push(entry);
-
-        if (mUndoStack.size() > MAX_HISTORY_STEPS) {
-            mUndoStack.removeLast();
+        GraphHistorySnapshot before = GraphHistorySnapshot.capture(context.getGraph(), currentSnapshot);
+        List<String> beforeScope = context.currentGroupPath();
+        GraphHistorySnapshot after;
+        String changeId = changeId(command);
+        executing = true;
+        try {
+            command.execute();
+            after = GraphHistorySnapshot.capture(context.getGraph(), before);
+        } catch (RuntimeException | Error failure) {
+            try {
+                context.replaceGraphState(before.restore(), beforeScope);
+                currentSnapshot = before;
+            } catch (RuntimeException | Error rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        } finally {
+            executing = false;
         }
+        currentSnapshot = after;
+        if (after == before) return false;
 
-        mRedoStack.clear();
-        recordMutation(entry.changeId());
-        return true;
-    }
-
-    /**
-     * Executes a command and, only after it succeeds, replaces older undo/redo history with it.
-     */
-    public boolean executeAsNewBaseline(ICommand command) {
-        if (command == null || !command.canExecute()) {
-            return false;
-        }
-        requireRevisionCapacity();
-        HistoryEntry entry = new HistoryEntry(command, changeId(command));
-        command.execute();
-
-        mUndoStack.clear();
-        mRedoStack.clear();
+        HistoryEntry entry = new HistoryEntry(before, after, changeId);
+        if (replaceHistory) mUndoStack.clear();
         mUndoStack.push(entry);
+        if (mUndoStack.size() > MAX_HISTORY_STEPS) mUndoStack.removeLast();
+        mRedoStack.clear();
         recordMutation(entry.changeId());
         return true;
     }
 
     public void undo() {
-        if (!mUndoStack.isEmpty()) {
-            requireRevisionCapacity();
-            HistoryEntry entry = mUndoStack.peek();
-            entry.command().undo();
+        requireIdle();
+        if (mUndoStack.isEmpty()) return;
+        requireRevisionCapacity();
+        HistoryEntry entry = mUndoStack.peek();
+        executing = true;
+        try {
+            restore(entry.before());
             mUndoStack.pop();
             mRedoStack.push(entry);
-            recordMutation(entry.changeId());
+        } finally {
+            executing = false;
         }
+        recordMutation(entry.changeId());
     }
 
     public void redo() {
-        if (!mRedoStack.isEmpty()) {
-            HistoryEntry entry = mRedoStack.peek();
-            if (!entry.command().canExecute()) {
-                return;
-            }
-            requireRevisionCapacity();
-            entry.command().execute();
+        requireIdle();
+        if (mRedoStack.isEmpty()) return;
+        requireRevisionCapacity();
+        HistoryEntry entry = mRedoStack.peek();
+        executing = true;
+        try {
+            restore(entry.after());
             mRedoStack.pop();
             mUndoStack.push(entry);
-            recordMutation(entry.changeId());
+        } finally {
+            executing = false;
         }
+        recordMutation(entry.changeId());
+    }
+
+    private void restore(GraphHistorySnapshot snapshot) {
+        context.replaceGraphState(snapshot.restore());
+        currentSnapshot = snapshot;
     }
 
     public void clearHistory() {
+        requireIdle();
         mUndoStack.clear();
         mRedoStack.clear();
+        currentSnapshot = null;
     }
 
-    /** Records a mutation performed by legacy initialization code that has no reversible command. */
+    /**
+     * Starts a new baseline after an explicitly irreversible external mutation. Both stacks must be
+     * discarded: restoring an older document snapshot would also discard that untracked mutation.
+     * Normal edits, scope navigation and MCP patches must not use this escape hatch.
+     */
     public void recordExternalMutation() {
+        requireIdle();
         requireRevisionCapacity();
+        mUndoStack.clear();
         mRedoStack.clear();
+        currentSnapshot = null;
         recordMutation(UUID.randomUUID().toString());
     }
 
@@ -114,7 +137,7 @@ public class CommandManager {
             try {
                 mDirtyListener.run();
             } catch (RuntimeException failure) {
-                GeometryNode.LOGGER.error("Command dirty listener failed", failure);
+                LOGGER.error("Command dirty listener failed", failure);
             }
         }
     }
@@ -125,18 +148,17 @@ public class CommandManager {
         markAsDirty();
     }
 
+    private void requireIdle() {
+        if (executing) throw new IllegalStateException("Cannot change history while a command is executing");
+    }
+
     private void requireRevisionCapacity() {
-        if (mRevision == Long.MAX_VALUE) {
-            throw new IllegalStateException("graph revision overflow");
-        }
+        if (mRevision == Long.MAX_VALUE) throw new IllegalStateException("graph revision overflow");
     }
 
     private static String changeId(ICommand command) {
-        if (command instanceof IdentifiedCommand identified) {
-            return identified.changeId();
-        }
-        return UUID.randomUUID().toString();
+        return command instanceof IdentifiedCommand identified ? identified.changeId() : UUID.randomUUID().toString();
     }
 
-    private record HistoryEntry(ICommand command, String changeId) {}
+    private record HistoryEntry(GraphHistorySnapshot before, GraphHistorySnapshot after, String changeId) {}
 }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.client.ai.graph.editor.BoundGraphTarget;
 import com.mine.geometry_node.client.ai.graph.editor.GraphReadSnapshotCache;
 import com.mine.geometry_node.client.ai.graph.editor.NodeCatalogQueryTarget;
 import com.mine.geometry_node.client.ai.graph.editor.PreparedGraphQueryTarget;
+import com.mine.geometry_node.client.ai.graph.editor.PreparedGraphPatchTarget;
 import com.mine.geometry_node.client.ai.graph.editor.ViewportGraphTargetResolver;
 import icyllis.modernui.core.Core;
 
@@ -90,6 +91,8 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                 }
                 BoundGraphTarget target = resolution.target();
                 if (command.effect() == com.mine.geometry_node.client.ai.protocol.ToolContract.CommandEffect.GRAPH_WRITE) {
+                    PreparedGraphPatchTarget patchTarget = target.preparePatch();
+                    JsonObject patchArguments = arguments.deepCopy();
                     Thread.ofVirtual().name("geometry-node-graph-patch").start(
                             () -> {
                                 if (closed.get()) {
@@ -98,7 +101,7 @@ public final class MinecraftClientMcpGateway implements McpCommandGateway {
                                 }
                                 CommandResult commandResult = cancellation.isCancelled()
                                         ? CommandResult.failure("CANCELLED", "工具调用已取消")
-                                        : executeCommand(command, arguments, cancellation, target);
+                                        : executeCommand(command, patchArguments, cancellation, patchTarget);
                                 result.complete(closed.get() ? closedResult() : commandResult);
                             });
                     return;

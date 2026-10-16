@@ -26,12 +26,17 @@ public final class UIHintValueBinder {
 
     public static boolean commit(EditorContext editorContext, NodeData nodeData, String portId, Object oldValue, Object newValue) {
         if (nodeData == null || portId == null) return false;
+        // A popup or queued callback may outlive an undo/reload or a scope switch.
+        // Never resolve that stale control against a different node with the same ID.
+        if (editorContext != null && editorContext.getCurrentGraph().getNode(nodeData.id) != nodeData) {
+            return false;
+        }
         if (Objects.equals(newValue, oldValue)) {
             return false;
         }
         if (editorContext != null) {
             CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldValue, newValue);
-            editorContext.getCommandManager().execute(cmd);
+            return editorContext.getCommandManager().execute(cmd);
         } else if (newValue == null) {
             nodeData.inputs.remove(portId);
         } else {

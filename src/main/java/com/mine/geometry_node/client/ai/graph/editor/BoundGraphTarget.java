@@ -102,6 +102,12 @@ public final class BoundGraphTarget implements GraphQueryTarget, GraphPatchComma
     public long revision() { return session.revision(); }
     public boolean isTargetCurrent() { return targetValidator.getAsBoolean(); }
 
+    /** Captures only worker-safe capabilities; transaction validation remains on the UI thread. */
+    public PreparedGraphPatchTarget preparePatch() {
+        icyllis.modernui.core.Core.checkUiThread();
+        return new PreparedGraphPatchTarget(hasGraph(), transactions::apply);
+    }
+
     public PreparedGraphQueryTarget prepareRead(GraphReadSnapshotCache cache) {
         NodeGraph graph = resolve();
         if (graph == null) throw new IllegalStateException("bound graph scope is closed");
