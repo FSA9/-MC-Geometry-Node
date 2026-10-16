@@ -37,19 +37,30 @@ final class CollisionDebugProvider {
     private ServerLevel lastLevel;
     private long lastRevision = Long.MIN_VALUE;
     private Vec3 lastOrigin;
+    private List<Vec3> lastOrigins = List.of();
     private double lastRadius;
     private boolean warned;
     private List<GeometryDebugElement> meshes = List.of();
 
     List<GeometryDebugElement> collect(ServerPlayer player, double radius) {
+        return collect(player, radius, player.position());
+    }
+
+    List<GeometryDebugElement> collect(ServerPlayer player, double radius, Vec3 origin) {
+        return collect(player, radius, List.of(origin));
+    }
+
+    List<GeometryDebugElement> collect(ServerPlayer player, double radius, List<Vec3> origins) {
+        if (origins.isEmpty()) return List.of();
+        Vec3 origin = origins.getFirst();
         ServerLevel level = player.level();
-        Vec3 origin = player.position();
         long revision = ModelCollisionScene.revision(level);
         if (level == lastLevel && revision == lastRevision && radius == lastRadius
-                && lastOrigin != null && origin.distanceToSqr(lastOrigin) < 16) return meshes;
+                && lastOrigins.equals(origins)) return meshes;
         lastLevel = level;
         lastRevision = revision;
         lastOrigin = origin;
+        lastOrigins = List.copyOf(origins);
         lastRadius = radius;
         try (var sample = nodeCollision ? null : ModelCollisionMetrics.debugBuild()) {
         int availableParts = 0, displayedParts = 0;
@@ -60,34 +71,44 @@ final class CollisionDebugProvider {
             if (isNodeCollision(entry.instanceId()) != nodeCollision) continue;
             for (ModelCollisionMesh.Part part : entry.geometry().mesh().parts()) {
                 availableParts++;
-                double distance = distanceSquared(part, entry, origin);
+                Vec3 closest = origin;
+                double distance = Double.POSITIVE_INFINITY;
+                for (Vec3 eye : origins) {
+                    double candidate = distanceSquared(part, entry, eye);
+                    if (candidate < distance) { distance = candidate; closest = eye; }
+                }
                 if (distance > radius * radius) continue;
                 if (nearest.size() >= MAX_FACES / 4) {
                     truncated = true;
                     if (distance >= nearest.peek().distance()) continue;
                     nearest.poll();
                 }
-                nearest.add(new Part(part, entry.x(), entry.y(), entry.z(), distance));
+                nearest.add(new Part(part, entry.x(), entry.y(), entry.z(), distance, closest));
             }
         }
         List<Part> parts = new ArrayList<>(nearest);
         parts.sort(order);
         List<GeometryDebugElement> result = new ArrayList<>();
-        Chunk chunk = new Chunk();
+        var chunks = new java.util.LinkedHashMap<Vec3, Chunk>();
         int total = 0;
         for (Part part : parts) {
             var surface = ModelCollisionDebugGeometry.of(part.part());
+            Vec3 chunkOrigin = part.origin();
+            Chunk chunk = chunks.computeIfAbsent(chunkOrigin, key -> new Chunk());
             int count = surface.faces().length / 4;
             if (total + count > MAX_FACES) { truncated = true; continue; }
             if (chunk.faces.size() / 4 + count > CHUNK_FACES) {
-                result.add(chunk.mesh(result.size(), origin));
+                result.add(chunk.mesh(result.size(), chunkOrigin));
                 chunk = new Chunk();
+                chunks.put(chunkOrigin, chunk);
             }
-            chunk.add(surface, part, origin);
+            chunk.add(surface, part, chunkOrigin);
             total += count;
             displayedParts++;
         }
-        if (!chunk.faces.isEmpty()) result.add(chunk.mesh(result.size(), origin));
+        chunks.forEach((chunkOrigin, chunk) -> {
+            if (!chunk.faces.isEmpty()) result.add(chunk.mesh(result.size(), chunkOrigin));
+        });
         meshes = List.copyOf(result);
         if (truncated && !warned) player.sendSystemMessage(Component.translatable(
                 "geometry_node.debug." + channel + ".limited", MAX_FACES));
@@ -108,6 +129,7 @@ final class CollisionDebugProvider {
         meshes = List.of();
         lastLevel = null;
         lastOrigin = null;
+        lastOrigins = List.of();
         lastRevision = Long.MIN_VALUE;
         warned = false;
     }
@@ -145,5 +167,5 @@ final class CollisionDebugProvider {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    private record Part(ModelCollisionMesh.Part part, double x, double y, double z, double distance) {}
+    private record Part(ModelCollisionMesh.Part part, double x, double y, double z, double distance, Vec3 origin) {}
 }

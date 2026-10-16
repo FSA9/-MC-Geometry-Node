@@ -52,6 +52,10 @@ public final class GameFrameImage {
          * Unsupported backends return false without taking ownership.
          */
         public boolean publish(GpuTexture texture) {
+            return publish(texture, null, () -> Minecraft.getInstance().execute(texture::close));
+        }
+
+        boolean publish(GpuTexture texture, PresentedViewportFrame metadata, Runnable released) {
             Core.checkRenderThread();
             var context = Core.peekImmediateContext();
             if (!(texture instanceof GlTexture glTexture) || texture.isClosed()
@@ -70,11 +74,11 @@ public final class GameFrameImage {
             // Wrapped Arc3D textures never delete the external GL name themselves.
             // This callback runs only after both recording and GPU command references
             // are gone. Minecraft owns the GL resource and must release it on its thread.
-            image.setReleaseCallback(() -> Minecraft.getInstance().execute(texture::close));
+            image.setReleaseCallback(released);
             Frame previous;
             synchronized (LOCK) {
                 previous = frame;
-                frame = new Frame(image, new Size(width, height));
+                frame = new Frame(image, new Size(width, height), metadata);
             }
             if (previous != null) previous.image.unref();
             return true;
@@ -109,13 +113,24 @@ public final class GameFrameImage {
         /** Skip a stale layout if the producer resized after the view measured its frame. */
         public boolean draw(Canvas canvas, Size expectedSize,
                                    float left, float top, float right, float bottom) {
-            if (!(canvas instanceof ArcCanvas arcCanvas) || !(right > left) || !(bottom > top)) return false;
+            return drawFrame(canvas, expectedSize, left, top, right, bottom) != null;
+        }
+
+        public PresentedViewportFrame drawPresented(Canvas canvas, Size expectedSize,
+                                                     float left, float top, float right, float bottom) {
+            Frame drawn = drawFrame(canvas, expectedSize, left, top, right, bottom);
+            return drawn == null ? null : drawn.metadata;
+        }
+
+        private Frame drawFrame(Canvas canvas, Size expectedSize,
+                                float left, float top, float right, float bottom) {
+            if (!(canvas instanceof ArcCanvas arcCanvas) || !(right > left) || !(bottom > top)) return null;
             var context = Core.requireUiRecordingContext();
             context.checkOwnerThread();
             Frame current;
             synchronized (LOCK) {
                 current = frame;
-                if (current == null || (expectedSize != null && !current.size.equals(expectedSize))) return false;
+                if (current == null || (expectedSize != null && !current.size.equals(expectedSize))) return null;
                 current.image.ref();
             }
             // Each constructor takes ownership of its argument's existing reference.
@@ -126,14 +141,14 @@ public final class GameFrameImage {
                 image = new GraniteImage(context, view, ColorInfo.CT_RGBA_8888, ColorInfo.AT_OPAQUE, null);
                 arcCanvas.getCanvas().drawImageRect(image, new Rect2f(left, top, right, bottom),
                         SamplingOptions.LINEAR, null);
-                return true;
+                return current;
             } finally {
                 if (image != null) image.unref();
                 else view.unref();
             }
         }
 
-        private record Frame(GLTexture image, Size size) {}
+        private record Frame(GLTexture image, Size size, PresentedViewportFrame metadata) {}
     }
 
     public record Size(int width, int height) {

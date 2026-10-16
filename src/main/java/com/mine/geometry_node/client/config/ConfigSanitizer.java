@@ -389,10 +389,7 @@ final class ConfigSanitizer {
         config.keyBindings.viewport.toggleRightSidebar = toggleRightSidebar.value;
         changed |= toggleRightSidebar.changed;
 
-        ReadKeyBinding fly = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.fly)
-                : readKeyBinding(gameView, "fly", defaults.keyBindings.gameView.fly);
-        config.keyBindings.gameView.fly = fly.value;
-        changed |= fly.changed;
+        changed |= gameView != null && gameView.has("fly");
 
         ReadKeyBinding toggleProjection = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleProjection)
                 : readKeyBinding(gameView, "toggleProjection", defaults.keyBindings.gameView.toggleProjection);
@@ -408,6 +405,35 @@ final class ConfigSanitizer {
                 : readKeyBinding(gameView, "viewMenu", defaults.keyBindings.gameView.viewMenu);
         config.keyBindings.gameView.viewMenu = viewMenu.value;
         changed |= viewMenu.changed;
+        ReadKeyBinding sceneADD = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.add)
+                : readKeyBinding(gameView, "add", defaults.keyBindings.gameView.add);
+        config.keyBindings.gameView.add = sceneADD.value;
+        changed |= sceneADD.changed;
+        ReadKeyBinding sceneFOCUS = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.focus)
+                : readKeyBinding(gameView, "focus", defaults.keyBindings.gameView.focus);
+        config.keyBindings.gameView.focus = sceneFOCUS.value;
+        changed |= sceneFOCUS.changed;
+        ReadKeyBinding sceneDELETE = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.delete)
+                : readKeyBinding(gameView, "delete", defaults.keyBindings.gameView.delete);
+        config.keyBindings.gameView.delete = sceneDELETE.value;
+        changed |= sceneDELETE.changed;
+        ReadKeyBinding sceneUNDO = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.undo)
+                : readKeyBinding(gameView, "undo", defaults.keyBindings.gameView.undo);
+        config.keyBindings.gameView.undo = sceneUNDO.value;
+        changed |= sceneUNDO.changed;
+        ReadKeyBinding sceneREDO = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.redo)
+                : readKeyBinding(gameView, "redo", defaults.keyBindings.gameView.redo);
+        config.keyBindings.gameView.redo = sceneREDO.value;
+        changed |= sceneREDO.changed;
+        ReadKeyBinding sceneCANCEL = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.cancel)
+                : readKeyBinding(gameView, "cancel", defaults.keyBindings.gameView.cancel);
+        config.keyBindings.gameView.cancel = sceneCANCEL.value;
+        changed |= sceneCANCEL.changed;
+        ReadKeyBinding sceneSELECT_ALL = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.selectAll)
+                : readKeyBinding(gameView, "selectAll", defaults.keyBindings.gameView.selectAll);
+        config.keyBindings.gameView.selectAll = sceneSELECT_ALL.value;
+        changed |= sceneSELECT_ALL.changed;
+
 
         // Control bindings include standalone modifiers, so use their registered validator.
         for (ConfigEntry<String> entry : List.of(

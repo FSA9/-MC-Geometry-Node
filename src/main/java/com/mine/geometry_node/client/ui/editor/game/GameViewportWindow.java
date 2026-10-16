@@ -31,7 +31,6 @@ import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
@@ -41,20 +40,25 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
 public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware, EditViewportFlightInput.ViewMenuOwner {
+    private final com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization visualization = new com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization();
+    private final com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus sceneMenus;
+    private final com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel propertiesPanel;
+    private final EditorSidebar sidebar;
+    private final UiActionButton visibilityButton;
     private final EditViewportCamera editCamera = new EditViewportCamera();
     private final GameViewportView viewport;
     private final UiRadialMenu viewMenu;
     private final HeldMenuKey menuKey = new HeldMenuKey();
-    private final TextView gameButton;
-    private final TextView editButton;
-    private final TextView flyButton;
-    private final TextView projectionButton;
-    private final TextView resetButton;
-    private final TextView status;
+    private final UiActionButton gameButton;
+    private final UiActionButton editButton;
+    private final UiActionButton flyButton;
+    private final UiActionButton projectionButton;
+    private final UiActionButton resetButton;
     private final TextView waiting;
     private final SidebarLayoutController sidebarLayout;
     private final GameViewportSidebarPanel sidebarPanel;
@@ -65,11 +69,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private boolean shown;
     private boolean registered;
     private boolean disposed;
+    private boolean dismissingMenuGesture;
     private String statusKey;
-    private String statusShortcut = "";
     private boolean toolOrthographic;
     private long nextSidebarRefresh;
-    private long nextHintRefresh;
     private final Runnable refresh = this::refresh;
     private final Runnable refreshVisibility = this::updateVisibility;
 
@@ -91,7 +94,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         projectionButton = action(context, "projection.perspective", this::toggleProjection);
         resetButton = action(context, "reset_camera", this::resetCamera);
         for (TextView button : new TextView[]{gameButton, editButton, flyButton, projectionButton, resetButton}) {
-            tools.addView(button, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            tools.addView(button, toolbarButtonLayout());
         }
         HorizontalScrollView toolScroller = new HorizontalScrollView(context);
         toolScroller.setHorizontalScrollBarEnabled(false);
@@ -99,19 +102,16 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         toolScroller.addView(tools, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         header.addView(toolScroller, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        status = UIUtils.createLockedTextView(context, "", 10.0f, UiTheme.Text.MUTED);
-        status.setSingleLine(true);
-        status.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        status.setEllipsize(TextUtils.TruncateAt.END);
-        status.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        status.setBackground(background(UiTheme.Surface.HEADER));
-        header.addView(status, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        header.addView(new View(context), new LayoutParams(0, 1, 1));
+        visibilityButton = action(context, "scene.visibility", this::openVisualization);
+        header.addView(visibilityButton, toolbarButtonLayout());
         addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28)));
 
         FrameLayout content = new FrameLayout(context);
         viewport = new GameViewportView(context, this, editCamera, this::markInteracted,
                 this::updateTools, this::scheduleVisibilityRefresh);
         content.addView(viewport, new FrameLayout.LayoutParams(-1, -1));
+        sceneMenus = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus(this,content,visualization,this::visualizationChanged);
         waiting = UIUtils.createLockedTextView(context, tr("waiting"), 12.0f, UiTheme.Text.MUTED);
         waiting.setPadding(UIUtils.dp2pxInt(12), 0, UIUtils.dp2pxInt(12), 0);
         waiting.setGravity(Gravity.CENTER);
@@ -129,9 +129,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         workspace.addView(content, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.75f));
         View divider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
         workspace.addView(divider);
-        EditorSidebar sidebar = new EditorSidebar(context);
+        sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.GAME_VIEWPORT, this));
         sidebarPanel = sidebar.requirePanel(GameViewportSidebarPanel.PANEL_ID, GameViewportSidebarPanel.class);
+        propertiesPanel = sidebar.requirePanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID, com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.class);
         workspace.addView(sidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.25f));
         sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, null);
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
@@ -148,6 +149,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     private void openViewMenu() {
         if (!viewport.canNavigate()) return;
+        closeSceneMenus();
         viewport.prepareViewMenu();
         viewport.showViewMenu(viewMenu);
     }
@@ -175,6 +177,31 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
                 menuKey.begin(key);
                 openViewMenu();
             } else confirmViewMenu();
+        });
+    }
+
+    public com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization visualization() { return visualization; }
+    private void visualizationChanged() {
+        viewport.prepareViewMenu();
+        if (registered && mode().usesEditorCamera()) com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.publish(this,visualization.snapshot());
+        viewport.invalidate();
+    }
+    void closeSceneMenus() { if(sceneMenus != null) sceneMenus.dismiss(); }
+    private void openVisualization() {
+        if (!mode().usesEditorCamera()) return;
+        closeViewMenu(); viewport.prepareViewMenu(); sceneMenus.visualization(visibilityButton);
+    }
+    void openCreateMenu(float rootX,float rootY,net.minecraft.world.phys.Vec3 position) {
+        if(mode()!=ViewportMode.EDIT || !viewport.canNavigate())return;
+        closeViewMenu(); viewport.prepareViewMenu();
+        if(!Float.isFinite(rootX)||!Float.isFinite(rootY)){
+            icyllis.modernui.graphics.Matrix matrix=new icyllis.modernui.graphics.Matrix();viewport.transformMatrixToGlobal(matrix);
+            float[] point={viewport.getWidth()*.5f,viewport.getHeight()*.5f};matrix.mapPoint(point);rootX=point[0];rootY=point[1];
+        }
+        sceneMenus.createAt(rootX,rootY,position,()->{
+            sidebarLayout.setVisible(true,true);
+            sidebar.selectPanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID);
+            viewport.requestFocus();
         });
     }
 
@@ -237,12 +264,14 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     public void resetCamera() {
         if (!mode().usesEditorCamera()) return;
+        viewport.releaseInteraction();
         markInteracted();
         if (!Boolean.getBoolean("gn.standalone")) EditViewportRuntime.resetToPlayer(this);
     }
 
     public void toggleProjection() {
         if (mode() != ViewportMode.EDIT) return;
+        viewport.releaseInteraction();
         editCamera.toggleOrthographic();
         markInteracted();
         updateTools();
@@ -254,27 +283,49 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         if (!Boolean.getBoolean("gn.standalone") && mode().usesEditorCamera()) EditViewportRuntime.touch(this);
     }
 
-    private TextView action(Context context, String key, Runnable action) {
-        TextView button = UIUtils.createLockedTextView(context, tr(key), 11.0f, UiTheme.Text.MUTED);
+    private LayoutParams toolbarButtonLayout() {
+        LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        params.setMargins(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(3));
+        return params;
+    }
+
+    private UiActionButton action(Context context, String key, Runnable action) {
+        UiActionButton button = UiActionButton.withPalette(context, tr(key), toolbarPalette(false),
+                UiActionButton.Density.COMPACT,
+                new UiActionButton.Style(3, 1, UiTheme.Control.ICON_BORDER, UiTheme.Metrics.DISABLED_ALPHA));
+        UIUtils.setLockedTextSize(button, 11);
         button.setSingleLine(true);
-        button.setGravity(Gravity.CENTER);
+        button.setMinWidth(0);
+        button.setMinHeight(0);
         button.setPadding(UIUtils.dp2pxInt(9), 0, UIUtils.dp2pxInt(9), 0);
-        button.setClickable(true);
-        button.setFocusable(true);
         button.setOnClickListener(ignored -> action.run());
         return button;
+    }
+
+    private static UiActionButton.Palette toolbarPalette(boolean selected) {
+        return new UiActionButton.Palette(selected ? UiTheme.Control.CHECKED : UiTheme.Control.ICON,
+                UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
+                selected ? UiTheme.Text.STRONG : UiTheme.Text.NORMAL);
     }
 
     private void updateTools() {
         toolOrthographic = editCamera.isOrthographic();
         boolean editing = mode() == ViewportMode.EDIT;
-        gameButton.setTextColor(mode() == ViewportMode.GAME ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
-        flyButton.setTextColor(mode() == ViewportMode.FLY ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
-        editButton.setTextColor(editing ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
+        gameButton.setTextColor(mode() == ViewportMode.GAME ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+        flyButton.setTextColor(mode() == ViewportMode.FLY ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+        editButton.setTextColor(editing ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
         projectionButton.setVisibility(editing ? View.VISIBLE : View.GONE);
         resetButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
-        projectionButton.setText(tr(editCamera.isOrthographic() ? "projection.orthographic" : "projection.perspective"));
+        visibilityButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
+        gameButton.setSelected(mode() == ViewportMode.GAME);
+        editButton.setSelected(editing);
+        flyButton.setSelected(mode() == ViewportMode.FLY);
+        projectionButton.setText(tr("projection.orthographic"));
+        projectionButton.setSelected(editCamera.isOrthographic());
+        for (UiActionButton button : new UiActionButton[]{gameButton, editButton, flyButton, projectionButton})
+            button.setPalette(toolbarPalette(button.isSelected()));
         if (sidebarPanel != null) sidebarPanel.refresh();
+        if (propertiesPanel != null) propertiesPanel.refresh();
     }
 
     private void updateVisibility() {
@@ -292,6 +343,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
                 GameViewportInput.setVisible(this, true);
             } else {
                 EditViewportRuntime.setVisible(this, editCamera, true);
+                com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.publish(this,visualization.snapshot());
             }
         }
         viewport.setActive(true);
@@ -306,6 +358,8 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     }
 
     private void deactivate() {
+        closeSceneMenus();
+        com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.remove(this);
         removeCallbacks(refresh);
         removeCallbacks(refreshVisibility);
         if (viewport != null) viewport.setActive(false);
@@ -328,6 +382,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         long now = System.nanoTime();
         if (sidebarLayout.isVisible() && now >= nextSidebarRefresh) {
             sidebarPanel.refresh();
+            propertiesPanel.refresh();
             nextSidebarRefresh = now + 250_000_000L;
         }
         boolean available = viewport.isFrameAvailable();
@@ -350,24 +405,23 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
             key = !available ? "waiting" : GameViewportInput.isCaptured(this)
                     ? (basic ? "controlling_basic" : "controlling") : (basic ? "viewing_basic" : "viewing");
         }
-        // Camera images and transform demand refresh every frame. Binding descriptions
-        // and localized help need only follow settings changes at the sidebar cadence;
-        // capture, availability and mode transitions still update immediately.
-        long now = System.nanoTime();
-        if (key.equals(statusKey) && now < nextHintRefresh) return;
-        nextHintRefresh = now + 250_000_000L;
-        String shortcut = ("editing_basic".equals(key) || "editing_orthographic".equals(key))
-                ? GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_FLY)
-                : "flying_basic".equals(key) ? GameViewportShortcuts.flightHint() : "";
-        if (key.equals(statusKey) && shortcut.equals(statusShortcut)) return;
+        if (key.equals(statusKey)) return;
         statusKey = key;
-        statusShortcut = shortcut;
-        String text = "flying_basic".equals(key) ? shortcut + " · " + tr("basic_shading") : shortcut.isEmpty() ? tr(key)
-                : Component.translatable("geometry_node.game_view." + key, shortcut).getString();
-        status.setText(text);
-        status.setTooltipText(text);
-        waiting.setText(text);
-        status.setTextColor((key.startsWith("controlling") || "flying_basic".equals(key)) ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
+        waiting.setText(tr(key));
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(icyllis.modernui.view.MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
+            dismissingMenuGesture = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
+        }
+        if (dismissingMenuGesture) {
+            if (action == icyllis.modernui.view.MotionEvent.ACTION_UP
+                    || action == icyllis.modernui.view.MotionEvent.ACTION_CANCEL) dismissingMenuGesture = false;
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
@@ -375,6 +429,13 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         KeyBinding menuBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_MENU));
         if (menuKey.dispatch(event, menuBinding, !(findFocus() instanceof EditText) && viewport.canNavigate()
                 && !EditViewportFlightInput.isCaptured(), this::openViewMenu, this::confirmViewMenu, viewMenu::dismiss)) return true;
+        if (sceneMenus.isOpen()) {
+            KeyBinding cancel=KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_CANCEL));
+            if(event.getAction()==KeyEvent.ACTION_DOWN&&cancel!=null&&UiInputBindings.matches(cancel,event)) {
+                closeSceneMenus();viewport.requestFocus();return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
         if (event.getAction() == KeyEvent.ACTION_DOWN && !(findFocus() instanceof EditText)) {
             // A toolbar/sidebar button may own focus after switching modes. Commands
             // belong to this window, not only to its image child.

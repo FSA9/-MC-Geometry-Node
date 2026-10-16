@@ -82,7 +82,7 @@ public final class GameViewportSidebarPanel extends ScrollView implements Sideba
         String text = owner.mode().usesEditorCamera()
                 ? Component.translatable(owner.mode() == ViewportMode.FLY
                     ? "geometry_node.game_view.sidebar.fly_help" : "geometry_node.game_view.sidebar.edit_help",
-                    GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_FLY),
+                    tr("mode.fly"),
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_PROJECTION),
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_FORWARD),
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_BACKWARD),
@@ -98,6 +98,10 @@ public final class GameViewportSidebarPanel extends ScrollView implements Sideba
         else if (!Boolean.getBoolean("gn.standalone") && EditViewportRuntime.hasVisibleViews()) {
             text += "\n\n" + tr("sidebar.shared_basic_help");
         }
+        if (editing) text += "\n\n" + Component.translatable("geometry_node.game_view.scene.help",
+                GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_ADD),
+                GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_FOCUS),
+                GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_CANCEL)).getString();
         if (!text.equals(lastHelp)) { lastHelp = text; help.setText(text); }
     }
 

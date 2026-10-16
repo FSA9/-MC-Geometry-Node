@@ -26,6 +26,9 @@ import icyllis.modernui.view.View;
 
 /** Canvas composition and local input coordinates preserve workspace transforms and clipping. */
 final class GameViewportView extends View {
+    private final com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction scene;
+    private final Matrix inputMatrix = new Matrix();
+    private final float[] inputPoint = new float[2];
     private final ScopedKeyManager<GameViewportShortcuts.Action, GameViewportView> shortcuts;
     private final GameViewportWindow inputOwner;
     private final EditViewportCamera editCamera;
@@ -53,11 +56,12 @@ final class GameViewportView extends View {
         super(context);
         this.inputOwner = inputOwner;
         this.editCamera = editCamera;
+        scene = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction(inputOwner.visualization(), this::invalidate);
         this.onInteraction = onInteraction;
         this.onProjectionChanged = onProjectionChanged;
         this.onSizeChanged = onSizeChanged;
         shortcuts = new ScopedKeyManager<>(this, KeyScope.GAME_VIEW,
-                () -> GameViewportShortcuts.ACTIONS, this::executeShortcut);
+                this::availableShortcuts, this::executeShortcut);
         shortcuts.dispose(); // Subscribe only while attached to the workspace.
         setClickable(true);
         setFocusable(true);
@@ -98,6 +102,7 @@ final class GameViewportView extends View {
 
     void releaseInteraction() {
         inputOwner.closeViewMenu();
+        inputOwner.closeSceneMenus();
         cancelInteraction();
         if (!Boolean.getBoolean("gn.standalone")) GameViewportInput.release(inputOwner);
     }
@@ -110,6 +115,7 @@ final class GameViewportView extends View {
     }
 
     private void cancelInteraction() {
+        scene.cancel();
         EditViewportFlightInput.release(inputOwner);
         activationPressed = false;
         navigating = false;
@@ -129,6 +135,7 @@ final class GameViewportView extends View {
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
         inputOwner.closeViewMenu();
+        inputOwner.closeSceneMenus();
         cancelInteraction();
         pointerRootX = pointerRootY = Float.NaN;
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
@@ -141,6 +148,7 @@ final class GameViewportView extends View {
         orientation.hide();
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
         if (!isFrameAvailable()) {
+            scene.clearFrame();
             cancelInteraction();
             return;
         }
@@ -149,23 +157,27 @@ final class GameViewportView extends View {
         // The texture snapshot still guards channel.draw against a concurrent resize.
         var framebuffer = EditViewportRuntime.framebufferSize();
         if (!framebuffer.available()) {
+            scene.clearFrame();
             cancelInteraction();
             return;
         }
         var bounds = GameViewportLayout.fit(getWidth(), getHeight(), framebuffer.width(), framebuffer.height());
-        boolean drawn = editing()
-                ? EditViewportRuntime.draw(inputOwner, canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom())
+        var presented = editing() ? EditViewportRuntime.drawPresented(inputOwner, canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom()) : null;
+        boolean drawn = editing() ? presented != null
                 : GameFrameImage.draw(canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
         if (drawn) {
             displayedBounds = bounds;
             if (editing()) {
-                var pose = editCamera.snapshot();
+                scene.presented(presented, bounds);
+                if (inputOwner.mode() == ViewportMode.EDIT) scene.draw(canvas);
+                var pose = presented.camera();
                 orientation.layout(bounds, UIUtils.dp2px(1), pose.yaw(), pose.pitch());
                 orientation.draw(canvas);
             }
             GameViewTiming.finish("activation to first UI frame recording", firstFrameStart, true);
             firstFrameStart = 0;
         }
+        if (!drawn) scene.clearFrame();
         if (navigating && !canNavigate()) cancelInteraction();
     }
 
@@ -177,17 +189,21 @@ final class GameViewportView extends View {
             cancelInteraction();
             return true;
         }
-        if (handleOrientationTouch(event)) return true;
+        if (scene.busy() && event.getActionMasked()==MotionEvent.ACTION_DOWN
+                && (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)||event.getActionButton()==MotionEvent.BUTTON_SECONDARY)) {
+            cancelInteraction();return true;
+        }
+        if (!scene.busy() && handleOrientationTouch(event)) return true;
         if (inputOwner.mode() == ViewportMode.EDIT) return handleEditTouch(event);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 activationPressed = isFrameAvailable() && event.isButtonPressed(MotionEvent.BUTTON_PRIMARY)
-                        && displayedBounds.contains(event.getX(), event.getY());
+                        && displayedBounds.contains(eventX(event), eventY(event));
                 return activationPressed;
             }
             case MotionEvent.ACTION_UP -> {
                 boolean capture = activationPressed && isFrameAvailable()
-                        && displayedBounds.contains(event.getX(), event.getY());
+                        && displayedBounds.contains(eventX(event), eventY(event));
                 activationPressed = false;
                 if (capture) {
                     requestFocus();
@@ -200,7 +216,7 @@ final class GameViewportView extends View {
                 return capture;
             }
             case MotionEvent.ACTION_MOVE -> {
-                if (!displayedBounds.contains(event.getX(), event.getY())) activationPressed = false;
+                if (!displayedBounds.contains(eventX(event), eventY(event))) activationPressed = false;
                 return activationPressed;
             }
             default -> { return super.onTouchEvent(event); }
@@ -209,7 +225,7 @@ final class GameViewportView extends View {
 
     /** Consume the entire overlay gesture so a flight-mode click never captures the mouse. */
     private boolean handleOrientationTouch(MotionEvent event) {
-        float x = event.getX(), y = event.getY();
+        float x = eventX(event), y = eventY(event);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 if (!canNavigate() || !orientation.contains(x, y)) return false;
@@ -248,24 +264,27 @@ final class GameViewportView extends View {
         pointerRootX = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawX();
         pointerRootY = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawY();
         var hovered = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT || !canNavigate()
-                ? null : orientation.hit(event.getX(), event.getY());
+                ? null : orientation.hit(eventX(event), eventY(event));
         if (orientation.setHovered(hovered)) invalidate();
+        if (inputOwner.mode() == ViewportMode.EDIT) scene.hover(event.getActionMasked()==MotionEvent.ACTION_HOVER_EXIT?Float.NaN:eventX(event),eventY(event));
         return super.onHoverEvent(event) || hovered != null;
     }
 
     private boolean handleEditTouch(MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
-                if (!canNavigate() || !displayedBounds.contains(event.getX(), event.getY())) return false;
+                if (!canNavigate() || !displayedBounds.contains(eventX(event), eventY(event))) return false;
                 navigating = event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)
                         || event.getActionButton() == MotionEvent.BUTTON_TERTIARY;
                 // ModernUI's native ACTION_MOVE currently omits modifier flags.
                 // Seed Shift from DOWN and maintain it with focused key events.
                 panning = event.isShiftPressed();
                 activationPressed = event.isButtonPressed(MotionEvent.BUTTON_PRIMARY);
+                if (navigating) scene.cancel();
+                else if (activationPressed) scene.down(eventX(event), eventY(event), event.isShiftPressed(), event.isCtrlPressed());
                 if (!navigating && !activationPressed) return false;
-                lastX = event.getX();
-                lastY = event.getY();
+                lastX = eventX(event);
+                lastY = eventY(event);
                 requestFocus();
                 onInteraction.run();
                 return true;
@@ -275,22 +294,24 @@ final class GameViewportView extends View {
                     cancelInteraction();
                     return false;
                 }
+                if (scene.busy()) return scene.move(eventX(event),eventY(event));
                 if (navigating && !event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) navigating = false;
                 if (navigating) {
-                    float dx = event.getX() - lastX;
-                    float dy = event.getY() - lastY;
+                    float dx = eventX(event) - lastX;
+                    float dy = eventY(event) - lastY;
                     // Events are already inverse-transformed into the view's local space.
                     // Use the rendered image height so letterboxing cannot change pan speed.
                     if (panning) editCamera.pan(dx, dy, displayedBounds.bottom() - displayedBounds.top());
                     else editCamera.orbit(dx, dy);
-                    lastX = event.getX();
-                    lastY = event.getY();
+                    lastX = eventX(event);
+                    lastY = eventY(event);
                     invalidate();
                 }
                 return navigating || activationPressed;
             }
             case MotionEvent.ACTION_UP -> {
                 boolean handled = navigating || activationPressed;
+                if (scene.busy()) scene.up(eventX(event),eventY(event));
                 cancelInteraction();
                 if (handled) performClick();
                 return handled;
@@ -301,11 +322,14 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (editing() && orientation.contains(event.getX(), event.getY())
+        if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_SCROLL)return true;
+        if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS
+                && event.getActionButton()==MotionEvent.BUTTON_SECONDARY){cancelInteraction();return true;}
+        if (editing() && orientation.contains(eventX(event), eventY(event))
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL) return true;
         if (inputOwner.mode() == ViewportMode.EDIT
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL && canNavigate()
-                && displayedBounds.contains(event.getX(), event.getY())) {
+                && displayedBounds.contains(eventX(event), eventY(event))) {
             float steps = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
             if (steps == 0 || !Float.isFinite(steps)) return false;
             editCamera.dolly(steps);
@@ -326,6 +350,7 @@ final class GameViewportView extends View {
     }
 
     void prepareViewMenu() {
+        scene.cancel();
         activationPressed = navigating = panning = orientationPressed = false;
         pressedAxis = null;
         orientation.reset();
@@ -338,6 +363,13 @@ final class GameViewportView extends View {
         editCamera.alignToAxis(axis, inputOwner.mode() == ViewportMode.FLY, false);
         onInteraction.run();
         invalidate();
+    }
+
+    private java.util.List<com.mine.geometry_node.client.ui.shortcut.ScopedAction<GameViewportShortcuts.Action>> availableShortcuts() {
+        return GameViewportShortcuts.ACTIONS.stream().filter(action -> {
+            if (inputOwner.mode()!=ViewportMode.EDIT) return false;
+            return action.id()!=GameViewportShortcuts.Action.CANCEL || scene.busy();
+        }).toList();
     }
 
     boolean dispatchShortcut(KeyEvent event) {
@@ -357,15 +389,27 @@ final class GameViewportView extends View {
 
     private void executeShortcut(GameViewportShortcuts.Action action) {
         if (handlingRepeat) return;
-        if (action == GameViewportShortcuts.Action.FLY) {
-            cancelInteraction();
-            onInteraction.run();
-            inputOwner.selectFlightMode();
-        } else if (inputOwner.mode() == ViewportMode.EDIT) {
-            editCamera.toggleOrthographic();
-            onProjectionChanged.run();
+        if (inputOwner.mode() == ViewportMode.EDIT) {
+            switch (action) {
+                case PROJECTION -> { scene.cancel(); editCamera.toggleOrthographic(); onProjectionChanged.run(); }
+                case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }
+                case FOCUS -> scene.focus(editCamera);
+                case SELECT_ALL -> scene.selectAll();
+                case DELETE -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.deleteSelected(); }
+                case UNDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.undo(); }
+                case REDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.redo(); }
+                case CANCEL -> { scene.cancel(); inputOwner.closeSceneMenus(); }
+                default -> {}
+            }
             invalidate();
         }
+    }
+
+    private float eventX(MotionEvent event) {
+        return UIUtils.rootToLocal(this,event.getRawX(),event.getRawY(),inputMatrix,inputPoint) ? inputPoint[0] : Float.NaN;
+    }
+    private float eventY(MotionEvent event) {
+        return UIUtils.rootToLocal(this,event.getRawX(),event.getRawY(),inputMatrix,inputPoint) ? inputPoint[1] : Float.NaN;
     }
 
     @Override

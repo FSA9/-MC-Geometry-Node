@@ -1,0 +1,177 @@
+package com.mine.geometry_node.client.ui.editor.game.scene;
+
+import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
+import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
+import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
+import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
+import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
+import java.util.*;
+
+/** Scene gestures refer to the image actually presented, including throttled background views. */
+public final class ViewportSceneInteraction {
+    private static final EditViewportCamera.Axis[] AXES={EditViewportCamera.Axis.POSITIVE_X,EditViewportCamera.Axis.POSITIVE_Y,EditViewportCamera.Axis.POSITIVE_Z};
+    private final ClientSceneService service;
+    private final ViewportVisualization visibility;
+    private final Runnable changed;
+    private final Paint paint=new Paint();
+    private PresentedViewportFrame frame,gestureFrame;
+    private GameViewportLayout bounds,gestureBounds;
+    private float startX,startY,currentX,currentY;
+    private boolean pressed,additive,subtractive,marquee;
+    private Set<UUID> selectionAtPress=Set.of();
+    private EditViewportCamera.Axis dragAxis;
+    private Vec3 dragOrigin;
+    private Map<UUID,Vec3> originals=Map.of();
+    private UUID hovered;
+    public ViewportSceneInteraction(ViewportVisualization visibility,Runnable changed){this(ClientSceneService.INSTANCE,visibility,changed);}
+    ViewportSceneInteraction(ClientSceneService service,ViewportVisualization visibility,Runnable changed){this.service=service;this.visibility=visibility;this.changed=changed;paint.setAntiAlias(true);}
+    public void presented(PresentedViewportFrame frame,GameViewportLayout bounds){this.frame=frame;this.bounds=bounds;}
+    public void clearFrame(){frame=null;bounds=null;cancel();}
+    public boolean busy(){return pressed;}
+    public void cancel(){boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
+    public boolean down(float x,float y,boolean shift){return down(x,y,shift,false);}
+    public boolean down(float x,float y,boolean shift,boolean control){
+        if(!current(frame)||bounds==null||!bounds.contains(x,y))return false;
+        gestureFrame=frame;gestureBounds=bounds;startX=currentX=x;startY=currentY=y;subtractive=control;additive=shift&&!control;pressed=true;selectionAtPress=service.snapshot().selected();
+        dragAxis=shift||control?null:hitAxis(x,y);
+        if(dragAxis!=null){
+            var snapshot=service.snapshot();
+            if(!snapshot.canEdit()||snapshot.pending()){dragAxis=null;pressed=false;return true;}
+            Map<UUID,Vec3> positions=new LinkedHashMap<>();
+            for(var object:frame.scene().objects())if(snapshot.selected().contains(object.id()))positions.put(object.id(),object.position());
+            if(positions.isEmpty()||positions.size()!=snapshot.selected().size()){dragAxis=null;pressed=false;return true;}
+            originals=Map.copyOf(positions);dragOrigin=center(positions.values());
+            Map<UUID,Long> revisions=new LinkedHashMap<>();for(var o:frame.scene().objects())if(originals.containsKey(o.id()))revisions.put(o.id(),o.revision());
+            if(originals.isEmpty()||!service.beginPreview(this,frame.scene().worldGeneration(),revisions,originals)){dragAxis=null;pressed=false;}
+        }
+        return true;
+    }
+    public boolean move(float x,float y){
+        if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}currentX=x;currentY=y;
+        if(dragAxis!=null){
+            if(!service.previewActive(this)){pressed=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;}
+            double amount=ViewportSceneMath.axisDrag(gestureFrame,dragOrigin,dragAxis,u(gestureBounds,startX),v(gestureBounds,startY),u(gestureBounds,x),v(gestureBounds,y));
+            if(Double.isFinite(amount)){
+                Vec3 delta=new Vec3(dragAxis.x*amount,dragAxis.y*amount,dragAxis.z*amount);
+                Map<UUID,Vec3> next=new LinkedHashMap<>();originals.forEach((id,p)->next.put(id,p.add(delta)));try { service.previewPositions(this,next); } catch (IllegalArgumentException invalid) { cancel(); }
+            }
+        }else if(Math.hypot(x-startX,y-startY)>UIUtils.dp2px(4))marquee=true;
+        changed.run();return true;
+    }
+    public boolean up(float x,float y){
+        if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}move(x,y);
+        if(!pressed)return true;
+        if(dragAxis!=null)service.commitPreview(this);
+        else if(visibility.selectable(ViewportVisualization.Layer.LIGHT)){
+            Set<UUID> selection=new LinkedHashSet<>();
+            if(additive||subtractive)selection.addAll(selectionAtPress);
+            UUID active=null;
+            if(marquee){
+                double minU=Math.min(u(gestureBounds,startX),u(gestureBounds,x)),maxU=Math.max(u(gestureBounds,startX),u(gestureBounds,x));
+                double minV=Math.min(v(gestureBounds,startY),v(gestureBounds,y)),maxV=Math.max(v(gestureBounds,startY),v(gestureBounds,y));
+                for(var object:gestureFrame.scene().objects())if(ViewportSceneMath.intersects(gestureFrame,ViewportSceneMath.bounds(object),minU,minV,maxU,maxV)){
+                    if(subtractive)selection.remove(object.id());else{selection.add(object.id());active=object.id();}
+                }
+            }else{
+                active=pick(gestureFrame,gestureBounds,x,y);
+                if(active!=null){if(subtractive){selection.remove(active);active=null;}else if(additive&&!selection.add(active)){selection.remove(active);active=null;}else selection.add(active);}
+            }
+            if(active==null&&!selection.isEmpty())active=selection.iterator().next();
+            service.select(selection,active);
+        }
+        pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;
+    }
+    public void hover(float x,float y){UUID next=frame==null?null:pick(frame,bounds,x,y);if(!Objects.equals(next,hovered)){hovered=next;changed.run();}}
+    private UUID pick(PresentedViewportFrame f,GameViewportLayout b,float x,float y){
+        if(!current(f)||!visibility.selectable(ViewportVisualization.Layer.LIGHT)||!visibility.visible(ViewportVisualization.Layer.LIGHT)||!b.contains(x,y))return null;
+        UUID best=null;double depth=Double.POSITIVE_INFINITY;
+        for(var object:f.scene().objects()){
+            var p=ViewportSceneMath.project(f,object.position());
+            if(!p.visible())continue;
+            double dx=px(b,p.u())-x,dy=py(b,p.v())-y;
+            if(dx*dx+dy*dy<=Math.pow(UIUtils.dp2px(11),2)&&p.depth()<depth){depth=p.depth();best=object.id();}
+        }return best;
+    }
+    public void selectAll(){if(!current(frame)||!visibility.selectable(ViewportVisualization.Layer.LIGHT)||!visibility.visible(ViewportVisualization.Layer.LIGHT))return;Set<UUID> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())ids.add(o.id());service.select(ids,ids.isEmpty()?null:ids.iterator().next());}
+    public void focus(EditViewportCamera camera){
+        var s=service.snapshot();AABB box=null;
+        for(var o:s.objects())if(s.selected().contains(o.id())){AABB b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);}
+        if(box!=null){cancel();camera.focus(box,frame==null?1:frame.aspect(),1.2);changed.run();}
+    }
+    public Vec3 creationPosition(EditViewportCamera camera){var p=camera.snapshot();return new Vec3(p.pivotX(),p.pivotY(),p.pivotZ());}
+    public void draw(Canvas canvas){
+        if(!current(frame)||bounds==null)return;
+        canvas.save();canvas.clipRect(bounds.left(),bounds.top(),bounds.right(),bounds.bottom());
+        if(visibility.visible(ViewportVisualization.Layer.LIGHT)){
+            var selection=service.snapshot().selected();
+            for(var object:frame.scene().objects()){
+                var projected=ViewportSceneMath.project(frame,object.position());if(!projected.visible())continue;
+                boolean selected=selection.contains(object.id());boolean active=object.id().equals(service.snapshot().active());
+                float x=px(bounds,projected.u()),y=py(bounds,projected.v()),r=UIUtils.dp2px(selected?7:5);
+                paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(selected?2:1.3f));
+                paint.setColor(selected?(active?0xFFFFD98A:0xFFFF9E35):Objects.equals(hovered,object.id())?0xFFFFFFFF:0xFFE4D899);
+                canvas.drawCircle(x,y,r,paint);canvas.drawLine(x-r*1.7f,y,x+r*1.7f,y,paint);canvas.drawLine(x,y-r*1.7f,x,y+r*1.7f,paint);
+                if(active&&selected&&visibility.helpers())drawRange(canvas,object);
+            }
+            if(visibility.gizmo()&&visibility.selectable(ViewportVisualization.Layer.LIGHT))drawAxes(canvas);
+        }
+        if(pressed&&marquee){
+            paint.setStyle(Paint.FILL);paint.setColor(0x224C9AFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
+            paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0xFF75AFFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
+        }
+        paint.setStyle(Paint.FILL);canvas.restore();
+    }
+    private void drawRange(Canvas canvas,SceneObject object){
+        paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0x66FFB547);
+        for(int plane=0;plane<3;plane++)for(int i=0;i<48;i++){
+            double a=i*Math.PI/24,b=(i+1)*Math.PI/24,r=0.5;
+            Vec3 p=ring(plane,Math.cos(a)*r,Math.sin(a)*r).add(object.position()),q=ring(plane,Math.cos(b)*r,Math.sin(b)*r).add(object.position());
+            var from=ViewportSceneMath.project(frame,p);var to=ViewportSceneMath.project(frame,q);
+            if(from.visible()&&to.visible())canvas.drawLine(px(bounds,from.u()),py(bounds,from.v()),px(bounds,to.u()),py(bounds,to.v()),paint);
+        }
+    }
+    private static Vec3 ring(int plane,double a,double b){return plane==0?new Vec3(a,b,0):plane==1?new Vec3(a,0,b):new Vec3(0,a,b);}
+    private Vec3 selectedCenter(){List<Vec3> points=new ArrayList<>();var selected=service.snapshot().selected();for(var o:frame.scene().objects())if(selected.contains(o.id()))points.add(o.position());return points.isEmpty()?null:center(points);}
+    private double axisLength(Vec3 origin){
+        var c=frame.camera();double pixels=Math.max(1,bounds.bottom()-bounds.top());
+        double height=c.orthographic()?c.orthographicHeight():2*Math.max(.1,new Vec3(c.x(),c.y(),c.z()).distanceTo(origin))*Math.tan(Math.toRadians(c.verticalFovDegrees())/2);
+        return height*UIUtils.dp2px(72)/pixels;
+    }
+    private void drawAxes(Canvas canvas){
+        Vec3 center=selectedCenter();if(center==null)return;var p=ViewportSceneMath.project(frame,center);if(!p.visible())return;
+        float x=px(bounds,p.u()),y=py(bounds,p.v());double length=axisLength(center);
+        for(int i=0;i<3;i++){var axis=AXES[i];var end=ViewportSceneMath.project(frame,center.add(axis.x*length,axis.y*length,axis.z*length));if(!end.visible())continue;
+            paint.setColor(dragAxis==axis?0xFFFFFF77:new int[]{0xFFEB5967,0xFFA4CE50,0xFF4698EE}[i]);paint.setStrokeWidth(UIUtils.dp2px(2));
+            float ex=px(bounds,end.u()),ey=py(bounds,end.v());canvas.drawLine(x,y,ex,ey,paint);paint.setStyle(Paint.FILL);canvas.drawCircle(ex,ey,UIUtils.dp2px(7),paint);drawAxisLetter(canvas,axis,ex,ey);
+        }
+    }
+    private void drawAxisLetter(Canvas canvas,EditViewportCamera.Axis axis,float x,float y){
+        float unit=UIUtils.dp2px(1),w=2.3f*unit,h=3.1f*unit;
+        paint.setColor(0xFF182029);paint.setStrokeWidth(1.2f*unit);
+        if(axis.x!=0){canvas.drawLine(x-w,y-h,x+w,y+h,paint);canvas.drawLine(x+w,y-h,x-w,y+h,paint);}
+        else if(axis.y!=0){canvas.drawLine(x-w,y-h,x,y,paint);canvas.drawLine(x+w,y-h,x,y,paint);canvas.drawLine(x,y,x,y+h,paint);}
+        else{canvas.drawLine(x-w,y-h,x+w,y-h,paint);canvas.drawLine(x+w,y-h,x-w,y+h,paint);canvas.drawLine(x-w,y+h,x+w,y+h,paint);}
+    }
+    private EditViewportCamera.Axis hitAxis(float x,float y){
+        if(!visibility.gizmo()||!visibility.visible(ViewportVisualization.Layer.LIGHT)||!visibility.selectable(ViewportVisualization.Layer.LIGHT))return null;
+        Vec3 origin=selectedCenter();if(origin==null)return null;var p=ViewportSceneMath.project(frame,origin);if(!p.visible())return null;
+        double length=axisLength(origin),best=UIUtils.dp2px(7);EditViewportCamera.Axis hit=null;
+        for(var axis:AXES){var q=ViewportSceneMath.project(frame,origin.add(axis.x*length,axis.y*length,axis.z*length));if(!q.visible())continue;
+            double ax=px(bounds,p.u()),ay=py(bounds,p.v()),dx=px(bounds,q.u())-ax,dy=py(bounds,q.v())-ay,len=dx*dx+dy*dy;if(len<64)continue;
+            double t=Math.clamp(((x-ax)*dx+(y-ay)*dy)/len,.2,1);double distance=Math.hypot(x-ax-t*dx,y-ay-t*dy);if(distance<best){best=distance;hit=axis;}}
+        return hit;
+    }
+    private boolean current(PresentedViewportFrame frame){return frame!=null&&frame.scene().worldGeneration()==service.snapshot().worldGeneration();}
+    private static Vec3 center(Collection<Vec3> points){Vec3 sum=Vec3.ZERO;for(var p:points)sum=sum.add(p);return sum.scale(1.0/points.size());}
+    private static double u(GameViewportLayout b,float x){return (x-b.left())/(b.right()-b.left());}
+    private static double v(GameViewportLayout b,float y){return (y-b.top())/(b.bottom()-b.top());}
+    private static float px(GameViewportLayout b,double u){return b.left()+(float)u*(b.right()-b.left());}
+    private static float py(GameViewportLayout b,double v){return b.top()+(float)v*(b.bottom()-b.top());}
+}

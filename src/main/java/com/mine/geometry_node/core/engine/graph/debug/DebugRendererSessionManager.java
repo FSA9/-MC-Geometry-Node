@@ -543,6 +543,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static boolean hasAreaSessions(MinecraftServer server) {
+        if (ViewportDebugService.wants(server, ViewportDebugLayer.AREA)) return true;
         DebugServerState state = getState(server);
         if (state == null) return false;
         for (Session session : state.sessions.values()) {
@@ -552,6 +553,8 @@ public final class DebugRendererSessionManager {
     }
 
     private static boolean hasPathfindingSessions(DebugServerState state) {
+        if (SERVERS.entrySet().stream().anyMatch(e -> e.getValue() == state
+                && ViewportDebugService.wants(e.getKey(), ViewportDebugLayer.PATHFINDING))) return true;
         for (Session session : state.sessions.values()) {
             if (session.pathfindingEnabled) return true;
         }
@@ -598,7 +601,8 @@ public final class DebugRendererSessionManager {
     }
 
     private static void clearRequestedPathTargetsIfUnused(DebugServerState state) {
-        boolean interactionInUse = state.sessions.values().stream().anyMatch(session -> session.interactionEnabled);
+        boolean interactionInUse = state.sessions.values().stream().anyMatch(session -> session.interactionEnabled)
+                || SERVERS.entrySet().stream().anyMatch(e -> e.getValue() == state && ViewportDebugService.wants(e.getKey(), ViewportDebugLayer.INTERACTION));
         if (!interactionInUse) {
             state.observations.values().forEach(DebugLevelObservationCache::clearInteractions);
         }
@@ -663,6 +667,67 @@ public final class DebugRendererSessionManager {
         session.lastDirtyVersion = state.dirtyVersion;
         session.lastCollisionRevision = ModelCollisionScene.revision(player.level());
         session.lastSignature = snapshot.signature();
+    }
+
+    /** Editor subscriptions use separate observations and typed layers; never overwrite chat settings. */
+    static Map<ViewportDebugLayer, PacketGeometryDebugSnapshot> collectViewport(
+            ServerPlayer player, List<Vec3> origins, int mask, DebugLevelObservationCache observations,
+            CollisionDebugProvider nodeCollision, CollisionDebugProvider modelCollision) {
+        DebugServerState state = state(player.level().getServer());
+        ServerLevel level = player.level();
+        Session settings = session(player);
+        double radius = settings != null ? settings.radius : DEFAULT_RADIUS;
+        if (state.sources.pruneExpired(level, level.getGameTime())) markDirty(state);
+        state.pathState.prune(level, level.getGameTime());
+        var observerAreas = origins.stream().map(p -> new DebugObserverArea(p, radius)).toList();
+        observations.refresh(level,
+                (mask & ViewportDebugLayer.INTERACTION.bit()) != 0 ? observerAreas : List.of(),
+                (mask & ViewportDebugLayer.PATHFINDING.bit()) != 0 ? observerAreas : List.of(),
+                state.pathState, true, true, true, MAX_PATHFINDING_ENTITIES);
+        record LayerCandidates(ViewportDebugLayer layer, List<PacketGeometryDebugSnapshot.Mesh> meshes) {}
+        List<LayerCandidates> candidates = new ArrayList<>();
+        // Each observer receives a share; do not spend the complete budget on the first camera.
+        for (Vec3 origin : origins) for (ViewportDebugLayer layer : ViewportDebugLayer.values()) {
+            if ((mask & layer.bit()) == 0) continue;
+            if (layer.channel == null && !origin.equals(origins.getFirst())) continue;
+            List<GeometryDebugElement> collision = layer == ViewportDebugLayer.COLLISION
+                    ? nodeCollision.collect(player, radius, origins)
+                    : layer == ViewportDebugLayer.MODEL_COLLISION ? modelCollision.collect(player, radius, origins) : List.of();
+            var snapshot = SNAPSHOT_ASSEMBLER.assemble(level, origin, radius,
+                    layer.channel == null ? 0 : DebugSnapshotAssembler.channelBit(layer.channel),
+                    DEFAULT_MAX_MESHES, MAX_PATHFINDING_ENTITIES, state.sources, observations, collision);
+            candidates.add(new LayerCandidates(layer, snapshot.meshes()));
+        }
+        var selected = new java.util.EnumMap<ViewportDebugLayer, List<PacketGeometryDebugSnapshot.Mesh>>(ViewportDebugLayer.class);
+        var seen = new java.util.HashSet<String>();
+        int count = 0, bytes = 0;
+        for (int index = 0; index < DEFAULT_MAX_MESHES && count < DEFAULT_MAX_MESHES; index++) {
+            for (var group : candidates) {
+                if (index >= group.meshes().size() || count >= DEFAULT_MAX_MESHES) continue;
+                var mesh = group.meshes().get(index);
+                String key = group.layer().name() + "/" + mesh.id() + "/" + mesh.centerX() + "/" + mesh.centerY() + "/" + mesh.centerZ();
+                if (!seen.add(key)) continue;
+                long size = 256L + 3L * (mesh.id().length() + mesh.graphId().length())
+                        + 4L * (mesh.vertices().length + mesh.edges().length + mesh.faces().length);
+                if (size + bytes > 900_000) continue;
+                bytes += (int) size; count++;
+                selected.computeIfAbsent(group.layer(), k -> new ArrayList<>()).add(mesh);
+            }
+        }
+        var result = new java.util.EnumMap<ViewportDebugLayer, PacketGeometryDebugSnapshot>(ViewportDebugLayer.class);
+        selected.forEach((layer, meshes) -> result.put(layer, new PacketGeometryDebugSnapshot(true, radius, meshes)));
+        return Map.copyOf(result);
+    }
+
+    static void viewportSubscriptionsChanged(MinecraftServer server) {
+        DebugServerState state = getState(server);
+        if (state == null) return;
+        clearRequestedPathTargetsIfUnused(state);
+        discardStateIfEmpty(server, state);
+    }
+
+    static void hydrateViewport(ServerPlayer player, boolean schematic) {
+        if (schematic) for (var hydrator : SCHEMATIC_CHANNEL_HYDRATORS) hydrator.accept(player);
     }
 
     private static Session session(ServerPlayer player) {

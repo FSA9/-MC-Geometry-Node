@@ -118,8 +118,6 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.viewport.groupIntoFrame, (config, value) -> config.keyBindings.viewport.groupIntoFrame = value);
     public static final ConfigEntry<String> VIEWPORT_GROUP_NODE = key("keyBindings.viewport.groupIntoNodeGroup", SHORTCUT_VIEWPORT, 700, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.groupIntoNodeGroup, (config, value) -> config.keyBindings.viewport.groupIntoNodeGroup = value);
-    public static final ConfigEntry<String> GAME_VIEW_FLY = key("keyBindings.gameView.fly", SHORTCUT_GAME_VIEW_FLIGHT, 100, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.fly, (config, value) -> config.keyBindings.gameView.fly = value);
     public static final ConfigEntry<String> GAME_VIEW_PROJECTION = key("keyBindings.gameView.toggleProjection", SHORTCUT_GAME_VIEW_EDIT, 200, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.toggleProjection, (config, value) -> config.keyBindings.gameView.toggleProjection = value);
     public static final ConfigEntry<String> GAME_VIEW_SIDEBAR = key("keyBindings.gameView.toggleSidebar", SHORTCUT_GAME_VIEW_GENERAL, 300, KeyScope.GAME_VIEW,
@@ -127,6 +125,21 @@ public final class BuiltinConfigEntries {
 
     public static final ConfigEntry<String> GAME_VIEW_MENU = key("keyBindings.gameView.viewMenu", SHORTCUT_GAME_VIEW_GENERAL, 350, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.viewMenu, (config, value) -> config.keyBindings.gameView.viewMenu = value);
+
+    public static final ConfigEntry<String> GAME_VIEW_ADD = key("keyBindings.gameView.add", SHORTCUT_GAME_VIEW_EDIT, 400, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.add, (config, value) -> config.keyBindings.gameView.add = value);
+    public static final ConfigEntry<String> GAME_VIEW_FOCUS = key("keyBindings.gameView.focus", SHORTCUT_GAME_VIEW_EDIT, 410, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.focus, (config, value) -> config.keyBindings.gameView.focus = value);
+    public static final ConfigEntry<String> GAME_VIEW_DELETE = key("keyBindings.gameView.delete", SHORTCUT_GAME_VIEW_EDIT, 420, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.delete, (config, value) -> config.keyBindings.gameView.delete = value);
+    public static final ConfigEntry<String> GAME_VIEW_UNDO = key("keyBindings.gameView.undo", SHORTCUT_GAME_VIEW_EDIT, 430, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.undo, (config, value) -> config.keyBindings.gameView.undo = value);
+    public static final ConfigEntry<String> GAME_VIEW_REDO = key("keyBindings.gameView.redo", SHORTCUT_GAME_VIEW_EDIT, 440, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.redo, (config, value) -> config.keyBindings.gameView.redo = value);
+    public static final ConfigEntry<String> GAME_VIEW_CANCEL = key("keyBindings.gameView.cancel", SHORTCUT_GAME_VIEW_EDIT, 450, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.cancel, (config, value) -> config.keyBindings.gameView.cancel = value);
+    public static final ConfigEntry<String> GAME_VIEW_SELECT_ALL = key("keyBindings.gameView.selectAll", SHORTCUT_GAME_VIEW_EDIT, 460, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.selectAll, (config, value) -> config.keyBindings.gameView.selectAll = value);
 
     public static final ConfigEntry<String> GAME_FLIGHT_FORWARD = controlKey("keyBindings.gameView.forward", 400, true,
             config -> config.keyBindings.gameView.forward, (config, value) -> config.keyBindings.gameView.forward = value);
@@ -161,7 +174,8 @@ public final class BuiltinConfigEntries {
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
-            GAME_VIEW_FLY, GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
+            GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
+            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_DELETE, GAME_VIEW_UNDO, GAME_VIEW_REDO, GAME_VIEW_CANCEL, GAME_VIEW_SELECT_ALL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}

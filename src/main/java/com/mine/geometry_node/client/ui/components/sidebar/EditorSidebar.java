@@ -10,6 +10,10 @@ import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.Matrix;
+import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -44,6 +48,14 @@ public final class EditorSidebar extends LinearLayout {
     private final ScrollView mTabScroll;
     private final LinearLayout mTabStrip;
     private PanelEntry mSelected;
+    private SidebarTabView dragTab;
+    private float dragStartY;
+    private boolean dragging;
+    private int dropIndex = -1;
+    private final Matrix dragMatrix = new Matrix();
+    private final float[] dragPoint = new float[2];
+    private final float[] railPoint = new float[2];
+
     private boolean mPanelsActive = true;
     private boolean mContentVisible = true;
     private Runnable mOnCollapseRequested;
@@ -84,7 +96,17 @@ public final class EditorSidebar extends LinearLayout {
         mTabScroll = new ScrollView(context);
         mTabScroll.setVerticalScrollBarEnabled(false);
         mTabScroll.setBackground(rect(COLOR_TAB_RAIL, 0.0f, 0, 0));
-        mTabStrip = new LinearLayout(context);
+        mTabStrip = new LinearLayout(context) {
+            private final Paint indicator = new Paint();
+            @Override protected void dispatchDraw(Canvas canvas) {
+                super.dispatchDraw(canvas);
+                if (!dragging || dropIndex < 0 || getChildCount() == 0) return;
+                float y = dropIndex < getChildCount() ? getChildAt(dropIndex).getTop()
+                        : getChildAt(getChildCount()-1).getBottom();
+                indicator.setColor(0xFF00AAFF);
+                canvas.drawRect(0,y-UIUtils.dp2px(1),getWidth(),y+UIUtils.dp2px(1),indicator);
+            }
+        };
         mTabStrip.setOrientation(VERTICAL);
         mTabStrip.setPadding(UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(4), UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(4));
         mTabScroll.addView(mTabStrip, new ViewGroup.LayoutParams(
@@ -93,6 +115,69 @@ public final class EditorSidebar extends LinearLayout {
         addView(mTabScroll, new LayoutParams(
                 UIUtils.dp2pxInt(TAB_RAIL_WIDTH_DP),
                 ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    /** Reorder the shared sidebar tab rail without recreating panel contents. */
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        boolean insideRail = UIUtils.rootToLocal(mTabScroll,event.getRawX(),event.getRawY(),dragMatrix,railPoint)
+                && railPoint[0]>=0 && railPoint[0]<mTabScroll.getWidth()
+                && railPoint[1]>=0 && railPoint[1]<mTabScroll.getHeight();
+        boolean mapped = UIUtils.rootToLocal(mTabStrip,event.getRawX(),event.getRawY(),dragMatrix,dragPoint);
+        if (action == MotionEvent.ACTION_DOWN && insideRail && mapped && event.getActionButton() == MotionEvent.BUTTON_PRIMARY) {
+            cancelTabDrag();
+            if (dragPoint[0] >= 0 && dragPoint[0] < mTabStrip.getWidth()) {
+                for (int i=0;i<mTabStrip.getChildCount();i++) {
+                    View tab=mTabStrip.getChildAt(i);
+                    if (dragPoint[1]>=tab.getTop() && dragPoint[1]<tab.getBottom()) {
+                        dragTab=(SidebarTabView)tab;dragStartY=dragPoint[1];
+                        dragTab.setPressed(true);
+                        return true;
+                    }
+                }
+            }
+        }
+        if (dragTab == null) return super.dispatchTouchEvent(event);
+        if (action == MotionEvent.ACTION_MOVE && mapped) {
+            if (Math.abs(dragPoint[1]-dragStartY)>UIUtils.dp2px(4)) dragging=true;
+            if (dragging) {
+                dragTab.setPressed(false);
+                dropIndex=-1;
+                if (insideRail && dragPoint[0]>=0 && dragPoint[0]<mTabStrip.getWidth()) {
+                    dropIndex=mTabStrip.getChildCount();
+                    for(int i=0;i<mTabStrip.getChildCount();i++) {
+                        View tab=mTabStrip.getChildAt(i);
+                        if(dragPoint[1]<(tab.getTop()+tab.getBottom())*.5f){dropIndex=i;break;}
+                    }
+                }
+                mTabStrip.invalidate();
+            }
+        } else if (action == MotionEvent.ACTION_UP) {
+            SidebarTabView tab=dragTab;
+            if (dragging && dropIndex>=0 && insideRail) {
+                int from=mTabStrip.indexOfChild(tab),to=dropIndex;
+                if(to>from)to--;
+                if(to!=from){
+                    mTabStrip.removeView(tab);mTabStrip.addView(tab,to);
+                    var entries=new java.util.ArrayList<>(mPanels.values());
+                    mPanels.clear();
+                    for(int i=0;i<mTabStrip.getChildCount();i++)
+                        for(var entry:entries)if(entry.tab()==mTabStrip.getChildAt(i))mPanels.put(entry.id(),entry);
+                }
+            } else if (!dragging && mapped && insideRail && dragPoint[0]>=0 && dragPoint[0]<mTabStrip.getWidth()
+                    && dragPoint[1]>=tab.getTop() && dragPoint[1]<tab.getBottom()) tab.performClick();
+            cancelTabDrag();
+        } else if(action == MotionEvent.ACTION_CANCEL) cancelTabDrag();
+        return true;
+    }
+
+    private void cancelTabDrag() {
+        if(dragTab!=null)dragTab.setPressed(false);
+        dragTab=null;dragging=false;dropIndex=-1;mTabStrip.invalidate();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        cancelTabDrag();super.onDetachedFromWindow();
     }
 
     public void setOnCollapseRequested(Runnable listener) {
@@ -165,6 +250,7 @@ public final class EditorSidebar extends LinearLayout {
     }
 
     public boolean unregisterPanel(String id) {
+        cancelTabDrag();
         PanelEntry entry = mPanels.remove(normalizeId(id));
         if (entry == null) return false;
 
@@ -214,6 +300,7 @@ public final class EditorSidebar extends LinearLayout {
     public void setPanelsActive(boolean active) {
         if (mPanelsActive == active) return;
         mPanelsActive = active;
+        if (!active) cancelTabDrag();
         if (mSelected == null) return;
         if (active) {
             mSelected.panel().onSelected();

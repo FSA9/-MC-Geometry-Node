@@ -81,9 +81,10 @@ public final class ClientLightStore {
     public static List<ResolvedLight> resolved(float partialTick) {
         ClientLevel level = Minecraft.getInstance().level;
         selectWorld(level);
-        if (level == null || LIGHTS.isEmpty()) return List.of();
+        if (level == null) return List.of();
         float alpha = Math.clamp(partialTick, 0, 1);
         List<ResolvedLight> result = new ArrayList<>(LIGHTS.size());
+        result.addAll(com.mine.geometry_node.client.runtime.game.scene.SceneLightInputs.resolved());
         for (var pair : LIGHTS.entrySet()) {
             Entry entry = pair.getValue();
             LightDefinition d = entry.definition;

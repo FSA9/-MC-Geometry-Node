@@ -49,6 +49,16 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.init();
+        ClientboundPayloadRegistry.registerClientReceiver(
+                com.mine.geometry_node.core.network.packet.scene.PacketSceneSnapshot.TYPE,
+                (payload, context) -> {
+                    long generation = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();
+                    context.queue(() -> com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.accept(payload, generation));
+                });
+        ClientboundPayloadRegistry.registerClientReceiver(
+                com.mine.geometry_node.core.network.packet.s2c.PacketViewportDebugSnapshot.TYPE,
+                (payload, context) -> context.queue(() -> com.mine.geometry_node.client.runtime.game.scene.ViewportDebugClient.accept(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.s2c.PacketEditCameraView.TYPE,
                 (payload, context) -> context.queue(() ->

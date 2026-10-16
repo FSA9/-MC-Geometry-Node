@@ -19,6 +19,8 @@ final class EditorRenderCamera extends Camera {
     private ClientLevel cameraLevel;
     private final Matrix4f projection = new Matrix4f();
     private float projectionFar;
+    private float projectionAspect, projectionDistance;
+    private boolean projectionZeroToOne;
     private Frustum frustum = new Frustum(new Matrix4f(), new Matrix4f());
 
     void configure(ClientLevel level, LocalPlayer player, EditViewportCamera.Snapshot snapshot) {
@@ -53,8 +55,17 @@ final class EditorRenderCamera extends Camera {
         boolean zeroToOne = RenderSystem.getDevice().isZZeroToOne();
         EditViewportProjection.set(projection, pose, aspect, PROJECTION_Z_NEAR, far, zeroToOne);
         projectionFar = pose.orthographic() ? (float) pose.distance() + far : far;
+        projectionAspect = aspect;
+        projectionDistance = far;
+        projectionZeroToOne = zeroToOne;
         frustum = new Frustum(getViewRotationMatrix(new Matrix4f()), projection);
         frustum.prepare(pose.x(), pose.y(), pose.z());
+    }
+
+    PresentedViewportFrame presented(long id, com.mine.geometry_node.client.scene.ClientSceneService.Snapshot scene) {
+        return snapshot == null ? null : new PresentedViewportFrame(id, snapshot, projectionAspect,
+                PROJECTION_Z_NEAR, projectionDistance, projectionZeroToOne, scene,
+                getViewRotationProjectionMatrix(new Matrix4f()));
     }
 
     @Override public Frustum getCullFrustum() { return frustum; }

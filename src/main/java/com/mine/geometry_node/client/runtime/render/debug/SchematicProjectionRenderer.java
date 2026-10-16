@@ -211,6 +211,9 @@ public final class SchematicProjectionRenderer {
     }
 
     public static void render(PoseStack poseStack, Camera camera) {
+        if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()
+                && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
+                com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.SCHEMATIC)) return;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) {
             clear();
@@ -273,6 +276,9 @@ public final class SchematicProjectionRenderer {
     }
 
     public static void submitFeatures(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, LevelRenderState levelRenderState) {
+        if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()
+                && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
+                com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.SCHEMATIC)) return;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) {
             clear();

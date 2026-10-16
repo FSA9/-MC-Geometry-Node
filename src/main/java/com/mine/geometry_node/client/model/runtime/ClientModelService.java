@@ -354,6 +354,9 @@ public final class ClientModelService {
     }
 
     public List<ModelRenderInstance> renderSnapshots() {
+        if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()
+                && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
+                com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.MODEL)) return List.of();
         RenderSystem.assertOnRenderThread();ensureWorld();
         if (!instances.hasVisibleInstances()) { renderDeferrals.clear(); return List.of(); }
         List<ModelRenderInstance> ready = new ArrayList<>();

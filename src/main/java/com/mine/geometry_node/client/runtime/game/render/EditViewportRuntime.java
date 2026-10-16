@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.runtime.game.render;
 
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
+import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.chunk.EditCameraChunkClient;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
@@ -41,6 +42,7 @@ public final class EditViewportRuntime {
     private static boolean workspaceFrame;
     private static boolean budgetSources;
     private static Object frameSource;
+    private static long publicationSequence;
 
     private static final class Request {
         final EditViewportCamera camera;
@@ -54,6 +56,7 @@ public final class EditViewportRuntime {
         final ViewportResolution resolution = new ViewportResolution();
         EditViewportRenderContext context;
         TextureTarget target;
+        ClientSceneService.Snapshot sceneSnapshot;
         GameFrameImage.Size requestedSize = new GameFrameImage.Size(0, 0);
         Session(EditViewportCamera camera) { this.camera = camera; }
         @Override public void close() {
@@ -127,6 +130,17 @@ public final class EditViewportRuntime {
         Session session = SESSIONS.get(owner);
         return isOwner(owner) && session != null && session.surface.image.draw(canvas, size, left, top, right, bottom);
     }
+    /** Returns precisely the metadata of the texture retained by this UI draw, or null when skipped. */
+    public static synchronized PresentedViewportFrame drawPresented(Object owner, Canvas canvas, GameFrameImage.Size size,
+                                                                    float left, float top, float right, float bottom) {
+        Session session = SESSIONS.get(owner);
+        return isOwner(owner) && session != null
+                ? session.surface.image.drawPresented(canvas, size, left, top, right, bottom) : null;
+    }
+
+    public static Object renderingOwner() { return frame == null ? null : frameSource; }
+    public static ClientSceneService.Snapshot renderedScene() { return frame == null ? null : frame.sceneSnapshot; }
+
     private static List<Object> admitted() {
         return VISIBLE.entrySet().stream().filter(e -> e.getValue().demand > 0)
                 .limit(EditCameraObservers.MAX_VIEWS).map(Map.Entry::getKey).toList();
@@ -187,6 +201,7 @@ public final class EditViewportRuntime {
         frameSource = SCHEDULER.next(sources, priority, System.nanoTime(), backgroundFps);
         frame = SESSIONS.get(frameSource);
         if (frame != null) {
+            frame.sceneSnapshot = ClientSceneService.INSTANCE.snapshot();
             frame.renderCamera.configure(mc.level, mc.player, frame.camera.snapshot());
             // Construction is lazy: at most one terrain context is created per client frame.
             try (var ignored = EditViewportShaderScope.enter(true)) {
@@ -243,7 +258,9 @@ public final class EditViewportRuntime {
     public static void endWorldTarget() { targetActive = false; }
     static void captureFrame() {
         Session session = frame;
-        if (session != null && session.target != null) session.surface.capture(session.target.getColorTexture());
+        if (session != null && session.target != null)
+            session.surface.capture(session.target.getColorTexture(),
+                    session.renderCamera.presented(++publicationSequence, session.sceneSnapshot));
     }
 
     public static void resetToPlayer(Object owner) {

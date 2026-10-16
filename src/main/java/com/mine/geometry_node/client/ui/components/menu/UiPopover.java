@@ -1,0 +1,136 @@
+package com.mine.geometry_node.client.ui.components.menu;
+
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Matrix;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MeasureSpec;
+import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.View;
+import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.widget.ScrollView;
+
+/** Reusable arbitrary-content popup. Positioning uses root coordinates and layout margins. */
+public final class UiPopover extends FrameLayout {
+    private final ScrollView panel;
+    private final int width;
+    private boolean outsidePressed;
+    private final Matrix inputMatrix=new Matrix();
+    private final float[] inputPoint=new float[2];
+    private AreaLifecycle.Subscription binding = AreaLifecycle.Subscription.NONE;
+    public UiPopover(Context context, View content, int widthDp) {
+        super(context);
+        width = UIUtils.dp2pxInt(widthDp);
+        setClickable(true);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        setOnClickListener(v -> dismiss());
+        panel = new ScrollView(context);
+        panel.setOnClickListener(v -> {});
+        ShapeDrawable background = new ShapeDrawable();
+        background.setColor(UiTheme.Surface.PANEL);
+        background.setCornerRadius(UIUtils.dp2px(4));
+        background.setStroke(UIUtils.dp2pxInt(1), UiTheme.Control.BORDER);
+        panel.setBackground(background);
+        int padding = UIUtils.dp2pxInt(7);
+        panel.setPadding(padding,padding,padding,padding);
+        panel.addView(content, new ViewGroup.LayoutParams(-1,-2));
+        addView(panel, new FrameLayout.LayoutParams(width,-2));
+    }
+    public void showAtRoot(View owner, FrameLayout host, float rootX, float rootY) {
+        dismiss();
+        float[] point = {rootX,rootY};
+        if (!UIUtils.rootToLocal(host,rootX,rootY,new Matrix(),point)) return;
+        int w = Math.min(width,host.getWidth());
+        if (w <= 0 || host.getHeight() <= 0) return;
+        panel.measure(MeasureSpec.makeMeasureSpec(w,MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(host.getHeight(),MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w,Math.min(host.getHeight(),panel.getMeasuredHeight()));
+        lp.leftMargin = Math.round(Math.clamp(point[0],0,host.getWidth()-w));
+        lp.topMargin = Math.round(Math.clamp(point[1],0,Math.max(0,host.getHeight()-lp.height)));
+        panel.setLayoutParams(lp);
+        host.addView(this,new FrameLayout.LayoutParams(-1,-1));
+        binding = AreaTransientUi.bind(owner,this,this::dismiss);
+        requestFocus();
+    }
+    public void showBelow(View anchor, FrameLayout host) {
+        Matrix matrix = new Matrix();
+        anchor.transformMatrixToGlobal(matrix);
+        float[] point = {0,anchor.getHeight()};
+        matrix.mapPoint(point);
+        showAtRoot(anchor,host,point[0],point[1]);
+    }
+    public boolean isOpen() { return getParent() != null; }
+    public void dismiss() {
+        outsidePressed = false;
+        binding.close(); binding = AreaLifecycle.Subscription.NONE;
+        if(getParent()!=null)clearTooltips(this);
+        if (getParent() instanceof ViewGroup group) group.removeView(this);
+    }
+    /** ModernUI offsets child events before the inherited ancestor scale. Rebase once at this
+     * unscaled popup boundary, then retain native scrolling, text editing and click dispatch. */
+    private MotionEvent localEvent(MotionEvent source) {
+        if(!UIUtils.rootToLocal(this,source.getRawX(),source.getRawY(),inputMatrix,inputPoint))return null;
+        MotionEvent event=MotionEvent.obtain(source.getEventTimeNano(),source.getAction(),source.getActionButton(),
+                inputPoint[0],inputPoint[1],source.getModifiers(),source.getButtonState(),0);
+        event.setAxisValue(MotionEvent.AXIS_VSCROLL,source.getAxisValue(MotionEvent.AXIS_VSCROLL));
+        event.setAxisValue(MotionEvent.AXIS_HSCROLL,source.getAxisValue(MotionEvent.AXIS_HSCROLL));
+        return event;
+    }
+    @Override public boolean dispatchTouchEvent(MotionEvent source) {
+        if(!isOpen())return false;
+        MotionEvent event=localEvent(source);if(event==null)return false;
+        try {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                outsidePressed = !containsPanel(event.getX(), event.getY());
+            }
+            if (outsidePressed) {
+                if (event.getActionMasked() == MotionEvent.ACTION_UP) dismiss();
+                else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) outsidePressed = false;
+                return true;
+            }
+            return super.dispatchTouchEvent(event);
+        } finally { event.recycle(); }
+    }
+    @Override public boolean dispatchGenericMotionEvent(MotionEvent source) {
+        if(!isOpen())return false;
+        MotionEvent event=localEvent(source);if(event==null)return false;
+        try{return super.dispatchGenericMotionEvent(event);}finally{event.recycle();}
+    }
+    /** Owner windows can dismiss clicks outside this popup's host as well (header/sidebar). */
+    public boolean dismissIfOutside(float rootX, float rootY) {
+        if (!isOpen() || !UIUtils.rootToLocal(this, rootX, rootY, inputMatrix, inputPoint)) return false;
+        if (containsPanel(inputPoint[0], inputPoint[1])) return false;
+        dismiss();
+        return true;
+    }
+    private boolean containsPanel(float x, float y) {
+        return x >= panel.getLeft() && x < panel.getRight() && y >= panel.getTop() && y < panel.getBottom();
+    }
+
+    private static void clearTooltips(View view) {
+        view.setTooltipText(null);
+        if(view instanceof ViewGroup group) for(int i=0;i<group.getChildCount();i++) clearTooltips(group.getChildAt(i));
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if(event.getAction()==KeyEvent.ACTION_DOWN&&event.getKeyCode()==KeyEvent.KEY_ESCAPE){dismiss();return true;}
+        return super.dispatchKeyEvent(event);
+    }
+    @Override protected void onSizeChanged(int w,int h,int oldW,int oldH) {
+        super.onSizeChanged(w,h,oldW,oldH);
+        if(oldW>0&&oldH>0&&(w!=oldW||h!=oldH))post(this::dismiss);
+    }
+    @Override public boolean onKeyDown(int key, KeyEvent event) {
+        if (key == KeyEvent.KEY_ESCAPE) { dismiss(); return true; }
+        return super.onKeyDown(key,event);
+    }
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (!focused) dismiss();
+    }
+}

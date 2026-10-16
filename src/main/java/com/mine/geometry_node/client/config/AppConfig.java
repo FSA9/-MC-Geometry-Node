@@ -163,10 +163,17 @@ public class AppConfig {
     }
 
     public static class GameViewKeyBindingsConfig {
-        public String fly = "SHIFT+GRAVE_ACCENT";
         public String toggleProjection = "KP_5";
         public String toggleSidebar = "N";
         public String viewMenu = "GRAVE_ACCENT";
+        public String add = "SHIFT+A";
+        public String focus = "F";
+        public String delete = "DELETE";
+        public String undo = "CTRL+Z";
+        public String redo = "CTRL+SHIFT+Z";
+        public String cancel = "ESCAPE";
+        public String selectAll = "A";
+
 
         public String forward = "W";
         public String backward = "S";
@@ -178,10 +185,17 @@ public class AppConfig {
 
         GameViewKeyBindingsConfig copy() {
             GameViewKeyBindingsConfig copy = new GameViewKeyBindingsConfig();
-            copy.fly = fly;
             copy.toggleProjection = toggleProjection;
             copy.toggleSidebar = toggleSidebar;
             copy.viewMenu = viewMenu;
+            copy.add = add;
+            copy.focus = focus;
+            copy.delete = delete;
+            copy.undo = undo;
+            copy.redo = redo;
+            copy.cancel = cancel;
+            copy.selectAll = selectAll;
+
             copy.forward = forward;
             copy.backward = backward;
             copy.left = left;

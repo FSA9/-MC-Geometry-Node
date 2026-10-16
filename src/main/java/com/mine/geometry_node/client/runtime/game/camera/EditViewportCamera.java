@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.runtime.game.camera;
 
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
 /** Per-viewport orbit camera, independent of Minecraft's player and camera objects.
  * Navigation runs on the UI thread; the renderer consumes one immutable snapshot.
  * Yaw and pitch use Minecraft conventions: yaw 0 faces +Z, positive pitch looks down.
@@ -140,6 +143,39 @@ public final class EditViewportCamera {
         pivotX = clampCoordinate(pivotX + x);
         pivotY = clampCoordinate(pivotY + y);
         pivotZ = clampCoordinate(pivotZ + z);
+    }
+
+    /** Frame all supplied bounds while preserving heading and projection. Padding must be >= 1. */
+    public synchronized void focus(AABB bounds, double aspect, double padding) {
+        if (bounds == null || !finite(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY,
+                bounds.maxZ, aspect, padding) || aspect <= 0 || padding < 1) return;
+        Vec3 center = bounds.getCenter();
+        double y = Math.toRadians(yaw), p = Math.toRadians(pitch);
+        Vec3 forward = new Vec3(-Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p));
+        Vec3 right = new Vec3(-Math.cos(y), 0, -Math.sin(y));
+        Vec3 up = right.cross(forward);
+        double tanY = Math.tan(Math.toRadians(verticalFovDegrees) * .5), tanX = tanY * aspect;
+        double required = .5;
+        for (int i = 0; i < 8; i++) {
+            Vec3 offset = new Vec3((i & 1) == 0 ? bounds.minX : bounds.maxX,
+                    (i & 2) == 0 ? bounds.minY : bounds.maxY,
+                    (i & 4) == 0 ? bounds.minZ : bounds.maxZ).subtract(center);
+            double depth = orthographic ? 0 : offset.dot(forward);
+            required = Math.max(required, Math.max(Math.abs(offset.dot(right)) * padding / tanX - depth,
+                    Math.abs(offset.dot(up)) * padding / tanY - depth));
+            if (!orthographic) required = Math.max(required, .1 - depth);
+        }
+        pivotX = clampCoordinate(center.x);
+        pivotY = clampCoordinate(center.y);
+        pivotZ = clampCoordinate(center.z);
+        distance = clamp(required, .5, MAX_DISTANCE);
+        initialized = true;
+    }
+
+    public synchronized void focus(Vec3 center, double radius) {
+        if (center == null || !finite(center.x, center.y, center.z, radius) || radius < 0) return;
+        focus(new AABB(center.x - radius, center.y - radius, center.z - radius,
+                center.x + radius, center.y + radius, center.z + radius), 1, 1.2);
     }
 
     public synchronized Snapshot snapshot() {

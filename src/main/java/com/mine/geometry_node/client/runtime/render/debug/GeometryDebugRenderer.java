@@ -72,11 +72,16 @@ public final class GeometryDebugRenderer {
             clear();
             return;
         }
+        if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()) {
+            var visible = com.mine.geometry_node.client.runtime.game.scene.ViewportDebugClient.visibleMeshes();
+            if (!visible.isEmpty()) renderMeshes(poseStack, camera, visible);
+            return;
+        }
         if (!enabled || meshes.isEmpty()) return;
 
         if (hasModelCollision) {
             try (var sample = ModelCollisionMetrics.debugRender()) {
-                renderMeshes(poseStack, camera);
+                renderMeshes(poseStack, camera, meshes);
                 if (sample.sampled()) {
                     sample.meshes = meshes.size();
                     sample.faces = submittedFaces;
@@ -84,10 +89,10 @@ public final class GeometryDebugRenderer {
                     sample.uploadedBytes = estimatedUploadBytes;
                 }
             }
-        } else renderMeshes(poseStack, camera);
+        } else renderMeshes(poseStack, camera, meshes);
     }
 
-    private static void renderMeshes(PoseStack poseStack, Camera camera) {
+    private static void renderMeshes(PoseStack poseStack, Camera camera, List<PacketGeometryDebugSnapshot.Mesh> meshes) {
 
         Minecraft minecraft = Minecraft.getInstance();
         MultiBufferSource.BufferSource bufferSource = minecraft.renderBuffers().bufferSource();

@@ -11,13 +11,25 @@ import java.util.List;
 
 /** Commands use the same configuration and scoped dispatch as the node editor. */
 public final class GameViewportShortcuts {
-    public enum Action { FLY, PROJECTION }
+    public enum Action { PROJECTION, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
 
     public static final List<ScopedAction<Action>> ACTIONS = List.of(
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.FLY, "geometry_node.game_view.fly",
-                    BuiltinConfigEntries.GAME_VIEW_FLY, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.PROJECTION, "geometry_node.game_view.toggle_projection",
-                    BuiltinConfigEntries.GAME_VIEW_PROJECTION, null));
+                    BuiltinConfigEntries.GAME_VIEW_PROJECTION, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.ADD, "geometry_node.game_view.scene.add",
+                    BuiltinConfigEntries.GAME_VIEW_ADD, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.FOCUS, "geometry_node.game_view.scene.focus",
+                    BuiltinConfigEntries.GAME_VIEW_FOCUS, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.DELETE, "geometry_node.game_view.scene.delete",
+                    BuiltinConfigEntries.GAME_VIEW_DELETE, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.UNDO, "geometry_node.game_view.scene.undo",
+                    BuiltinConfigEntries.GAME_VIEW_UNDO, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.REDO, "geometry_node.game_view.scene.redo",
+                    BuiltinConfigEntries.GAME_VIEW_REDO, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.CANCEL, "geometry_node.game_view.scene.cancel",
+                    BuiltinConfigEntries.GAME_VIEW_CANCEL, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.SELECT_ALL, "geometry_node.game_view.scene.selectAll",
+                    BuiltinConfigEntries.GAME_VIEW_SELECT_ALL, null));
 
     public static String display(ConfigEntry<String> entry) {
         String binding = ConfigManager.INSTANCE.get(entry);
