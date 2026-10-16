@@ -11,6 +11,7 @@ import java.util.Map;
 /** Stable built-in setting handles. Default literals remain owned by {@link AppConfig}. */
 public final class BuiltinConfigEntries {
     public static final ConfigCategory VIEWPORT = category("viewport", 100);
+    public static final ConfigCategory GAME_VIEW = category("game_view", 150);
     public static final ConfigCategory NODE = category("node", 200);
     public static final ConfigCategory ASSET_BROWSER = category("asset_browser", 300);
     public static final ConfigCategory PREVIEW_CACHE = category("preview_cache", 375);
@@ -28,6 +29,9 @@ public final class BuiltinConfigEntries {
     public static final ConfigEntry<Boolean> VIEWPORT_SHOW_GRID_AND_AXIS = bool(
             "viewport.showGridAndAxis", VIEWPORT, 300, ConfigEntry.SettingsVisibility.HIDDEN,
             config -> config.viewport.showGridAndAxis, (config, value) -> config.viewport.showGridAndAxis = value);
+    public static final ConfigEntry<Integer> GAME_VIEW_BACKGROUND_FPS = integer(
+            "gameView.backgroundFps", GAME_VIEW, 100, 1, 120, ConfigEntry.SettingsVisibility.VISIBLE,
+            config -> config.gameView.backgroundFps, (config, value) -> config.gameView.backgroundFps = value);
     public static final ConfigEntry<Float> NODE_CORNER_RADIUS = floating(
             "node.cornerRadius", NODE, 100, 0.0f, 24.0f, 0.5f, ConfigEntry.SettingsVisibility.HIDDEN,
             config -> config.node.cornerRadius, (config, value) -> config.node.cornerRadius = value);
@@ -138,7 +142,7 @@ public final class BuiltinConfigEntries {
             .build();
 
     private static final List<ConfigEntry<?>> ALL = List.of(
-            VIEWPORT_GRID_SIZE, VIEWPORT_SNAP_TO_GRID, VIEWPORT_SHOW_GRID_AND_AXIS,
+            VIEWPORT_GRID_SIZE, VIEWPORT_SNAP_TO_GRID, VIEWPORT_SHOW_GRID_AND_AXIS, GAME_VIEW_BACKGROUND_FPS,
             NODE_CORNER_RADIUS, ASSET_QUICK_ACCESS_PATHS, ASSET_VIEW_MODE,
             PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
@@ -150,7 +154,7 @@ public final class BuiltinConfigEntries {
     private BuiltinConfigEntries() {}
 
     static void register(ConfigRegistry registry) {
-        for (ConfigCategory category : List.of(VIEWPORT, NODE, ASSET_BROWSER, PREVIEW_CACHE,
+        for (ConfigCategory category : List.of(VIEWPORT, GAME_VIEW, NODE, ASSET_BROWSER, PREVIEW_CACHE,
                 SHORTCUT_GLOBAL, SHORTCUT_VIEWPORT, SHORTCUT_GAME_VIEW, SHORTCUT_SHOP)) {
             registry.registerCategory(category);
         }

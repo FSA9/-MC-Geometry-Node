@@ -1,9 +1,10 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.render;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.EditViewportRenderContext;
 import com.mine.geometry_node.client.runtime.game.EditViewportShaderScope;
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -32,28 +33,36 @@ public abstract class EditViewportRendererMixin {
         // Initialize from a fresh player pose, not the previous editor pose.
         if (EditViewportRuntime.hasVisibleViews()) player.update(delta);
         EditViewportRuntime.beginFrame(player);
-        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.isOrthographic())) {
+        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.useBasicShading());
+             var context = EditViewportRenderContext.enter(EditViewportRuntime.renderContext())) {
             if (EditViewportRuntime.isRendering()) mainCamera = EditViewportRuntime.camera();
-            original.call(delta, advance);
+            original.call(delta, EditViewportRuntime.shouldAdvanceWorld(advance));
         } finally { mainCamera = player; }
     }
 
     @WrapMethod(method = "extract")
     private void geometryNode$extractEditorCamera(DeltaTracker delta, boolean advance, Operation<Void> original) {
         Camera player = mainCamera;
-        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.isOrthographic())) {
+        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.useBasicShading());
+             var context = EditViewportRenderContext.enter(EditViewportRuntime.renderContext());
+             var gizmos = net.minecraft.client.Minecraft.getInstance().levelRenderer.collectPerFrameGizmos()) {
             if (EditViewportRuntime.isRendering()) mainCamera = EditViewportRuntime.camera();
-            original.call(delta, advance);
+            original.call(delta, EditViewportRuntime.shouldAdvanceWorld(advance));
         } finally { mainCamera = player; }
     }
 
     @WrapMethod(method = "render")
     private void geometryNode$renderEditorCamera(DeltaTracker delta, boolean advance, Operation<Void> original) {
         Camera player = mainCamera;
-        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.isOrthographic())) {
+        var renderContext = EditViewportRuntime.renderContext();
+        try (var ignored = EditViewportShaderScope.enter(EditViewportRuntime.useBasicShading());
+             var context = EditViewportRenderContext.enter(renderContext)) {
             if (EditViewportRuntime.isRendering()) mainCamera = EditViewportRuntime.camera();
             original.call(delta, advance);
-        } finally { mainCamera = player; }
+        } finally {
+            if (renderContext != null) renderContext.rendered();
+            mainCamera = player;
+        }
     }
 
     @Inject(method = "tick", at = @At("TAIL"))

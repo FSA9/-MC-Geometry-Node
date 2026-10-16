@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.input;
 
 import com.mine.geometry_node.client.runtime.game.GameViewportInput;
 import net.minecraft.client.gui.screens.Screen;

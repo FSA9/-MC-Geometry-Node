@@ -1948,5 +1948,16 @@
     "geometry_node.settings.entry.keyBindings.gameView.exit.description": "停止移动并释放鼠标，保持飞行模式。可改键；必须保留有效绑定。",
     "geometry_node.game_view.mode.fly": "飞行",
     "geometry_node.game_view.fly_ready": "飞行模式 · 点击画面开始控制 · 顶部按钮切换模式",
-    "geometry_node.game_view.sidebar.fly_help": "飞行模式\n\n点击画面：接管鼠标\n鼠标：转向\n%3$s / %4$s：前进 / 后退\n%5$s / %6$s：左移 / 右移\n%7$s / %8$s：上升 / 下降\n%9$s：释放鼠标，保持飞行模式\n\n释放后可再次点击画面继续，或点击顶部“编辑”返回环绕操作。飞行使用透视视角，返回编辑后恢复原投影。\n\n移动的是编辑相机，不是真实玩家。键盘绑定可在设置 → 游戏视图中修改。"
+    "geometry_node.game_view.sidebar.fly_help": "飞行模式\n\n点击画面：接管鼠标\n鼠标：转向\n%3$s / %4$s：前进 / 后退\n%5$s / %6$s：左移 / 右移\n%7$s / %8$s：上升 / 下降\n%9$s：释放鼠标，保持飞行模式\n\n释放后可再次点击画面继续，或点击顶部“编辑”返回环绕操作。飞行使用透视视角，返回编辑后恢复原投影。\n\n移动的是编辑相机，不是真实玩家。键盘绑定可在设置 → 游戏视图中修改。",
+    "geometry_node.game_view.editing_basic": "编辑 · 基础着色（光影暂停） · %s 切到飞行",
+    "geometry_node.game_view.edit_limited": "最多同时显示 4 个编辑视图 · 关闭或隐藏其他编辑视图后自动加入",
+    "geometry_node.game_view.fly_ready_basic": "飞行 · 基础着色 · 点击画面开始控制",
+    "geometry_node.game_view.basic_shading": "基础着色（光影暂停）",
+    "geometry_node.game_view.viewing_basic": "游戏 · 基础着色 · 点击控制 · Esc 释放控制",
+    "geometry_node.game_view.controlling_basic": "正在控制 · 基础着色 · Esc / Shift+Esc 返回工作区",
+    "geometry_node.game_view.sidebar.multi_view_help": "各编辑视图拥有独立相机和渲染分辨率。最多 4 个可见编辑视图轮流刷新，每帧绘制一个世界视角；当前激活区域优先。\n\n编辑视图使用基础着色。存在可见编辑视图时，游戏预览也暂停光影效果。所有游戏预览仍共享同一个玩家视角。",
+    "geometry_node.game_view.sidebar.shared_basic_help": "存在可见编辑视图时，游戏预览也暂停光影效果。游戏与编辑视图轮流刷新；所有游戏预览仍共享同一个玩家视角。",
+    "geometry_node.settings.category.game_view": "游戏视图",
+    "geometry_node.settings.entry.gameView.backgroundFps.label": "非活动视图帧率上限",
+    "geometry_node.settings.entry.gameView.backgroundFps.description": "限制未选中游戏/编辑视图的刷新频率，默认 20 FPS，可设为 1–120。当前活动视图不受此限制；游戏窗口共用一份画面。应用设置后立即生效。"
 }

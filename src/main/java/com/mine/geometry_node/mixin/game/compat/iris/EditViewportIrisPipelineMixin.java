@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.compat.iris;
 
 import com.mine.geometry_node.client.runtime.game.EditViewportShaderScope;
 import org.spongepowered.asm.mixin.Mixin;

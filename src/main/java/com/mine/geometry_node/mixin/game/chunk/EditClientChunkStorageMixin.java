@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.chunk;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;

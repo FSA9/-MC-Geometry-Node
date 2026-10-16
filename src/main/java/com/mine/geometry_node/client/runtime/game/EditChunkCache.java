@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.runtime.game;
 
+import com.mine.geometry_node.core.engine.system.viewport.CameraChunkRegions;
+import com.mine.geometry_node.core.engine.system.viewport.EditCameraObservers;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -11,20 +14,27 @@ public final class EditChunkCache<T> {
     private final ConcurrentHashMap<Integer, Slot<T>> byIndex = new ConcurrentHashMap<>();
     private final AtomicInteger nextIndex = new AtomicInteger(-1);
     private volatile Region player = new Region(0, 0, 5);
-    private volatile Region camera;
+    private volatile List<Region> cameras = List.of();
     private volatile boolean enabled;
 
     public boolean enabled() { return enabled; }
     public void playerCenter(int x, int z) { player = new Region(x, z, player.radius); prune(); }
     public void playerRadius(int radius) { player = new Region(player.x, player.z, Math.max(2, radius) + 3); prune(); }
     public void camera(boolean active, int x, int z, int radius) {
-        if (active) enabled = true;
-        camera = active ? new Region(x, z, Math.max(2, Math.min(32, radius)) + 3) : null;
+        cameras(active ? List.of(new CameraChunkRegions.Region(x, z, Math.max(2, Math.min(32, radius)))) : List.of());
+    }
+    public void cameras(List<CameraChunkRegions.Region> regions) {
+        EditCameraObservers.checkCount(regions.size());
+        List<Region> next = regions.stream().distinct().map(region -> new Region(region.x(), region.z(), region.radius() + 3)).toList();
+        if (!next.isEmpty()) enabled = true;
+        cameras = next;
         prune();
     }
     public boolean accepts(int x, int z) {
-        Region other = camera;
-        return enabled && (player.contains(x, z) || (other != null && other.contains(x, z)));
+        if (!enabled) return false;
+        if (player.contains(x, z)) return true;
+        for (Region camera : cameras) if (camera.contains(x, z)) return true;
+        return false;
     }
     public boolean has(int x, int z) {
         Slot<T> slot = byPosition.get(key(x, z));
@@ -45,7 +55,9 @@ public final class EditChunkCache<T> {
     }
     public boolean drop(int index, T expected) {
         Slot<T> slot = byIndex.get(index);
-        return slot != null && slot.value.compareAndSet(expected, null);
+        if (slot == null || !slot.value.compareAndSet(expected, null)) return false;
+        prune(slot);
+        return true;
     }
     public void retain(int x, int z, T value) { slot(x, z).value.set(value); }
     private Slot<T> slot(int x, int z) {
@@ -59,10 +71,13 @@ public final class EditChunkCache<T> {
         byPosition.forEach((key, slot) -> {
             // Loaded chunks live until the server's forget packet, even after
             // centers change. Never discard data just because an acknowledgement arrived.
-            if (!accepts(slot.x, slot.z) && slot.value.get() == null && byPosition.remove(key, slot)) {
-                byIndex.remove(slot.index, slot);
-            }
+            prune(slot);
         });
+    }
+    private void prune(Slot<T> slot) {
+        if (!accepts(slot.x, slot.z) && slot.value.get() == null && byPosition.remove(key(slot.x, slot.z), slot)) {
+            byIndex.remove(slot.index, slot);
+        }
     }
     private static long key(int x, int z) { return (x & 0xffffffffL) | ((long) z << 32); }
     private record Region(int x, int z, int radius) {

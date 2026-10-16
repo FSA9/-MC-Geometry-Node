@@ -57,15 +57,20 @@ final class NumberConfigEntryEditor extends AbstractConfigEntryEditor<Number> {
 
     private void commit(String text) {
         try {
-            Number value = mEntry.editorType() == ConfigEntry.EditorType.INTEGER
-                    ? Integer.valueOf(text.trim())
-                    : Float.valueOf(text.trim());
+            Number value = parseValue(mEntry.editorType(), text);
             if (!mEntry.accepts(value)) throw new NumberFormatException();
             mDraft.set(mEntry, value);
             showValidity(true);
         } catch (Exception ignored) {
             showValidity(false);
         }
+    }
+
+    // A numeric ternary promotes Integer/Float to float before boxing, breaking
+    // integer ConfigEntry validators. Keep the two return paths separate.
+    static Number parseValue(ConfigEntry.EditorType type, String text) {
+        if (type == ConfigEntry.EditorType.INTEGER) return Integer.valueOf(text.trim());
+        return Float.valueOf(text.trim());
     }
 
     private void showValidity(boolean valid) {

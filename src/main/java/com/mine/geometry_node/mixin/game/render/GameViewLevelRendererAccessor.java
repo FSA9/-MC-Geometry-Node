@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.render;
 
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.gizmos.SimpleGizmoCollector;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.hud;
 
 import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;

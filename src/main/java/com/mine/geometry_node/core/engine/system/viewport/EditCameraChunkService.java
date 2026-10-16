@@ -4,6 +4,8 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketEditCamera;
 import com.mine.geometry_node.core.network.packet.s2c.PacketEditCameraView;
 import com.mine.geometry_node.mixin.viewport.CameraChunkMapAccess;
+import com.mine.geometry_node.core.engine.system.viewport.CameraChunkLeasePlan.Lease;
+import com.mine.geometry_node.core.engine.system.viewport.CameraChunkLeasePlan.Observer;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
@@ -18,7 +20,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import java.util.*;
 import java.util.function.Supplier;
 
-/** Server-thread leases for a second observer, without moving or spawning any player. */
+/** Server-thread leases for bounded additional observers, without moving or spawning players. */
 public final class EditCameraChunkService {
     private static final DeferredRegister<TicketType> TYPES = DeferredRegister.create(Registries.TICKET_TYPE, "geometry_node");
     private static final Supplier<TicketType> LOAD = TYPES.register("edit_camera_load",
@@ -26,7 +28,7 @@ public final class EditCameraChunkService {
     private static final Supplier<TicketType> SIMULATE = TYPES.register("edit_camera_simulate",
             () -> new TicketType(80, TicketType.FLAG_SIMULATION | TicketType.FLAG_CAN_EXPIRE_IF_UNLOADED));
     private static final Map<ServerPlayer, Session> SESSIONS = new IdentityHashMap<>();
-    private static final Map<MinecraftServer, Set<Lease>> LEASES = new IdentityHashMap<>();
+    private static final Map<MinecraftServer, CameraChunkLeasePlan> LEASES = new IdentityHashMap<>();
 
     private EditCameraChunkService() {}
 
@@ -47,21 +49,27 @@ public final class EditCameraChunkService {
 
     public static void receive(ServerPlayer player, PacketEditCamera packet) {
         if (!packet.dimension().equals(player.level().dimension().identifier())) return;
-        if (!packet.active()) { release(player); return; }
-        if (!packet.validPosition() || !player.isAlive()) return;
+        if (packet.positions().isEmpty()) { release(player); return; }
+        if (!packet.validPositions() || !player.isAlive()) return;
         Session session = SESSIONS.get(player);
         if (session == null || session.level != player.level()) {
             session = new Session(player.level());
             SESSIONS.put(player, session);
         }
         // Coalesce requests; tickets and tracking change at most once per four ticks.
-        session.requested = new Vec3(packet.x(), packet.y(), packet.z());
+        session.requested = packet.positions();
         session.heartbeat = player.level().getServer().getTickCount();
     }
 
-    public static Vec3 position(ServerPlayer player) {
+    public static List<Vec3> positions(ServerPlayer player) {
         Session session = SESSIONS.get(player);
-        return session != null && session.level == player.level() ? session.position : null;
+        return session != null && session.level == player.level() ? session.positions : List.of();
+    }
+
+    /** Active observer is first; all other observers remain in the normal send queue. */
+    public static Vec3 position(ServerPlayer player) {
+        var positions = positions(player);
+        return positions.isEmpty() ? null : positions.getFirst();
     }
 
     private static void tick(MinecraftServer server) {
@@ -73,7 +81,7 @@ public final class EditCameraChunkService {
                     || server.getTickCount() - session.heartbeat > 60) {
                 expired.add(player);
             } else {
-                session.position = session.requested;
+                session.positions = session.requested;
                 ((CameraChunkMapAccess) session.level.getChunkSource().chunkMap).geometryNode$updateTracking(player);
                 // Also refresh stationary entity tracking as the observer moves or
                 // a chunk batch becomes ready; player position itself never changes.
@@ -89,47 +97,56 @@ public final class EditCameraChunkService {
         if (previous == null) return;
         if (!player.hasDisconnected()) {
             ((CameraChunkMapAccess) player.level().getChunkSource().chunkMap).geometryNode$updateTracking(player);
-            NetworkHandler.sendToPlayer(player, new PacketEditCameraView(previous.level.dimension().identifier(), false, 0, 0, 0));
+            // Refresh stationary entities too: removing a distant observer changes
+            // visibility even when neither the player nor those entities moved.
+            player.level().getChunkSource().chunkMap.move(player);
+            NetworkHandler.sendToPlayer(player, new PacketEditCameraView(previous.level.dimension().identifier(), List.of()));
         }
         reconcile(previous.level.getServer());
     }
 
     private static void reconcile(MinecraftServer server) {
-        Set<Lease> desired = new HashSet<>();
+        Set<Observer> observers = new HashSet<>();
         SESSIONS.forEach((player, session) -> {
-            if (session.level.getServer() != server || session.position == null || session.level != player.level()) return;
+            if (session.level.getServer() != server || session.positions.isEmpty() || session.level != player.level()) return;
             int radius = ((CameraChunkMapAccess) session.level.getChunkSource().chunkMap).geometryNode$viewDistance(player);
             int simulationRadius = Math.min(radius, server.getPlayerList().getSimulationDistance());
-            ChunkPos center = new ChunkPos((int) Math.floor(session.position.x / 16), (int) Math.floor(session.position.z / 16));
-            var region = new ChunkTrackingView.Positioned(center, radius);
-            region.forEach(pos -> {
-                // Level 32 supplies vanilla's ready-to-send chunks without a blocking getChunk call.
-                desired.add(new Lease(session.level, pos, false));
-                if (ChunkTrackingView.isInViewDistance(center.x(), center.z(), simulationRadius, pos.x(), pos.z())) {
-                    desired.add(new Lease(session.level, pos, true));
-                }
-            });
+            for (Vec3 position : session.positions) {
+                observers.add(new Observer(session.level, (int) Math.floor(position.x / 16),
+                        (int) Math.floor(position.z / 16), radius, simulationRadius));
+            }
         });
-        Set<Lease> previous = LEASES.getOrDefault(server, Set.of());
-        for (Lease lease : previous) if (!desired.contains(lease)) lease.remove();
-        for (Lease lease : desired) if (!previous.contains(lease) || server.getTickCount() % 20 == 0) lease.refresh();
-        if (desired.isEmpty()) LEASES.remove(server);
-        else LEASES.put(server, desired);
+        CameraChunkLeasePlan previous = LEASES.getOrDefault(server, CameraChunkLeasePlan.EMPTY);
+        CameraChunkLeasePlan next = previous.update(observers);
+        boolean refresh = server.getTickCount() % 20 == 0;
+        if (next != previous) {
+            for (Lease lease : previous.leases()) if (!next.leases().contains(lease)) remove(lease);
+            for (Lease lease : next.leases()) if (refresh || !previous.leases().contains(lease)) refresh(lease);
+            if (next.leases().isEmpty()) LEASES.remove(server);
+            else LEASES.put(server, next);
+        } else if (refresh) {
+            // Ticket expiry still needs a heartbeat; unchanged views do not need
+            // another full region enumeration or a newly allocated lease union.
+            for (Lease lease : next.leases()) refresh(lease);
+        }
     }
 
     private static final class Session {
         final ServerLevel level;
-        Vec3 requested;
-        Vec3 position;
+        List<Vec3> requested = List.of();
+        List<Vec3> positions = List.of();
         int heartbeat;
         Session(ServerLevel level) { this.level = level; }
     }
 
-    /** Set union provides reference counting when multiple users watch the same chunks. */
-    private record Lease(ServerLevel level, ChunkPos pos, boolean simulate) {
-        TicketType type() { return simulate ? SIMULATE.get() : LOAD.get(); }
-        int radius() { return simulate ? 2 : 1; }
-        void refresh() { level.getChunkSource().addTicketWithRadius(type(), pos, radius()); }
-        void remove() { level.getChunkSource().removeTicketWithRadius(type(), pos, radius()); }
+    private static void refresh(Lease lease) {
+        // Level 32 supplies ready-to-send chunks without a blocking getChunk call.
+        lease.level().getChunkSource().addTicketWithRadius(
+                lease.simulate() ? SIMULATE.get() : LOAD.get(), new ChunkPos((int) lease.pos(), (int) (lease.pos() >> 32)), lease.simulate() ? 2 : 1);
+    }
+
+    private static void remove(Lease lease) {
+        lease.level().getChunkSource().removeTicketWithRadius(
+                lease.simulate() ? SIMULATE.get() : LOAD.get(), new ChunkPos((int) lease.pos(), (int) (lease.pos() >> 32)), lease.simulate() ? 2 : 1);
     }
 }

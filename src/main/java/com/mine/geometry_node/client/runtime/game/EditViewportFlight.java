@@ -33,13 +33,15 @@ public final class EditViewportFlight {
     public void look(double yaw, double pitch) { if (active) camera.look(yaw, pitch); }
 
     public void advance(double seconds) {
-        if (!active || !Double.isFinite(seconds) || seconds <= 0) return;
-        var pose = camera.snapshot();
-        double yaw = Math.toRadians(pose.yaw()), pitch = Math.toRadians(pose.pitch());
+        if (!active || held.isEmpty() || !Double.isFinite(seconds) || seconds <= 0) return;
         double forward = axis(Direction.FORWARD, Direction.BACKWARD);
         double right = axis(Direction.RIGHT, Direction.LEFT);
+        double up = axis(Direction.UP, Direction.DOWN);
+        if (forward == 0 && right == 0 && up == 0) return;
+        var pose = camera.snapshot();
+        double yaw = Math.toRadians(pose.yaw()), pitch = Math.toRadians(pose.pitch());
         double x = -Math.sin(yaw) * Math.cos(pitch) * forward - Math.cos(yaw) * right;
-        double y = -Math.sin(pitch) * forward + axis(Direction.UP, Direction.DOWN);
+        double y = -Math.sin(pitch) * forward + up;
         double z = Math.cos(yaw) * Math.cos(pitch) * forward - Math.sin(yaw) * right;
         double length = Math.sqrt(x * x + y * y + z * z);
         if (length < 1.0e-8) return;

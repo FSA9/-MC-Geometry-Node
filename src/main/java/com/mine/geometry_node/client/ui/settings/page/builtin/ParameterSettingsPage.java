@@ -22,6 +22,7 @@ public final class ParameterSettingsPage extends ConfigEntriesSettingsPage {
 
     private static boolean retainCategory(ConfigCategory category) {
         return category.id().equals(BuiltinConfigEntries.VIEWPORT.id())
+                || category.id().equals(BuiltinConfigEntries.GAME_VIEW.id())
                 || category.id().equals(BuiltinConfigEntries.NODE.id());
     }
 }

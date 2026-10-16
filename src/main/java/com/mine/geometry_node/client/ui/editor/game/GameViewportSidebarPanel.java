@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -87,6 +88,10 @@ public final class GameViewportSidebarPanel extends ScrollView implements Sideba
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_DOWN),
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_EXIT)).getString()
                 : tr("sidebar.game_help");
+        if (owner.mode().usesEditorCamera()) text += "\n\n" + tr("sidebar.multi_view_help");
+        else if (!Boolean.getBoolean("gn.standalone") && EditViewportRuntime.hasVisibleViews()) {
+            text += "\n\n" + tr("sidebar.shared_basic_help");
+        }
         if (!text.equals(lastHelp)) { lastHelp = text; help.setText(text); }
     }
 

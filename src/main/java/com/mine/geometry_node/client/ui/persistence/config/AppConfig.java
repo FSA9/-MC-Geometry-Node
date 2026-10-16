@@ -6,6 +6,7 @@ import java.util.List;
 public class AppConfig {
     public AssetBrowserConfig assetBrowser = new AssetBrowserConfig();
     public ViewportConfig viewport = new ViewportConfig();
+    public GameViewConfig gameView = new GameViewConfig();
     public NodeConfig node = new NodeConfig();
     public PreviewCacheConfig previewCache = new PreviewCacheConfig();
     public KeyBindingsConfig keyBindings = new KeyBindingsConfig();
@@ -18,6 +19,7 @@ public class AppConfig {
         AppConfig copy = new AppConfig();
         copy.assetBrowser = assetBrowser != null ? assetBrowser.copy() : null;
         copy.viewport = viewport != null ? viewport.copy() : null;
+        copy.gameView = gameView != null ? gameView.copy() : null;
         copy.node = node != null ? node.copy() : null;
         copy.previewCache = previewCache != null ? previewCache.copy() : null;
         copy.keyBindings = keyBindings != null ? keyBindings.copy() : null;
@@ -60,6 +62,16 @@ public class AppConfig {
             copy.rightSidebarVisible = rightSidebarVisible;
             copy.rightSidebarWeight = rightSidebarWeight;
             copy.rightSidebarTab = rightSidebarTab;
+            return copy;
+        }
+    }
+
+    public static class GameViewConfig {
+        public int backgroundFps = 20;
+
+        GameViewConfig copy() {
+            GameViewConfig copy = new GameViewConfig();
+            copy.backgroundFps = backgroundFps;
             return copy;
         }
     }

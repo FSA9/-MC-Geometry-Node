@@ -19,6 +19,7 @@ public final class GameViewportInput {
     private static final Set<Object> VISIBLE = Collections.newSetFromMap(new IdentityHashMap<>());
     private static final Set<Object> BLOCKING_WORKSPACES = Collections.newSetFromMap(new IdentityHashMap<>());
     private static volatile Object capturedOwner;
+    private static final ViewportInputDispatch.CaptureRequests CAPTURES = new ViewportInputDispatch.CaptureRequests();
     private static Screen suspendedEditor;
     private static boolean consumeEscapeRelease;
 
@@ -52,10 +53,11 @@ public final class GameViewportInput {
     public static void requestCapture(Object owner) {
         if (owner == null || Boolean.getBoolean("gn.standalone")) return;
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> {
+        CAPTURES.submit(mc, owner, () -> {
             synchronized (VISIBLE) { if (!VISIBLE.contains(owner)) return; }
-            if (EditViewportRuntime.hasVisibleViews() || isWorkspaceBlocked() || !isEditor(mc.screen) || mc.player == null || mc.level == null
+            if (isWorkspaceBlocked() || !isEditor(mc.screen) || mc.player == null || mc.level == null
                     || mc.player.isDeadOrDying() || !mc.isWindowActive() || mc.getOverlay() != null) return;
+            EditViewportFlightInput.releaseAll();
             releaseNow(mc);
             capturedOwner = owner;
             // The mouse mixin suppresses grabMouse's setScreen(null) only for this capture.
@@ -69,12 +71,14 @@ public final class GameViewportInput {
     public static boolean isCaptured(Object owner) { return owner != null && capturedOwner == owner; }
 
     public static void release(Object owner) {
+        CAPTURES.cancel(owner);
         if (owner == null || Boolean.getBoolean("gn.standalone")) return;
         Minecraft mc = Minecraft.getInstance();
         ViewportInputDispatch.run(mc, () -> { if (capturedOwner == owner) releaseNow(mc); });
     }
 
     public static void releaseAll() {
+        CAPTURES.clear();
         if (Boolean.getBoolean("gn.standalone")) return;
         EditViewportFlightInput.releaseAll();
         Minecraft mc = Minecraft.getInstance();
@@ -99,7 +103,7 @@ public final class GameViewportInput {
     }
 
     public static boolean isGameInputActive() {
-        if (capturedOwner == null || EditViewportRuntime.hasVisibleViews()) return false;
+        if (capturedOwner == null) return false;
         Minecraft mc = Minecraft.getInstance();
         return isEditor(mc.screen) && mc.player != null && mc.level != null
                 && !isWorkspaceBlocked() && mc.isWindowActive() && mc.getOverlay() == null;

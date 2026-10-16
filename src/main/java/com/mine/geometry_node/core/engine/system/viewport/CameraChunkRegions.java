@@ -1,17 +1,31 @@
 package com.mine.geometry_node.core.engine.system.viewport;
 
+import java.util.List;
 import java.util.function.LongConsumer;
 
-/** Registry-independent region algebra used by the server tracking adapter. */
-public record CameraChunkRegions(Region player, Region camera) {
-    public static final CameraChunkRegions EMPTY = new CameraChunkRegions(null, null);
+/** Bounded region union: never loads the rectangle between remote observers. */
+public record CameraChunkRegions(Region player, List<Region> cameras) {
+    public CameraChunkRegions {
+        EditCameraObservers.checkCount(cameras.size());
+        cameras = List.copyOf(cameras).stream().distinct().toList();
+    }
+    public static final CameraChunkRegions EMPTY = new CameraChunkRegions(null, List.of());
     public boolean contains(int x, int z, boolean neighbors) {
-        return (player != null && player.contains(x, z, neighbors)) || (camera != null && camera.contains(x, z, neighbors));
+        if (player != null && player.contains(x, z, neighbors)) return true;
+        for (Region camera : cameras) if (camera.contains(x, z, neighbors)) return true;
+        return false;
     }
     public boolean contains(long pos) { return contains((int) pos, (int) (pos >> 32), true); }
     public void forEach(LongConsumer consumer) {
         if (player != null) player.forEach(consumer);
-        if (camera != null) camera.forEach(pos -> { if (player == null || !player.contains(pos)) consumer.accept(pos); });
+        for (int i = 0; i < cameras.size(); i++) {
+            int previousCount = i;
+            cameras.get(i).forEach(pos -> {
+                if (player != null && player.contains(pos)) return;
+                for (int j = 0; j < previousCount; j++) if (cameras.get(j).contains(pos)) return;
+                consumer.accept(pos);
+            });
+        }
     }
     public static void difference(CameraChunkRegions from, CameraChunkRegions to, LongConsumer enter, LongConsumer leave) {
         if (from.equals(to)) return;
@@ -19,7 +33,11 @@ public record CameraChunkRegions(Region player, Region camera) {
         to.forEach(pos -> { if (!from.contains(pos)) enter.accept(pos); });
     }
     public record Region(int x, int z, int radius) {
-        public Region { if (radius < 2 || radius > 32) throw new IllegalArgumentException("Chunk radius must be 2..32"); }
+        public Region {
+            if (radius < 2 || radius > 32) throw new IllegalArgumentException("Chunk radius must be 2..32");
+            if (Math.abs((long) x) > 1_875_000 || Math.abs((long) z) > 1_875_000)
+                throw new IllegalArgumentException("Chunk center outside world bounds");
+        }
         public boolean contains(long pos) { return contains((int) pos, (int) (pos >> 32), true); }
         public boolean contains(int cx, int cz, boolean neighbors) {
             int padding = neighbors ? 2 : 1;

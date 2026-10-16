@@ -2,10 +2,9 @@ package com.mine.geometry_node.client.runtime.game;
 
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.mixin.game.GameViewGuiRendererAccessor;
+import com.mine.geometry_node.mixin.game.hud.GameViewGuiRendererAccessor;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import icyllis.modernui.mc.MuiScreen;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -20,7 +19,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** One scheduled world frame: shared player+HUD, or the sole E1 editor camera.
+/** One scheduled world frame: shared player+HUD, or one independent editor camera.
  * GPU operations and GUI extraction run on Minecraft's render thread. Only visibility
  * and the small published status are accessed from ModernUI's UI thread.
  */
@@ -32,17 +31,12 @@ public final class SharedGameFrame {
     // forcing earlier GPU fence waits. Each submission keeps its own buffer rings;
     // item atlases and picture-in-picture caches still belong to the same renderer.
     private static final Map<VertexFormat, MappableRingBuffer> HUD_VERTEX_BUFFERS = new Object2ObjectOpenHashMap<>();
-    private static GpuTexture texture;
-    private static Object textureOwner;
+    private static final ViewportFrameSurface GAME = new ViewportFrameSurface(GameFrameImage.gameChannel());
     private static boolean editorFrame;
     private static boolean opaqueEditorFrame;
     private static boolean consumersThisFrame;
     private static boolean captureThisFrame;
     private static GuiRenderer hudPassRenderer;
-    private static volatile boolean available;
-    private static volatile int frameWidth;
-    private static volatile int frameHeight;
-
     private SharedGameFrame() {}
 
     public static synchronized void setVisible(Object owner, boolean visible) {
@@ -50,14 +44,12 @@ public final class SharedGameFrame {
         else CONSUMERS.remove(owner);
     }
 
-    private static synchronized boolean hasConsumers() {
+    static synchronized boolean hasConsumers() {
         return !CONSUMERS.isEmpty();
     }
 
-    public static boolean isAvailable() { return available; }
+    static synchronized boolean containsConsumer(Object owner) { return CONSUMERS.contains(owner); }
     public static boolean capturesGameHud() { return captureThisFrame && !EditViewportRuntime.isRendering(); }
-    public static int width() { return frameWidth; }
-    public static int height() { return frameHeight; }
 
     /** The HUD and editor are two submissions in one frame. Renderer caches must
      * retire unused entries only after both have marked their resources as used.
@@ -74,11 +66,11 @@ public final class SharedGameFrame {
         Minecraft minecraft = Minecraft.getInstance();
         editorFrame = minecraft.screen instanceof MuiScreen screen && screen.getFragment() instanceof MainUI;
         opaqueEditorFrame = editorFrame && (UIConstants.MainUI.BG_ROOT >>> 24) == 255;
-        consumersThisFrame = hasConsumers() || EditViewportRuntime.isRendering();
+        consumersThisFrame = EditViewportRuntime.hasScheduledWorld();
     }
 
-    /** This changes only GameRenderer.render's world branch. Camera updates, world
-     * extraction, game ticks, native GUI previews and renderer endFrame still run.
+    /** Controls GameRenderer.render's world branch. The runtime separately controls
+     * camera/world extraction; game ticks, native GUI previews and frame cleanup continue.
      */
     public static boolean shouldRenderWorld(boolean original) {
         return original && (!opaqueEditorFrame || consumersThisFrame);
@@ -92,37 +84,7 @@ public final class SharedGameFrame {
         captureThisFrame = shouldRenderLevel && consumersThisFrame && minecraft.level != null && editorFrame
                 && width > 0 && height > 0;
         HUD.reset();
-        if (!captureThisFrame) {
-            releaseTexture();
-            return;
-        }
-        Object owner = EditViewportRuntime.frameOwner();
-        if (texture == null || textureOwner != owner || frameWidth != width || frameHeight != height) {
-            long allocationStart = GameViewTiming.start();
-            releaseTexture();
-            var source = minecraft.getMainRenderTarget().getColorTexture();
-            if (source == null) {
-                captureThisFrame = false;
-                return;
-            }
-            texture = RenderSystem.getDevice().createTexture(
-                    () -> "GeometryNode shared game view",
-                    GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT,
-                    source.getFormat(), width, height, 1, 1);
-            RenderSystem.getDevice().createCommandEncoder().clearColorTexture(texture, 0xFF000000);
-            boolean published = owner == null ? GameFrameImage.publish(texture) : EditViewportRuntime.image().publish(texture);
-            if (!published) {
-                texture.close();
-                texture = null;
-                captureThisFrame = false;
-                return;
-            }
-            textureOwner = owner;
-            frameWidth = width;
-            frameHeight = height;
-            GameViewTiming.finish("allocate shared frame " + width + "x" + height, allocationStart, true);
-        }
-        available = true;
+        if (!hasConsumers() || !editorFrame || minecraft.level == null) GAME.clear();
     }
 
     /** Redirect only in-game GUI producers; the editor keeps its original GUI state. */
@@ -136,36 +98,15 @@ public final class SharedGameFrame {
 
     /** Runs at the normal GUI render boundary, never inside a view's draw callback. */
     public static void renderGui(GuiRenderer renderer, GpuBufferSlice fog) {
-        if (captureThisFrame && texture != null) {
-            GameViewGuiRendererAccessor access = (GameViewGuiRendererAccessor) renderer;
-            GuiRenderState editor = access.geometryNode$getRenderState();
-            Map<VertexFormat, MappableRingBuffer> editorVertexBuffers = access.geometryNode$getVertexBuffers();
-            GuiRenderer previousHudPass = hudPassRenderer;
-            try {
-                hudPassRenderer = renderer;
-                access.geometryNode$setRenderState(HUD);
-                access.geometryNode$setVertexBuffers(HUD_VERTEX_BUFFERS);
-                long hudStart = GameViewTiming.start();
-                if (!EditViewportRuntime.isRendering()) renderer.render(fog);
-                GameViewTiming.finish("HUD submission", hudStart);
-            } finally {
-                hudPassRenderer = previousHudPass;
-                access.geometryNode$setVertexBuffers(editorVertexBuffers);
-                access.geometryNode$setRenderState(editor);
-            }
-            var target = Minecraft.getInstance().getMainRenderTarget();
-            var source = target.getColorTexture();
-            if (source != null && source.getWidth(0) == frameWidth && source.getHeight(0) == frameHeight) {
-                var encoder = RenderSystem.getDevice().createCommandEncoder();
-                long copyStart = GameViewTiming.start();
-                encoder.copyTextureToTexture(source, texture, 0, 0, 0, 0, 0, frameWidth, frameHeight);
-                GameViewTiming.finish("frame copy", copyStart);
-            } else {
-                // Never copy with mixed dimensions during a resize. Retire the
-                // publication rather than showing a stale or partially copied frame.
-                releaseTexture();
-            }
+        if (captureThisFrame) {
+            if (capturesGameHud()) renderHud(renderer, fog);
+            long copyStart = GameViewTiming.start();
+            if (EditViewportRuntime.isRendering()) EditViewportRuntime.captureFrame();
+            else GAME.capture(Minecraft.getInstance().getMainRenderTarget().getColorTexture());
+            GameViewTiming.finish("frame copy", copyStart);
+            EditViewportRuntime.frameCompleted();
         }
+
         if (opaqueEditorFrame) {
             // The world is only a source for game views. It must not bleed through
             // workspace gaps or appear briefly while the UI changes its layout.
@@ -185,13 +126,33 @@ public final class SharedGameFrame {
         GameViewTiming.finish("editor submission", editorStart);
     }
 
+    /** Only the shared player source owns a HUD submission and its buffer rings. */
+    private static void renderHud(GuiRenderer renderer, GpuBufferSlice fog) {
+        GameViewGuiRendererAccessor access = (GameViewGuiRendererAccessor) renderer;
+        GuiRenderState editor = access.geometryNode$getRenderState();
+        Map<VertexFormat, MappableRingBuffer> editorVertexBuffers = access.geometryNode$getVertexBuffers();
+        GuiRenderer previousHudPass = hudPassRenderer;
+        try {
+            hudPassRenderer = renderer;
+            access.geometryNode$setRenderState(HUD);
+            access.geometryNode$setVertexBuffers(HUD_VERTEX_BUFFERS);
+            long hudStart = GameViewTiming.start();
+            renderer.render(fog);
+            GameViewTiming.finish("HUD submission", hudStart);
+        } finally {
+            hudPassRenderer = previousHudPass;
+            access.geometryNode$setVertexBuffers(editorVertexBuffers);
+            access.geometryNode$setRenderState(editor);
+        }
+    }
+
     public static void close() {
         captureThisFrame = false;
         editorFrame = false;
         opaqueEditorFrame = false;
         consumersThisFrame = false;
         HUD.reset();
-        releaseTexture();
+        GAME.clear();
         // GameRenderer.close invokes this before closing the original GUI buffers.
         // These buffers were restored out of that renderer, so we own their close.
         for (MappableRingBuffer buffer : HUD_VERTEX_BUFFERS.values()) buffer.close();
@@ -199,18 +160,5 @@ public final class SharedGameFrame {
         EditViewportRuntime.close();
     }
 
-    private static void releaseTexture() {
-        available = false;
-        // Keep the much smaller HUD vertex buffers across temporary invisibility
-        // and native screens. Idle rings do not rotate or overwrite in-flight data;
-        // their normal fence check protects reuse when the game view returns.
-        // Arc3D recordings can still reference retired frames. The image bridge owns
-        // texture destruction and releases the GPU allocation after the last use.
-        GameFrameImage.clear();
-        EditViewportRuntime.image().clear();
-        textureOwner = null;
-        texture = null;
-        frameWidth = 0;
-        frameHeight = 0;
-    }
+    static void clearImage() { GAME.clear(); }
 }

@@ -9,7 +9,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 /** Render-thread mouse/keyboard capture belonging only to an editor camera. */
 public final class EditViewportFlightInput {
@@ -21,20 +20,17 @@ public final class EditViewportFlightInput {
     private static long lastFrame;
     private static double returnX, returnY;
     private static final Set<Integer> HELD_KEYS = new HashSet<>();
-    private record CaptureRequest(Object owner, EditViewportCamera camera) {}
-    private static final AtomicReference<CaptureRequest> PENDING = new AtomicReference<>();
+    private static final ViewportInputDispatch.CaptureRequests CAPTURES = new ViewportInputDispatch.CaptureRequests();
 
     private EditViewportFlightInput() {}
+    static Object capturedOwner() { return owner; }
     public static boolean isCaptured() { return owner != null; }
     public static boolean isCaptured(Object candidate) { return candidate != null && owner == candidate; }
 
     public static void requestCapture(Object candidate, EditViewportCamera target) {
         if (candidate == null || Boolean.getBoolean("gn.standalone")) return;
-        var request = new CaptureRequest(candidate, target);
-        PENDING.set(request);
         Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> {
-            if (!PENDING.compareAndSet(request, null)) return;
+        CAPTURES.submit(mc, candidate, () -> {
             if (!EditViewportRuntime.ownsCamera(candidate, target)
                     || !EditViewportRuntime.navigateAllowed(candidate) || !canUse(mc)) return;
             GameViewportInput.releaseAll();
@@ -75,10 +71,9 @@ public final class EditViewportFlightInput {
     }
 
     /** Called before publishing the frame's immutable camera snapshot. */
-    static void updateFrame(Object nextOwner, EditViewportCamera nextCamera) {
+    static void updateFrame() {
         validate();
         if (owner == null) return;
-        if (owner != nextOwner || camera != nextCamera) { releaseNow(Minecraft.getInstance()); return; }
         long now = System.nanoTime();
         flight.advance((now - lastFrame) * 1.0e-9);
         lastFrame = now;
@@ -116,14 +111,16 @@ public final class EditViewportFlightInput {
     }
 
     public static void release(Object candidate) {
-        PENDING.updateAndGet(request -> request != null && request.owner() == candidate ? null : request);
-        if (!isCaptured(candidate) || Boolean.getBoolean("gn.standalone")) return;
+        CAPTURES.cancel(candidate);
+        if (candidate == null || Boolean.getBoolean("gn.standalone")) return;
         Minecraft mc = Minecraft.getInstance();
+        // A capture may already be running but not yet have installed its owner.
+        // Check ownership on the client thread, after that capture finishes.
         ViewportInputDispatch.run(mc, () -> { if (owner == candidate) releaseNow(mc); });
     }
 
     public static void releaseAll() {
-        PENDING.set(null);
+        CAPTURES.clear();
         if (Boolean.getBoolean("gn.standalone")) return;
         Minecraft mc = Minecraft.getInstance();
         ViewportInputDispatch.run(mc, () -> releaseNow(mc));

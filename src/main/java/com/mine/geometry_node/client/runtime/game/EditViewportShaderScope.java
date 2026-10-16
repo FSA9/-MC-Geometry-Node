@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.game;
 
-/** Selects basic shading only inside an orthographic frame on the rendering thread.
+/** Selects basic shading inside editor rendering and terrain maintenance on the rendering thread.
  * Chunk workers and Iris' settings/reload code must still see the real shader pack.
  */
 public final class EditViewportShaderScope implements AutoCloseable {
@@ -8,13 +8,13 @@ public final class EditViewportShaderScope implements AutoCloseable {
     private final Boolean previous;
     private boolean closed;
 
-    private EditViewportShaderScope(boolean orthographic) {
+    private EditViewportShaderScope(boolean basicShading) {
         previous = ACTIVE.get();
-        ACTIVE.set(orthographic || Boolean.TRUE.equals(previous));
+        ACTIVE.set(basicShading || Boolean.TRUE.equals(previous));
     }
 
-    public static EditViewportShaderScope enter(boolean orthographic) {
-        return new EditViewportShaderScope(orthographic);
+    public static EditViewportShaderScope enter(boolean basicShading) {
+        return new EditViewportShaderScope(basicShading);
     }
 
     public static boolean isActive() { return Boolean.TRUE.equals(ACTIVE.get()); }

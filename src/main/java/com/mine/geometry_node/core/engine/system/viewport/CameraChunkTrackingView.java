@@ -3,11 +3,12 @@ package com.mine.geometry_node.core.engine.system.viewport;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.world.level.ChunkPos;
 import java.util.function.Consumer;
+import java.util.List;
 
-/** Two bounded view regions; never loads the rectangle between player and camera. */
+/** Bounded observer regions; never loads corridors between them. */
 public record CameraChunkTrackingView(CameraChunkRegions regions) implements ChunkTrackingView {
-    public CameraChunkTrackingView(ChunkTrackingView.Positioned player, ChunkTrackingView.Positioned camera) {
-        this(new CameraChunkRegions(region(player), region(camera)));
+    public CameraChunkTrackingView(ChunkTrackingView.Positioned player, List<ChunkTrackingView.Positioned> cameras) {
+        this(new CameraChunkRegions(region(player), cameras.stream().map(CameraChunkTrackingView::region).toList()));
     }
     @Override public boolean contains(int x, int z, boolean neighbors) {
         return regions.contains(x, z, neighbors);
@@ -31,7 +32,7 @@ public record CameraChunkTrackingView(CameraChunkRegions regions) implements Chu
     private static CameraChunkRegions regions(ChunkTrackingView view) {
         if (view == ChunkTrackingView.EMPTY) return CameraChunkRegions.EMPTY;
         if (view instanceof CameraChunkTrackingView union) return union.regions;
-        if (view instanceof ChunkTrackingView.Positioned positioned) return new CameraChunkRegions(region(positioned), null);
+        if (view instanceof ChunkTrackingView.Positioned positioned) return new CameraChunkRegions(region(positioned), List.of());
         return null;
     }
     private static CameraChunkRegions.Region region(ChunkTrackingView.Positioned view) {

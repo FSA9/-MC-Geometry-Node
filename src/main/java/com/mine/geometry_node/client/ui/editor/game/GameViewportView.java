@@ -10,6 +10,8 @@ import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Matrix;
+import icyllis.modernui.graphics.Rect;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
@@ -23,6 +25,8 @@ final class GameViewportView extends View {
     private final Runnable onInteraction;
     private final Runnable onProjectionChanged;
     private final Runnable onSizeChanged;
+    private final Rect visibleBounds = new Rect();
+    private final Matrix localToRoot = new Matrix();
     private boolean activationPressed;
     private boolean navigating;
     private boolean panning;
@@ -55,7 +59,7 @@ final class GameViewportView extends View {
     void setActive(boolean active) {
         this.active = active;
         firstFrameStart = active ? GameViewTiming.start() : 0;
-        if (!active) cancelInteraction();
+        if (!active) releaseInteraction();
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
         invalidate();
     }
@@ -63,7 +67,27 @@ final class GameViewportView extends View {
     boolean isFrameAvailable() {
         if (!active || Boolean.getBoolean("gn.standalone")) return false;
         return editing() ? EditViewportRuntime.isAvailable(inputOwner)
-                : !EditViewportRuntime.isRendering() && GameFrameImage.isAvailable();
+                : GameFrameImage.isAvailable();
+    }
+
+    void publishPixelDemand() {
+        if (!active || !editing() || Boolean.getBoolean("gn.standalone")) return;
+        var frame = EditViewportRuntime.framebufferSize();
+        double demand = 0;
+        if (getGlobalVisibleRect(visibleBounds)) {
+            // transformMatrixToGlobal concatenates, so reset our reusable matrix each sample.
+            localToRoot.setIdentity();
+            transformMatrixToGlobal(localToRoot);
+            View root = getRootView();
+            demand = GameViewportPixelDemand.scale(getWidth(), getHeight(), frame.width(), frame.height(),
+                    root.getWidth(), root.getHeight(), localToRoot, visibleBounds);
+        }
+        EditViewportRuntime.setDemand(inputOwner, demand);
+    }
+
+    void releaseInteraction() {
+        cancelInteraction();
+        if (!Boolean.getBoolean("gn.standalone")) GameViewportInput.release(inputOwner);
     }
 
     private boolean editing() { return inputOwner.mode().usesEditorCamera(); }
@@ -83,7 +107,7 @@ final class GameViewportView extends View {
     @Override
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
-        if (!hasWindowFocus) cancelInteraction();
+        if (!hasWindowFocus) releaseInteraction();
     }
 
     @Override
@@ -103,7 +127,14 @@ final class GameViewportView extends View {
             return;
         }
         var size = editing() ? EditViewportRuntime.size(inputOwner) : GameFrameImage.size();
-        var bounds = GameViewportLayout.fit(getWidth(), getHeight(), size.width(), size.height());
+        // Integer target rounding must not change the display or input aspect ratio.
+        // The texture snapshot still guards channel.draw against a concurrent resize.
+        var framebuffer = EditViewportRuntime.framebufferSize();
+        if (!framebuffer.available()) {
+            cancelInteraction();
+            return;
+        }
+        var bounds = GameViewportLayout.fit(getWidth(), getHeight(), framebuffer.width(), framebuffer.height());
         boolean drawn = editing()
                 ? EditViewportRuntime.draw(inputOwner, canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom())
                 : GameFrameImage.draw(canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
@@ -249,7 +280,7 @@ final class GameViewportView extends View {
     @Override
     protected void onDetachedFromWindow() {
         shortcuts.dispose();
-        cancelInteraction();
+        releaseInteraction();
         super.onDetachedFromWindow();
     }
 

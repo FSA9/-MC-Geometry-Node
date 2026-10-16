@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.input;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mine.geometry_node.client.runtime.game.GameViewportInput;

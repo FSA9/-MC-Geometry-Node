@@ -17,6 +17,7 @@ import com.mine.geometry_node.client.ui.persistence.config.ConfigManager;
 import com.mine.geometry_node.client.ui.persistence.config.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import icyllis.modernui.core.Context;
@@ -47,6 +48,8 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final SidebarLayoutController sidebarLayout;
     private final GameViewportSidebarPanel sidebarPanel;
     private UiSurfaceRegistry.Registration registration;
+    private AreaLifecycle areaLifecycle;
+    private AreaLifecycle.Subscription areaSubscription = AreaLifecycle.Subscription.NONE;
     private final ViewportModeState modes = new ViewportModeState(editCamera);
     private boolean shown;
     private boolean registered;
@@ -55,6 +58,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private String statusShortcut = "";
     private boolean toolOrthographic;
     private long nextSidebarRefresh;
+    private long nextHintRefresh;
     private final Runnable refresh = this::refresh;
     private final Runnable refreshVisibility = this::updateVisibility;
 
@@ -127,8 +131,37 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     @Override public void onHide() { shown = false; sidebarLayout.onOwnerHidden(); updateVisibility(); }
     @Override public void onDispose() { disposed = true; onHide(); }
 
-    @Override protected void onAttachedToWindow() { super.onAttachedToWindow(); updateVisibility(); }
-    @Override protected void onDetachedFromWindow() { deactivate(); super.onDetachedFromWindow(); }
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        areaSubscription.close();
+        areaLifecycle = AreaLifecycle.find(this);
+        if (areaLifecycle != null) areaSubscription = areaLifecycle.subscribe(this::onAreaEvent);
+        updateVisibility();
+    }
+    @Override protected void onDetachedFromWindow() {
+        areaSubscription.close();
+        areaSubscription = AreaLifecycle.Subscription.NONE;
+        areaLifecycle = null;
+        deactivate();
+        super.onDetachedFromWindow();
+    }
+
+    private void onAreaEvent(AreaLifecycle.Event event) {
+        switch (event) {
+            case ACTIVATED -> updatePreferred();
+            case DEACTIVATED -> {
+                viewport.releaseInteraction();
+                updatePreferred();
+            }
+            case CONTENT_CHANGED, HIDDEN, DETACHED, DISPOSED -> deactivate();
+        }
+    }
+
+    private void updatePreferred() {
+        if (!Boolean.getBoolean("gn.standalone")) {
+            EditViewportRuntime.setPreferred(this, registered && areaLifecycle != null && areaLifecycle.isActive());
+        }
+    }
     @Override public void onVisibilityAggregated(boolean visible) {
         super.onVisibilityAggregated(visible);
         if (viewport != null) updateVisibility();
@@ -163,6 +196,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     private void markInteracted() {
         if (registration != null) registration.markInteracted();
+        if (!Boolean.getBoolean("gn.standalone") && mode().usesEditorCamera()) EditViewportRuntime.touch(this);
     }
 
     private TextView action(Context context, String key, Runnable action) {
@@ -206,6 +240,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
             }
         }
         viewport.setActive(true);
+        updatePreferred();
         refresh();
     }
 
@@ -221,6 +256,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         if (viewport != null) viewport.setActive(false);
         if (!registered) return;
         registered = false;
+        updatePreferred();
         if (!Boolean.getBoolean("gn.standalone")) {
             GameViewportInput.setVisible(this, false);
             SharedGameFrame.setVisible(this, false);
@@ -230,6 +266,8 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     private void refresh() {
         if (!registered) return;
+        // Includes the first frame and parent-only transforms, not just local layout changes.
+        viewport.publishPixelDemand();
         if (toolOrthographic != editCamera.isOrthographic()) updateTools();
         long now = System.nanoTime();
         if (sidebarLayout.isVisible() && now >= nextSidebarRefresh) {
@@ -247,27 +285,33 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         String key;
         if (Boolean.getBoolean("gn.standalone")) key = "waiting";
         else if (mode().usesEditorCamera()) {
-            key = EditViewportFlightInput.isCaptured(this) ? "flying"
-                    : EditViewportRuntime.isRendering() && !EditViewportRuntime.isOwner(this)
-                    ? "edit_busy" : available
-                    ? (mode() == ViewportMode.FLY ? "fly_ready"
-                            : editCamera.isOrthographic() ? "editing_orthographic" : "editing") : "edit_waiting";
+            key = EditViewportRuntime.isLimited(this) ? "edit_limited"
+                    : EditViewportFlightInput.isCaptured(this) ? "flying_basic" : available
+                    ? (mode() == ViewportMode.FLY ? "fly_ready_basic"
+                            : editCamera.isOrthographic() ? "editing_orthographic" : "editing_basic") : "edit_waiting";
         } else {
-            key = EditViewportRuntime.isRendering() ? "game_suspended" : !available ? "waiting"
-                    : GameViewportInput.isCaptured(this) ? "controlling" : "viewing";
+            boolean basic = EditViewportRuntime.hasVisibleViews();
+            key = !available ? "waiting" : GameViewportInput.isCaptured(this)
+                    ? (basic ? "controlling_basic" : "controlling") : (basic ? "viewing_basic" : "viewing");
         }
-        String shortcut = ("editing".equals(key) || "editing_orthographic".equals(key))
+        // Camera images and transform demand refresh every frame. Binding descriptions
+        // and localized help need only follow settings changes at the sidebar cadence;
+        // capture, availability and mode transitions still update immediately.
+        long now = System.nanoTime();
+        if (key.equals(statusKey) && now < nextHintRefresh) return;
+        nextHintRefresh = now + 250_000_000L;
+        String shortcut = ("editing_basic".equals(key) || "editing_orthographic".equals(key))
                 ? GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_FLY)
-                : "flying".equals(key) ? GameViewportShortcuts.flightHint() : "";
+                : "flying_basic".equals(key) ? GameViewportShortcuts.flightHint() : "";
         if (key.equals(statusKey) && shortcut.equals(statusShortcut)) return;
         statusKey = key;
         statusShortcut = shortcut;
-        String text = "flying".equals(key) ? shortcut : shortcut.isEmpty() ? tr(key)
+        String text = "flying_basic".equals(key) ? shortcut + " · " + tr("basic_shading") : shortcut.isEmpty() ? tr(key)
                 : Component.translatable("geometry_node.game_view." + key, shortcut).getString();
         status.setText(text);
         status.setTooltipText(text);
         waiting.setText(text);
-        status.setTextColor(("controlling".equals(key) || "flying".equals(key)) ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
+        status.setTextColor((key.startsWith("controlling") || "flying_basic".equals(key)) ? UiTheme.Control.FOCUS : UiTheme.Text.MUTED);
     }
 
     @Override

@@ -1948,5 +1948,16 @@
     "geometry_node.settings.entry.keyBindings.gameView.exit.description": "Stop moving and release the mouse while staying in Fly mode. Rebindable; a valid binding is required.",
     "geometry_node.game_view.mode.fly": "Fly",
     "geometry_node.game_view.fly_ready": "Fly mode · Click the image to control · Use the header to change mode",
-    "geometry_node.game_view.sidebar.fly_help": "Fly mode\n\nClick the image: capture mouse\nMouse: look\n%3$s / %4$s: forward / backward\n%5$s / %6$s: left / right\n%7$s / %8$s: ascend / descend\n%9$s: release mouse, stay in Fly mode\n\nClick the image again to resume, or select Edit in the header to return to orbit. Fly uses perspective; Edit restores the previous projection.\n\nMoves the editor camera, not the player. Change keyboard bindings in Settings → Game View."
+    "geometry_node.game_view.sidebar.fly_help": "Fly mode\n\nClick the image: capture mouse\nMouse: look\n%3$s / %4$s: forward / backward\n%5$s / %6$s: left / right\n%7$s / %8$s: ascend / descend\n%9$s: release mouse, stay in Fly mode\n\nClick the image again to resume, or select Edit in the header to return to orbit. Fly uses perspective; Edit restores the previous projection.\n\nMoves the editor camera, not the player. Change keyboard bindings in Settings → Game View.",
+    "geometry_node.game_view.editing_basic": "Edit · Basic shading (shaders paused) · %s selects Fly",
+    "geometry_node.game_view.edit_limited": "Up to 4 edit views · Close or hide another edit view to join automatically",
+    "geometry_node.game_view.fly_ready_basic": "Fly · Basic shading · Click the image to control",
+    "geometry_node.game_view.basic_shading": "Basic shading (shaders paused)",
+    "geometry_node.game_view.viewing_basic": "Game · Basic shading · Click to control · Esc releases control",
+    "geometry_node.game_view.controlling_basic": "Controlling · Basic shading · Esc / Shift+Esc returns to the workspace",
+    "geometry_node.game_view.sidebar.multi_view_help": "Each edit view keeps its own camera and resolution. Up to 4 visible edit views refresh in rotation, with one world render per frame. The active area gets priority.\n\nEditor views use basic shading. Shader effects also pause in game previews while an edit view is visible. All game previews share one player view.",
+    "geometry_node.game_view.sidebar.shared_basic_help": "A visible edit view pauses shader effects in this game preview too. Game and edit views refresh in rotation; all game previews still share one player view.",
+    "geometry_node.settings.category.game_view": "Game View",
+    "geometry_node.settings.entry.gameView.backgroundFps.label": "Inactive View FPS Limit",
+    "geometry_node.settings.entry.gameView.backgroundFps.description": "Limits refreshes of inactive game/edit views. Default: 20 FPS; range: 1–120. The active view is exempt; game views share one frame. Takes effect as soon as settings are applied."
 }

@@ -16,7 +16,7 @@ final class ConfigSanitizer {
 
     static boolean looksLikeConfig(JsonObject root) {
         return root != null && (root.has("assetBrowser") || root.has("viewport") || root.has("node")
-                || root.has("previewCache") || root.has("terminal")
+                || root.has("previewCache") || root.has("terminal") || root.has("gameView")
                 || root.has("keyBindings"));
     }
 
@@ -168,6 +168,16 @@ final class ConfigSanitizer {
             }
         }
 
+        JsonObject gameView = readObject(root, "gameView");
+        if (gameView == null) {
+            config.gameView = defaults.gameView;
+            changed = true;
+        } else {
+            ReadInt backgroundFps = readInt(gameView, "backgroundFps");
+            config.gameView.backgroundFps = backgroundFps.valid ? backgroundFps.value : defaults.gameView.backgroundFps;
+            changed |= !backgroundFps.valid || backgroundFps.changed;
+        }
+
         JsonObject keyBindings = readObject(root, "keyBindings");
         changed |= readKeyBindings(keyBindings, config, defaults);
 
@@ -249,6 +259,11 @@ final class ConfigSanitizer {
                 config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
                 changed = true;
             }
+        }
+
+        if (config.gameView == null) {
+            config.gameView = defaults.gameView;
+            changed = true;
         }
 
         if (config.node == null) {

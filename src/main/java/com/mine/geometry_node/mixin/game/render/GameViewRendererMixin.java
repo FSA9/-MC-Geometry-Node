@@ -1,4 +1,4 @@
-package com.mine.geometry_node.mixin.game;
+package com.mine.geometry_node.mixin.game.render;
 
 import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
 import com.mine.geometry_node.client.runtime.game.GameViewTiming;

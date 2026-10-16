@@ -22,15 +22,15 @@ public abstract class CameraChunkMapMixin {
 
     @Inject(method = "updateChunkTracking", at = @At("HEAD"), cancellable = true)
     private void geometryNode$trackCamera(ServerPlayer player, CallbackInfo ci) {
-        var position = EditCameraChunkService.position(player);
-        if (position == null) return;
+        var positions = EditCameraChunkService.positions(player);
+        if (positions.isEmpty()) return;
         int radius = getPlayerViewDistance(player);
-        ChunkPos center = new ChunkPos((int) Math.floor(position.x / 16), (int) Math.floor(position.z / 16));
-        var next = new CameraChunkTrackingView(new ChunkTrackingView.Positioned(player.chunkPosition(), radius),
-                new ChunkTrackingView.Positioned(center, radius));
+        var cameras = positions.stream().map(position -> new ChunkTrackingView.Positioned(
+                new ChunkPos((int) Math.floor(position.x / 16), (int) Math.floor(position.z / 16)), radius)).distinct().toList();
+        var next = new CameraChunkTrackingView(new ChunkTrackingView.Positioned(player.chunkPosition(), radius), cameras);
         if (!next.equals(player.getChunkTrackingView())) {
             player.connection.send(new ClientboundSetChunkCacheCenterPacket(player.chunkPosition().x(), player.chunkPosition().z()));
-            NetworkHandler.sendToPlayer(player, new PacketEditCameraView(player.level().dimension().identifier(), true, center.x(), center.z(), radius));
+            NetworkHandler.sendToPlayer(player, new PacketEditCameraView(player.level().dimension().identifier(), next.regions().cameras()));
             applyChunkTrackingView(player, next);
         }
         ci.cancel();

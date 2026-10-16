@@ -33,15 +33,10 @@ public final class GameFrameImage {
 
     private GameFrameImage() {}
 
-    public static boolean publish(GpuTexture texture) { return GAME.publish(texture); }
-    public static void clear() { GAME.clear(); }
+    static Channel gameChannel() { return GAME; }
+
     public static Size size() { return GAME.size(); }
     public static boolean isAvailable() { return GAME.isAvailable(); }
-    public static int width() { return GAME.size().width(); }
-    public static int height() { return GAME.size().height(); }
-    public static boolean draw(Canvas canvas, float left, float top, float right, float bottom) {
-        return GAME.draw(canvas, null, left, top, right, bottom);
-    }
     public static boolean draw(Canvas canvas, Size size, float left, float top, float right, float bottom) {
         return GAME.draw(canvas, size, left, top, right, bottom);
     }
