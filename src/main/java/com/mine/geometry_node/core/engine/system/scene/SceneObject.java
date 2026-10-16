@@ -1,41 +1,46 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
-import com.mine.geometry_node.core.engine.graph.light.LightDefinition;
-import com.mine.geometry_node.core.node.value.light.LightConfig;
 import net.minecraft.world.phys.Vec3;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
-/** Immutable authored data. Render resources and graph-owned runtime objects never enter this record. */
+/** Immutable common envelope. Type-owned scalar parameters are validated by the registered schema. */
 public record SceneObject(UUID id, String typeId, String name, Vec3 position, Vec3 color,
-                          float intensity, float range, boolean enabled, long revision) {
-    public static final String POINT_LIGHT = "point_light";
+                          boolean enabled, long revision, Map<String,String> parameters, Vec3 rotation, Vec3 scale) {
+    public static final String POINT_LIGHT="point_light";
     public SceneObject {
-        Objects.requireNonNull(id);
-        Objects.requireNonNull(typeId);
-        Objects.requireNonNull(name);
-        if (typeId.isBlank() || typeId.length() > 64) throw new IllegalArgumentException("Invalid scene object type ID");
-        if (name.isBlank() || name.length() > 96) throw new IllegalArgumentException("Name must contain 1–96 characters");
-        if (revision < 0) throw new IllegalArgumentException("Invalid object revision");
-        if (!LightDefinition.finite(position) || Math.abs(position.x) > 30_000_000
-                || Math.abs(position.z) > 30_000_000 || Math.abs(position.y) > 30_000_000)
+        Objects.requireNonNull(id);Objects.requireNonNull(typeId);Objects.requireNonNull(name);
+        if(typeId.isBlank()||typeId.length()>64||name.isBlank()||name.length()>96||revision<0)
+            throw new IllegalArgumentException("Invalid scene identity");
+        if(!finite(position)||Math.abs(position.x)>30_000_000||Math.abs(position.y)>30_000_000||Math.abs(position.z)>30_000_000)
             throw new IllegalArgumentException("Invalid scene position");
-        // Use the same validated light contract as transport and the real renderer.
-        new LightDefinition("point", color, intensity, range, 60, 0.25f, position, Vec3.ZERO, LightConfig.DEFAULT);
+        if(!finite(color)||color.x<0||color.y<0||color.z<0||color.x>1||color.y>1||color.z>1)
+            throw new IllegalArgumentException("Invalid scene color");
+        if(!finite(rotation)||Math.max(Math.max(Math.abs(rotation.x),Math.abs(rotation.y)),Math.abs(rotation.z))>1e6||!finite(scale)||scale.x<.001||scale.y<.001||scale.z<.001||scale.x>1024||scale.y>1024||scale.z>1024)throw new IllegalArgumentException("Invalid transform");
+        parameters=Map.copyOf(parameters);
+        if(parameters.size()>32)throw new IllegalArgumentException("Too many scene parameters");
+        parameters.forEach((key,value)->{if(key.isBlank()||key.length()>64||value.length()>256)throw new IllegalArgumentException("Invalid scene parameter");});
     }
-    public static SceneObject pointLight(UUID id, Vec3 position) {
-        return new SceneObject(id, POINT_LIGHT, "Point Light", position, new Vec3(1, 1, 1), 3, 16, true, 0);
+    public SceneObject(UUID id,String type,String name,Vec3 position,Vec3 color,boolean enabled,long revision,Map<String,String> parameters){
+        this(id,type,name,position,color,enabled,revision,parameters,Vec3.ZERO,new Vec3(1,1,1));
     }
-    public SceneObject withPosition(Vec3 value) {
-        return new SceneObject(id, typeId, name, value, color, intensity, range, enabled, revision);
+    public SceneObject withTransform(Vec3 position,Vec3 rotation,Vec3 scale){return new SceneObject(id,typeId,name,position,color,enabled,revision,parameters,rotation,scale);}
+    /** Compatibility bridge for existing light callers and version-one world saves. */
+    public SceneObject(UUID id,String type,String name,Vec3 position,Vec3 color,float intensity,float range,boolean enabled,long revision){
+        this(id,type,name,position,color,enabled,revision,Map.of("intensity",Float.toString(intensity),"range",Float.toString(range)));
+        if(!Float.isFinite(intensity)||intensity<0||intensity>1024||!Float.isFinite(range)||range<.01f||range>32)throw new IllegalArgumentException("Invalid light parameters");
     }
-    public SceneObject withProperties(String name, Vec3 color, float intensity, float range, boolean enabled) {
-        return new SceneObject(id, typeId, name, position, color, intensity, range, enabled, revision);
+    public double number(String key){return Double.parseDouble(parameters.get(key));}
+    public float intensity(){return (float)number("intensity");}
+    public float range(){return (float)number("range");}
+    public static SceneObject pointLight(UUID id,Vec3 position){return SceneObjectTypes.require(POINT_LIGHT).create(id,position);}
+    public SceneObject withPosition(Vec3 value){return new SceneObject(id,typeId,name,value,color,enabled,revision,parameters,rotation,scale);}
+    public SceneObject withRevision(long value){return new SceneObject(id,typeId,name,position,color,enabled,value,parameters,rotation,scale);}
+    public SceneObject withProperties(String name,Vec3 color,float intensity,float range,boolean enabled){
+        return new SceneObject(id,typeId,name,position,color,intensity,range,enabled,revision).withTransform(position,rotation,scale);
     }
-    public SceneObject withRevision(long value) {
-        return new SceneObject(id, typeId, name, position, color, intensity, range, enabled, value);
+    public SceneObject withProperties(String name,Vec3 color,boolean enabled,Map<String,String> parameters){
+        return new SceneObject(id,typeId,name,position,color,enabled,revision,parameters,rotation,scale);
     }
-    public boolean sameContent(SceneObject other) {
-        return other != null && withRevision(0).equals(other.withRevision(0));
-    }
+    public boolean sameContent(SceneObject other){return other!=null&&withRevision(0).equals(other.withRevision(0));}
+    private static boolean finite(Vec3 v){return v!=null&&Double.isFinite(v.x)&&Double.isFinite(v.y)&&Double.isFinite(v.z);}
 }

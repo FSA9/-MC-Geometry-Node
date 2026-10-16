@@ -35,7 +35,7 @@ public final class ClientSceneService {
     private Set<UUID> selected = Set.of();
     private UUID active;
     private Map<UUID, SceneObject> previewBase = Map.of();
-    private Map<UUID, Vec3> preview = Map.of();
+    private Map<UUID, SceneObject> preview = Map.of();
     private Object previewOwner;
     private Pending pending;
     private Object world;
@@ -115,11 +115,11 @@ public final class ClientSceneService {
             objects = incoming; versions = incomingVersions; revision = packet.revision();
             canEdit = packet.canEdit(); received = true;
             if (completed == null && !packet.success()) message = packet.message();
-            if (pending != null && !pending.visualPositions.isEmpty()) {
-                boolean conflict = pending.visualPositions.keySet().stream().anyMatch(id ->
+            if (pending != null && !pending.visualObjects.isEmpty()) {
+                boolean conflict = pending.visualObjects.keySet().stream().anyMatch(id ->
                         objects.get(id) == null || objects.get(id).revision() != pending.before.get(id).revision());
                 if (conflict || !canEdit) {
-                    pending.visualPositions = Map.of();
+                    pending.visualObjects = Map.of();
                     message = "Scene changed while waiting for the move confirmation";
                 }
             }
@@ -143,7 +143,15 @@ public final class ClientSceneService {
     public void createPointLight(Vec3 position) { createPointLight(snapshot().worldGeneration(), position); }
     public synchronized void createPointLight(long expectedGeneration, Vec3 position) {
         if (!editable(expectedGeneration)) return;
-        SceneObject object = SceneObject.pointLight(UUID.randomUUID(), position);
+        create(expectedGeneration, SceneObject.POINT_LIGHT, position);
+    }
+    public synchronized void create(long expectedGeneration,String typeId,Vec3 position){
+        if (!editable(expectedGeneration)) return;
+        var type = com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(typeId);
+        SceneObject object = type.create(UUID.randomUUID(),position);
+        String name = net.minecraft.network.chat.Component.translatable(type.labelKey()).getString();
+        if (!name.isBlank() && name.length() <= 96)
+            object = object.withProperties(name, object.color(), object.enabled(), object.parameters());
         submit(List.of(new SceneChange(object.id(), -1, object)), Kind.EDIT, object.id());
     }
     public void update(SceneObject replacement) { update(snapshot().worldGeneration(), replacement); }
@@ -186,28 +194,36 @@ public final class ClientSceneService {
     }
     public synchronized void previewPositions(Map<UUID, Vec3> positions) {
         if (previewBase.isEmpty()) return;
-        Map<UUID, Vec3> next = new LinkedHashMap<>();
+        Map<UUID, SceneObject> next = new LinkedHashMap<>();
         for (var entry : positions.entrySet()) {
             SceneObject base = previewBase.get(entry.getKey());
             if (base == null) throw new IllegalArgumentException("Object is not part of this drag");
-            base.withPosition(entry.getValue()); // Same finite/bounds validation as committed data.
-            next.put(entry.getKey(), entry.getValue());
+            next.put(entry.getKey(), base.withPosition(entry.getValue()));
         }
         preview = Map.copyOf(next); publish();
+    }
+    public synchronized void previewObjects(Object owner, Map<UUID,SceneObject> values) {
+        if(!previewActive(owner))return;
+        for(var entry:values.entrySet()){
+            SceneObject base=previewBase.get(entry.getKey()), value=entry.getValue();
+            if(base==null||!base.withTransform(value.position(),value.rotation(),value.scale()).equals(value))throw new IllegalArgumentException("Not a transform of preview base");
+            com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.validate(value);
+        }
+        preview=Map.copyOf(values);publish();
     }
     public synchronized void commitPreview() {
         if (previewBase.isEmpty()) return;
         List<SceneChange> changes = new ArrayList<>();
-        Map<UUID, Vec3> visualPositions = new LinkedHashMap<>();
+        Map<UUID, SceneObject> visualObjects = new LinkedHashMap<>();
         for (var entry : preview.entrySet()) {
             SceneObject base = previewBase.get(entry.getKey());
-            if (!base.position().equals(entry.getValue())) {
-                changes.add(new SceneChange(base.id(), base.revision(), base.withPosition(entry.getValue())));
-                visualPositions.put(base.id(), entry.getValue());
+            if (!base.sameContent(entry.getValue())) {
+                changes.add(new SceneChange(base.id(), base.revision(), entry.getValue()));
+                visualObjects.put(base.id(), entry.getValue());
             }
         }
         previewBase = Map.of(); preview = Map.of(); previewOwner = null;
-        if (editable(generation) && !changes.isEmpty()) submit(changes, Kind.EDIT, null, visualPositions);
+        if (editable(generation) && !changes.isEmpty()) submit(changes, Kind.EDIT, null, visualObjects);
         else publish();
     }
     public synchronized void commitPreview(Object owner) { if (previewActive(owner)) commitPreview(); }
@@ -231,11 +247,11 @@ public final class ClientSceneService {
     private void submit(List<SceneChange> changes, Kind kind, UUID selectCreated) {
         submit(changes, kind, selectCreated, Map.of());
     }
-    private void submit(List<SceneChange> changes, Kind kind, UUID selectCreated, Map<UUID, Vec3> visualPositions) {
+    private void submit(List<SceneChange> changes, Kind kind, UUID selectCreated, Map<UUID, SceneObject> visualObjects) {
         previewBase = Map.of(); preview = Map.of(); previewOwner = null;
         PacketSceneEdit packet = new PacketSceneEdit(UUID.randomUUID(), dimension, changes);
         Set<UUID> ids = new LinkedHashSet<>(); changes.forEach(change -> ids.add(change.id()));
-        pending = new Pending(packet, kind, objects, Set.copyOf(ids), selectCreated, ticks, Map.copyOf(visualPositions));
+        pending = new Pending(packet, kind, objects, Set.copyOf(ids), selectCreated, ticks, Map.copyOf(visualObjects));
         message = ""; publish(); send(packet, generation);
     }
     private void send(PacketSceneEdit packet, long expectedGeneration) {
@@ -254,11 +270,11 @@ public final class ClientSceneService {
     private void publish() {
         confirmed = new Snapshot(dimension, revision, List.copyOf(objects.values()), selected, active,
                 canEdit, pending != null, message, generation);
-        Map<UUID, Vec3> visualPositions = pending != null && !pending.visualPositions.isEmpty() ? pending.visualPositions : preview;
-        if (visualPositions.isEmpty()) published = confirmed;
+        Map<UUID, SceneObject> visualObjects = pending != null && !pending.visualObjects.isEmpty() ? pending.visualObjects : preview;
+        if (visualObjects.isEmpty()) published = confirmed;
         else {
             List<SceneObject> rendered = objects.values().stream()
-                    .map(object -> visualPositions.containsKey(object.id()) ? object.withPosition(visualPositions.get(object.id())) : object).toList();
+                    .map(object -> visualObjects.containsKey(object.id()) ? visualObjects.get(object.id()) : object).toList();
             published = new Snapshot(dimension, revision, rendered, selected, active, canEdit, pending != null, message, generation);
         }
     }
@@ -275,11 +291,11 @@ public final class ClientSceneService {
     private static final class Pending {
         final PacketSceneEdit packet; final Kind kind; final Map<UUID, SceneObject> before;
         final Set<UUID> ids; final UUID selectCreated; long sentTick;
-        Map<UUID, Vec3> visualPositions;
+        Map<UUID, SceneObject> visualObjects;
         Pending(PacketSceneEdit packet, Kind kind, Map<UUID, SceneObject> before, Set<UUID> ids, UUID selectCreated, long sentTick,
-                Map<UUID, Vec3> visualPositions) {
+                Map<UUID, SceneObject> visualObjects) {
             this.packet = packet; this.kind = kind; this.before = before; this.ids = ids; this.selectCreated = selectCreated;
-            this.sentTick = sentTick; this.visualPositions = visualPositions;
+            this.sentTick = sentTick; this.visualObjects = visualObjects;
         }
     }
 }

@@ -50,6 +50,8 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel propertiesPanel;
     private final EditorSidebar sidebar;
     private final UiActionButton visibilityButton;
+    private final UiActionButton snapButton;
+    private boolean moveSnap;
     private final EditViewportCamera editCamera = new EditViewportCamera();
     private final GameViewportView viewport;
     private final UiRadialMenu viewMenu;
@@ -71,6 +73,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private boolean disposed;
     private boolean dismissingMenuGesture;
     private String statusKey;
+    private final TextView transformStatus;
     private boolean toolOrthographic;
     private long nextSidebarRefresh;
     private final Runnable refresh = this::refresh;
@@ -102,7 +105,11 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         toolScroller.addView(tools, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         header.addView(toolScroller, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        header.addView(new View(context), new LayoutParams(0, 1, 1));
+        transformStatus=UIUtils.createLockedTextView(context,"",11,UiTheme.Text.SECONDARY);
+        transformStatus.setSingleLine(true);
+        header.addView(transformStatus, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        snapButton = action(context, "scene.snap", this::toggleMoveSnap);
+        header.addView(snapButton, toolbarButtonLayout());
         visibilityButton = action(context, "scene.visibility", this::openVisualization);
         header.addView(visibilityButton, toolbarButtonLayout());
         addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28)));
@@ -308,12 +315,19 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
                 selected ? UiTheme.Text.STRONG : UiTheme.Text.NORMAL);
     }
 
+    private void toggleMoveSnap() {
+        if(mode()!=ViewportMode.EDIT)return;
+        moveSnap=!moveSnap;viewport.setMoveSnap(moveSnap);updateTools();
+    }
+
     private void updateTools() {
         toolOrthographic = editCamera.isOrthographic();
         boolean editing = mode() == ViewportMode.EDIT;
         gameButton.setTextColor(mode() == ViewportMode.GAME ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
         flyButton.setTextColor(mode() == ViewportMode.FLY ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
         editButton.setTextColor(editing ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+        snapButton.setVisibility(editing ? View.VISIBLE : View.GONE);
+        snapButton.setSelected(moveSnap);
         projectionButton.setVisibility(editing ? View.VISIBLE : View.GONE);
         resetButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         visibilityButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
@@ -322,7 +336,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         flyButton.setSelected(mode() == ViewportMode.FLY);
         projectionButton.setText(tr("projection.orthographic"));
         projectionButton.setSelected(editCamera.isOrthographic());
-        for (UiActionButton button : new UiActionButton[]{gameButton, editButton, flyButton, projectionButton})
+        for (UiActionButton button : new UiActionButton[]{gameButton, editButton, flyButton, projectionButton, snapButton})
             button.setPalette(toolbarPalette(button.isSelected()));
         if (sidebarPanel != null) sidebarPanel.refresh();
         if (propertiesPanel != null) propertiesPanel.refresh();
@@ -377,6 +391,8 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         if (!registered) return;
         // Includes the first frame and parent-only transforms, not just local layout changes.
         viewport.publishPixelDemand();
+        String transformLabel=viewport.transformLabel();
+        if(!transformLabel.contentEquals(transformStatus.getText()))transformStatus.setText(transformLabel);
         if (viewMenu.isOpen() && !viewport.canNavigate()) closeViewMenu();
         if (toolOrthographic != editCamera.isOrthographic()) updateTools();
         long now = System.nanoTime();
@@ -414,6 +430,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     public boolean dispatchTouchEvent(icyllis.modernui.view.MotionEvent event) {
         int action = event.getActionMasked();
         if (action == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
+            propertiesPanel.commitIfOutside(event.getRawX(),event.getRawY());
             dismissingMenuGesture = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
         }
         if (dismissingMenuGesture) {

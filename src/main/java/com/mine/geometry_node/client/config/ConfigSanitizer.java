@@ -429,6 +429,34 @@ final class ConfigSanitizer {
                 : readKeyBinding(gameView, "cancel", defaults.keyBindings.gameView.cancel);
         config.keyBindings.gameView.cancel = sceneCANCEL.value;
         changed |= sceneCANCEL.changed;
+        ReadKeyBinding transformmove = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.move)
+                : readKeyBinding(gameView, "move", defaults.keyBindings.gameView.move);
+        config.keyBindings.gameView.move = transformmove.value;
+        changed |= transformmove.changed;
+        ReadKeyBinding transformrotate = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.rotate)
+                : readKeyBinding(gameView, "rotate", defaults.keyBindings.gameView.rotate);
+        config.keyBindings.gameView.rotate = transformrotate.value;
+        changed |= transformrotate.changed;
+        ReadKeyBinding transformscale = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.scale)
+                : readKeyBinding(gameView, "scale", defaults.keyBindings.gameView.scale);
+        config.keyBindings.gameView.scale = transformscale.value;
+        changed |= transformscale.changed;
+        ReadKeyBinding transformaxisX = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisX)
+                : readKeyBinding(gameView, "axisX", defaults.keyBindings.gameView.axisX);
+        config.keyBindings.gameView.axisX = transformaxisX.value;
+        changed |= transformaxisX.changed;
+        ReadKeyBinding transformaxisY = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisY)
+                : readKeyBinding(gameView, "axisY", defaults.keyBindings.gameView.axisY);
+        config.keyBindings.gameView.axisY = transformaxisY.value;
+        changed |= transformaxisY.changed;
+        ReadKeyBinding transformaxisZ = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisZ)
+                : readKeyBinding(gameView, "axisZ", defaults.keyBindings.gameView.axisZ);
+        config.keyBindings.gameView.axisZ = transformaxisZ.value;
+        changed |= transformaxisZ.changed;
+        ReadKeyBinding transformconfirm = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.confirm)
+                : readKeyBinding(gameView, "confirm", defaults.keyBindings.gameView.confirm);
+        config.keyBindings.gameView.confirm = transformconfirm.value;
+        changed |= transformconfirm.changed;
         ReadKeyBinding sceneSELECT_ALL = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.selectAll)
                 : readKeyBinding(gameView, "selectAll", defaults.keyBindings.gameView.selectAll);
         config.keyBindings.gameView.selectAll = sceneSELECT_ALL.value;

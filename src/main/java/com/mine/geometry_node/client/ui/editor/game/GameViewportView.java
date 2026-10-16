@@ -193,6 +193,11 @@ final class GameViewportView extends View {
                 && (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)||event.getActionButton()==MotionEvent.BUTTON_SECONDARY)) {
             cancelInteraction();return true;
         }
+        if(scene.transforming()){
+            scene.transformMove(eventX(event),eventY(event));
+            if(event.getActionMasked()==MotionEvent.ACTION_DOWN && event.isButtonPressed(MotionEvent.BUTTON_PRIMARY))scene.confirmTransform();
+            return true;
+        }
         if (!scene.busy() && handleOrientationTouch(event)) return true;
         if (inputOwner.mode() == ViewportMode.EDIT) return handleEditTouch(event);
         switch (event.getActionMasked()) {
@@ -263,6 +268,7 @@ final class GameViewportView extends View {
     public boolean onHoverEvent(MotionEvent event) {
         pointerRootX = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawX();
         pointerRootY = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawY();
+        if(scene.transforming()){scene.transformMove(eventX(event),eventY(event));return true;}
         var hovered = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT || !canNavigate()
                 ? null : orientation.hit(eventX(event), eventY(event));
         if (orientation.setHovered(hovered)) invalidate();
@@ -358,6 +364,10 @@ final class GameViewportView extends View {
         onInteraction.run();
     }
 
+    void setMoveSnap(boolean enabled){scene.setSnap(enabled);}
+
+    String transformLabel(){return scene.transformLabel();}
+
     void alignView(EditViewportCamera.Axis axis) {
         if (!canNavigate()) return;
         editCamera.alignToAxis(axis, inputOwner.mode() == ViewportMode.FLY, false);
@@ -368,7 +378,8 @@ final class GameViewportView extends View {
     private java.util.List<com.mine.geometry_node.client.ui.shortcut.ScopedAction<GameViewportShortcuts.Action>> availableShortcuts() {
         return GameViewportShortcuts.ACTIONS.stream().filter(action -> {
             if (inputOwner.mode()!=ViewportMode.EDIT) return false;
-            return action.id()!=GameViewportShortcuts.Action.CANCEL || scene.busy();
+            if(scene.transforming())return switch(action.id()){case AXIS_X,AXIS_Y,AXIS_Z,CONFIRM,CANCEL -> true;default -> false;};
+            return switch(action.id()){case AXIS_X,AXIS_Y,AXIS_Z,CONFIRM -> false;case CANCEL -> scene.busy();default -> true;};
         }).toList();
     }
 
@@ -391,6 +402,14 @@ final class GameViewportView extends View {
         if (handlingRepeat) return;
         if (inputOwner.mode() == ViewportMode.EDIT) {
             switch (action) {
+                case MOVE,ROTATE,SCALE -> {
+                    boolean valid=UIUtils.rootToLocal(this,pointerRootX,pointerRootY,inputMatrix,inputPoint);
+                    scene.beginTransform(action.name(),valid?inputPoint[0]:Float.NaN,valid?inputPoint[1]:Float.NaN);
+                }
+                case AXIS_X -> scene.transformAxis(1);
+                case AXIS_Y -> scene.transformAxis(2);
+                case AXIS_Z -> scene.transformAxis(4);
+                case CONFIRM -> scene.confirmTransform();
                 case PROJECTION -> { scene.cancel(); editCamera.toggleOrthographic(); onProjectionChanged.run(); }
                 case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }
                 case FOCUS -> scene.focus(editCamera);

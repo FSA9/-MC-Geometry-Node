@@ -172,6 +172,13 @@ public class AppConfig {
         public String undo = "CTRL+Z";
         public String redo = "CTRL+SHIFT+Z";
         public String cancel = "ESCAPE";
+        public String move = "G";
+        public String rotate = "R";
+        public String scale = "S";
+        public String axisX = "X";
+        public String axisY = "Y";
+        public String axisZ = "Z";
+        public String confirm = "ENTER";
         public String selectAll = "A";
 
 
@@ -194,6 +201,13 @@ public class AppConfig {
             copy.undo = undo;
             copy.redo = redo;
             copy.cancel = cancel;
+            copy.move = move;
+            copy.rotate = rotate;
+            copy.scale = scale;
+            copy.axisX = axisX;
+            copy.axisY = axisY;
+            copy.axisZ = axisZ;
+            copy.confirm = confirm;
             copy.selectAll = selectAll;
 
             copy.forward = forward;

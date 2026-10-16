@@ -72,6 +72,8 @@ public final class GeometryDebugRenderer {
             clear();
             return;
         }
+        var authored = com.mine.geometry_node.client.runtime.game.scene.SceneGeometryInputs.visibleMeshes();
+        if (!authored.isEmpty()) renderMeshes(poseStack, camera, authored);
         if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()) {
             var visible = com.mine.geometry_node.client.runtime.game.scene.ViewportDebugClient.visibleMeshes();
             if (!visible.isEmpty()) renderMeshes(poseStack, camera, visible);

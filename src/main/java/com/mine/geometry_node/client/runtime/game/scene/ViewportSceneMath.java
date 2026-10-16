@@ -47,16 +47,14 @@ public final class ViewportSceneMath {
     }
 
     public static AABB bounds(SceneObject object) {
+        if (!SceneObject.POINT_LIGHT.equals(object.typeId())) return focusBounds(object);
         Vec3 p = object.position();
         return new AABB(p.x - .18, p.y - .18, p.z - .18, p.x + .18, p.y + .18, p.z + .18);
     }
 
     /** Frame object geometry, not its effect radius. Point lights use their one-block helper bounds. */
     public static AABB focusBounds(SceneObject object) {
-        Vec3 p = object.position();
-        double radius = .5;
-        return new AABB(p.x - radius, p.y - radius, p.z - radius,
-                p.x + radius, p.y + radius, p.z + radius);
+        return com.mine.geometry_node.core.engine.system.scene.SceneTransforms.bounds(object,com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(object.typeId()).bounds().apply(object));
     }
 
     /** Distance from the visible near plane, or infinity. Works for signed orthographic near planes. */

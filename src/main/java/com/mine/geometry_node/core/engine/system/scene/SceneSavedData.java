@@ -28,7 +28,7 @@ public final class SceneSavedData extends SavedData {
     }
     public synchronized CompoundTag save() {
         CompoundTag root = new CompoundTag();
-        root.putInt("Version", 1);
+        root.putInt("Version", 3);
         ListTag list = new ListTag();
         dimensions.forEach((dimension, document) -> {
             CompoundTag tag = new CompoundTag();
@@ -43,7 +43,7 @@ public final class SceneSavedData extends SavedData {
         return root;
     }
     public static SceneSavedData load(CompoundTag root) {
-        if (root.getIntOr("Version", 1) != 1) throw new IllegalArgumentException("Unsupported scene save version");
+        if (root.getIntOr("Version", 1) < 1 || root.getIntOr("Version", 1) > 3) throw new IllegalArgumentException("Unsupported scene save version");
         SceneSavedData result = new SceneSavedData();
         ListTag list = root.getListOrEmpty("Dimensions");
         for (int i = 0; i < list.size(); i++) {
@@ -62,15 +62,26 @@ public final class SceneSavedData extends SavedData {
         tag.putString("Id", object.id().toString()); tag.putString("Type", object.typeId()); tag.putString("Name", object.name());
         tag.putDouble("X", object.position().x); tag.putDouble("Y", object.position().y); tag.putDouble("Z", object.position().z);
         tag.putDouble("R", object.color().x); tag.putDouble("G", object.color().y); tag.putDouble("B", object.color().z);
-        tag.putFloat("Intensity", object.intensity()); tag.putFloat("Range", object.range());
+        CompoundTag parameters=new CompoundTag();object.parameters().forEach(parameters::putString);tag.put("Parameters",parameters);
+        tag.putDouble("RX",object.rotation().x);tag.putDouble("RY",object.rotation().y);tag.putDouble("RZ",object.rotation().z);
+        tag.putDouble("SX",object.scale().x);tag.putDouble("SY",object.scale().y);tag.putDouble("SZ",object.scale().z);
         tag.putBoolean("Enabled", object.enabled()); tag.putLong("Revision", object.revision());
         return tag;
     }
     private static SceneObject readObject(CompoundTag tag) {
+        java.util.Map<String,String> parameters=new java.util.LinkedHashMap<>();
+        if(tag.contains("Parameters")){
+            CompoundTag values=tag.getCompoundOrEmpty("Parameters");
+            for(String key:values.keySet())parameters.put(key,values.getStringOr(key,""));
+        }else{
+            parameters.put("intensity",Float.toString(tag.getFloatOr("Intensity",3)));
+            parameters.put("range",Float.toString(tag.getFloatOr("Range",16)));
+        }
         return new SceneObject(UUID.fromString(tag.getStringOr("Id", "")), tag.getStringOr("Type", ""),
                 tag.getStringOr("Name", ""), new Vec3(tag.getDoubleOr("X", 0), tag.getDoubleOr("Y", 0), tag.getDoubleOr("Z", 0)),
                 new Vec3(tag.getDoubleOr("R", 1), tag.getDoubleOr("G", 1), tag.getDoubleOr("B", 1)),
-                tag.getFloatOr("Intensity", 3), tag.getFloatOr("Range", 16), tag.getBooleanOr("Enabled", true),
-                tag.getLongOr("Revision", 0));
+                tag.getBooleanOr("Enabled", true), tag.getLongOr("Revision", 0), parameters,
+                new Vec3(tag.getDoubleOr("RX",0),tag.getDoubleOr("RY",0),tag.getDoubleOr("RZ",0)),
+                new Vec3(tag.getDoubleOr("SX",1),tag.getDoubleOr("SY",1),tag.getDoubleOr("SZ",1)));
     }
 }

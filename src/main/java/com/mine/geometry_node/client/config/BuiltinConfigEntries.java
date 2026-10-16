@@ -126,6 +126,21 @@ public final class BuiltinConfigEntries {
     public static final ConfigEntry<String> GAME_VIEW_MENU = key("keyBindings.gameView.viewMenu", SHORTCUT_GAME_VIEW_GENERAL, 350, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.viewMenu, (config, value) -> config.keyBindings.gameView.viewMenu = value);
 
+    public static final ConfigEntry<String> GAME_VIEW_MOVE = key("keyBindings.gameView.move", SHORTCUT_GAME_VIEW_EDIT, 470, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.move, (config,value) -> config.keyBindings.gameView.move = value);
+    public static final ConfigEntry<String> GAME_VIEW_ROTATE = key("keyBindings.gameView.rotate", SHORTCUT_GAME_VIEW_EDIT, 480, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.rotate, (config,value) -> config.keyBindings.gameView.rotate = value);
+    public static final ConfigEntry<String> GAME_VIEW_SCALE = key("keyBindings.gameView.scale", SHORTCUT_GAME_VIEW_EDIT, 490, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.scale, (config,value) -> config.keyBindings.gameView.scale = value);
+    public static final ConfigEntry<String> GAME_VIEW_AXIS_X = key("keyBindings.gameView.axisX", SHORTCUT_GAME_VIEW_EDIT, 500, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.axisX, (config,value) -> config.keyBindings.gameView.axisX = value);
+    public static final ConfigEntry<String> GAME_VIEW_AXIS_Y = key("keyBindings.gameView.axisY", SHORTCUT_GAME_VIEW_EDIT, 510, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.axisY, (config,value) -> config.keyBindings.gameView.axisY = value);
+    public static final ConfigEntry<String> GAME_VIEW_AXIS_Z = key("keyBindings.gameView.axisZ", SHORTCUT_GAME_VIEW_EDIT, 520, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.axisZ, (config,value) -> config.keyBindings.gameView.axisZ = value);
+    public static final ConfigEntry<String> GAME_VIEW_CONFIRM = key("keyBindings.gameView.confirm", SHORTCUT_GAME_VIEW_EDIT, 530, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.confirm, (config,value) -> config.keyBindings.gameView.confirm = value);
+
     public static final ConfigEntry<String> GAME_VIEW_ADD = key("keyBindings.gameView.add", SHORTCUT_GAME_VIEW_EDIT, 400, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.add, (config, value) -> config.keyBindings.gameView.add = value);
     public static final ConfigEntry<String> GAME_VIEW_FOCUS = key("keyBindings.gameView.focus", SHORTCUT_GAME_VIEW_EDIT, 410, KeyScope.GAME_VIEW,
@@ -175,6 +190,7 @@ public final class BuiltinConfigEntries {
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
             GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
+            GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
             GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_DELETE, GAME_VIEW_UNDO, GAME_VIEW_REDO, GAME_VIEW_CANCEL, GAME_VIEW_SELECT_ALL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 

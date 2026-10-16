@@ -12,7 +12,7 @@ public record PacketSceneSnapshot(UUID requestId, String dimension, boolean succ
                                   boolean canEdit, long revision, List<SceneObject> objects,
                                   Map<UUID, Long> deletedVersions) implements CustomPacketPayload {
     public static final UUID BROADCAST = new UUID(0, 0);
-    public static final Type<PacketSceneSnapshot> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_snapshot"));
+    public static final Type<PacketSceneSnapshot> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_snapshot_v3"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketSceneSnapshot> STREAM_CODEC = StreamCodec.of(PacketSceneSnapshot::write, PacketSceneSnapshot::read);
     public PacketSceneSnapshot {
         Objects.requireNonNull(requestId); Identifier.parse(dimension); Objects.requireNonNull(message);
@@ -21,6 +21,7 @@ public record PacketSceneSnapshot(UUID requestId, String dimension, boolean succ
             throw new IllegalArgumentException("Invalid scene snapshot");
         Set<UUID> ids = new HashSet<>();
         for (SceneObject object : objects) {
+            com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.validate(object);
             if (object.revision() > revision || !ids.add(object.id()) || deletedVersions.containsKey(object.id()))
                 throw new IllegalArgumentException("Inconsistent scene object identity/revision");
         }

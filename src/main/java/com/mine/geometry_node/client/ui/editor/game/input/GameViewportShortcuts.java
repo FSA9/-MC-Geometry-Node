@@ -11,9 +11,17 @@ import java.util.List;
 
 /** Commands use the same configuration and scoped dispatch as the node editor. */
 public final class GameViewportShortcuts {
-    public enum Action { PROJECTION, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
+    public enum Action { PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
 
     public static final List<ScopedAction<Action>> ACTIONS = List.of(
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.MOVE, "geometry_node.game_view.scene.move", BuiltinConfigEntries.GAME_VIEW_MOVE, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.ROTATE, "geometry_node.game_view.scene.rotate", BuiltinConfigEntries.GAME_VIEW_ROTATE, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.SCALE, "geometry_node.game_view.scene.scale", BuiltinConfigEntries.GAME_VIEW_SCALE, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.AXIS_X, "geometry_node.game_view.scene.axisX", BuiltinConfigEntries.GAME_VIEW_AXIS_X, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.AXIS_Y, "geometry_node.game_view.scene.axisY", BuiltinConfigEntries.GAME_VIEW_AXIS_Y, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.AXIS_Z, "geometry_node.game_view.scene.axisZ", BuiltinConfigEntries.GAME_VIEW_AXIS_Z, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.CONFIRM, "geometry_node.game_view.scene.confirm", BuiltinConfigEntries.GAME_VIEW_CONFIRM, null),
+
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.PROJECTION, "geometry_node.game_view.toggle_projection",
                     BuiltinConfigEntries.GAME_VIEW_PROJECTION, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.ADD, "geometry_node.game_view.scene.add",

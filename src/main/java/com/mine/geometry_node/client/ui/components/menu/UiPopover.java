@@ -58,6 +58,18 @@ public final class UiPopover extends FrameLayout {
         binding = AreaTransientUi.bind(owner,this,this::dismiss);
         requestFocus();
     }
+    /** Refit dynamic menu contents while retaining the current local anchor and viewport bounds. */
+    public void refreshSize() {
+        if (!(getParent() instanceof ViewGroup host)) return;
+        int w=Math.min(width,host.getWidth());
+        panel.measure(MeasureSpec.makeMeasureSpec(w,MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(host.getHeight(),MeasureSpec.AT_MOST));
+        FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)panel.getLayoutParams();
+        lp.width=w;lp.height=Math.min(host.getHeight(),panel.getMeasuredHeight());
+        lp.leftMargin=Math.max(0,Math.min(lp.leftMargin,host.getWidth()-w));
+        lp.topMargin=Math.max(0,Math.min(lp.topMargin,host.getHeight()-lp.height));
+        panel.setLayoutParams(lp);panel.scrollTo(0,0);
+    }
     public void showBelow(View anchor, FrameLayout host) {
         Matrix matrix = new Matrix();
         anchor.transformMatrixToGlobal(matrix);

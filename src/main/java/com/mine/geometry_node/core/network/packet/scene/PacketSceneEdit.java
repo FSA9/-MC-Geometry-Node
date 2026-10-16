@@ -10,7 +10,7 @@ import java.util.*;
 
 /** Empty changes request a fresh dimension snapshot. IDs make mutations safely retryable. */
 public record PacketSceneEdit(UUID requestId, String dimension, List<SceneChange> changes) implements CustomPacketPayload {
-    public static final Type<PacketSceneEdit> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_edit"));
+    public static final Type<PacketSceneEdit> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_edit_v3"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketSceneEdit> STREAM_CODEC = StreamCodec.of(PacketSceneEdit::write, PacketSceneEdit::read);
     public PacketSceneEdit {
         Objects.requireNonNull(requestId); Identifier.parse(dimension); changes = List.copyOf(changes);

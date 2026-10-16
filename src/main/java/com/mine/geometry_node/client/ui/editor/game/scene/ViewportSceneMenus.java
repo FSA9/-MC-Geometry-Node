@@ -43,25 +43,45 @@ public final class ViewportSceneMenus {
         search.setHint(Component.translatable("geometry_node.asset_library.toolbar.search").getString());
         column.addView(search,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(28)));
         LinearLayout choices=column();column.addView(choices,new LinearLayout.LayoutParams(-1,-2));
+        String[] category={""};
+        java.util.concurrent.atomic.AtomicReference<Consumer<String>> filterRef=new java.util.concurrent.atomic.AtomicReference<>();
         Consumer<String> filter=query->{
+            if(token!=epoch)return;
             choices.removeAllViews();String needle=query.toLowerCase(java.util.Locale.ROOT).strip();
+            if(!category[0].isEmpty()){
+                View back=createItem("‹ "+tr("back"),true,()->{category[0]="";search.setText("");filterRef.get().accept("");});
+                choices.addView(back,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(30)));
+            }
+            java.util.Set<String> categories=new java.util.LinkedHashSet<>();
             for(var entry:SceneCreateRegistry.entries()){
+                if(needle.isEmpty()&&category[0].isEmpty()&&!entry.category().isEmpty()){
+                    if(categories.add(entry.category())){
+                        String group=entry.category();
+                        choices.addView(createItem(tr(group)+" ›",true,()->{category[0]=group;filterRef.get().accept("");}),new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(30)));
+                    }
+                    continue;
+                }
+                if(!category[0].isEmpty()&&!entry.category().equals(category[0]))continue;
                 String name=Component.translatable(entry.labelKey()).getString();
                 if(!name.toLowerCase(java.util.Locale.ROOT).contains(needle)&&!entry.typeId().contains(needle))continue;
-                UiActionButton row=UiActionButton.withPalette(owner.getContext(),name,
-                        new UiActionButton.Palette(0,UiTheme.Control.SELECTED,UiTheme.Control.ICON_PRESSED,UiTheme.Text.NORMAL),
-                        UiActionButton.Density.COMPACT,new UiActionButton.Style(4,0,0,UiTheme.Metrics.DISABLED_ALPHA));
-                row.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);
-                row.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);
-                row.setMinWidth(0);row.setMinHeight(0);
-                row.setEnabled(snapshot.canEdit()&&!snapshot.pending());
-                row.setOnClickListener(v->{if(token!=epoch||!isOpen())return;dismiss();entry.create().accept(snapshot.worldGeneration(),position);created.run();});
+                View row=createItem(name,snapshot.canEdit()&&!snapshot.pending(),()->{
+                    if(token!=epoch||!isOpen())return;dismiss();entry.create().accept(snapshot.worldGeneration(),position);created.run();
+                });
                 choices.addView(row,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(30)));
             }
+            if(open!=null&&open.isOpen())open.refreshSize();
         };
+        filterRef.set(filter);
         filter.accept("");search.setOnQueryChanged(filter);
         if(!snapshot.canEdit())column.addView(label(tr("read_only")),new LinearLayout.LayoutParams(-1,-2));
         open=new UiPopover(owner.getContext(),column,220);open.showAtRoot(owner,host,rootX,rootY);search.post(()->{if(search.isAttachedToWindow())search.requestFocus();});
+    }
+    private View createItem(String name,boolean enabled,Runnable action){
+        UiActionButton row=UiActionButton.withPalette(owner.getContext(),name,
+                new UiActionButton.Palette(0,UiTheme.Control.SELECTED,UiTheme.Control.ICON_PRESSED,UiTheme.Text.NORMAL),
+                UiActionButton.Density.COMPACT,new UiActionButton.Style(4,0,0,UiTheme.Metrics.DISABLED_ALPHA));
+        row.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);row.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);
+        row.setMinWidth(0);row.setMinHeight(0);row.setEnabled(enabled);row.setOnClickListener(v->action.run());return row;
     }
     public void visualization(View anchor){
         dismiss();LinearLayout column=column();
@@ -74,9 +94,9 @@ public final class ViewportSceneMenus {
         for(var layer:ViewportVisualization.Layer.values()){
             LinearLayout row=new LinearLayout(owner.getContext());row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);
             row.addView(label(tr("layer."+layer.name().toLowerCase(java.util.Locale.ROOT))),new LinearLayout.LayoutParams(0,UIUtils.dp2pxInt(28),1));
-            View selectToggle=iconToggle(SvgIconView.Icon.SCENE_CURSOR,state.snapshot().selectable().contains(layer),layer==ViewportVisualization.Layer.LIGHT&&state.visible(layer),b->{state.setSelectable(layer,b);changed.run();});
+            View selectToggle=iconToggle(SvgIconView.Icon.SCENE_CURSOR,state.snapshot().selectable().contains(layer),com.mine.geometry_node.client.runtime.game.scene.ScenePresentations.selectable(layer)&&state.visible(layer),b->{state.setSelectable(layer,b);changed.run();});
             row.addView(selectToggle,new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
-            row.addView(iconToggle(SvgIconView.Icon.SCENE_EYE,state.visible(layer),true,b->{state.setVisible(layer,b);selectToggle.setEnabled(b&&layer==ViewportVisualization.Layer.LIGHT);changed.run();}),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
+            row.addView(iconToggle(SvgIconView.Icon.SCENE_EYE,state.visible(layer),true,b->{state.setVisible(layer,b);selectToggle.setEnabled(b&&com.mine.geometry_node.client.runtime.game.scene.ScenePresentations.selectable(layer));changed.run();}),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
             column.addView(row);
         }
         option(column,"helpers",state.helpers(),b->{state.setHelpers(b);changed.run();});
