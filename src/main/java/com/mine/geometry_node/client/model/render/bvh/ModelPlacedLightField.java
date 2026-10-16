@@ -51,7 +51,7 @@ public final class ModelPlacedLightField {
     private static java.util.List<ModelLightFieldLayout.Tile> lightTiles=java.util.List.of();
     private static long eyeTileX=Long.MIN_VALUE,eyeTileY=Long.MIN_VALUE,eyeTileZ=Long.MIN_VALUE;
     private static boolean layoutChanged(java.util.List<ModelRenderInstance> instances,Vec3 eye) {
-        var nextLights=com.mine.geometry_node.client.runtime.light.NodeLightRenderer.lights().stream()
+        var nextLights=com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.lights().stream()
                 .map(l->{
                     double margin=Math.max(0,31-l.definition().range()-l.definition().emitterRadius());
                     for(var old:lightTiles) if(Math.abs(old.x()-l.position().x)<=margin
@@ -175,7 +175,7 @@ public final class ModelPlacedLightField {
                 int n=f.volume.step((bx,by,bz)->{
                     if(!level.hasChunk(bx>>4,bz>>4))return -1;
                     POS.set(bx,by,bz);var state=level.getBlockState(POS);
-                    return com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.encode(state,level,POS);
+                    return com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.encode(state,level,POS);
                 },remaining,time);
                 scannedCells+=n;remaining-=n;
                 if(n>0&&f.volume.tolerantSources())f.uploaded=false;

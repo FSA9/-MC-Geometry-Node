@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
@@ -80,6 +81,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final AssetTaskController mIoTasks;
     private final AssetBrowserActionController mActionController;
     private FileContextMenu mActiveMenu;
+    private UiSearchableMenu mViewModeMenu;
 
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
@@ -666,22 +668,27 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void showOptionsMenu(View anchor) {
-        int[] bodyLoc = new int[2];
-        int[] anchorLoc = new int[2];
-        mBodyFrame.getLocationOnScreen(bodyLoc);
-        anchor.getLocationOnScreen(anchorLoc);
-
-        float localX = anchorLoc[0] - bodyLoc[0];
-        float localY = Math.max(0, anchorLoc[1] + anchor.getHeight() - bodyLoc[1]);
-
-        FileContextMenu menu = new FileContextMenu(getContext());
-        menu.addSubMenuItem("视图模式", subMenu -> {
-            subMenu.addMenuItem(viewModeMenuText(AssetViewMode.LIST), () -> setViewMode(AssetViewMode.LIST));
-            subMenu.addMenuItem(viewModeMenuText(AssetViewMode.ICON_SMALL), () -> setViewMode(AssetViewMode.ICON_SMALL));
-            subMenu.addMenuItem(viewModeMenuText(AssetViewMode.ICON_MEDIUM), () -> setViewMode(AssetViewMode.ICON_MEDIUM));
-            subMenu.addMenuItem(viewModeMenuText(AssetViewMode.ICON_LARGE), () -> setViewMode(AssetViewMode.ICON_LARGE));
+        dismissActiveMenu();
+        // Mount over the whole containing area so the toolbar anchor remains in the host.
+        View current = this;
+        FrameLayout host = null;
+        while (current.getParent() instanceof ViewGroup parent) {
+            if (parent instanceof FrameLayout frame) { host = frame; break; }
+            current = parent;
+        }
+        if (host == null) return;
+        List<String> options = new ArrayList<>();
+        Map<String, String> labels = new HashMap<>();
+        for (AssetViewMode mode : AssetViewMode.values()) {
+            options.add(mode.configValue);
+            labels.put(mode.configValue, viewModeMenuText(mode));
+        }
+        mViewModeMenu = new UiSearchableMenu(getContext(),
+                tr("geometry_node.settings.entry.assetBrowser.viewMode.label"), options, labels, value -> {
+            dismissActiveMenu();
+            setViewMode(AssetViewMode.fromConfig(value));
         });
-        showMenu(menu, localX, localY);
+        mViewModeMenu.showAt(anchor, host);
     }
 
     void showMenu(FileContextMenu menu, float localX, float localY) {
@@ -700,18 +707,17 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void dismissActiveMenu() {
+        UiSearchableMenu viewMenu = mViewModeMenu;
+        mViewModeMenu = null;
+        if (viewMenu != null) viewMenu.dismiss();
         FileContextMenu menu = mActiveMenu;
         mActiveMenu = null;
         if (menu != null) menu.dismiss();
     }
 
     private String viewModeMenuText(AssetViewMode mode) {
-        return (mode == mViewMode ? "✓ " : "   ") + switch (mode) {
-            case LIST -> "列表";
-            case ICON_SMALL -> "小图标";
-            case ICON_MEDIUM -> "中图标";
-            case ICON_LARGE -> "大图标";
-        };
+        return (mode == mViewMode ? "✓ " : "") + tr("geometry_node.settings.choice.asset_view."
+                + mode.configValue.toLowerCase(java.util.Locale.ROOT));
     }
 
     @Override

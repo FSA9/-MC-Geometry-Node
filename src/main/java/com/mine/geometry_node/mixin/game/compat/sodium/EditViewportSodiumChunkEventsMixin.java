@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.compat.sodium;
 
-import com.mine.geometry_node.client.runtime.game.ViewportChunkReadiness;
+import com.mine.geometry_node.client.runtime.game.chunk.ViewportChunkReadiness;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Final;

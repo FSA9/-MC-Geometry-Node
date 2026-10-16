@@ -17,8 +17,8 @@ public abstract class ModelPlacedLightWorldMixin {
     private void geometryNode$lightChanged(BlockPos pos, BlockState oldState, BlockState newState, CallbackInfo ci) {
         if (!ModelPlacedLightField.watching(this,pos)) return;
         ClientLevel world=(ClientLevel)(Object)this;
-        int next=com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.encode(newState,world,pos);
-        if(com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.encode(oldState,world,pos)!=next)
+        int next=com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.encode(newState,world,pos);
+        if(com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.encode(oldState,world,pos)!=next)
             ModelPlacedLightField.blockChanged(world,pos,next);
     }
     @Inject(method="onChunkLoaded",at=@At("HEAD"))

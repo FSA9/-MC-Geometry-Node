@@ -16,6 +16,6 @@ public abstract class IrisLightProgramMixin {
     @Inject(method = "use", at = @At("TAIL"), remap = false)
     private void geometryNode$uploadLighting(CallbackInfo callback) {
         ModelIrisHeldLight.uploadUniforms(getProgramId());
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.upload(getProgramId());
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.upload(getProgramId());
     }
 }

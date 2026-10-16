@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.gizmo;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportCamera.Axis;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera.Axis;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;

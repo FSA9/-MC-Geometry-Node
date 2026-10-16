@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.utils;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Matrix;
+import icyllis.modernui.view.View;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
@@ -42,6 +44,22 @@ public class UIUtils {
      */
     public static float px2dp(float px) {
         return px / UIConstants.mDensity;
+    }
+
+    /**
+     * 将 ModernUI 事件的根像素坐标转换到目标 View；这里不再进行 dp/px 换算。
+     * matrix 和 point 由调用方复用，避免鼠标移动时分配对象。
+     */
+    public static boolean rootToLocal(View target, float rootX, float rootY,
+                                      Matrix matrix, float[] point) {
+        if (!Float.isFinite(rootX) || !Float.isFinite(rootY)) return false;
+        matrix.setIdentity();
+        target.transformMatrixToGlobal(matrix);
+        if (!matrix.invert()) return false;
+        point[0] = rootX;
+        point[1] = rootY;
+        matrix.mapPoint(point);
+        return Float.isFinite(point[0]) && Float.isFinite(point[1]);
     }
 
     /**

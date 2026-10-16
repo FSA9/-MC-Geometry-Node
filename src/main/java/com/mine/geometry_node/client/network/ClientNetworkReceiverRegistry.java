@@ -52,8 +52,8 @@ public final class ClientNetworkReceiverRegistry {
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.s2c.PacketEditCameraView.TYPE,
                 (payload, context) -> context.queue(() ->
-                        com.mine.geometry_node.client.runtime.game.EditCameraChunkClient.accept(payload)));
-        com.mine.geometry_node.client.runtime.light.ClientLightStore.init();
+                        com.mine.geometry_node.client.runtime.game.chunk.EditCameraChunkClient.accept(payload)));
+        com.mine.geometry_node.client.runtime.light.store.ClientLightStore.init();
 
         ClientboundPayloadRegistry.registerClientReceiver(PacketAssetFileResponse.TYPE,
                 (payload, context) -> context.queue(() -> ClientAssetTransferService.INSTANCE.handle(payload)));
@@ -68,7 +68,7 @@ public final class ClientNetworkReceiverRegistry {
         ClientboundPayloadRegistry.registerClientReceiver(PacketGeometryCollision.TYPE,
                 (payload, context) -> context.queue(() -> ClientGeometryCollisions.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight.TYPE,
-                (payload, context) -> context.queue(() -> com.mine.geometry_node.client.runtime.light.ClientLightStore.handle(payload)));
+                (payload, context) -> context.queue(() -> com.mine.geometry_node.client.runtime.light.store.ClientLightStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketBehaviorDebugSnapshot.TYPE,
                 (payload, context) -> context.queue(() -> ClientBehaviorDebugStore.handle(payload)));
         ClientboundPayloadRegistry.registerClientReceiver(PacketSchematicProjection.TYPE,

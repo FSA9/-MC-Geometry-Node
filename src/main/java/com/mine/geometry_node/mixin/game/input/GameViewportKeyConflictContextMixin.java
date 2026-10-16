@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.input;
 
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

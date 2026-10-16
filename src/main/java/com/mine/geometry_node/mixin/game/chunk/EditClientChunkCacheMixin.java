@@ -2,8 +2,8 @@ package com.mine.geometry_node.mixin.game.chunk;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.runtime.game.EditChunkCache;
-import com.mine.geometry_node.client.runtime.game.EditChunkCacheAccess;
+import com.mine.geometry_node.client.runtime.game.chunk.EditChunkCache;
+import com.mine.geometry_node.client.runtime.game.chunk.EditChunkCacheAccess;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.chunk.LevelChunk;

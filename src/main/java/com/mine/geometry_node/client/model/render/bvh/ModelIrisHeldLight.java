@@ -249,7 +249,7 @@ public final class ModelIrisHeldLight {
         GL20C.glUniform4fv(uniforms.receiverQuality, receiverQuality);
         GL20C.glUniform1i(uniforms.receiverCount, receiverCount);
         // The world blocker snapshot is shared by held/provider queries even when placed reconstruction is off.
-        boolean placed = (activeCount > 0 || com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()) && ModelPlacedLightField.ready();
+        boolean placed = (activeCount > 0 || com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.active()) && ModelPlacedLightField.ready();
         GL20C.glUniform1i(uniforms.placedReady, placed ? 1 : 0);
         if (placed) {
             GL20C.glUniform1i(uniforms.placedCount, ModelPlacedLightField.fieldCount());
@@ -263,7 +263,7 @@ public final class ModelIrisHeldLight {
         }
         GL20C.glUniform1i(uniforms.dynamicCount, activeCount > 0 ? ModelLocalLightProviders.count() : 0);
         if (activeCount > 0 && ModelLocalLightProviders.count() > 0) GL20C.glUniform4fv(uniforms.dynamicSources, ModelLocalLightProviders.uniforms());
-        if (activeCount > 0 || com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()) {
+        if (activeCount > 0 || com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.active()) {
             GL20C.glUniformMatrix4fv(uniforms.inverse, false, inverses);
             GL20C.glUniform4iv(uniforms.ranges, ranges);
             if (uniforms.boundsMin >= 0) GL20C.glUniform4fv(uniforms.boundsMin, boundsMin);
@@ -273,7 +273,7 @@ public final class ModelIrisHeldLight {
         }
     }
     public static void deleted(int program) {
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.deleted(program);
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.deleted(program);
         PROGRAMS.remove(program); NATIVE_PROGRAMS.remove(program); SEUS_PROGRAMS.remove(program);
         ModelBvhLightResolution.deleted(program);
         if (lastSeusProgram == program) lastSeusProgram = 0;
@@ -287,7 +287,7 @@ public final class ModelIrisHeldLight {
                               java.util.function.Predicate<ModelRenderInstance> inFrustum) {
         receiverCount = excludedReceivers = 0;
         lastSeusProgram = 0;
-        boolean nodeLights = com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active();
+        boolean nodeLights = com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.active();
         if ((!irisActive || PROGRAMS.isEmpty() || instances.isEmpty()) && !nodeLights) {
             ModelPlacedLightField.clear();
             ModelLocalLightProviders.resetFrame();
@@ -584,7 +584,7 @@ public final class ModelIrisHeldLight {
         out.put("additionalDrawCalls", "ACTIVE".equals(resolutionStatus) || "AUTO_SPARSE".equals(resolutionStatus) ? 1 : 0);
         out.put("placedLight", ModelPlacedLightField.report());
         out.put("sourceProviders", ModelLocalLightProviders.report());
-        out.put("nodeLights", com.mine.geometry_node.client.runtime.light.NodeLightRenderer.report());
+        out.put("nodeLights", com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.report());
         out.put("transparentReceivers", ModelNativeLight.report());
         out.put("scope", "version-guarded pack light adapters; OPAQUE/MASK and scalar BLEND transmission; G-buffer model/terrain/entity and native forward transparent receivers; per-pack effects require visual verification");
         out.put("limits", "8 instances, 128MiB atlas, 2MiB/2ms sliced upload; 2048 node visits per instance/ray, exhaustion is fail-open and not GPU-counted; alpha coverage is bounded tessellation; additional sky occlusion is unsupported (fixed-direction approximation removed); pack sky and sun preserved; placed/provider scope separately reported");

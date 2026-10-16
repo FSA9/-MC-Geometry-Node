@@ -124,7 +124,7 @@ final class ModelPlacedLightVolume {
     boolean patch(int px,int py,int pz,int value) {
         if((!ready()&&!tolerantSources) || !contains(px,py,pz) || value<0) return false;
         sources.removeIf(source -> source.x()==px && source.y()==py && source.z()==pz);
-        setCell((px-x)+SIZE*((py-y)+SIZE*(pz-z)),com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.cell(value));
+        setCell((px-x)+SIZE*((py-y)+SIZE*(pz-z)),com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.cell(value));
         if(tolerantSources)known.set((px-x)+SIZE*((py-y)+SIZE*(pz-z)));
         int emission=value&15;
         if(emission>0) {
@@ -153,7 +153,7 @@ final class ModelPlacedLightVolume {
                 if(sources.size()==MAX_SOURCES) {state="SOURCE_LIMIT";break;}
                 sources.add(new Source(px,py,pz,emission));
             }
-            setCell(cursor++,com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.cell(value));
+            setCell(cursor++,com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.cell(value));
         }
         if(cursor==CELLS) {
             sources.sort(BRIGHTEST_FIRST);
@@ -172,7 +172,7 @@ final class ModelPlacedLightVolume {
             int value=reader.read(px,py,pz);
             if(value<0)sourceUnavailable=true;
             if(value>=0&&(value&15)>0)addSource(new Source(px,py,pz,value&15));
-            setCell(index,com.mine.geometry_node.client.runtime.light.NodeLightWorldMaterial.cell(value));
+            setCell(index,com.mine.geometry_node.client.runtime.light.material.NodeLightWorldMaterial.cell(value));
             known.set(index);sampled++;
             if(!centerFirst)cursor=index+1;
         }

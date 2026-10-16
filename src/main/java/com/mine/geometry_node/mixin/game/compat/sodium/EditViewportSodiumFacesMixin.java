@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.compat.sodium;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportShaderScope;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportShaderScope;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;

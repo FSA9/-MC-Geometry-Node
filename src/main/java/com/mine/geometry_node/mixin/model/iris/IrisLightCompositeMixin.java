@@ -34,7 +34,7 @@ public abstract class IrisLightCompositeMixin {
     @WrapOperation(method = "renderAll", at = @At(value = "INVOKE", target =
             "Lcom/mojang/blaze3d/opengl/GlStateManager;_drawElements(IIIJ)V"), remap = false, require = 0)
     private void geometryNode$drawLighting(int mode, int count, int type, long offset, Operation<Void> original) {
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.draw(() ->
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.draw(() ->
                 ModelBvhLightResolution.draw(geometryNode$gpuPassName, () -> original.call(mode, count, type, offset)));
     }
 
@@ -42,7 +42,7 @@ public abstract class IrisLightCompositeMixin {
     private void geometryNode$releaseLighting(CallbackInfo callback) {
         geometryNode$gpuPassName = null;
         ModelBvhLightResolution.clear();
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.clear();
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear();
         ModelShaderGpuTimings.clear();
     }
 }

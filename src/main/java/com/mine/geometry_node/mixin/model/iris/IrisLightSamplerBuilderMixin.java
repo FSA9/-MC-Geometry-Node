@@ -14,6 +14,6 @@ public abstract class IrisLightSamplerBuilderMixin {
     @Inject(method="build",at=@At("HEAD"),remap=false)
     private void geometryNode$registerLightSamplers(CallbackInfoReturnable<Object> callback) {
         ModelIrisHeldLight.registerProgram(this);
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.registerProgram(this);
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.registerProgram(this);
     }
 }

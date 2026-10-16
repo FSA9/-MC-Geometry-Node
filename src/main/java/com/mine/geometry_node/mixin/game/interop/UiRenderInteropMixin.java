@@ -2,7 +2,7 @@ package com.mine.geometry_node.mixin.game.interop;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.mine.geometry_node.client.runtime.game.UiRenderInterop;
+import com.mine.geometry_node.client.runtime.game.interop.UiRenderInterop;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.spongepowered.asm.mixin.Mixin;
 

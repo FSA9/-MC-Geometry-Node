@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.render;
 
-import com.mine.geometry_node.client.runtime.light.NodeLightTerrainShader;
+import com.mine.geometry_node.client.runtime.light.shader.NodeLightTerrainShader;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;

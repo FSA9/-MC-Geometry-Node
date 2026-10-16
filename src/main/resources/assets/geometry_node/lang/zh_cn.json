@@ -1965,5 +1965,15 @@
     "geometry_node.settings.category.shortcut_game_view_game": "游戏模式",
     "geometry_node.settings.category.shortcut_game_view_edit": "编辑模式",
     "geometry_node.settings.category.shortcut_game_view_flight": "飞行模式",
-    "geometry_node.settings.category.shortcut_game_view_game.description": "游戏操作沿用 Minecraft 的“选项 → 控制 → 按键绑定”。点击画面接管输入，Esc 释放控制并返回编辑器。"
+    "geometry_node.settings.category.shortcut_game_view_game.description": "游戏操作沿用 Minecraft 的“选项 → 控制 → 按键绑定”。点击画面接管输入，Esc 释放控制并返回编辑器。",
+    "geometry_node.settings.entry.keyBindings.gameView.viewMenu.label": "按住显示视角菜单",
+    "geometry_node.settings.entry.keyBindings.gameView.viewMenu.description": "编辑/飞行模式按住显示六向菜单，松开应用悬停方向；Esc 取消，飞行控制中会先释放鼠标。",
+    "geometry_node.game_view.view_menu.title": "视图",
+    "geometry_node.game_view.view_menu.top": "顶视图",
+    "geometry_node.game_view.view_menu.bottom": "底视图",
+    "geometry_node.game_view.view_menu.front": "前视图",
+    "geometry_node.game_view.view_menu.back": "后视图",
+    "geometry_node.game_view.view_menu.left": "左视图",
+    "geometry_node.game_view.view_menu.right": "右视图",
+    "geometry_node.game_view.view_menu.help": "按住 %s 显示视角菜单，移到方向后松开确认，Esc 取消；也可点击对齐。飞行中唤出菜单会释放控制；点击画面继续飞行。"
 }

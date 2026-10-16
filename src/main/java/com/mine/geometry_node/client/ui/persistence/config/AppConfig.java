@@ -166,6 +166,7 @@ public class AppConfig {
         public String fly = "SHIFT+GRAVE_ACCENT";
         public String toggleProjection = "KP_5";
         public String toggleSidebar = "N";
+        public String viewMenu = "GRAVE_ACCENT";
 
         public String forward = "W";
         public String backward = "S";
@@ -180,6 +181,7 @@ public class AppConfig {
             copy.fly = fly;
             copy.toggleProjection = toggleProjection;
             copy.toggleSidebar = toggleSidebar;
+            copy.viewMenu = viewMenu;
             copy.forward = forward;
             copy.backward = backward;
             copy.left = left;

@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -92,7 +92,9 @@ public final class GameViewportSidebarPanel extends ScrollView implements Sideba
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_DOWN),
                     GameViewportShortcuts.display(BuiltinConfigEntries.GAME_FLIGHT_EXIT)).getString()
                 : tr("sidebar.game_help");
-        if (owner.mode().usesEditorCamera()) text += "\n\n" + tr("sidebar.multi_view_help");
+        if (owner.mode().usesEditorCamera()) text += "\n\n" + Component.translatable(
+                "geometry_node.game_view.view_menu.help", GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_MENU)).getString()
+                + "\n\n" + tr("sidebar.multi_view_help");
         else if (!Boolean.getBoolean("gn.standalone") && EditViewportRuntime.hasVisibleViews()) {
             text += "\n\n" + tr("sidebar.shared_basic_help");
         }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin.model.render;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import com.mine.geometry_node.client.runtime.light.NativeLightPreloads;
+import com.mine.geometry_node.client.runtime.light.shader.NativeLightPreloads;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import java.util.List;
 import net.minecraft.client.renderer.ShaderManager;

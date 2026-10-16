@@ -5,15 +5,16 @@ import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportPixelDemand;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportCamera;
-import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
-import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
-import com.mine.geometry_node.client.runtime.game.GameFrameImage;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
-import com.mine.geometry_node.client.runtime.game.GameViewTiming;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
+import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.render.GameFrameImage;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.ui.shortcut.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Matrix;
@@ -39,6 +40,7 @@ final class GameViewportView extends View {
     private boolean activationPressed;
     private boolean navigating;
     private boolean panning;
+    private float pointerRootX = Float.NaN, pointerRootY = Float.NaN;
     private float lastX;
     private float lastY;
     private boolean active;
@@ -95,13 +97,14 @@ final class GameViewportView extends View {
     }
 
     void releaseInteraction() {
+        inputOwner.closeViewMenu();
         cancelInteraction();
         if (!Boolean.getBoolean("gn.standalone")) GameViewportInput.release(inputOwner);
     }
 
     private boolean editing() { return inputOwner.mode().usesEditorCamera(); }
 
-    private boolean canNavigate() {
+    boolean canNavigate() {
         return active && editing() && !Boolean.getBoolean("gn.standalone")
                 && EditViewportRuntime.navigateAllowed(inputOwner) && isFrameAvailable();
     }
@@ -125,7 +128,9 @@ final class GameViewportView extends View {
     @Override
     protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
+        inputOwner.closeViewMenu();
         cancelInteraction();
+        pointerRootX = pointerRootY = Float.NaN;
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
         onSizeChanged.run();
     }
@@ -166,6 +171,8 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        pointerRootX = event.getRawX();
+        pointerRootY = event.getRawY();
         if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
             cancelInteraction();
             return true;
@@ -238,6 +245,8 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onHoverEvent(MotionEvent event) {
+        pointerRootX = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawX();
+        pointerRootY = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? Float.NaN : event.getRawY();
         var hovered = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT || !canNavigate()
                 ? null : orientation.hit(event.getX(), event.getY());
         if (orientation.setHovered(hovered)) invalidate();
@@ -306,6 +315,29 @@ final class GameViewportView extends View {
             return true;
         }
         return super.onGenericMotionEvent(event);
+    }
+
+    void showViewMenu(UiRadialMenu menu) {
+        if (Float.isFinite(pointerRootX) && Float.isFinite(pointerRootY)) {
+            menu.showAtRoot(this, pointerRootX, pointerRootY);
+        } else {
+            menu.showAtCenter(this);
+        }
+    }
+
+    void prepareViewMenu() {
+        activationPressed = navigating = panning = orientationPressed = false;
+        pressedAxis = null;
+        orientation.reset();
+        requestFocus();
+        onInteraction.run();
+    }
+
+    void alignView(EditViewportCamera.Axis axis) {
+        if (!canNavigate()) return;
+        editCamera.alignToAxis(axis, inputOwner.mode() == ViewportMode.FLY, false);
+        onInteraction.run();
+        invalidate();
     }
 
     boolean dispatchShortcut(KeyEvent event) {

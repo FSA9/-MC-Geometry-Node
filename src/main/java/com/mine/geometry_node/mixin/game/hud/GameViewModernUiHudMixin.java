@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.hud;
 
-import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
+import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import org.spongepowered.asm.mixin.Mixin;

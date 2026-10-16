@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.game.gizmo;
 
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportCamera.Axis;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera.Axis;
 import java.util.Arrays;
 import java.util.Comparator;
 

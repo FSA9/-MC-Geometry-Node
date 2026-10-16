@@ -199,8 +199,8 @@ public final class ModelStaticRenderer {
     public static void prepareLighting(Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
         RenderSystem.assertOnRenderThread();
         mainCameraPosition = camera;
-        com.mine.geometry_node.client.runtime.light.NativeTerrainLights.setEnabled(!(IRIS.available() && IRIS.active()));
-        com.mine.geometry_node.client.runtime.light.NodeLightRenderer.prepare(camera);
+        com.mine.geometry_node.client.runtime.light.render.NativeTerrainLights.setEnabled(!(IRIS.available() && IRIS.active()));
+        com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.prepare(camera);
         long lightingStarted = System.nanoTime();
         try { ModelIrisHeldLight.update(instances, camera, IRIS.available() && IRIS.active(), instance ->
                 !isOutsideFrustum(instance.asset().sceneBounds(instance.scene()),
@@ -695,7 +695,7 @@ public final class ModelStaticRenderer {
                 bind(pass, minecraft, "Sampler1", binding.overlay());
                 pass.bindTexture("Sampler2", minecraft.gameRenderer.lightmap(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
                 int transformIndex = 0;
-                try (var nodeLighting = !shadowPass && com.mine.geometry_node.client.runtime.light.NodeLightRenderer.active()
+                try (var nodeLighting = !shadowPass && com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.active()
                         ? com.mine.geometry_node.client.model.render.bvh.ModelNativeLight.nodeScope() : null) {
                 for (DirectDraw draw : entry.getValue()) {
                     pass.setUniform("DynamicTransforms", transforms.get(transformIndex++));

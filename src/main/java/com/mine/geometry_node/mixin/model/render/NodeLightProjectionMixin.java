@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.render;
 
-import com.mine.geometry_node.client.runtime.light.NativeVolumeLights;
+import com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;

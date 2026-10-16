@@ -403,6 +403,11 @@ final class ConfigSanitizer {
         config.keyBindings.gameView.toggleSidebar = toggleSidebar.value;
         changed |= toggleSidebar.changed;
 
+        ReadKeyBinding viewMenu = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.viewMenu)
+                : readKeyBinding(gameView, "viewMenu", defaults.keyBindings.gameView.viewMenu);
+        config.keyBindings.gameView.viewMenu = viewMenu.value;
+        changed |= viewMenu.changed;
+
         // Control bindings include standalone modifiers, so use their registered validator.
         for (ConfigEntry<String> entry : List.of(
                 BuiltinConfigEntries.GAME_FLIGHT_FORWARD, BuiltinConfigEntries.GAME_FLIGHT_BACKWARD,

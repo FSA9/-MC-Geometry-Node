@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin.model.iris;
 
 import com.mine.geometry_node.client.model.render.bvh.ModelPackLightAdapters;
-import com.mine.geometry_node.client.runtime.light.NodeLightIrisPrograms;
+import com.mine.geometry_node.client.runtime.light.shader.NodeLightIrisPrograms;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,9 +17,9 @@ public abstract class IrisLightProgramBuilderMixin {
     private static String geometryNode$patchLighting(String fragment, String name, String vertex, String geometry,
                                                             String originalFragment, com.google.common.collect.ImmutableSet<Integer> reservedUnits) {
         NodeLightIrisPrograms.reset();
-        com.mine.geometry_node.client.runtime.light.NodeLightShaderBuilds.begin(name);
-        String result = com.mine.geometry_node.client.runtime.light.NodeLightShader.patch(ModelPackLightAdapters.patch(fragment), vertex);
-        com.mine.geometry_node.client.runtime.light.NodeLightShaderBuilds.patched(result);
+        com.mine.geometry_node.client.runtime.light.shader.NodeLightShaderBuilds.begin(name);
+        String result = com.mine.geometry_node.client.runtime.light.shader.NodeLightShader.patch(ModelPackLightAdapters.patch(fragment), vertex);
+        com.mine.geometry_node.client.runtime.light.shader.NodeLightShaderBuilds.patched(result);
         return result;
     }
     @Inject(method = "begin", at = @At(value = "INVOKE",
@@ -30,13 +30,13 @@ public abstract class IrisLightProgramBuilderMixin {
                                                 CallbackInfoReturnable<Object> callback) {
         Object builder = NodeLightIrisPrograms.load(name, vertex, geometry, fragment, reservedUnits);
         if (builder != null) {
-            com.mine.geometry_node.client.runtime.light.NodeLightShaderBuilds.finish();
+            com.mine.geometry_node.client.runtime.light.shader.NodeLightShaderBuilds.finish();
             callback.setReturnValue(builder);
         }
     }
     @Inject(method = "begin", at = @At("RETURN"), remap = false)
     private static void geometryNode$recordBuild(CallbackInfoReturnable<Object> callback) {
         NodeLightIrisPrograms.save(callback.getReturnValue());
-        com.mine.geometry_node.client.runtime.light.NodeLightShaderBuilds.finish();
+        com.mine.geometry_node.client.runtime.light.shader.NodeLightShaderBuilds.finish();
     }
 }

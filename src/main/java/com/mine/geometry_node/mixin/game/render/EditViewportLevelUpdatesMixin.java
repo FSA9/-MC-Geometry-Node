@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.render;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportRenderContext;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRenderContext;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.client.multiplayer.ClientLevel;

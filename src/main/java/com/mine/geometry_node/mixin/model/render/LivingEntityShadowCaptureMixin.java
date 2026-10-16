@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.render;
 
-import com.mine.geometry_node.client.runtime.light.NodeLightEntityShadows;
+import com.mine.geometry_node.client.runtime.light.render.NodeLightEntityShadows;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;

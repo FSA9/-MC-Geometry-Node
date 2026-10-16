@@ -3,7 +3,7 @@ package com.mine.geometry_node.mixin.game.input;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.objectweb.asm.Opcodes;

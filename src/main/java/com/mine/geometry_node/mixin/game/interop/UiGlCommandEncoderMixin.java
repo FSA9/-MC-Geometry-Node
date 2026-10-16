@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.interop;
 
-import com.mine.geometry_node.client.runtime.game.UiRenderInterop;
+import com.mine.geometry_node.client.runtime.game.interop.UiRenderInterop;
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import org.spongepowered.asm.mixin.Mixin;

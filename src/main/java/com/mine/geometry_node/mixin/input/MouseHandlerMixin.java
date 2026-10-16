@@ -1,8 +1,8 @@
 package com.mine.geometry_node.mixin.input;
 
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
-import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;

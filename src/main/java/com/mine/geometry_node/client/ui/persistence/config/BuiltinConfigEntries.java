@@ -122,6 +122,9 @@ public final class BuiltinConfigEntries {
     public static final ConfigEntry<String> GAME_VIEW_SIDEBAR = key("keyBindings.gameView.toggleSidebar", SHORTCUT_GAME_VIEW_GENERAL, 300, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.toggleSidebar, (config, value) -> config.keyBindings.gameView.toggleSidebar = value);
 
+    public static final ConfigEntry<String> GAME_VIEW_MENU = key("keyBindings.gameView.viewMenu", SHORTCUT_GAME_VIEW_GENERAL, 350, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.viewMenu, (config, value) -> config.keyBindings.gameView.viewMenu = value);
+
     public static final ConfigEntry<String> GAME_FLIGHT_FORWARD = controlKey("keyBindings.gameView.forward", 400, true,
             config -> config.keyBindings.gameView.forward, (config, value) -> config.keyBindings.gameView.forward = value);
     public static final ConfigEntry<String> GAME_FLIGHT_BACKWARD = controlKey("keyBindings.gameView.backward", 500, true,
@@ -155,7 +158,7 @@ public final class BuiltinConfigEntries {
             GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
-            GAME_VIEW_FLY, GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR,
+            GAME_VIEW_FLY, GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}

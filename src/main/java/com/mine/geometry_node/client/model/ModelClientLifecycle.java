@@ -35,7 +35,7 @@ public final class ModelClientLifecycle {
                     ModelStaticRenderer.refreshIris();
                     ClientModelService.INSTANCE.invalidateRenderResources("resource_reload");
                     ModelStaticRenderer.closeShadowResources();
-                    com.mine.geometry_node.client.runtime.light.NodeLightRenderer.clear();
+                    com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear();
                     com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate();
                 }));
     }
@@ -58,15 +58,15 @@ public final class ModelClientLifecycle {
     }
     private static void drawLightSources(RenderLevelStageEvent.AfterOpaqueFeatures event){
         // Establish source depth/color before glass, water and transparent models blend over it.
-        com.mine.geometry_node.client.runtime.light.NodeLightSourceRenderer.render(event.getPoseStack());
+        com.mine.geometry_node.client.runtime.light.render.NodeLightSourceRenderer.render(event.getPoseStack());
     }
     /** Iris has completed deferred/composite/final; world depth and projection are still bound. */
     private static void drawResolvedTransparent(RenderLevelStageEvent.AfterLevel event){
-        com.mine.geometry_node.client.runtime.light.NativeVolumeLights.render(event.getModelViewMatrix());
+        com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.render(event.getModelViewMatrix());
         if (!ModelStaticRenderer.needsResolvedTransparency()) return;
         ModelStaticRenderer.drawResolvedTransparent(event.getModelViewMatrix(), event.getLevelRenderState().cameraRenderState.pos,
                 event.getLevelRenderState().cameraRenderState.cullFrustum, ClientModelService.INSTANCE.renderSnapshots());
     }
-    private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.NativeVolumeLights.close();}
-    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.NodeLightRenderer.clear(); com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate(); });}
+    private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.close();}
+    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate(); });}
 }

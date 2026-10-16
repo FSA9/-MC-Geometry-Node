@@ -21,7 +21,7 @@ public abstract class ModelIrisAlphaDrawMixin {
     @WrapMethod(method = "_drawElements")
     private static void geometryNode$scopedAlpha(int mode, int count, int type, long offset, Operation<Void> original) {
         if (!ModelLightingReceiverTag.isActive() && !ModelIrisAlphaTest.isActive() && !ModelIrisBlendOverride.isActive() && !ModelIrisShadowUv.isActive() && !ModelNativeLight.isActive()) {
-            com.mine.geometry_node.client.runtime.light.NativeTerrainLights.draw(() -> original.call(mode, count, type, offset));
+            com.mine.geometry_node.client.runtime.light.render.NativeTerrainLights.draw(() -> original.call(mode, count, type, offset));
             return;
         }
         ModelLightingReceiverTag.draw(() -> ModelIrisShadowUv.draw(() -> ModelIrisAlphaTest.draw(() -> ModelIrisBlendOverride.draw(() -> ModelNativeLight.draw(() -> original.call(mode, count, type, offset))))));
@@ -29,8 +29,8 @@ public abstract class ModelIrisAlphaDrawMixin {
 
     @ModifyVariable(method = "glShaderSource", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private static String geometryNode$nativeReceiverSource(String source) {
-        return com.mine.geometry_node.client.runtime.light.NodeLightTerrainShader.patch(ModelNativeLight.patch(
-                com.mine.geometry_node.client.runtime.light.NodeLightShader.patch(source)));
+        return com.mine.geometry_node.client.runtime.light.shader.NodeLightTerrainShader.patch(ModelNativeLight.patch(
+                com.mine.geometry_node.client.runtime.light.shader.NodeLightShader.patch(source)));
     }
 
     @Inject(method = "glDeleteProgram", at = @At("HEAD"))

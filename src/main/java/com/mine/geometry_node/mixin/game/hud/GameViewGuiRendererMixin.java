@@ -2,7 +2,7 @@ package com.mine.geometry_node.mixin.game.hud;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
+import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
 import net.minecraft.client.gui.render.GuiRenderer;
 import net.neoforged.neoforge.client.gui.PictureInPictureRendererPool;
 import org.spongepowered.asm.mixin.Mixin;

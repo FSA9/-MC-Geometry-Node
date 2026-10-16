@@ -3,13 +3,17 @@ package com.mine.geometry_node.client.ui.editor.game;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportCamera;
-import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
-import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
-import com.mine.geometry_node.client.runtime.game.GameViewTiming;
-import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
+import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
+import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;
+import com.mine.geometry_node.client.ui.components.menu.RadialMenuLayout.Slot;
+import com.mine.geometry_node.client.ui.components.menu.HeldMenuKey;
+import java.util.List;
 import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
@@ -38,9 +42,11 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
-public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware {
+public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware, EditViewportFlightInput.ViewMenuOwner {
     private final EditViewportCamera editCamera = new EditViewportCamera();
     private final GameViewportView viewport;
+    private final UiRadialMenu viewMenu;
+    private final HeldMenuKey menuKey = new HeldMenuKey();
     private final TextView gameButton;
     private final TextView editButton;
     private final TextView flyButton;
@@ -108,6 +114,14 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         waiting.setPadding(UIUtils.dp2pxInt(12), 0, UIUtils.dp2pxInt(12), 0);
         waiting.setGravity(Gravity.CENTER);
         content.addView(waiting, new FrameLayout.LayoutParams(-1, -1));
+        viewMenu = new UiRadialMenu(context, tr("view_menu.title"), List.of(
+                viewItem(Slot.TOP, "top", EditViewportCamera.Axis.POSITIVE_Y),
+                viewItem(Slot.BOTTOM, "bottom", EditViewportCamera.Axis.NEGATIVE_Y),
+                viewItem(Slot.TOP_LEFT, "front", EditViewportCamera.Axis.NEGATIVE_Z),
+                viewItem(Slot.TOP_RIGHT, "back", EditViewportCamera.Axis.POSITIVE_Z),
+                viewItem(Slot.LEFT, "left", EditViewportCamera.Axis.NEGATIVE_X),
+                viewItem(Slot.RIGHT, "right", EditViewportCamera.Axis.POSITIVE_X)));
+        content.addView(viewMenu, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(HORIZONTAL);
         workspace.addView(content, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.75f));
@@ -124,6 +138,42 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         updateTools();
         updateStatus(false);
         GameViewTiming.finish("window construction", constructionStart, true);
+    }
+
+    private UiRadialMenu.Item viewItem(Slot slot, String name, EditViewportCamera.Axis axis) {
+        return new UiRadialMenu.Item(slot, tr("view_menu." + name), null, () -> viewport.alignView(axis));
+    }
+
+    private void openViewMenu() {
+        if (!viewport.canNavigate()) return;
+        viewport.prepareViewMenu();
+        viewport.showViewMenu(viewMenu);
+    }
+
+    void closeViewMenu() {
+        if (viewMenu != null) viewMenu.dismiss();
+        menuKey.reset();
+    }
+
+    private void confirmViewMenu() {
+        menuKey.reset();
+        if (registered && !disposed && viewport.canNavigate()
+                && (areaLifecycle == null || areaLifecycle.isActive())) viewMenu.confirmHoveredAndDismiss();
+        else viewMenu.dismiss();
+    }
+
+    @Override public void onViewMenuCancelled() { post(this::closeViewMenu); }
+
+    /** Flight input calls on the client thread; preserve press/release order on the UI queue. */
+    @Override public void onViewMenuKey(int key, boolean pressed) {
+        post(() -> {
+            if (pressed) {
+                if (!registered || disposed || mode() != ViewportMode.FLY || !viewport.canNavigate()
+                        || areaLifecycle != null && !areaLifecycle.isActive()) return;
+                menuKey.begin(key);
+                openViewMenu();
+            } else confirmViewMenu();
+        });
     }
 
     public ViewportMode mode() { return modes.current(); }
@@ -271,6 +321,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         if (!registered) return;
         // Includes the first frame and parent-only transforms, not just local layout changes.
         viewport.publishPixelDemand();
+        if (viewMenu.isOpen() && !viewport.canNavigate()) closeViewMenu();
         if (toolOrthographic != editCamera.isOrthographic()) updateTools();
         long now = System.nanoTime();
         if (sidebarLayout.isVisible() && now >= nextSidebarRefresh) {
@@ -319,6 +370,9 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        KeyBinding menuBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_MENU));
+        if (menuKey.dispatch(event, menuBinding, !(findFocus() instanceof EditText) && viewport.canNavigate()
+                && !EditViewportFlightInput.isCaptured(), this::openViewMenu, this::confirmViewMenu, viewMenu::dismiss)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN && !(findFocus() instanceof EditText)) {
             // A toolbar/sidebar button may own focus after switching modes. Commands
             // belong to this window, not only to its image child.

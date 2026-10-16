@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui;
 
 import com.mine.geometry_node.client.ui.shell.MainUiShell;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import icyllis.modernui.mc.ScreenCallback;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.NodeRegistry;
@@ -21,7 +21,7 @@ public class MainUI extends Fragment implements ScreenCallback {
     @Override
     public boolean isPauseScreen() {
         return !GameViewportInput.hasVisibleViews()
-                && !com.mine.geometry_node.client.runtime.game.EditViewportRuntime.hasVisibleViews();
+                && !com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime.hasVisibleViews();
     }
 
     @Override

@@ -3,7 +3,7 @@ package com.mine.geometry_node.mixin.model.render;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.runtime.light.NodeLightNativePrograms;
+import com.mine.geometry_node.client.runtime.light.shader.NodeLightNativePrograms;
 import com.mojang.blaze3d.opengl.GlProgram;
 import com.mojang.blaze3d.opengl.GlShaderModule;
 import com.mojang.blaze3d.pipeline.RenderPipeline;

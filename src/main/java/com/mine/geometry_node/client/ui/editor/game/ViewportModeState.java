@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportCamera;
+import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 
 /** Mode selection outlives mouse capture; only leaving Fly restores orbit projection. */
 final class ViewportModeState {

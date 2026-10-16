@@ -1965,5 +1965,15 @@
     "geometry_node.settings.category.shortcut_game_view_game": "Game Mode",
     "geometry_node.settings.category.shortcut_game_view_edit": "Edit Mode",
     "geometry_node.settings.category.shortcut_game_view_flight": "Fly Mode",
-    "geometry_node.settings.category.shortcut_game_view_game.description": "Game controls use Minecraft Options → Controls → Key Binds. Click the viewport to capture input; press Esc to release control and return to the editor."
+    "geometry_node.settings.category.shortcut_game_view_game.description": "Game controls use Minecraft Options → Controls → Key Binds. Click the viewport to capture input; press Esc to release control and return to the editor.",
+    "geometry_node.settings.entry.keyBindings.gameView.viewMenu.label": "Hold View Menu",
+    "geometry_node.settings.entry.keyBindings.gameView.viewMenu.description": "Hold in Edit/Fly to show six views; release to apply the hovered direction. Esc cancels. Releases flight mouse capture first.",
+    "geometry_node.game_view.view_menu.title": "View",
+    "geometry_node.game_view.view_menu.top": "Top",
+    "geometry_node.game_view.view_menu.bottom": "Bottom",
+    "geometry_node.game_view.view_menu.front": "Front",
+    "geometry_node.game_view.view_menu.back": "Back",
+    "geometry_node.game_view.view_menu.left": "Left",
+    "geometry_node.game_view.view_menu.right": "Right",
+    "geometry_node.game_view.view_menu.help": "Hold %s for the view menu; hover a direction and release to apply, or click to align. Esc cancels. Opening it releases flight control; click the image to resume."
 }

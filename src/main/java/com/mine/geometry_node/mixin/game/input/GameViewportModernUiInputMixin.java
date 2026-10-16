@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.game.input;
 
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import icyllis.modernui.mc.UIManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

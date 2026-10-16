@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin.game.compat.sodium;
 
-import com.mine.geometry_node.client.runtime.game.EditViewportRenderContext;
-import com.mine.geometry_node.client.runtime.game.ViewportChunkReadiness;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRenderContext;
+import com.mine.geometry_node.client.runtime.game.chunk.ViewportChunkReadiness;
 import it.unimi.dsi.fastutil.longs.LongCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.ChunkPos;

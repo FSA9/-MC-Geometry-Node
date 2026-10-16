@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.input;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mine.geometry_node.client.runtime.game.GameViewportInput;
+import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.core.engine.blueprint.event.PlayerInputKeys;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketPlayerInput;

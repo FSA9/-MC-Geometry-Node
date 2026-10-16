@@ -3,7 +3,7 @@ package com.mine.geometry_node.mixin.game.render;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;

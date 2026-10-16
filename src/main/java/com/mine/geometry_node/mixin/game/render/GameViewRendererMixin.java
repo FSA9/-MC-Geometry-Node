@@ -1,8 +1,8 @@
 package com.mine.geometry_node.mixin.game.render;
 
-import com.mine.geometry_node.client.runtime.game.SharedGameFrame;
-import com.mine.geometry_node.client.runtime.game.GameViewTiming;
-import com.mine.geometry_node.client.runtime.game.GameFrameCleanup;
+import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
+import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
+import com.mine.geometry_node.client.runtime.game.render.GameFrameCleanup;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
