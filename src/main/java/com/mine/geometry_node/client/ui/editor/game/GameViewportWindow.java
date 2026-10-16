@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
+import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
+
 import com.mine.geometry_node.client.runtime.game.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
@@ -178,15 +181,15 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         viewport.requestFocus();
     }
 
-    boolean isOrthographic() { return editCamera.isOrthographic(); }
+    public boolean isOrthographic() { return editCamera.isOrthographic(); }
 
-    void resetCamera() {
+    public void resetCamera() {
         if (!mode().usesEditorCamera()) return;
         markInteracted();
         if (!Boolean.getBoolean("gn.standalone")) EditViewportRuntime.resetToPlayer(this);
     }
 
-    void toggleProjection() {
+    public void toggleProjection() {
         if (mode() != ViewportMode.EDIT) return;
         editCamera.toggleOrthographic();
         markInteracted();

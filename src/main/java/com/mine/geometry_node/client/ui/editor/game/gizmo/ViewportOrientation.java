@@ -1,4 +1,6 @@
-package com.mine.geometry_node.client.ui.editor.game;
+package com.mine.geometry_node.client.ui.editor.game.gizmo;
+
+import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 
 import com.mine.geometry_node.client.runtime.game.EditViewportCamera.Axis;
 import java.util.Arrays;
@@ -6,6 +8,7 @@ import java.util.Comparator;
 
 /** Reusable local-space geometry shared by painting and hit testing. Minecraft is Y-up. */
 final class ViewportOrientation {
+    private static final float DISPLAY_SCALE = 0.8f;
     static final class Endpoint {
         final Axis axis;
         float x, y, depth;
@@ -18,6 +21,7 @@ final class ViewportOrientation {
     boolean visible;
 
     void layout(GameViewportLayout bounds, float density, float yaw, float pitch) {
+        density *= DISPLAY_SCALE;
         float available = Math.min(bounds.right() - bounds.left(), bounds.bottom() - bounds.top());
         visible = Float.isFinite(available) && density > 0 && available >= 64 * density;
         if (!visible) return;

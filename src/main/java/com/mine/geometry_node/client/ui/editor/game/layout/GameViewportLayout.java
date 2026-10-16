@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.game;
+package com.mine.geometry_node.client.ui.editor.game.layout;
 
 /** The same pixel rectangle is used for image presentation and capture hit testing. */
 public record GameViewportLayout(float left, float top, float right, float bottom) {

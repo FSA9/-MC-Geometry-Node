@@ -1,4 +1,8 @@
-package com.mine.geometry_node.client.ui.editor.game;
+package com.mine.geometry_node.client.ui.editor.game.sidebar;
+
+import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
+import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
+import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 
 import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
@@ -61,7 +65,7 @@ public final class GameViewportSidebarPanel extends ScrollView implements Sideba
     @Override public View getView() { return this; }
     @Override public void onSelected() { refresh(); }
 
-    void refresh() {
+    public void refresh() {
         boolean editing = owner.mode() == ViewportMode.EDIT;
         projection.setVisibility(editing ? View.VISIBLE : View.GONE);
         reset.setVisibility(owner.mode().usesEditorCamera() ? View.VISIBLE : View.GONE);

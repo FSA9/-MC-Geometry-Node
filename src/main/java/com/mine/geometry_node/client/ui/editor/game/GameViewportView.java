@@ -1,5 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.editor.game.gizmo.ViewportOrientationOverlay;
+import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
+import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
+import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportPixelDemand;
+
 import com.mine.geometry_node.client.runtime.game.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.EditViewportRuntime;
@@ -108,8 +113,7 @@ final class GameViewportView extends View {
         panning = false;
         orientationPressed = false;
         pressedAxis = null;
-        orientation.hovered = null;
-        orientation.geometry.visible = false;
+        orientation.reset();
     }
 
     @Override
@@ -129,7 +133,7 @@ final class GameViewportView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        orientation.geometry.visible = false;
+        orientation.hide();
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
         if (!isFrameAvailable()) {
             cancelInteraction();
@@ -151,7 +155,7 @@ final class GameViewportView extends View {
             displayedBounds = bounds;
             if (editing()) {
                 var pose = editCamera.snapshot();
-                orientation.geometry.layout(bounds, UIUtils.dp2px(1), pose.yaw(), pose.pitch());
+                orientation.layout(bounds, UIUtils.dp2px(1), pose.yaw(), pose.pitch());
                 orientation.draw(canvas);
             }
             GameViewTiming.finish("activation to first UI frame recording", firstFrameStart, true);
@@ -201,10 +205,10 @@ final class GameViewportView extends View {
         float x = event.getX(), y = event.getY();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
-                if (!canNavigate() || !orientation.geometry.contains(x, y)) return false;
+                if (!canNavigate() || !orientation.contains(x, y)) return false;
                 orientationPressed = true;
                 pressedAxis = event.isButtonPressed(MotionEvent.BUTTON_PRIMARY)
-                        ? orientation.geometry.hit(x, y) : null;
+                        ? orientation.hit(x, y) : null;
                 activationPressed = false;
                 requestFocus();
                 onInteraction.run();
@@ -212,7 +216,7 @@ final class GameViewportView extends View {
             }
             case MotionEvent.ACTION_MOVE -> {
                 if (!orientationPressed) return false;
-                if (orientation.geometry.hit(x, y) != pressedAxis) pressedAxis = null;
+                if (orientation.hit(x, y) != pressedAxis) pressedAxis = null;
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
@@ -220,7 +224,7 @@ final class GameViewportView extends View {
                 var axis = pressedAxis;
                 orientationPressed = false;
                 pressedAxis = null;
-                if (axis != null && canNavigate() && orientation.geometry.hit(x, y) == axis) {
+                if (axis != null && canNavigate() && orientation.hit(x, y) == axis) {
                     editCamera.alignToAxis(axis, inputOwner.mode() == ViewportMode.FLY);
                     onInteraction.run();
                     invalidate();
@@ -235,11 +239,8 @@ final class GameViewportView extends View {
     @Override
     public boolean onHoverEvent(MotionEvent event) {
         var hovered = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT || !canNavigate()
-                ? null : orientation.geometry.hit(event.getX(), event.getY());
-        if (orientation.hovered != hovered) {
-            orientation.hovered = hovered;
-            invalidate();
-        }
+                ? null : orientation.hit(event.getX(), event.getY());
+        if (orientation.setHovered(hovered)) invalidate();
         return super.onHoverEvent(event) || hovered != null;
     }
 
@@ -291,7 +292,7 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
-        if (editing() && orientation.geometry.contains(event.getX(), event.getY())
+        if (editing() && orientation.contains(event.getX(), event.getY())
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL) return true;
         if (inputOwner.mode() == ViewportMode.EDIT
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL && canNavigate()

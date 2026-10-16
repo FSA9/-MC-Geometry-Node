@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.workspace.registration;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer.AssetTransferPanel;
-import com.mine.geometry_node.client.ui.editor.game.GameViewportSidebarPanel;
+import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
 
 /**
  * Registers registration panels supplied by the base mod.

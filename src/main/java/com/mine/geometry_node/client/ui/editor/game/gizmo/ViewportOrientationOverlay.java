@@ -1,23 +1,41 @@
-package com.mine.geometry_node.client.ui.editor.game;
+package com.mine.geometry_node.client.ui.editor.game.gizmo;
 
 import com.mine.geometry_node.client.runtime.game.EditViewportCamera.Axis;
+import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 
 /** Canvas-only overlay: no world pass, textures, or independent input coordinate system. */
-final class ViewportOrientationOverlay {
-    final ViewportOrientation geometry = new ViewportOrientation();
-    Axis hovered;
+public final class ViewportOrientationOverlay {
+    private final ViewportOrientation geometry = new ViewportOrientation();
+    private Axis hovered;
     private final Paint paint = new Paint();
 
-    ViewportOrientationOverlay() { paint.setAntiAlias(true); }
+    public ViewportOrientationOverlay() { paint.setAntiAlias(true); }
 
-    void draw(Canvas canvas) {
+    public void hide() { geometry.visible = false; }
+
+    public void reset() { hide(); hovered = null; }
+
+    public boolean contains(float x, float y) { return geometry.contains(x, y); }
+
+    public Axis hit(float x, float y) { return geometry.hit(x, y); }
+
+    /** Returns whether the hover visual needs repainting. */
+    public boolean setHovered(Axis axis) {
+        if (hovered == axis) return false;
+        hovered = axis;
+        return true;
+    }
+
+    public void layout(GameViewportLayout bounds, float density, float yaw, float pitch) {
+        geometry.layout(bounds, density, yaw, pitch);
+    }
+
+    public void draw(Canvas canvas) {
         if (!geometry.visible) return;
         float u = geometry.unit;
         paint.setStyle(Paint.FILL);
-        paint.setColor(hovered == null ? 0x6821262C : 0xA021262C);
-        canvas.drawCircle(geometry.centerX, geometry.centerY, geometry.radius, paint);
         for (var e : geometry.endpoints) {
             if (!e.axis.positive()) continue;
             paint.setColor(color(e.axis));

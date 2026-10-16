@@ -1,14 +1,14 @@
-package com.mine.geometry_node.client.ui.editor.game;
+package com.mine.geometry_node.client.ui.editor.game.layout;
 
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.graphics.Rect;
 import icyllis.modernui.graphics.RectF;
 
 /** Pure UI measurement; it neither waits for a frame nor changes GPU resources. */
-final class GameViewportPixelDemand {
+public final class GameViewportPixelDemand {
     private GameViewportPixelDemand() {}
 
-    static double scale(int width, int height, int framebufferWidth, int framebufferHeight,
+    public static double scale(int width, int height, int framebufferWidth, int framebufferHeight,
                         int rootWidth, int rootHeight, Matrix localToRoot, Rect visibleInRoot) {
         if (width <= 0 || height <= 0 || framebufferWidth <= 0 || framebufferHeight <= 0
                 || rootWidth <= 0 || rootHeight <= 0 || visibleInRoot.isEmpty()) return 0;
