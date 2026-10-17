@@ -20,6 +20,10 @@ public final class UiPopover extends FrameLayout {
     private final ScrollView panel;
     private final int width;
     private boolean outsidePressed;
+    private boolean dismissPending;
+    private final Runnable deferredDismiss = () -> {
+        if (dismissPending) finishDismiss();
+    };
     private final Matrix inputMatrix=new Matrix();
     private final float[] inputPoint=new float[2];
     private AreaLifecycle.Subscription binding = AreaLifecycle.Subscription.NONE;
@@ -44,6 +48,9 @@ public final class UiPopover extends FrameLayout {
     }
     public void showAtRoot(View owner, FrameLayout host, float rootX, float rootY) {
         dismiss();
+        // Opening during an ongoing layout must not reinsert a child either.
+        if (dismissPending || host.isInLayout()) return;
+        setVisibility(VISIBLE);
         float[] point = {rootX,rootY};
         if (!UIUtils.rootToLocal(host,rootX,rootY,new Matrix(),point)) return;
         int w = Math.min(width,host.getWidth());
@@ -77,10 +84,25 @@ public final class UiPopover extends FrameLayout {
         matrix.mapPoint(point);
         showAtRoot(anchor,host,point[0],point[1]);
     }
-    public boolean isOpen() { return getParent() != null; }
+    public boolean isOpen() { return !dismissPending && getParent() != null; }
     public void dismiss() {
         outsidePressed = false;
         binding.close(); binding = AreaLifecycle.Subscription.NONE;
+        if (getParent() != null && isInLayout()) {
+            // A sibling's size callback can close us while FrameLayout is iterating
+            // its original child count. Hide now; mutate the child array after layout.
+            if (!dismissPending) {
+                dismissPending = true;
+                setVisibility(GONE);
+                post(deferredDismiss);
+            }
+            return;
+        }
+        finishDismiss();
+    }
+    private void finishDismiss() {
+        removeCallbacks(deferredDismiss);
+        dismissPending = false;
         if(getParent()!=null)clearTooltips(this);
         if (getParent() instanceof ViewGroup group) group.removeView(this);
     }
@@ -135,7 +157,7 @@ public final class UiPopover extends FrameLayout {
     }
     @Override protected void onSizeChanged(int w,int h,int oldW,int oldH) {
         super.onSizeChanged(w,h,oldW,oldH);
-        if(oldW>0&&oldH>0&&(w!=oldW||h!=oldH))post(this::dismiss);
+        if(oldW>0&&oldH>0&&(w!=oldW||h!=oldH))dismiss();
     }
     @Override public boolean onKeyDown(int key, KeyEvent event) {
         if (key == KeyEvent.KEY_ESCAPE) { dismiss(); return true; }
