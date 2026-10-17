@@ -2040,7 +2040,7 @@
     "geometry_node.game_view.scene.layer.schematic": "Schematics",
     "geometry_node.game_view.scene.layer.area": "Areas",
     "geometry_node.game_view.scene.layer.collision": "Collision",
-    "geometry_node.game_view.scene.layer.model_collision": "Collision",
+    "geometry_node.game_view.scene.layer.model_collision": "Model Collision",
     "geometry_node.game_view.scene.layer.interaction": "Interactions",
     "geometry_node.game_view.scene.layer.pathfinding": "Paths",
     "geometry_node.game_view.scene.help": "Click to select; Shift-click toggles selection. Drag empty space to box select; Shift adds and Ctrl removes. Drag XYZ handles to move; cancel restores the starting position. Helper markers and box selection work through occlusion. Only point lights are editable. Add: %s; Frame Selected: %s; Cancel: %s.",

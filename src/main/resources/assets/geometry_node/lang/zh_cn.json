@@ -2040,7 +2040,7 @@
     "geometry_node.game_view.scene.layer.schematic": "结构投影",
     "geometry_node.game_view.scene.layer.area": "区域",
     "geometry_node.game_view.scene.layer.collision": "碰撞",
-    "geometry_node.game_view.scene.layer.model_collision": "碰撞",
+    "geometry_node.game_view.scene.layer.model_collision": "模型碰撞",
     "geometry_node.game_view.scene.layer.interaction": "交互区域",
     "geometry_node.game_view.scene.layer.pathfinding": "寻路",
     "geometry_node.game_view.scene.help": "左键选择，Shift+左键增减选择；拖动空白框选，Shift 增选、Ctrl 移除。拖动 XYZ 轴移动，取消操作恢复原位。辅助标记和框选可以穿过遮挡；仅点光源可编辑。创建：%s；聚焦：%s；取消：%s。",
