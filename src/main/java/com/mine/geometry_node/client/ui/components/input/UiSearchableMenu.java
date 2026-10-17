@@ -21,14 +21,19 @@ import java.util.function.Consumer;
 
 /** Search, selection and anchor geometry shared by graph and ordinary forms. */
 public class UiSearchableMenu extends FrameLayout {
-    private static final int MENU_WIDTH_DP = 220;
+    public record Style(int widthDp, int maxVisibleItems) {
+        public static final Style DEFAULT = new Style(220, 6);
+        public Style {
+            if (widthDp <= 0 || maxVisibleItems <= 0) throw new IllegalArgumentException("Invalid menu dimensions");
+        }
+    }
+    private final Style style;
     private static final int MENU_PADDING_DP = 8;
     private static final int SEARCH_HEIGHT_DP = 28;
     private static final int TITLE_HEIGHT_DP = 22;
     private static final int SEARCH_RADIUS_DP = 5;
     private static final int ITEM_HEIGHT_DP = 24;
     private static final int ITEM_RADIUS_DP = 4;
-    private static final int MAX_VISIBLE_ITEMS = 6;
 
     private static final int COLOR_PANEL_BG = UiTheme.Surface.PANEL;
     private static final int COLOR_PANEL_BORDER = UiTheme.Control.BORDER;
@@ -88,7 +93,13 @@ public class UiSearchableMenu extends FrameLayout {
 
     public UiSearchableMenu(Context context, String title, List<String> options,
                               Map<String, String> optionLabels, Consumer<String> onSelect) {
+        this(context, title, options, optionLabels, Style.DEFAULT, onSelect);
+    }
+
+    public UiSearchableMenu(Context context, String title, List<String> options,
+                            Map<String, String> optionLabels, Style style, Consumer<String> onSelect) {
         super(context);
+        this.style = java.util.Objects.requireNonNull(style);
         this.mTitle = title;
         this.mOptions = List.copyOf(options);
         this.mFilteredOptions = new ArrayList<>(options);
@@ -112,7 +123,7 @@ public class UiSearchableMenu extends FrameLayout {
         );
         mContentLayout.setOnClickListener(v -> {});
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(MENU_WIDTH_DP), LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(style.widthDp()), LayoutParams.WRAP_CONTENT);
         mContentLayout.setLayoutParams(lp);
 
         if (mTitle != null && !mTitle.isBlank()) {
@@ -220,7 +231,7 @@ public class UiSearchableMenu extends FrameLayout {
     }
 
     private void updateScrollHeight(int itemCount) {
-        int visibleItems = Math.min(Math.max(itemCount, 1), MAX_VISIBLE_ITEMS);
+        int visibleItems = Math.min(Math.max(itemCount, 1), style.maxVisibleItems());
         int targetHeightPx = UIUtils.dp2pxInt(visibleItems * (ITEM_HEIGHT_DP + 2));
 
         LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
@@ -272,7 +283,7 @@ public class UiSearchableMenu extends FrameLayout {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int width = Math.min(UIUtils.dp2pxInt(MENU_WIDTH_DP), MeasureSpec.getSize(widthMeasureSpec));
+        int width = Math.min(UIUtils.dp2pxInt(style.widthDp()), MeasureSpec.getSize(widthMeasureSpec));
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
         lp.width = width;
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);

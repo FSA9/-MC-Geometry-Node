@@ -62,13 +62,17 @@ public class SelectHintRenderer implements UIHintRenderer {
             }
 
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
-                UiSearchableMenu menu = new UiSearchableMenu(context, title, resolvedOptions, optionLabels, selectedVal -> {
+                java.util.function.Consumer<String> commit = selectedVal -> {
                     dropdownBtn.setValue(optionLabels.getOrDefault(selectedVal, selectedVal));
                     UIHintValueBinder.commit(editorContext, nodeData, portId, selectedVal);
-                });
-
-                if (interactionContext instanceof ViewGroup host) {
-                    menu.showAt(v, host);
+                };
+                var presentation = SelectMenuPresentations.get(resolution.registryId());
+                if (presentation != null && interactionContext instanceof FrameLayout host) {
+                    Object current = UIHintValueBinder.getValue(nodeData, row.leftPort());
+                    presentation.show(context, title, resolution,
+                            current == null ? selectedValue : current.toString(), v, host, commit);
+                } else if (interactionContext instanceof ViewGroup host) {
+                    new UiSearchableMenu(context, title, resolvedOptions, optionLabels, commit).showAt(v, host);
                 }
             }
         });

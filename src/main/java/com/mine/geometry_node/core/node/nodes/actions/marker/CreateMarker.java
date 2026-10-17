@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.engine.system.marker.model.MarkerAnchor;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerRequest;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
@@ -34,40 +35,52 @@ public final class CreateMarker extends BaseNode {
 
     @Override
     public NodeDef getDefaultDefinition() {
-        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_marker"))
-                .comment(NodeComment.builder(TYPE_ID)
-                        .text("summary")
-                        .input(StandardPorts.FLOW_IN, "flow_in")
-                        .output(StandardPorts.FLOW_OUT, "flow_out")
-                        .output(StandardPorts.BOOL, "bool")
-                        .input(StandardPorts.KEY, "key")
-                        .input(StandardPorts.MARKER_TYPE, "marker_type")
-                        .input(StandardPorts.ONLY_SELF_VISIBLE, "only_self_visible")
-                        .input(StandardPorts.PLAYER, "player")
-                        .input(StandardPorts.ANCHOR_TYPE, "anchor_type")
-                        .input(StandardPorts.XYZ, "xyz")
-                        .input(StandardPorts.TARGET_ENTITY, "target_entity")
-                        .input(StandardPorts.MESSAGE, "message")
-                        .input(StandardPorts.SHOW_DISTANCE, "show_distance")
-                        .input(StandardPorts.TICK, "tick")
-                        .build())
+        return buildDefinition(ANCHOR_COORDINATE);
+    }
+
+    @Override
+    public NodeDef getDefinition(NodeData instanceData) {
+        Object binding = instanceData == null ? null : instanceData.inputs.get(StandardPorts.ANCHOR_TYPE.getId());
+        return buildDefinition(ANCHOR_ENTITY.equals(binding) ? ANCHOR_ENTITY : ANCHOR_COORDINATE);
+    }
+
+    private NodeDef buildDefinition(String bindingType) {
+        boolean entityBinding = ANCHOR_ENTITY.equals(bindingType);
+        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
+                .text("summary")
+                .input(StandardPorts.FLOW_IN, "flow_in")
+                .output(StandardPorts.FLOW_OUT, "flow_out")
+                .output(StandardPorts.BOOL, "bool")
+                .input(StandardPorts.KEY, "key")
+                .input(StandardPorts.MARKER_TYPE, "marker_type")
+                .input(StandardPorts.PLAYER, "player")
+                .input(StandardPorts.ANCHOR_TYPE, "anchor_type")
+                .input(entityBinding ? StandardPorts.TARGET_ENTITY : StandardPorts.XYZ,
+                        entityBinding ? "target_entity" : "xyz")
+                .input(StandardPorts.MESSAGE, "message")
+                .input(StandardPorts.SHOW_DISTANCE, "show_distance")
+                .input(StandardPorts.TICK, "tick");
+        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_marker"))
+                .comment(comment.build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESOURCE_ID.getId()))
+                .addPassthroughInput(StandardPorts.MESSAGE.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID))
-                .addPassthroughInput(StandardPorts.ONLY_SELF_VISIBLE.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
-                .addPassthroughInput(StandardPorts.ANCHOR_TYPE.toInput(ANCHOR_COORDINATE).hiddenPin(), UIHint.SELECT, null, Map.of(
+                .addPassthroughInput(StandardPorts.ANCHOR_TYPE.toInput(bindingType).hiddenPin(), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{ANCHOR_COORDINATE, ANCHOR_ENTITY},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
                                         "geometry_node.marker.anchor.coordinate",
                                         "geometry_node.marker.anchor.entity"
                                 }
-                        ))
-                .addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR)
-                .addPassthroughInput(StandardPorts.TARGET_ENTITY.toInput(), UIHint.DEFAULT)
-                .addPassthroughInput(StandardPorts.MESSAGE.toInput(""), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.SHOW_DISTANCE.toInput(true), UIHint.CHECKBOX)
+                        ));
+        if (entityBinding) {
+            builder.addPassthroughInput(StandardPorts.TARGET_ENTITY.toInput(), UIHint.DEFAULT);
+        } else {
+            builder.addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR);
+        }
+        return builder.addPassthroughInput(StandardPorts.SHOW_DISTANCE.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.TICK.toInput(0), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
@@ -80,8 +93,7 @@ public final class CreateMarker extends BaseNode {
         String key = getInput(context, StandardPorts.KEY.getId(), String.class);
         if (level != null) {
             try {
-                boolean onlySelf = valueOr(getInput(context, StandardPorts.ONLY_SELF_VISIBLE.getId(), Boolean.class), true);
-                MarkerAddress address = resolveAddress(context, key, onlySelf);
+                MarkerAddress address = resolveAddress(context, key);
                 MarkerAnchor anchor = resolveAnchor(context, level);
                 if (address != null && anchor != null) {
                     String typeId = valueOr(getInput(context, StandardPorts.MARKER_TYPE.getId(), String.class),
@@ -107,16 +119,14 @@ public final class CreateMarker extends BaseNode {
                 ? context.getNodeResult(portName) : null;
     }
 
-    private MarkerAddress resolveAddress(ExecutionContext context, String key, boolean onlySelf) {
+    private MarkerAddress resolveAddress(ExecutionContext context, String key) {
+        Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
+        if (!(viewer instanceof ServerPlayer player)) return null;
         String stableId = context.getCurrentNodeStableId();
         if (stableId == null || stableId.isBlank()) stableId = Integer.toString(context.getCurrentNodeId());
-        if (!onlySelf || GraphResourceReferences.isEncoded(key))
-            return GraphResourceReferences.resolveMarker(context, stableId, key, null, true);
-        Entity viewer = getInputFromList(context, StandardPorts.PLAYER.getId(), 0, Entity.class);
-        if (viewer == null) viewer = context.getGraphOwnerEntity();
-        if (viewer == null) viewer = context.getEntity();
-        return viewer instanceof ServerPlayer player
-                ? GraphResourceReferences.resolveMarker(context, stableId, key, player.getUUID(), true) : null;
+        MarkerAddress address = GraphResourceReferences.resolveMarker(context, stableId, key, player.getUUID(), true);
+        // Complete resource IDs must not override the explicitly supplied viewer.
+        return player.getUUID().equals(address.viewerId()) ? address : null;
     }
 
     private MarkerAnchor resolveAnchor(ExecutionContext context, ServerLevel fallbackLevel) {

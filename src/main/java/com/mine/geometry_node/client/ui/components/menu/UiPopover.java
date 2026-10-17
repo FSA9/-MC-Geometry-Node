@@ -21,6 +21,12 @@ import icyllis.modernui.widget.ScrollView;
 public final class UiPopover extends FrameLayout {
     private final ScrollView panel;
     private final int width;
+    private final int maxHeight;
+
+    /** Size from the required child width in pixels, after individual UI dimensions are rounded. */
+    public static UiPopover forContentWidth(Context context, View content, int contentWidthPx, int maxHeightDp) {
+        return new UiPopover(context, content, contentWidthPx, maxHeightDp, true);
+    }
     private boolean outsidePressed;
     private boolean dismissPending;
     private final Runnable deferredDismiss = () -> {
@@ -30,8 +36,16 @@ public final class UiPopover extends FrameLayout {
     private final float[] inputPoint=new float[2];
     private AreaLifecycle.Subscription binding = AreaLifecycle.Subscription.NONE;
     public UiPopover(Context context, View content, int widthDp) {
+        this(context, content, widthDp, 0);
+    }
+    /** A zero maximum height uses the available host height. */
+    public UiPopover(Context context, View content, int widthDp, int maxHeightDp) {
+        this(context, content, widthDp, maxHeightDp, false);
+    }
+    private UiPopover(Context context, View content, int widthDp, int maxHeightDp, boolean contentWidth) {
         super(context);
-        width = UIUtils.dp2pxInt(widthDp);
+        if (widthDp <= 0 || maxHeightDp < 0) throw new IllegalArgumentException("Invalid popup dimensions");
+        maxHeight = maxHeightDp == 0 ? Integer.MAX_VALUE : UIUtils.dp2pxInt(maxHeightDp);
         setClickable(true);
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -45,6 +59,12 @@ public final class UiPopover extends FrameLayout {
         panel.setBackground(background);
         int padding = UIUtils.dp2pxInt(7);
         panel.setPadding(padding,padding,padding,padding);
+        // Reserve actual resolved padding plus a scrollbar gutter even if currently hidden.
+        // Extra breathing room also keeps fractional-density rounding away from the wrap threshold.
+        width = contentWidth
+                ? widthDp + panel.getPaddingLeft() + panel.getPaddingRight()
+                    + panel.getVerticalScrollbarWidth() + Math.max(2, UIUtils.dp2pxInt(8))
+                : UIUtils.dp2pxInt(widthDp);
         panel.addView(content, new ViewGroup.LayoutParams(-1,-2));
         addView(panel, new FrameLayout.LayoutParams(width,-2));
     }
@@ -58,7 +78,7 @@ public final class UiPopover extends FrameLayout {
         int w = Math.min(width,host.getWidth());
         if (w <= 0 || host.getHeight() <= 0) return;
         panel.measure(MeasureSpec.makeMeasureSpec(w,MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(host.getHeight(),MeasureSpec.AT_MOST));
+                MeasureSpec.makeMeasureSpec(Math.min(host.getHeight(),maxHeight),MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w,Math.min(host.getHeight(),panel.getMeasuredHeight()));
         lp.leftMargin = Math.round(Math.clamp(point[0],0,host.getWidth()-w));
         lp.topMargin = Math.round(Math.clamp(point[1],0,Math.max(0,host.getHeight()-lp.height)));
@@ -72,7 +92,7 @@ public final class UiPopover extends FrameLayout {
         if (!(getParent() instanceof ViewGroup host)) return;
         int w=Math.min(width,host.getWidth());
         panel.measure(MeasureSpec.makeMeasureSpec(w,MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(host.getHeight(),MeasureSpec.AT_MOST));
+                MeasureSpec.makeMeasureSpec(Math.min(host.getHeight(),maxHeight),MeasureSpec.AT_MOST));
         FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)panel.getLayoutParams();
         lp.width=w;lp.height=Math.min(host.getHeight(),panel.getMeasuredHeight());
         lp.leftMargin=Math.max(0,Math.min(lp.leftMargin,host.getWidth()-w));
