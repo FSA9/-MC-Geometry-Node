@@ -35,6 +35,7 @@
     "game.render.EditViewportMinecraftAccessor",
     "game.render.EditViewportLevelStateAccessor",
     "game.render.ViewportEntitySelectionMixin",
+    "game.render.ViewportEntityVisibilityMixin",
     "game.render.EditViewportResourcePoolAccessor",
     "game.render.EditViewportLevelUpdatesMixin",
     "game.compat.sodium.EditViewportSodiumChunksMixin",

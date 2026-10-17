@@ -13,6 +13,10 @@ import java.util.*;
 public final class ViewportInteractionSource implements ViewportSelectionSources.Source {
     public static final String ID = "geometry_node:interaction";
     @Override public String id() { return ID; }
+    @Override public UUID editableObject(String id) { return UUID.fromString(id); }
+    @Override public boolean editableType(String typeId) {
+        return com.mine.geometry_node.core.engine.system.scene.SceneNativeInteractions.TYPE_ID.equals(typeId);
+    }
     @Override public Set<ViewportVisualization.Layer> selectableLayers() {
         return Set.of(ViewportVisualization.Layer.INTERACTION);
     }

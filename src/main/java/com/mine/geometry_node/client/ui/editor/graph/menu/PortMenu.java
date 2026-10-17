@@ -115,7 +115,7 @@ public class PortMenu {
                         ViewportActionRequest.builder()
                                 .nodeId(node.getNodeData().id)
                                 .port(finalCategory, portId)
-                                .rename(oldCustomName, newCustomName)
+                                .rename(newCustomName)
                                 .build()
                 );
             }
@@ -129,7 +129,7 @@ public class PortMenu {
                         ViewportActionRequest.builder()
                                 .nodeId(node.getNodeData().id)
                                 .port(finalCategory, portId)
-                                .rename(oldCustomName, null)
+                                .rename(null)
                                 .build()
                 );
             }

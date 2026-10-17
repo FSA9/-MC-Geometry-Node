@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.runtime.game.selection;
 
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
+import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.world.entity.Entity;
@@ -17,13 +18,24 @@ public final class ViewportEntitySource implements ViewportSelectionSources.Sour
     static List<ViewportTarget> extractedTargets() { return List.copyOf(EXTRACTED); }
     public static void begin() { EXTRACTED.clear(); }
     public static void extract(Entity entity, EntityRenderState state) {
+        if (!ViewportVisualization.current().visible(ViewportVisualization.Layer.ENTITY)) return;
         if (entity instanceof net.minecraft.world.entity.Interaction || entity.isRemoved() || !entity.isAlive() || state.isInvisible || entity.isSpectator()) return;
         Vec3 offset = new Vec3(state.x - entity.getX(), state.y - entity.getY(), state.z - entity.getZ());
         EXTRACTED.add(new ViewportTarget(new ViewportTarget.Key(ID, entity.getUUID().toString()),
                 entity.getBoundingBox().move(offset), ViewportTarget.Decoration.DISC, List.of()));
     }
     @Override public String id() { return ID; }
+    @Override public UUID editableObject(String id) {
+        try { return UUID.fromString(id); } catch (IllegalArgumentException invalid) { return null; }
+    }
+    @Override public boolean editableType(String typeId) {
+        return com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities.TYPE_ID.equals(typeId);
+    }
+    @Override public Set<ViewportVisualization.Layer> selectableLayers() {
+        return Set.of(ViewportVisualization.Layer.ENTITY);
+    }
     @Override public List<ViewportTarget> capture(PresentedViewportFrame frame) {
+        if (!ViewportVisualization.current().visible(ViewportVisualization.Layer.ENTITY)) return List.of();
         var level = Minecraft.getInstance().level;
         if (level == null) return List.of();
         List<ViewportTarget> result = new ArrayList<>();

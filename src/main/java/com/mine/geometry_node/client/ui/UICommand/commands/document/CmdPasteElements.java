@@ -119,12 +119,6 @@ public class CmdPasteElements implements ICommand {
         }
     }
 
-    @Override
-    public void undo() {
-        for (NodeData node : mPastedNodes) mController.removeNode(node.id);
-        for (FrameData frame : mPastedFrames) mController.removeFrame(frame.id);
-    }
-
     public List<NodeData> getPastedNodes() {
         return Collections.unmodifiableList(mPastedNodes);
     }

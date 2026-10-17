@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.scene;
 
+import com.mine.geometry_node.client.history.*;
+import com.mine.geometry_node.client.scene.history.SceneHistoryAdapter;
+import com.mine.geometry_node.client.scene.history.SceneHistoryAdapter.Delta;
 import com.mine.geometry_node.core.engine.system.scene.SceneChange;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneEdit;
@@ -15,7 +18,8 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /** Immutable cross-thread UI/render mirror. Every mutation is acknowledged by the server before entering history. */
-public final class ClientSceneService {
+public final class ClientSceneService implements HistoryTarget {
+    private static final System.Logger LOGGER = System.getLogger(ClientSceneService.class.getName());
     public static final ClientSceneService INSTANCE = new ClientSceneService();
     public record Snapshot(String dimension, long revision, List<SceneObject> objects, Set<UUID> selected,
                            UUID active, boolean canEdit, boolean pending, String message, long worldGeneration) {
@@ -28,9 +32,14 @@ public final class ClientSceneService {
     }
     private volatile Snapshot published = new Snapshot("", 0, List.of(), Set.of(), null, false, false, "", 0);
     private volatile Snapshot confirmed = published;
-    private final SceneHistory history = new SceneHistory();
+    private final SceneHistoryAdapter history = new SceneHistoryAdapter("scene:unbound");
+    private final List<HistorySubscription> historyListeners = new ArrayList<>();
+    private HistoryState lastHistoryState;
+    private boolean notifyingHistory, finalizingHistory;
+    private SceneClipboard clipboard = SceneClipboard.EMPTY;
     private final com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime collisions = new com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime();
     private final Consumer<PacketSceneEdit> transport;
+    private final Map<String, BackendSnapshot> backendSnapshots = new LinkedHashMap<>();
     private Map<UUID, SceneObject> objects = Map.of();
     private Map<UUID, Long> versions = Map.of();
     private Set<UUID> selected = Set.of();
@@ -45,11 +54,82 @@ public final class ClientSceneService {
     private boolean canEdit, initialized, received;
     private ClientSceneService() { this(null); }
     /** Optional transport keeps the logical mirror usable without a Minecraft process. */
-    ClientSceneService(Consumer<PacketSceneEdit> transport) { this.transport = transport; }
+    ClientSceneService(Consumer<PacketSceneEdit> transport) {
+        this.transport = transport;
+        history.subscribe(ignored -> publishHistory());
+    }
     public Snapshot snapshot() { return published; }
     public Snapshot confirmedSnapshot() { return confirmed; }
-    public synchronized boolean canUndo() { return canEdit && pending == null && history.canUndo(); }
-    public synchronized boolean canRedo() { return canEdit && pending == null && history.canRedo(); }
+    /** UI and automation query the same complete-selection policy as mutation entry points. */
+    public synchronized SceneEditCapabilities.Availability availability(SceneEditCapabilities.Action action) {
+        return availability(action, false);
+    }
+    public synchronized SceneEditCapabilities.Availability availability(SceneEditCapabilities.Action action, boolean unresolvedTargets) {
+        Collection<SceneObject> values = action == SceneEditCapabilities.Action.PASTE ? clipboard.objects()
+                : objects.values().stream().filter(object -> selected.contains(object.id())).toList();
+        var result = SceneEditCapabilities.evaluate(action, values, unresolvedTargets);
+        if (!result.allowed()) return result;
+        if (!received || dimension.isEmpty() || (action != SceneEditCapabilities.Action.COPY && !canEdit))
+            return new SceneEditCapabilities.Availability(SceneEditCapabilities.Reason.UNAVAILABLE);
+        if (action != SceneEditCapabilities.Action.COPY && (pending != null || previewOwner != null
+                || history.state().phase() != HistoryState.Phase.IDLE))
+            return new SceneEditCapabilities.Availability(SceneEditCapabilities.Reason.BUSY);
+        return result;
+    }
+    private static void requireCapability(SceneEditCapabilities.Action action, Collection<SceneObject> values) {
+        var availability = SceneEditCapabilities.evaluate(action, values, false);
+        if (!availability.allowed()) throw new IllegalArgumentException(availability.message());
+    }
+    @Override public synchronized HistoryState historyState() {
+        HistoryState state = history.state();
+        String unavailable = !received || !canEdit || dimension.isEmpty() ? "Scene editing is unavailable or permission was denied"
+                : previewOwner != null ? "Cancel the active scene preview first" : "";
+        if (state.phase() != HistoryState.Phase.IDLE) return state;
+        return state.withAvailability(
+                unavailable.isEmpty() ? history.blockedReason(true, objects, versions) : unavailable,
+                unavailable.isEmpty() ? history.blockedReason(false, objects, versions) : unavailable);
+    }
+    public synchronized boolean canUndo() { return historyState().canUndo(); }
+    public synchronized boolean canRedo() { return historyState().canRedo(); }
+    @Override public synchronized AutoCloseable subscribeHistory(Consumer<HistoryState> listener) {
+        requireMutationAllowed();
+        Objects.requireNonNull(listener);
+        HistorySubscription subscription = new HistorySubscription(listener);
+        historyListeners.add(subscription);
+        boolean previous = notifyingHistory;
+        notifyingHistory = true;
+        try { notifyHistory(listener, historyState()); }
+        finally { notifyingHistory = previous; }
+        return subscription;
+    }
+    private void publishHistory() {
+        if (finalizingHistory) return;
+        HistoryState state = historyState();
+        if (state.equals(lastHistoryState)) return;
+        lastHistoryState = state;
+        boolean previous = notifyingHistory;
+        notifyingHistory = true;
+        try {
+            for (var subscription : List.copyOf(historyListeners)) {
+                if (subscription.active) notifyHistory(subscription.listener, state);
+            }
+        } finally { notifyingHistory = previous; }
+    }
+    private void notifyHistory(Consumer<HistoryState> listener, HistoryState state) {
+        try { listener.accept(state); }
+        catch (Throwable failure) { LOGGER.log(System.Logger.Level.WARNING, "Scene history observer failed", failure); }
+    }
+    private final class HistorySubscription implements AutoCloseable {
+        private final Consumer<HistoryState> listener;
+        private boolean active = true;
+        private HistorySubscription(Consumer<HistoryState> listener) { this.listener = listener; }
+        @Override public void close() {
+            synchronized (ClientSceneService.this) { active = false; historyListeners.remove(this); }
+        }
+    }
+    private void requireMutationAllowed() {
+        if (notifyingHistory || finalizingHistory) throw new IllegalStateException("Scene history notification reentry");
+    }
     public synchronized void init() {
         if (initialized) return;
         initialized = true;
@@ -68,28 +148,47 @@ public final class ClientSceneService {
             lastSyncTick = ticks;
             send(new PacketSceneEdit(UUID.randomUUID(), dimension, List.of()), generation);
         }
-        if (pending != null && ticks - pending.sentTick >= 100) {
-            // Reuse the operation ID. A lost acknowledgement must not create a second object/history entry.
-            pending.sentTick = ticks;
-            send(pending.packet, generation);
-            message = "Waiting for server confirmation";
-            publish();
+        if (com.mine.geometry_node.client.runtime.game.input.GameViewportInput.isEditor(minecraft.screen)) {
+            for (var backend : SceneEditBackends.all()) if (backend.subscribed().getAsBoolean() && ticks % backend.syncIntervalTicks() == 0)
+                send(new PacketSceneEdit(UUID.randomUUID(), dimension, List.of()), generation, backend.id());
+        }
+        retryPending();
+    }
+    synchronized void advancePendingTick() { ticks++; retryPending(); }
+    private void retryPending() {
+        if (pending == null || ticks - pending.sentTick < 100) return;
+        Pending attempt = pending;
+        attempt.sentTick = ticks;
+        message = "Waiting for server confirmation";
+        publish();
+        history.markUnknown(attempt.ticket, message);
+        // UNKNOWN still owns the reservation; retry precisely the same request/token.
+        if (pending == attempt) {
+            try { send(attempt.packet, generation, attempt.backend); }
+            catch (RuntimeException ignored) { /* Still UNKNOWN; retry the same reservation next time. */ }
         }
     }
     private synchronized void reset(ClientLevel level) {
         bindWorld(level, level == null ? "" : level.dimension().identifier().toString());
     }
     synchronized void bindWorld(Object identity, String dimensionId) {
+        requireMutationAllowed();
         if (identity == world && dimension.equals(dimensionId)) return;
         if (world instanceof ClientLevel previous) collisions.clear(previous);
         generation++;
         world = identity;
         dimension = dimensionId;
         revision = 0; received = canEdit = false; message = "";
+        backendSnapshots.clear();
         objects = Map.of(); versions = Map.of(); selected = Set.of(); active = null;
-        previewBase = Map.of(); preview = Map.of(); previewOwner = null; pending = null; history.clear();
+        previewBase = Map.of(); preview = Map.of(); previewOwner = null; pending = null; clipboard = SceneClipboard.EMPTY;
         lastSyncTick = ticks - 20;
-        publish();
+        finalizingHistory = true;
+        try {
+            publish();
+            history.reset("scene:" + generation + ":" + dimension);
+        } finally { finalizingHistory = false; }
+        publishHistory();
     }
     public void accept(PacketSceneSnapshot packet) { accept(packet, snapshot().worldGeneration()); }
     public synchronized void accept(PacketSceneSnapshot packet, long expectedGeneration) {
@@ -97,25 +196,47 @@ public final class ClientSceneService {
         if (world != level) reset(level);
         acceptSnapshot(packet, expectedGeneration);
     }
+    /** Network entry point for registered authorities; world identity is checked before UI publication. */
+    public synchronized void acceptBackendSnapshot(String backend, PacketSceneSnapshot packet, long expectedGeneration) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (world != level) reset(level);
+        acceptSnapshot(packet, expectedGeneration, backend);
+    }
     synchronized void acceptSnapshot(PacketSceneSnapshot packet, long expectedGeneration) {
+        acceptSnapshot(packet, expectedGeneration, SceneEditBackends.AUTHORED);
+    }
+    synchronized void acceptSnapshot(PacketSceneSnapshot packet, long expectedGeneration, String backend) {
+        requireMutationAllowed();
         if (world == null || expectedGeneration != generation || !dimension.equals(packet.dimension())) return;
-        Pending completed = pending != null && pending.packet.requestId().equals(packet.requestId()) ? pending : null;
+        if (!backend.equals(SceneEditBackends.AUTHORED) && SceneEditBackends.all().stream().noneMatch(b -> b.id().equals(backend))) return;
+        if (packet.objects().stream().anyMatch(object -> !SceneEditBackends.accepts(backend, object))) return;
+        Pending completed = pending != null && pending.backend.equals(backend)
+                && pending.packet.requestId().equals(packet.requestId()) ? pending : null;
         Map<UUID, SceneObject> incoming = index(packet.objects());
         Map<UUID, Long> incomingVersions = versionIndex(packet.objects(), packet.deletedVersions());
         if (completed != null) {
             pending = null;
             if (packet.success()) {
-                if (completed.kind == Kind.EDIT) history.acknowledgeEdit(completed.before, incoming, completed.ids, incomingVersions);
-                else history.acknowledgeHistory(completed.kind == Kind.UNDO, incomingVersions);
-                if (completed.selectCreated != null && incoming.containsKey(completed.selectCreated)) {
-                    selected = Set.of(completed.selectCreated); active = completed.selectCreated;
+                if (completed.selection != null) {
+                    selected = completed.selection.ids(); active = completed.selection.active();
                 }
                 message = "";
             } else message = packet.message();
         }
         // Cached idempotent acknowledgements may describe an older revision than a later broadcast.
-        if (!received || packet.revision() >= revision) {
-            objects = incoming; versions = incomingVersions; revision = packet.revision();
+        BackendSnapshot previous = backendSnapshots.get(backend);
+        if (previous == null || packet.revision() >= previous.revision()) {
+            backendSnapshots.put(backend, new BackendSnapshot(packet.revision(), incoming, incomingVersions));
+            Map<UUID, SceneObject> merged = new LinkedHashMap<>();
+            Map<UUID, Long> mergedVersions = new HashMap<>();
+            for (var entry : backendSnapshots.values()) {
+                entry.objects().forEach((id, object) -> {
+                    if (merged.putIfAbsent(id, object) != null) throw new IllegalStateException("Duplicate backend object identity");
+                });
+                mergedVersions.putAll(entry.versions());
+            }
+            objects = Collections.unmodifiableMap(merged); versions = Map.copyOf(mergedVersions);
+            revision = Math.max(revision, packet.revision());
             canEdit = packet.canEdit(); received = true;
             if (completed == null && !packet.success()) message = packet.message();
             if (pending != null && !pending.visualObjects.isEmpty()) {
@@ -136,36 +257,94 @@ public final class ClientSceneService {
         }
         Set<UUID> surviving = new LinkedHashSet<>(selected); surviving.retainAll(objects.keySet()); selected = Set.copyOf(surviving);
         if (active == null || !selected.contains(active)) active = selected.stream().findFirst().orElse(null);
-        publish();
+        // Keep the reservation occupied through mirror/selection publication. Observers and
+        // operation completion must see the final domain state, including for a cached old ACK.
+        finalizingHistory = true;
+        try {
+            publish();
+            if (completed != null) {
+                if (!packet.success()) history.fail(completed.ticket, HistoryResult.Status.REJECTED, packet.message());
+                else if (completed.ticket.kind() == HistoryOperation.Kind.EDIT)
+                    history.acknowledgeEdit(completed.ticket, completed.before, incoming, completed.ids,
+                            completed.packet.changes().stream().collect(java.util.stream.Collectors.toMap(
+                                    SceneChange::id, SceneChange::expectedRevision)), incomingVersions);
+                else history.acknowledgeReplay(completed.ticket, incomingVersions);
+            }
+        } finally { finalizingHistory = false; }
+        publishHistory();
     }
     public synchronized void select(Set<UUID> ids, UUID activeId) {
+        requireMutationAllowed();
         Set<UUID> valid = new LinkedHashSet<>(ids); valid.retainAll(objects.keySet()); selected = Set.copyOf(valid);
         active = activeId != null && selected.contains(activeId) ? activeId : valid.stream().findFirst().orElse(null);
         publish();
     }
-    public void createPointLight(Vec3 position) { createPointLight(snapshot().worldGeneration(), position); }
-    public synchronized void createPointLight(long expectedGeneration, Vec3 position) {
-        if (!editable(expectedGeneration)) return;
-        create(expectedGeneration, SceneObject.POINT_LIGHT, position);
+    public HistoryOperation createPointLight(Vec3 position) { return createPointLight(snapshot().worldGeneration(), position); }
+    public synchronized HistoryOperation createPointLight(long expectedGeneration, Vec3 position) {
+        return create(expectedGeneration, SceneObject.POINT_LIGHT, position);
     }
-    public synchronized void create(long expectedGeneration,String typeId,Vec3 position){
-        if (!editable(expectedGeneration)) return;
-        var type = com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(typeId);
-        SceneObject object = type.create(UUID.randomUUID(),position);
-        String name = net.minecraft.network.chat.Component.translatable(type.labelKey()).getString();
-        if (!name.isBlank() && name.length() <= 96)
-            object = object.withProperties(name, object.color(), object.enabled(), object.parameters());
-        submit(List.of(new SceneChange(object.id(), -1, object)), Kind.EDIT, object.id());
+    public synchronized HistoryOperation create(long expectedGeneration, String typeId, Vec3 position) {
+        return executeEdit(expectedGeneration, "Create scene object", () -> {
+            var type = com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(typeId);
+            if (!type.creatable()) throw new IllegalArgumentException(
+                    new SceneEditCapabilities.Availability(SceneEditCapabilities.Reason.UNSUPPORTED).message());
+            SceneObject object = type.create(UUID.randomUUID(), position);
+            String name = net.minecraft.network.chat.Component.translatable(type.labelKey()).getString();
+            if (!name.isBlank() && name.length() <= 96)
+                object = object.withProperties(name, object.color(), object.enabled(), object.parameters());
+            requireCapability(SceneEditCapabilities.Action.CREATE, List.of(object));
+            return new Edit(List.of(new SceneChange(object.id(), -1, object)),
+                    new Selection(Set.of(object.id()), object.id()), Map.of());
+        });
     }
-    public void update(SceneObject replacement) { update(snapshot().worldGeneration(), replacement); }
-    public synchronized void update(long expectedGeneration, SceneObject replacement) {
-        if (!editable(expectedGeneration)) return;
-        submit(List.of(new SceneChange(replacement.id(), replacement.revision(), replacement)), Kind.EDIT, null);
+    public HistoryOperation update(SceneObject replacement) { return update(snapshot().worldGeneration(), replacement); }
+    public synchronized HistoryOperation update(long expectedGeneration, SceneObject replacement) {
+        return executeEdit(expectedGeneration, "Update scene object", () -> new Edit(
+                List.of(new SceneChange(replacement.id(), replacement.revision(), replacement)), null, Map.of()));
     }
-    public synchronized void deleteSelected() {
-        if (!editable(generation) || selected.isEmpty()) return;
-        List<SceneChange> changes = selected.stream().map(id -> new SceneChange(id, versions.getOrDefault(id, -1L), null)).toList();
-        submit(changes, Kind.EDIT, null);
+    /** Copy confirmed immutable values; later source edits/deletion cannot change the clipboard. */
+    public synchronized void copySelected() {
+        requireMutationAllowed();
+        var availability = availability(SceneEditCapabilities.Action.COPY);
+        if (!availability.allowed()) { message = availability.message(); publish(); return; }
+        List<SceneObject> values = objects.values().stream().filter(object -> selected.contains(object.id())).toList();
+        clipboard = new SceneClipboard(values, active);
+        message = ""; publish();
+    }
+    public synchronized HistoryOperation paste() {
+        return executeEdit(generation, "Paste scene objects", () -> {
+            if (clipboard.objects().isEmpty()) {
+                clipboardMessage("empty");
+                return new Edit(List.of(), null, Map.of());
+            }
+            requireCapability(SceneEditCapabilities.Action.PASTE, clipboard.objects());
+            String backend = SceneEditBackends.owner(clipboard.objects().getFirst());
+            long existing = objects.values().stream().filter(object -> SceneEditBackends.owner(object).equals(backend)).count();
+            if (existing + clipboard.objects().size() > com.mine.geometry_node.core.engine.system.scene.SceneDocument.MAX_OBJECTS) {
+                clipboardMessage("budget");
+                throw new IllegalArgumentException(message);
+            }
+            SceneClipboard copies = clipboard.duplicate();
+            List<SceneChange> changes = new ArrayList<>();
+            Set<UUID> ids = new LinkedHashSet<>();
+            for (SceneObject object : copies.objects()) {
+                com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.validate(object);
+                changes.add(new SceneChange(object.id(), -1, object));
+                ids.add(object.id());
+            }
+            return new Edit(changes, new Selection(ids, copies.active()), Map.of());
+        });
+    }
+    private void clipboardMessage(String suffix) {
+        message = net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene.clipboard." + suffix).getString();
+        publish();
+    }
+    public synchronized HistoryOperation deleteSelected() {
+        return executeEdit(generation, "Delete scene objects", () -> {
+            if (!selected.isEmpty()) requireCapability(SceneEditCapabilities.Action.DELETE,
+                    selected.stream().map(objects::get).toList());
+            return new Edit(selected.stream().map(id -> new SceneChange(id, versions.getOrDefault(id, -1L), null)).toList(), null, Map.of());
+        });
     }
     public synchronized boolean beginPreview(Set<UUID> ids) {
         Map<UUID, Long> expected = new LinkedHashMap<>();
@@ -189,76 +368,168 @@ public final class ClientSceneService {
             if (expectedObjects != null && !object.sameContent(expectedObjects.get(entry.getKey()))) return false;
             base.put(entry.getKey(), object);
         }
+        var availability = SceneEditCapabilities.evaluate(SceneEditCapabilities.Action.PROPERTIES, base.values(), false);
+        if (!availability.allowed()) { message = availability.message(); publish(); return false; }
         previewBase = Map.copyOf(base); preview = Map.of(); previewOwner = owner;
         publish(); return true;
     }
     public synchronized boolean previewActive(Object owner) { return previewOwner == owner && !previewBase.isEmpty(); }
     public synchronized void previewPositions(Object owner, Map<UUID, Vec3> positions) {
-        if (previewActive(owner)) previewPositions(positions);
+        requireMutationAllowed();
+        if (previewActive(owner)) applyPreviewPositions(positions);
     }
     public synchronized void previewPositions(Map<UUID, Vec3> positions) {
-        if (previewBase.isEmpty()) return;
+        requireMutationAllowed();
+        if (previewActive(this)) applyPreviewPositions(positions);
+    }
+    private void applyPreviewPositions(Map<UUID, Vec3> positions) {
         Map<UUID, SceneObject> next = new LinkedHashMap<>();
         for (var entry : positions.entrySet()) {
             SceneObject base = previewBase.get(entry.getKey());
             if (base == null) throw new IllegalArgumentException("Object is not part of this drag");
-            next.put(entry.getKey(), base.withPosition(entry.getValue()));
+            SceneObject moved = com.mine.geometry_node.core.engine.system.scene.SceneObjectCapabilities.transformed(
+                    base, entry.getValue(), base.rotation(), base.scale());
+            com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.validate(moved);
+            next.put(entry.getKey(), moved);
         }
         preview = Map.copyOf(next); publish();
     }
     public synchronized void previewObjects(Object owner, Map<UUID,SceneObject> values) {
+        requireMutationAllowed();
         if(!previewActive(owner))return;
         for(var entry:values.entrySet()){
             SceneObject base=previewBase.get(entry.getKey()), value=entry.getValue();
-            if(base==null||!base.withTransform(value.position(),value.rotation(),value.scale()).equals(value))throw new IllegalArgumentException("Not a transform of preview base");
+            if(base==null||!com.mine.geometry_node.core.engine.system.scene.SceneObjectCapabilities.transformed(
+                    base,value.position(),value.rotation(),value.scale()).equals(value))throw new IllegalArgumentException("Not a transform of preview base");
             com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.validate(value);
         }
         preview=Map.copyOf(values);publish();
     }
-    public synchronized void commitPreview() {
-        if (previewBase.isEmpty()) return;
-        List<SceneChange> changes = new ArrayList<>();
-        Map<UUID, SceneObject> visualObjects = new LinkedHashMap<>();
-        for (var entry : preview.entrySet()) {
-            SceneObject base = previewBase.get(entry.getKey());
-            if (!base.sameContent(entry.getValue())) {
-                changes.add(new SceneChange(base.id(), base.revision(), entry.getValue()));
-                visualObjects.put(base.id(), entry.getValue());
+    public synchronized HistoryOperation commitPreview() { return commitPreview(this); }
+    public synchronized HistoryOperation commitPreview(Object owner) {
+        requireMutationAllowed();
+        if (!previewActive(owner)) return completed(HistoryOperation.Kind.EDIT, HistoryResult.Status.NO_CHANGE, "Preview is not owned by caller");
+        return executeEdit(generation, "Transform scene objects", () -> {
+            List<SceneChange> changes = new ArrayList<>();
+            Map<UUID, SceneObject> visualObjects = new LinkedHashMap<>();
+            for (var entry : preview.entrySet()) {
+                SceneObject base = previewBase.get(entry.getKey());
+                if (!base.sameContent(entry.getValue())) {
+                    changes.add(new SceneChange(base.id(), base.revision(), entry.getValue()));
+                    visualObjects.put(base.id(), entry.getValue());
+                }
             }
+            previewBase = Map.of(); preview = Map.of(); previewOwner = null;
+            return new Edit(changes, null, Map.copyOf(visualObjects));
+        }, owner);
+    }
+    public synchronized void cancelPreview(Object owner) {
+        requireMutationAllowed();
+        if (previewActive(owner)) { previewBase = Map.of(); preview = Map.of(); previewOwner = null; publish(); }
+    }
+    public synchronized void cancelPreview() { cancelPreview(this); }
+    @Override public synchronized HistoryOperation undo() { return submitHistory(true); }
+    @Override public synchronized HistoryOperation redo() { return submitHistory(false); }
+    private HistoryOperation submitHistory(boolean undoing) {
+        requireMutationAllowed();
+        HistoryOperation.Kind kind = undoing ? HistoryOperation.Kind.UNDO : HistoryOperation.Kind.REDO;
+        if (history.state().phase() != HistoryState.Phase.IDLE)
+            return completed(kind, HistoryResult.Status.REJECTED, "Waiting for server confirmation");
+        HistorySession.Ticket<Delta> ticket = history.beginReplay(undoing);
+        if (ticket == null) return completed(kind, HistoryResult.Status.NO_CHANGE, "");
+        if (!editable(generation, true) || previewOwner != null) {
+            if (previewOwner != null) { message = "Cancel the active scene preview first"; publish(); }
+            failAttempt(ticket, HistoryResult.Status.REJECTED, message);
+            return ticket.operation();
         }
-        previewBase = Map.of(); preview = Map.of(); previewOwner = null;
-        if (editable(generation) && !changes.isEmpty()) submit(changes, Kind.EDIT, null, visualObjects);
-        else publish();
+        try { submit(history.prepare(ticket, objects, versions), ticket, null, Map.of()); }
+        catch (IllegalArgumentException failure) { failAttempt(ticket, HistoryResult.Status.REJECTED, failure.getMessage()); }
+        catch (IllegalStateException failure) { failAttempt(ticket, HistoryResult.Status.CONFLICT, failure.getMessage()); }
+        catch (RuntimeException failure) { failAttempt(ticket, HistoryResult.Status.FAILED, failure.getMessage()); }
+        return ticket.operation();
     }
-    public synchronized void commitPreview(Object owner) { if (previewActive(owner)) commitPreview(); }
-    public synchronized void cancelPreview(Object owner) { if (previewActive(owner)) cancelPreview(); }
-    public synchronized void cancelPreview() { previewBase = Map.of(); preview = Map.of(); previewOwner = null; publish(); }
-    public synchronized void undo() { submitHistory(true); }
-    public synchronized void redo() { submitHistory(false); }
-    private void submitHistory(boolean undoing) {
-        if (!editable(generation)) return;
-        try {
-            List<SceneChange> changes = history.prepare(undoing, objects, versions);
-            if (!changes.isEmpty()) submit(changes, undoing ? Kind.UNDO : Kind.REDO, null);
-        } catch (IllegalStateException failure) { message = failure.getMessage(); publish(); }
-    }
-    private boolean editable(long expectedGeneration) {
-        if (generation != expectedGeneration) return false;
+    private boolean editable(long expectedGeneration) { return editable(expectedGeneration, false); }
+    private boolean editable(long expectedGeneration, boolean reserved) {
+        requireMutationAllowed();
+        if (generation != expectedGeneration) { message = "Scene scope changed"; return false; }
         if (!received || !canEdit || dimension.isEmpty()) { message = "Scene editing is unavailable or permission was denied"; publish(); return false; }
-        if (pending != null) { message = "Waiting for server confirmation"; publish(); return false; }
+        if (pending != null || (!reserved && history.state().phase() != HistoryState.Phase.IDLE)) {
+            message = "Waiting for server confirmation"; publish(); return false;
+        }
         return true;
     }
-    private void submit(List<SceneChange> changes, Kind kind, UUID selectCreated) {
-        submit(changes, kind, selectCreated, Map.of());
+    private HistoryOperation executeEdit(long expectedGeneration, String label, java.util.function.Supplier<Edit> prepare) {
+        return executeEdit(expectedGeneration, label, prepare, null);
     }
-    private void submit(List<SceneChange> changes, Kind kind, UUID selectCreated, Map<UUID, SceneObject> visualObjects) {
-        previewBase = Map.of(); preview = Map.of(); previewOwner = null;
-        PacketSceneEdit packet = new PacketSceneEdit(UUID.randomUUID(), dimension, changes);
+    private HistoryOperation executeEdit(long expectedGeneration, String label, java.util.function.Supplier<Edit> prepare, Object owner) {
+        requireMutationAllowed();
+        if (history.state().phase() != HistoryState.Phase.IDLE)
+            return completed(HistoryOperation.Kind.EDIT, HistoryResult.Status.REJECTED, "Waiting for server confirmation");
+        HistorySession.Ticket<Delta> ticket = history.beginEdit(UUID.randomUUID().toString(), label);
+        try {
+            if (!editable(expectedGeneration, true) || (previewOwner != null && previewOwner != owner)) {
+                if (previewOwner != null && previewOwner != owner) message = "Cancel the active scene preview first";
+                failAttempt(ticket, HistoryResult.Status.REJECTED, message);
+            } else {
+                Edit edit = prepare.get();
+                if (edit.changes().isEmpty()) {
+                    finalizingHistory = true;
+                    try { publish(); history.noChange(ticket); }
+                    finally { finalizingHistory = false; }
+                    publishHistory();
+                }
+                else submit(edit.changes(), ticket, edit.selection(), edit.visualObjects());
+            }
+        } catch (IllegalArgumentException failure) { failAttempt(ticket, HistoryResult.Status.REJECTED, failure.getMessage()); }
+        catch (RuntimeException failure) { failAttempt(ticket, HistoryResult.Status.FAILED, failure.getMessage()); }
+        return ticket.operation();
+    }
+    private void failAttempt(HistorySession.Ticket<Delta> ticket, HistoryResult.Status status, String reason) {
+        if (pending != null && pending.ticket == ticket) pending = null;
+        message = reason == null ? "Scene edit failed" : reason;
+        finalizingHistory = true;
+        try { publish(); history.fail(ticket, status, message); }
+        finally { finalizingHistory = false; }
+        publishHistory();
+    }
+    private HistoryOperation completed(HistoryOperation.Kind kind, HistoryResult.Status status, String reason) {
+        HistoryState state = history.state();
+        return HistoryOperation.completed(kind, new HistoryResult(status, reason, state.lastChangeId(), state.revision()));
+    }
+    private void submit(List<SceneChange> changes, HistorySession.Ticket<Delta> ticket, Selection selection,
+                        Map<UUID, SceneObject> visualObjects) {
+        Set<String> backends = new HashSet<>();
+        for (SceneChange change : changes) {
+            SceneObject object = change.replacement() != null ? change.replacement() : objects.get(change.id());
+            if (object == null) throw new IllegalArgumentException("Object no longer exists");
+            // Undoing deletion recreates an absent object against a positive tombstone revision.
+            var mutation = change.replacement() == null ? SceneEditBackends.Mutation.DELETE
+                    : change.expectedRevision() < 0 || !objects.containsKey(change.id()) ? SceneEditBackends.Mutation.CREATE : SceneEditBackends.Mutation.UPDATE;
+            if (!SceneEditBackends.supports(object, mutation)) throw new IllegalArgumentException(
+                    new SceneEditCapabilities.Availability(SceneEditCapabilities.Reason.UNSUPPORTED).message());
+            backends.add(SceneEditBackends.owner(object));
+        }
+        if (backends.size() != 1) throw new IllegalArgumentException(
+                new SceneEditCapabilities.Availability(SceneEditCapabilities.Reason.MIXED_BACKENDS).message());
+        String backend = backends.iterator().next();
+        PacketSceneEdit packet = new PacketSceneEdit(ticket.operation().id(), dimension, changes);
         Set<UUID> ids = new LinkedHashSet<>(); changes.forEach(change -> ids.add(change.id()));
-        pending = new Pending(packet, kind, objects, Set.copyOf(ids), selectCreated, ticks, Map.copyOf(visualObjects));
-        message = ""; publish(); send(packet, generation);
+        Pending attempt = new Pending(backend, packet, ticket, objects, Set.copyOf(ids), selection, ticks, Map.copyOf(visualObjects));
+        pending = attempt;
+        message = ""; publish();
+        try { send(packet, generation, backend); }
+        catch (RuntimeException failure) {
+            // A transport can throw after submitting. Retain ownership until the request is resolved.
+            if (pending == attempt) {
+                message = "Scene transport failed; awaiting confirmation"; publish();
+                history.markUnknown(ticket, message);
+            }
+        }
     }
     private void send(PacketSceneEdit packet, long expectedGeneration) {
+        send(packet, expectedGeneration, SceneEditBackends.AUTHORED);
+    }
+    private void send(PacketSceneEdit packet, long expectedGeneration, String backend) {
         if (transport != null) {
             if (generation == expectedGeneration) transport.accept(packet);
             return;
@@ -267,7 +538,7 @@ public final class ClientSceneService {
             synchronized (this) {
                 Minecraft minecraft = Minecraft.getInstance();
                 if (generation != expectedGeneration || minecraft.level != world || minecraft.getConnection() == null) return;
-                NetworkManager.sendToServer(packet);
+                SceneEditBackends.send(backend, packet);
             }
         });
     }
@@ -281,6 +552,7 @@ public final class ClientSceneService {
                     .map(object -> visualObjects.containsKey(object.id()) ? visualObjects.get(object.id()) : object).toList();
             published = new Snapshot(dimension, revision, rendered, selected, active, canEdit, pending != null, message, generation);
         }
+        publishHistory();
     }
     private static Map<UUID, SceneObject> index(List<SceneObject> values) {
         Map<UUID, SceneObject> result = new LinkedHashMap<>();
@@ -291,14 +563,19 @@ public final class ClientSceneService {
         Map<UUID, Long> result = new HashMap<>(deleted); values.forEach(object -> result.put(object.id(), object.revision()));
         return Map.copyOf(result);
     }
-    private enum Kind { EDIT, UNDO, REDO }
+    private record BackendSnapshot(long revision, Map<UUID, SceneObject> objects, Map<UUID, Long> versions) {}
+    private record Selection(Set<UUID> ids, UUID active) {
+        private Selection { ids = Set.copyOf(ids); }
+    }
+    private record Edit(List<SceneChange> changes, Selection selection, Map<UUID, SceneObject> visualObjects) {}
     private static final class Pending {
-        final PacketSceneEdit packet; final Kind kind; final Map<UUID, SceneObject> before;
-        final Set<UUID> ids; final UUID selectCreated; long sentTick;
+        final String backend;
+        final PacketSceneEdit packet; final HistorySession.Ticket<Delta> ticket; final Map<UUID, SceneObject> before;
+        final Set<UUID> ids; final Selection selection; long sentTick;
         Map<UUID, SceneObject> visualObjects;
-        Pending(PacketSceneEdit packet, Kind kind, Map<UUID, SceneObject> before, Set<UUID> ids, UUID selectCreated, long sentTick,
+        Pending(String backend, PacketSceneEdit packet, HistorySession.Ticket<Delta> ticket, Map<UUID, SceneObject> before, Set<UUID> ids, Selection selection, long sentTick,
                 Map<UUID, SceneObject> visualObjects) {
-            this.packet = packet; this.kind = kind; this.before = before; this.ids = ids; this.selectCreated = selectCreated;
+            this.backend = backend; this.packet = packet; this.ticket = ticket; this.before = before; this.ids = ids; this.selection = selection;
             this.sentTick = sentTick; this.visualObjects = visualObjects;
         }
     }

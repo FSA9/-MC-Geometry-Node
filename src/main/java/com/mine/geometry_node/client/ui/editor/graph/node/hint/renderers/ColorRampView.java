@@ -31,6 +31,7 @@ import icyllis.modernui.widget.TextView;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 final class ColorRampView extends LinearLayout {
@@ -159,10 +160,8 @@ final class ColorRampView extends LinearLayout {
     }
 
     private void previewDrag(ColorGradientValue next) {
+        // Keep previews detached: saving during a drag must only serialize committed inputs.
         mGradient = next != null ? next : ColorGradientValue.DEFAULT;
-        if (mNodeData != null) {
-            mNodeData.inputs.put(ColorRamp.GRADIENT_INPUT, mGradient.toMap());
-        }
         refreshUiFromCurrentGradient();
     }
 
@@ -258,6 +257,11 @@ final class ColorRampView extends LinearLayout {
     }
 
     private boolean commitGradient(Object oldValue, ColorGradientValue next) {
+        // A command/MCP edit may have replaced the input while this control was dragging.
+        if (!Objects.equals(oldValue, currentStoredGradientValue())) {
+            refreshUi(true);
+            return false;
+        }
         mGradient = next != null ? next : ColorGradientValue.DEFAULT;
         boolean changed = UIHintValueBinder.commit(mEditorContext, mNodeData, ColorRamp.GRADIENT_INPUT, oldValue, mGradient.toMap());
         refreshUi(true);
@@ -265,7 +269,9 @@ final class ColorRampView extends LinearLayout {
     }
 
     private Object currentStoredGradientValue() {
-        return mNodeData != null ? mNodeData.inputs.get(ColorRamp.GRADIENT_INPUT) : null;
+        Object raw = mNodeData != null ? mNodeData.inputs.get(ColorRamp.GRADIENT_INPUT) : null;
+        // Detach the comparison snapshot from the model's potentially mutable map/list values.
+        return raw != null ? ColorGradientValue.from(raw).toMap() : null;
     }
 
     private NumericInputView.NumericControlKey numericControlKey(String controlId) {
@@ -408,6 +414,7 @@ final class ColorRampView extends LinearLayout {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 requestFocus();
+                refreshUi(false);
                 mDragWidthPx = Math.max(1.0f, getWidth());
                 float barBottom = gradientTrackBottom(getHeight());
                 int hitIndex = hitStop(event.getX(), event.getY(), mDragWidthPx, barBottom);
@@ -417,7 +424,7 @@ final class ColorRampView extends LinearLayout {
                 }
                 requestDisallowParentIntercept(true);
                 mDragging = true;
-                mDragOldValue = mNodeData != null ? mNodeData.inputs.get(ColorRamp.GRADIENT_INPUT) : null;
+                mDragOldValue = currentStoredGradientValue();
                 selectStop(hitIndex);
                 return true;
             }
@@ -434,9 +441,9 @@ final class ColorRampView extends LinearLayout {
                 requestDisallowParentIntercept(false);
                 if (wasDragging) {
                     if (action == MotionEvent.ACTION_CANCEL) {
-                        restoreDragOldValue();
+                        refreshUi(false);
                     } else {
-                        commitDragValue();
+                        commitGradient(mDragOldValue, mGradient);
                     }
                 }
                 return true;
@@ -502,32 +509,6 @@ final class ColorRampView extends LinearLayout {
         private void selectStop(int index) {
             mGradient = mGradient.withSelectedIndex(index);
             previewDrag(mGradient);
-        }
-
-        private void commitDragValue() {
-            if (mNodeData == null) {
-                return;
-            }
-            ColorGradientValue finalGradient = mGradient;
-            if (mDragOldValue == null) {
-                mNodeData.inputs.remove(ColorRamp.GRADIENT_INPUT);
-            } else {
-                mNodeData.inputs.put(ColorRamp.GRADIENT_INPUT, mDragOldValue);
-            }
-            UIHintValueBinder.commit(mEditorContext, mNodeData, ColorRamp.GRADIENT_INPUT, mDragOldValue, finalGradient.toMap());
-            mGradient = finalGradient;
-            refreshUi(false);
-        }
-
-        private void restoreDragOldValue() {
-            if (mNodeData != null) {
-                if (mDragOldValue == null) {
-                    mNodeData.inputs.remove(ColorRamp.GRADIENT_INPUT);
-                } else {
-                    mNodeData.inputs.put(ColorRamp.GRADIENT_INPUT, mDragOldValue);
-                }
-            }
-            refreshUi(false);
         }
 
         private void requestDisallowParentIntercept(boolean disallow) {

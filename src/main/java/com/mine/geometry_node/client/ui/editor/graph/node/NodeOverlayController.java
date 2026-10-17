@@ -379,7 +379,7 @@ final class NodeOverlayController {
         }
 
         if (currentCount > minCount && removeIndex != null) {
-            CmdRemoveBranch cmd = new CmdRemoveBranch(mEditorContext.getGraphController(), mEditorContext.getCurrentGraph(), mNodeData.id, propertyKey, currentCount, removeIndex);
+            CmdRemoveBranch cmd = new CmdRemoveBranch(mEditorContext.getGraphController(), mNodeData.id, propertyKey, currentCount, removeIndex);
             mEditorContext.getCommandManager().execute(cmd);
         }
     }

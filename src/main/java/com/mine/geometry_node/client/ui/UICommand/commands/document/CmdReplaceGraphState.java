@@ -22,6 +22,6 @@ public final class CmdReplaceGraphState implements IdentifiedCommand {
 
     @Override public boolean canExecute() { return !beforeJson.equals(afterJson); }
     @Override public void execute() { context.replaceGraphState(GraphJsonIO.fromJson(afterJson)); }
-    @Override public void undo() { context.replaceGraphState(GraphJsonIO.fromJson(beforeJson)); }
+
     @Override public String changeId() { return changeId; }
 }

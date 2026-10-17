@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.input;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.menu.UiMenuFocus;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchMenuLayout;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -30,7 +31,6 @@ public class UiSearchableMenu extends FrameLayout {
     }
     private final Style style;
     private static final int MENU_PADDING_DP = 8;
-    private static final int SEARCH_HEIGHT_DP = 28;
     private static final int TITLE_HEIGHT_DP = 22;
     private static final int SEARCH_RADIUS_DP = 5;
     private static final int ITEM_HEIGHT_DP = 24;
@@ -157,9 +157,7 @@ public class UiSearchableMenu extends FrameLayout {
         mSearchBox.setGravity(Gravity.CENTER_VERTICAL);
         mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
 
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(SEARCH_HEIGHT_DP));
-        searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(8));
-        mContentLayout.addView(mSearchBox, searchLp);
+        mContentLayout.addView(mSearchBox, UiSearchMenuLayout.searchLayoutParams());
 
         mScrollView = new UiScrollView(context);
         mListContainer = new LinearLayout(context);

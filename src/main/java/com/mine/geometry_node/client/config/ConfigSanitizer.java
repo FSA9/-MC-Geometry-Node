@@ -413,6 +413,18 @@ final class ConfigSanitizer {
                 : readKeyBinding(gameView, "focus", defaults.keyBindings.gameView.focus);
         config.keyBindings.gameView.focus = sceneFOCUS.value;
         changed |= sceneFOCUS.changed;
+        ReadString entityMove = gameView == null ? ReadString.valid(defaults.keyBindings.gameView.entityMove, true)
+                : readString(gameView, "entityMove");
+        config.keyBindings.gameView.entityMove = BuiltinConfigEntries.GAME_VIEW_ENTITY_MOVE.normalize(entityMove.value);
+        changed |= entityMove.changed || !java.util.Objects.equals(entityMove.value, config.keyBindings.gameView.entityMove);
+        ReadKeyBinding sceneCopy = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.copy)
+                : readKeyBinding(gameView, "copy", defaults.keyBindings.gameView.copy);
+        config.keyBindings.gameView.copy = sceneCopy.value;
+        changed |= sceneCopy.changed;
+        ReadKeyBinding scenePaste = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.paste)
+                : readKeyBinding(gameView, "paste", defaults.keyBindings.gameView.paste);
+        config.keyBindings.gameView.paste = scenePaste.value;
+        changed |= scenePaste.changed;
         ReadKeyBinding sceneDELETE = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.delete)
                 : readKeyBinding(gameView, "delete", defaults.keyBindings.gameView.delete);
         config.keyBindings.gameView.delete = sceneDELETE.value;

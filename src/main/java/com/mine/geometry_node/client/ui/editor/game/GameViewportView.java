@@ -297,10 +297,8 @@ final class GameViewportView extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 if (!canNavigate() || !displayedBounds.contains(eventX(event), eventY(event))) return false;
-                if(event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)||event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
-                    if(!contextPressed){contextPressed=scene.contextAction(eventX(event),eventY(event));}
-                    if(contextPressed){requestFocus();onInteraction.run();return true;}
-                }
+                if(!contextPressed){handlingRepeat=false;contextPressed=shortcuts.onMouseDown(event);}
+                if(contextPressed){requestFocus();onInteraction.run();return true;}
                 navigating = event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)
                         || event.getActionButton() == MotionEvent.BUTTON_TERTIARY;
                 // ModernUI's native ACTION_MOVE currently omits modifier flags.
@@ -350,16 +348,17 @@ final class GameViewportView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
+        pointerRootX = event.getRawX(); pointerRootY = event.getRawY();
         if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_SCROLL)return true;
         if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS
                 && event.getActionButton()==MotionEvent.BUTTON_SECONDARY){cancelInteraction();return true;}
-        if(event.getActionMasked()==MotionEvent.ACTION_BUTTON_RELEASE&&event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
+        if(event.getActionMasked()==MotionEvent.ACTION_BUTTON_RELEASE&&contextPressed){
             boolean handled=contextPressed;contextPressed=false;if(handled)return true;
         }
         if(inputOwner.mode()==ViewportMode.EDIT&&canNavigate()&&!scene.busy()
                 &&!orientation.contains(eventX(event),eventY(event))
-                &&event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS&&event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
-            if(!contextPressed)contextPressed=scene.contextAction(eventX(event),eventY(event));
+                &&event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS){
+            if(!contextPressed){handlingRepeat=false;contextPressed=shortcuts.onMouseDown(event);}
             if(contextPressed){requestFocus();onInteraction.run();return true;}
         }
         if (editing() && orientation.contains(eventX(event), eventY(event))
@@ -448,12 +447,23 @@ final class GameViewportView extends View {
                 case SNAP_TOGGLE -> inputOwner.toggleMoveSnap();
                 case CONFIRM -> scene.confirmTransform();
                 case PROJECTION -> inputOwner.toggleProjection();
-                case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }
+                case ADD -> {
+                    scene.cancel();
+                    boolean valid = UIUtils.rootToLocal(this, pointerRootX, pointerRootY, inputMatrix, inputPoint);
+                    inputOwner.openCreateMenu(pointerRootX, pointerRootY,
+                            scene.creationPosition(valid ? inputPoint[0] : Float.NaN, valid ? inputPoint[1] : Float.NaN));
+                }
                 case FOCUS -> scene.focus(editCamera);
+                case ENTITY_MOVE -> {
+                    if(UIUtils.rootToLocal(this,pointerRootX,pointerRootY,inputMatrix,inputPoint))
+                        scene.contextAction(inputPoint[0],inputPoint[1]);
+                }
                 case SELECT_ALL -> { scene.selectAll(); selectionChanged(); }
-                case DELETE -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.deleteSelected(); }
-                case UNDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.undo(); }
-                case REDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.redo(); }
+                case COPY -> scene.copySelected();
+                case PASTE -> scene.paste();
+                case DELETE -> scene.deleteSelected();
+                case UNDO -> { scene.cancel(); var history = inputOwner.historyTarget(); if (history != null) history.undo(); }
+                case REDO -> { scene.cancel(); var history = inputOwner.historyTarget(); if (history != null) history.redo(); }
                 case CANCEL -> { scene.cancel(); inputOwner.closeSceneMenus(); }
                 default -> {}
             }

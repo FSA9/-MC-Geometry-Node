@@ -56,13 +56,6 @@ public class CmdInsertRerouteOnConnection implements ICommand {
         connectThroughReroute();
     }
 
-    @Override
-    public void undo() {
-        disconnectThroughReroute();
-        mController.removeNode(mRerouteNode.id);
-        reconnectOriginal();
-    }
-
     private void disconnectOriginal() {
         if (mExecution) {
             mController.removeExecutionConnection(mOutNodeId, mOutPortId);
@@ -93,14 +86,6 @@ public class CmdInsertRerouteOnConnection implements ICommand {
         return false;
     }
 
-    private void reconnectOriginal() {
-        if (mExecution) {
-            mController.addExecutionConnection(mOutNodeId, mOutPortId, mInNodeId, mInPortId);
-        } else {
-            mController.addConnection(mOutNodeId, mOutPortId, mInNodeId, mInPortId);
-        }
-    }
-
     private void connectThroughReroute() {
         if (mExecution) {
             mController.addExecutionConnection(mOutNodeId, mOutPortId, mRerouteNode.id, RerouteNodeSupport.INPUT_PORT);
@@ -111,13 +96,4 @@ public class CmdInsertRerouteOnConnection implements ICommand {
         }
     }
 
-    private void disconnectThroughReroute() {
-        if (mExecution) {
-            mController.removeExecutionConnection(mRerouteNode.id, RerouteNodeSupport.OUTPUT_PORT);
-            mController.removeExecutionConnection(mOutNodeId, mOutPortId);
-        } else {
-            mController.removeConnection(mRerouteNode.id, RerouteNodeSupport.OUTPUT_PORT, mInNodeId, mInPortId);
-            mController.removeConnection(mOutNodeId, mOutPortId, mRerouteNode.id, RerouteNodeSupport.INPUT_PORT);
-        }
-    }
 }

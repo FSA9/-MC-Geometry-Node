@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchMenuLayout;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
@@ -42,7 +43,7 @@ public final class ViewportSceneMenus {
         column.addView(label(tr("add")),new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(25)));
         UiSearchInput search=new UiSearchInput(owner.getContext());
         search.setHint(Component.translatable("geometry_node.asset_library.toolbar.search").getString());
-        column.addView(search,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(28)));
+        column.addView(search,UiSearchMenuLayout.searchLayoutParams());
         LinearLayout choices=column();column.addView(choices,new LinearLayout.LayoutParams(-1,-2));
         String[] category={""};
         java.util.concurrent.atomic.AtomicReference<Consumer<String>> filterRef=new java.util.concurrent.atomic.AtomicReference<>();

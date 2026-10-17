@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.game.scene;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.scene.SceneEditCapabilities;
 import com.mine.geometry_node.client.runtime.game.selection.*;
 import com.mine.geometry_node.client.ui.editor.game.selection.ViewportSelectionOverlay;
 import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
@@ -32,6 +33,7 @@ public final class ViewportSceneInteraction {
     private boolean pressed,additive,subtractive,marquee;
     private Set<ViewportTarget.Key> selectionAtPress=Set.of();
     private Set<ViewportTarget.Key> worldSelection=Set.of();
+    private String selectionMessage="";
     private Set<UUID> expectedSceneSelection=Set.of();
     private long selectionGeneration=-1;
     private final ViewportWorldActions worldActions=new ViewportWorldActions();
@@ -42,9 +44,23 @@ public final class ViewportSceneInteraction {
         boolean valid = enabled && selectionGeneration == snapshot.worldGeneration()
                 && snapshot.selected().equals(expectedSceneSelection);
         com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime.setSelection(
-                owner, snapshot.worldGeneration(), valid ? worldSelection : Set.of());
+                owner, snapshot.worldGeneration(), valid ? actionableWorldSelection() : Set.of());
+    }
+    private Set<ViewportTarget.Key> actionableWorldSelection() {
+        if (!current(frame)) return Set.of();
+        Set<ViewportTarget.Key> result = new LinkedHashSet<>();
+        for (var target : frame.targets()) {
+            UUID editable = ViewportSelectionSources.editableObject(target.key());
+            if ((worldSelection.contains(target.key()) || (editable != null && service.snapshot().selected().contains(editable)))
+                    && selectable(target)) result.add(target.key());
+        }
+        return Set.copyOf(result);
     }
     public Set<ViewportTarget.Key> selectedTargets(){return Set.copyOf(combinedSelection());}
+    private ViewportTarget.Key selectionKey(ViewportTarget.Key key) {
+        UUID editable = ViewportSelectionSources.editableObject(key);
+        return editable != null && service.snapshot().object(editable) != null ? sceneKey(editable) : key;
+    }
     private Set<ViewportTarget.Key> combinedSelection(){
         Set<ViewportTarget.Key> result=new LinkedHashSet<>(worldSelection);
         for(UUID id:service.snapshot().selected())result.add(sceneKey(id));
@@ -52,17 +68,29 @@ public final class ViewportSceneInteraction {
     }
     private void applySelection(Set<ViewportTarget.Key> selected){applySelection(selected,null);}
     private void applySelection(Set<ViewportTarget.Key> selected,ViewportTarget.Key preferred){
+        selectionMessage="";
         Set<UUID> scene=new LinkedHashSet<>();Set<ViewportTarget.Key> world=new LinkedHashSet<>();
-        for(var key:selected)if(key.source().equals("geometry_node:scene"))scene.add(UUID.fromString(key.id()));else world.add(key);
+        for (var key : selected) {
+            UUID editable = key.source().equals("geometry_node:scene") ? UUID.fromString(key.id())
+                    : ViewportSelectionSources.editableObject(key);
+            if (editable != null && service.snapshot().object(editable) != null) scene.add(editable);
+            else world.add(key);
+        }
         if(!worldSelection.equals(world))worldActions.clear();
         worldSelection=Set.copyOf(world);expectedSceneSelection=Set.copyOf(scene);
         UUID active=preferred!=null&&preferred.source().equals("geometry_node:scene")?UUID.fromString(preferred.id()):service.snapshot().active();
+        if (preferred != null && !preferred.source().equals("geometry_node:scene")) {
+            UUID editable = ViewportSelectionSources.editableObject(preferred);
+            if (editable != null && scene.contains(editable)) active = editable;
+        }
         if(active==null||!scene.contains(active))active=scene.isEmpty()?null:scene.iterator().next();
         service.select(scene,active);
     }
     public boolean contextAction(float x,float y){
-        if(busy()||!current(frame)||bounds==null||!bounds.contains(x,y)||worldSelection.isEmpty())return false;
-        boolean result=ViewportSelectionSources.action(worldSelection,frame,ViewportSceneMath.ray(frame,u(bounds,x),v(bounds,y)),worldActions);
+        if(busy()||!current(frame)||bounds==null||!bounds.contains(x,y))return false;
+        var selected=actionableWorldSelection();
+        if(selected.isEmpty())return false;
+        boolean result=ViewportSelectionSources.action(selected,frame,ViewportSceneMath.ray(frame,u(bounds,x),v(bounds,y)),worldActions);
         if(result)changed.run();return result;
     }
     private EditViewportCamera.Axis dragAxis;
@@ -79,7 +107,7 @@ public final class ViewportSceneInteraction {
         if(transforming())transform.refresh();else if(dragAxis!=null)move(currentX,currentY);
         changed.run();
     }
-    public String transformLabel(){return transforming()?transform.label():worldActions.message();}
+    public String transformLabel(){return transforming()?transform.label():!selectionMessage.isEmpty()?selectionMessage:worldActions.message();}
     public boolean transforming(){if(transform!=null&&!transform.active()){transform=null;snapping.end();}return transform!=null;}
     public void transformAxis(int bit){if(transforming()){transform.axis(bit);changed.run();}}
     public void confirmTransform(){if(transforming()&&transform.confirm()){transform=null;snapping.end();}changed.run();}
@@ -91,6 +119,8 @@ public final class ViewportSceneInteraction {
         var snapshot=service.snapshot();Map<UUID,SceneObject> objects=new LinkedHashMap<>();
         for(var o:frame.scene().objects())if(snapshot.selected().contains(o.id())&&selectable(o))objects.put(o.id(),o);
         if(objects.isEmpty()||objects.size()!=snapshot.selected().size())return;
+        var availability = SceneEditCapabilities.evaluate(SceneEditCapabilities.Action.valueOf(operation), objects.values(), false);
+        if (!availability.allowed()) { selectionMessage = availability.message(); changed.run(); return; }
         var gesture=new ViewportTransformGesture(service,frame,bounds,objects,ViewportTransformGesture.Operation.valueOf(operation),x,y,snapping);
         if(gesture.begin()){transform=gesture;snapping.begin(frame,bounds,objects.values());transform.refresh();}changed.run();
     }
@@ -103,9 +133,14 @@ public final class ViewportSceneInteraction {
         }
         var snapshot=service.snapshot();
         if(selectionGeneration!=snapshot.worldGeneration()||!snapshot.selected().equals(expectedSceneSelection)){
-            worldSelection=Set.of();worldActions.clear();expectedSceneSelection=snapshot.selected();
+            worldSelection=Set.of();worldActions.clear();selectionMessage="";expectedSceneSelection=snapshot.selected();
             selectionGeneration=snapshot.worldGeneration();
         }
+        // A bounded server query can arrive after the first selectable diagnostic frame.
+        if (worldSelection.stream().anyMatch(key -> {
+            UUID id = ViewportSelectionSources.editableObject(key);
+            return id != null && snapshot.object(id) != null;
+        })) applySelection(combinedSelection());
     }
     public void clearFrame(){frame=null;bounds=null;cancel();}
     public boolean busy(){return pressed||transforming();}
@@ -162,18 +197,18 @@ public final class ViewportSceneInteraction {
             if(marquee){
                 double minU=Math.min(u(gestureBounds,startX),u(gestureBounds,x)),maxU=Math.max(u(gestureBounds,startX),u(gestureBounds,x));
                 double minV=Math.min(v(gestureBounds,startY),v(gestureBounds,y)),maxV=Math.max(v(gestureBounds,startY),v(gestureBounds,y));
-                for(var object:gestureFrame.scene().objects())if(selectable(object)&&ViewportSceneMath.intersects(gestureFrame,ViewportSceneMath.bounds(object),minU,minV,maxU,maxV))hits.add(sceneKey(object.id()));
-                for(var target:gestureFrame.targets())if(selectable(target)&&ViewportSceneMath.intersects(gestureFrame,target.bounds(),minU,minV,maxU,maxV))hits.add(target.key());
+                for(var object:gestureFrame.scene().objects())if(selectable(object,gestureFrame)&&ViewportSceneMath.intersects(gestureFrame,selectionBounds(object,gestureFrame),minU,minV,maxU,maxV))hits.add(sceneKey(object.id()));
+                for(var target:gestureFrame.targets())if(selectable(target)&&ViewportSceneMath.intersects(gestureFrame,target.bounds(),minU,minV,maxU,maxV))hits.add(selectionKey(target.key()));
             }else{
                 UUID object=pick(gestureFrame,gestureBounds,x,y);
                 double depth=Double.POSITIVE_INFINITY;
                 ViewportTarget.Key hit=object==null?null:sceneKey(object);
                 if(object!=null)for(var o:gestureFrame.scene().objects())if(o.id().equals(object))
-                    depth=ScenePresentations.pointMarker(o)?lightDepth(gestureFrame,o):ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),ViewportSceneMath.bounds(o));
+                    depth=ScenePresentations.pointMarker(o)?lightDepth(gestureFrame,o):ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),selectionBounds(o,gestureFrame));
                 for(var target:gestureFrame.targets()){
                     if(!selectable(target))continue;
                     double d=ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),target.bounds());
-                    if(d<depth){depth=d;hit=target.key();}
+                    if(d<depth){depth=d;hit=selectionKey(target.key());}
                 }
                 if(hit!=null)hits.add(hit);
             }
@@ -188,8 +223,8 @@ public final class ViewportSceneInteraction {
         if(!current(f)||!b.contains(x,y))return null;
         UUID best=null;double depth=Double.POSITIVE_INFINITY;
         for(var object:f.scene().objects()){
-            if(!selectable(object))continue;
-            double hit=ViewportSceneMath.pickBounds(f,u(b,x),v(b,y),ViewportSceneMath.bounds(object));
+            if(!selectable(object,f))continue;
+            double hit=ViewportSceneMath.pickBounds(f,u(b,x),v(b,y),selectionBounds(object,f));
             if(!ScenePresentations.pointMarker(object)){
                 if(hit<depth){depth=hit;best=object.id();}continue;
             }
@@ -198,6 +233,27 @@ public final class ViewportSceneInteraction {
             double dx=px(b,p.u())-x,dy=py(b,p.v())-y;
             if(dx*dx+dy*dy<=Math.pow(UIUtils.dp2px(11),2)&&lightDepth(f,object)<depth){depth=lightDepth(f,object);best=object.id();}
         }return best;
+    }
+    public void copySelected() {
+        if (prepareSceneClipboardOperation(SceneEditCapabilities.Action.COPY)) service.copySelected();
+        changed.run();
+    }
+    public void paste() {
+        cancel(); selectionMessage="";
+        service.paste(); changed.run();
+    }
+    public void deleteSelected() {
+        if (prepareSceneClipboardOperation(SceneEditCapabilities.Action.DELETE)) service.deleteSelected();
+        changed.run();
+    }
+    private boolean prepareSceneClipboardOperation(SceneEditCapabilities.Action action) {
+        cancel();
+        var snapshot=service.snapshot();
+        boolean unresolvedTargets=selectionGeneration==snapshot.worldGeneration()
+                && snapshot.selected().equals(expectedSceneSelection) && !worldSelection.isEmpty();
+        var availability = service.availability(action, unresolvedTargets);
+        selectionMessage = availability.message();
+        return availability.allowed();
     }
     public void selectAll() {
         cancel();
@@ -209,11 +265,18 @@ public final class ViewportSceneInteraction {
     }
     public void focus(EditViewportCamera camera){
         var s=service.snapshot();AABB box=null;
-        for(var o:s.objects())if(s.selected().contains(o.id())){AABB b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);}
+        if(current(frame))for(var o:frame.scene().objects())if(s.selected().contains(o.id())&&selectable(o)){
+            AABB b=ViewportSelectionSources.presentedBounds(o,frame);if(b==null)b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);
+        }
         if(current(frame))for(var target:frame.targets())if(selectable(target)&&worldSelection.contains(target.key()))box=box==null?target.bounds():box.minmax(target.bounds());
         if(box!=null){cancel();camera.focus(box,frame==null?1:frame.aspect(),1.2);changed.run();}
     }
-    public Vec3 creationPosition(EditViewportCamera camera){var p=camera.snapshot();return new Vec3(p.pivotX(),p.pivotY(),p.pivotZ());}
+    public com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.Request creationPosition(float x, float y) {
+        if (!current(frame)) return null;
+        boolean inside = bounds != null && bounds.contains(x, y);
+        return com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.capture(
+                frame, inside ? u(bounds, x) : .5, inside ? v(bounds, y) : .5);
+    }
     public void draw(Canvas canvas){
         if(!current(frame)||bounds==null)return;
         canvas.save();canvas.clipRect(bounds.left(),bounds.top(),bounds.right(),bounds.bottom());
@@ -222,6 +285,8 @@ public final class ViewportSceneInteraction {
             for(var object:frame.scene().objects()){
                 var layer=ScenePresentations.layer(object);
                 if(layer==null||!visibility.visible(layer))continue;
+                if(layer==ViewportVisualization.Layer.INTERACTION&&!visibility.helpers())continue;
+                if(!ViewportSelectionSources.presented(object,frame))continue;
                 if(!ScenePresentations.pointMarker(object)){
                     if(selection.contains(object.id())||Objects.equals(hovered,object.id()))drawBounds(canvas,object,selection.contains(object.id()));
                     continue;
@@ -236,7 +301,7 @@ public final class ViewportSceneInteraction {
             }
             if(visibility.gizmo())drawAxes(canvas);
         }
-        worldOverlay.draw(canvas,frame,bounds,worldSelection,worldActions.target(),this::selectable);
+        worldOverlay.draw(canvas,frame,bounds,actionableWorldSelection(),worldActions.target(),this::selectable);
         if(pressed&&marquee){
             paint.setStyle(Paint.FILL);paint.setColor(0x224C9AFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
             paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0xFF75AFFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
@@ -244,8 +309,13 @@ public final class ViewportSceneInteraction {
         paint.setStyle(Paint.FILL);canvas.restore();
     }
     private boolean selectable(SceneObject object){
+        return selectable(object,frame);
+    }
+    private boolean selectable(SceneObject object, PresentedViewportFrame presented){
         var layer=ScenePresentations.layer(object);
-        return layer!=null&&visibility.selectable(layer);
+        return layer!=null&&visibility.selectable(layer)
+                && (layer != ViewportVisualization.Layer.INTERACTION || visibility.helpers())
+                && ViewportSelectionSources.presented(object,presented);
     }
     private boolean selectable(ViewportTarget target){
         return ViewportSelectionSources.selectable(target.key(),visibility.snapshot());
@@ -255,7 +325,7 @@ public final class ViewportSceneInteraction {
         return ray==null?Double.POSITIVE_INFINITY:o.position().subtract(ray.origin()).dot(ray.direction());
     }
     private void drawBounds(Canvas canvas,SceneObject object,boolean selected){
-        AABB box=ViewportSceneMath.bounds(object);
+        AABB box=selectionBounds(object,frame);
         paint.setColor(selected?0xFFFFB547:0xFFFFFFFF);paint.setStrokeWidth(UIUtils.dp2px(selected?2:1));
         for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0){
             int j=i|bit;
@@ -274,7 +344,15 @@ public final class ViewportSceneInteraction {
         }
     }
     private static Vec3 ring(int plane,double a,double b){return plane==0?new Vec3(a,b,0):plane==1?new Vec3(a,0,b):new Vec3(0,a,b);}
-    private Vec3 selectedCenter(){if(!worldSelection.isEmpty())return null;List<Vec3> points=new ArrayList<>();var selected=service.snapshot().selected();for(var o:frame.scene().objects())if(selected.contains(o.id())&&selectable(o))points.add(o.position());return points.isEmpty()?null:center(points);}
+    private Vec3 selectedCenter(){
+        if(!worldSelection.isEmpty())return null;
+        List<Vec3> points=new ArrayList<>();List<SceneObject> objects=new ArrayList<>();var selected=service.snapshot().selected();
+        for(var o:frame.scene().objects())if(selected.contains(o.id())&&selectable(o)) {
+            objects.add(o);
+            points.add(o.position());
+        }
+        return points.size()!=selected.size()||!SceneEditCapabilities.evaluate(SceneEditCapabilities.Action.MOVE,objects,false).allowed()?null:center(points);
+    }
     private double axisLength(Vec3 origin){
         var c=frame.camera();double pixels=Math.max(1,bounds.bottom()-bounds.top());
         double height=c.orthographic()?c.orthographicHeight():2*Math.max(.1,new Vec3(c.x(),c.y(),c.z()).distanceTo(origin))*Math.tan(Math.toRadians(c.verticalFovDegrees())/2);
@@ -305,6 +383,10 @@ public final class ViewportSceneInteraction {
         return hit;
     }
     private boolean current(PresentedViewportFrame frame){return frame!=null&&frame.scene().worldGeneration()==service.snapshot().worldGeneration();}
+    private static AABB selectionBounds(SceneObject object,PresentedViewportFrame frame){
+        AABB presented=ViewportSelectionSources.presentedBounds(object,frame);
+        return presented==null?ViewportSceneMath.bounds(object):presented;
+    }
     private static Vec3 center(Collection<Vec3> points){Vec3 sum=Vec3.ZERO;for(var p:points)sum=sum.add(p);return sum.scale(1.0/points.size());}
     private static double u(GameViewportLayout b,float x){return (x-b.left())/(b.right()-b.left());}
     private static double v(GameViewportLayout b,float y){return (y-b.top())/(b.bottom()-b.top());}

@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Per-view presentation, never changes the actual scene object's enabled state. */
 public final class ViewportVisualization {
-    public enum Layer { LIGHT, GEOMETRY, MODEL, SCHEMATIC, AREA, COLLISION, MODEL_COLLISION, INTERACTION, PATHFINDING }
+    public enum Layer { LIGHT, GEOMETRY, MODEL, SCHEMATIC, AREA, COLLISION, MODEL_COLLISION, INTERACTION, PATHFINDING, ENTITY }
     public record Snapshot(Set<Layer> visible, Set<Layer> selectable, boolean helpers, boolean gizmo, boolean grid) {
         public Snapshot(Set<Layer> visible, Set<Layer> selectable, boolean helpers, boolean gizmo) {
             this(visible, selectable, helpers, gizmo, false);
@@ -17,8 +17,8 @@ public final class ViewportVisualization {
         public boolean visible(Layer layer) { return visible.contains(layer); }
         public boolean selectable(Layer layer) { return visible(layer) && selectable.contains(layer); }
     }
-    private static final Snapshot DEFAULT = new Snapshot(EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.MODEL, Layer.SCHEMATIC, Layer.AREA, Layer.COLLISION),
-            EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.AREA, Layer.COLLISION, Layer.INTERACTION), true, true);
+    private static final Snapshot DEFAULT = new Snapshot(EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.MODEL, Layer.SCHEMATIC, Layer.AREA, Layer.COLLISION, Layer.ENTITY),
+            EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.AREA, Layer.COLLISION, Layer.INTERACTION, Layer.ENTITY), true, true);
     private static final Map<Object, Snapshot> VIEWS = new ConcurrentHashMap<>();
     private final EnumSet<Layer> visible = EnumSet.copyOf(DEFAULT.visible());
     private final EnumSet<Layer> selectable = EnumSet.copyOf(DEFAULT.selectable());
@@ -39,6 +39,10 @@ public final class ViewportVisualization {
     public static Snapshot forOwner(Object owner) { return owner == null ? DEFAULT : VIEWS.getOrDefault(owner, DEFAULT); }
     public static Snapshot current() { return forOwner(EditViewportRuntime.renderingOwner()); }
     public static boolean inEditorPass() { return EditViewportRuntime.renderingOwner() != null; }
+    public static boolean requestedNativeEntities() {
+        return VIEWS.values().stream().anyMatch(view -> view.visible(Layer.ENTITY)
+                || (view.helpers() && view.visible(Layer.INTERACTION)));
+    }
     public static int requestedDebugMask() {
         int mask = 0;
         for (Snapshot view : VIEWS.values()) if (view.helpers())

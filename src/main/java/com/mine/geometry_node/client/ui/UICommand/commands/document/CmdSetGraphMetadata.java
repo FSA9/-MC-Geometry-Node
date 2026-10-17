@@ -52,11 +52,6 @@ public final class CmdSetGraphMetadata implements ICommand {
         mController.setGraphMetadata(mNewGraphTypeId, mNewComment, mNewTags, mNewQuestDefinition);
     }
 
-    @Override
-    public void undo() {
-        mController.setGraphMetadata(mOldGraphTypeId, mOldComment, mOldTags, mOldQuestDefinition);
-    }
-
     private static String normalizeComment(String comment) {
         return comment != null ? comment.trim() : "";
     }

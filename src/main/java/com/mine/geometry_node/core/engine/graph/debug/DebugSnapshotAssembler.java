@@ -48,7 +48,10 @@ final class DebugSnapshotAssembler {
 
         if (observations != null && isEnabled(channelMask, DebugRenderChannel.INTERACTION)) {
             for (GeometryDebugElement mesh : observations.interactions()) {
-                addBoundedCandidate(level, origin, radiusSqr, mesh, candidates);
+                // The provider already queried accessible entity sections. Level.isLoaded also
+                // checks block build height, which can reject a valid Interaction's AABB center.
+                double distanceSqr = mesh.center().distanceToSqr(origin);
+                if (distanceSqr <= radiusSqr) candidates.add(new Candidate(mesh, distanceSqr));
             }
         }
         if (observations != null && isEnabled(channelMask, DebugRenderChannel.PATHFINDING)) {

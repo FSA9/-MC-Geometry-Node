@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -18,16 +17,9 @@ public class CmdConnect implements ICommand {
     private final String outNodeId, outPortId;
     private final String inNodeId, inPortId;
 
-    // 目标输入和执行流输出都可能各自替换一条已有连接。
+    // The destination input may displace an existing source.
     private String mDisplacedInboundNodeId;
     private String mDisplacedInboundPortId;
-    private Connection mDisplacedExecutionOutput;
-    private final List<ExternalConnectionBackup> mDisplacedExternalConnections = new ArrayList<>();
-
-    private record ExternalConnectionBackup(
-            String boundaryNodeId,
-            GraphController.ScopedConnectionSnapshot snapshot
-    ) {}
 
     public CmdConnect(GraphController controller, NodeGraph graph, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;
@@ -36,9 +28,6 @@ public class CmdConnect implements ICommand {
         this.outPortId = outPortId;
         this.inNodeId = inNodeId;
         this.inPortId = inPortId;
-
-        // 在命令创建时，立即快照当前的旧连接状态
-        snapshotDisplacedConnections();
     }
 
     @Override
@@ -70,19 +59,11 @@ public class CmdConnect implements ICommand {
      * 遍历图，寻找是否已有其它输出端口指向了我们的目标输入端口
      */
     private void snapshotDisplacedConnections() {
+        mDisplacedInboundNodeId = null;
+        mDisplacedInboundPortId = null;
         if (mGraph == null) return;
         boolean executionFlow = isFlowConnection();
-        if (executionFlow) {
-            NodeData outNode = mGraph.getNode(outNodeId);
-            Connection existingOutput = outNode != null ? outNode.execOutputs.get(outPortId) : null;
-            if (existingOutput != null
-                    && (!existingOutput.targetNodeId().equals(inNodeId)
-                    || !existingOutput.targetPortName().equals(inPortId))) {
-                mDisplacedExecutionOutput = existingOutput;
-                backupExternalConnections(existingOutput.targetNodeId(), existingOutput.targetPortName());
-            }
-            if (isRerouteInput(inNodeId, inPortId)) return;
-        }
+        if (executionFlow && isRerouteInput(inNodeId, inPortId)) return;
 
         for (NodeData node : mGraph.nodes.values()) {
             if (executionFlow) {
@@ -92,7 +73,6 @@ public class CmdConnect implements ICommand {
                         if (link.targetNodeId().equals(inNodeId) && link.targetPortName().equals(inPortId)) {
                             mDisplacedInboundNodeId = node.id;
                             mDisplacedInboundPortId = entry.getKey();
-                            backupExternalConnections(node.id, entry.getKey());
                             return;
                         }
                     }
@@ -104,20 +84,12 @@ public class CmdConnect implements ICommand {
                             if (link.targetNodeId().equals(inNodeId) && link.targetPortName().equals(inPortId)) {
                                 mDisplacedInboundNodeId = node.id;
                                 mDisplacedInboundPortId = entry.getKey();
-                                backupExternalConnections(node.id, entry.getKey());
                                 return;
                             }
                         }
                     }
                 }
             }
-        }
-    }
-
-    private void backupExternalConnections(String boundaryNodeId, String portId) {
-        for (GraphController.ScopedConnectionSnapshot snapshot
-                : mController.getBoundaryPortExternalConnectionSnapshots(boundaryNodeId, portId)) {
-            mDisplacedExternalConnections.add(new ExternalConnectionBackup(boundaryNodeId, snapshot));
         }
     }
 
@@ -132,6 +104,7 @@ public class CmdConnect implements ICommand {
         if (!canExecute()) {
             return;
         }
+        snapshotDisplacedConnections();
         // 1. 如果有旧连线，先断开它 (打断旧关系)
         if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
             if (isFlowConnection()) {
@@ -150,39 +123,4 @@ public class CmdConnect implements ICommand {
         }
     }
 
-    @Override
-    public void undo() {
-        // 1. 撤销新连线
-        if (isFlowConnection()) {
-            if (mDisplacedExecutionOutput == null) {
-                mController.removeExecutionConnection(outNodeId, outPortId);
-            }
-        } else {
-            mController.removeConnection(outNodeId, outPortId, inNodeId, inPortId);
-        }
-
-        // 2. 恢复该执行流输出原先指向的目标。
-        if (mDisplacedExecutionOutput != null) {
-            mController.addExecutionConnection(
-                    outNodeId,
-                    outPortId,
-                    mDisplacedExecutionOutput.targetNodeId(),
-                    mDisplacedExecutionOutput.targetPortName()
-            );
-        }
-
-        // 3. 恢复目标输入原先的来源。
-        if (mDisplacedInboundNodeId != null && mDisplacedInboundPortId != null) {
-            if (isFlowConnection()) {
-                mController.addExecutionConnection(
-                        mDisplacedInboundNodeId, mDisplacedInboundPortId, inNodeId, inPortId);
-            } else {
-                mController.addConnection(
-                        mDisplacedInboundNodeId, mDisplacedInboundPortId, inNodeId, inPortId);
-            }
-        }
-        for (ExternalConnectionBackup backup : mDisplacedExternalConnections) {
-            mController.restoreGroupVirtualPortConnection(backup.boundaryNodeId(), backup.snapshot());
-        }
-    }
 }

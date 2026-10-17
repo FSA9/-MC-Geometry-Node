@@ -41,7 +41,19 @@ public final class ViewportDebugClient {
         var state=ViewportVisualization.current();
         if (!state.helpers()) return List.of();
         List<PacketGeometryDebugSnapshot.Mesh> result=new ArrayList<>();
-        layers.forEach((layer,data) -> { if (state.visible(ViewportVisualization.Layer.valueOf(layer.name()))) result.addAll(data.meshes()); });
+        var scene = EditViewportRuntime.renderedScene();
+        layers.forEach((layer,data) -> {
+            if (!state.visible(ViewportVisualization.Layer.valueOf(layer.name()))) return;
+            for (var mesh : data.meshes()) {
+                com.mine.geometry_node.core.engine.system.scene.SceneObject object = null;
+                if (scene != null) {
+                    try { object = scene.object(java.util.UUID.fromString(mesh.id())); }
+                    catch (IllegalArgumentException ignored) { }
+                }
+                var replacement = object == null ? null : ScenePresentations.diagnostic(object);
+                result.add(replacement == null ? mesh : replacement);
+            }
+        });
         return result;
     }
     public static List<PacketGeometryDebugSnapshot.Mesh> meshes(ViewportDebugLayer layer) {

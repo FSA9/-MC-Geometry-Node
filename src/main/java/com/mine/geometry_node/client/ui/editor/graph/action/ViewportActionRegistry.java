@@ -16,8 +16,8 @@ public final class ViewportActionRegistry {
     static {
         register(KeyScope.VIEWPORT, ViewportActionId.SELECT_ALL, BuiltinConfigEntries.VIEWPORT_SELECT_ALL,
                 ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.UNDO, BuiltinConfigEntries.GLOBAL_UNDO, ViewportActionState::isReady);
-        register(KeyScope.GLOBAL, ViewportActionId.REDO, BuiltinConfigEntries.GLOBAL_REDO, ViewportActionState::isReady);
+        register(KeyScope.GLOBAL, ViewportActionId.UNDO, BuiltinConfigEntries.GLOBAL_UNDO, ViewportActionState::canUndo);
+        register(KeyScope.GLOBAL, ViewportActionId.REDO, BuiltinConfigEntries.GLOBAL_REDO, ViewportActionState::canRedo);
         register(KeyScope.GLOBAL, ViewportActionId.SAVE, BuiltinConfigEntries.GLOBAL_SAVE, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.EXPORT_IMAGE, "导出为图片", null, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.COPY, BuiltinConfigEntries.GLOBAL_COPY, ViewportActionState::isReady);

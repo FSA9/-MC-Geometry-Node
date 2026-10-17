@@ -4,8 +4,8 @@ import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigChangeListener;
 import com.mine.geometry_node.client.config.ConfigManager;
-import com.mine.geometry_node.client.input.binding.KeyBinding;
 import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MotionEvent;
 
 import java.util.Collection;
 import java.util.List;
@@ -57,19 +57,27 @@ public class ScopedKeyManager<T, S> {
 
         List<KeyScope> scopes = mScope == KeyScope.GLOBAL ? List.of(KeyScope.GLOBAL) : List.of(mScope, KeyScope.GLOBAL);
         for (KeyScope scope : scopes) {
-            if (handleScope(scope, event)) return true;
+            if (handleScope(scope, action -> UiInputBindings.matches(action.inputBinding(mConfig), event))) return true;
         }
         return false;
     }
 
-    private boolean handleScope(KeyScope scope, KeyEvent event) {
+    public boolean onMouseDown(MotionEvent event) {
+        if (event == null || (event.getActionMasked() != MotionEvent.ACTION_DOWN
+                && event.getActionMasked() != MotionEvent.ACTION_BUTTON_PRESS)) return false;
+        List<KeyScope> scopes = mScope == KeyScope.GLOBAL ? List.of(KeyScope.GLOBAL) : List.of(mScope, KeyScope.GLOBAL);
+        for (KeyScope scope : scopes)
+            if (handleScope(scope, action -> UiInputBindings.matches(action.inputBinding(mConfig), event))) return true;
+        return false;
+    }
+
+    private boolean handleScope(KeyScope scope, java.util.function.Predicate<ScopedAction<T>> matches) {
         Collection<? extends ScopedAction<T>> actions = mActions != null ? mActions.get() : null;
         if (actions == null || actions.isEmpty()) return false;
 
         for (ScopedAction<T> action : actions) {
             if (action == null || action.scope() != scope) continue;
-            KeyBinding binding = action.keyBinding(mConfig);
-            if (!matches(binding, event)) continue;
+            if (!matches.test(action)) continue;
             if (!action.isEnabled(mState)) return true;
             if (mExecutor != null) {
                 mExecutor.execute(action.id());
@@ -83,7 +91,4 @@ public class ScopedKeyManager<T, S> {
         mConfig = config;
     }
 
-    private static boolean matches(KeyBinding binding, KeyEvent event) {
-        return UiInputBindings.matches(binding, event);
-    }
 }

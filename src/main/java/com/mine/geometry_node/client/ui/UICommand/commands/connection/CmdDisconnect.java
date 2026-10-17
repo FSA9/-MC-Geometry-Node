@@ -6,9 +6,6 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.document.Connection;
 import com.mine.geometry_node.core.node.document.NodeData;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class CmdDisconnect implements ICommand {
     private final GraphController mController;
     private final String outNodeId;
@@ -16,9 +13,6 @@ public class CmdDisconnect implements ICommand {
     private final String inNodeId;
     private final String inPortId;
     private final boolean mFlowConnection;
-    private final List<ExternalConnectionBackup> mExternalConnections = new ArrayList<>();
-
-    private record ExternalConnectionBackup(String boundaryNodeId, GraphController.ScopedConnectionSnapshot snapshot) {}
 
     public CmdDisconnect(GraphController controller, String outNodeId, String outPortId, String inNodeId, String inPortId) {
         this.mController = controller;
@@ -27,7 +21,6 @@ public class CmdDisconnect implements ICommand {
         this.inNodeId = inNodeId;
         this.inPortId = inPortId;
         this.mFlowConnection = detectFlowConnection();
-        backupExternalConnections();
     }
 
     private boolean detectFlowConnection() {
@@ -44,17 +37,6 @@ public class CmdDisconnect implements ICommand {
         return (outType != null && outType.isFlow()) || (inType != null && inType.isFlow());
     }
 
-    private void backupExternalConnections() {
-        backupExternalConnections(outNodeId, outPortId);
-        backupExternalConnections(inNodeId, inPortId);
-    }
-
-    private void backupExternalConnections(String boundaryNodeId, String portId) {
-        for (GraphController.ScopedConnectionSnapshot snapshot : mController.getBoundaryPortExternalConnectionSnapshots(boundaryNodeId, portId)) {
-            mExternalConnections.add(new ExternalConnectionBackup(boundaryNodeId, snapshot));
-        }
-    }
-
     @Override
     public void execute() {
         if (mFlowConnection) {
@@ -64,16 +46,4 @@ public class CmdDisconnect implements ICommand {
         }
     }
 
-    @Override
-    public void undo() {
-        // 撤销时：恢复连线
-        if (mFlowConnection) {
-            mController.addExecutionConnection(outNodeId, outPortId, inNodeId, inPortId);
-        } else {
-            mController.addConnection(outNodeId, outPortId, inNodeId, inPortId);
-        }
-        for (ExternalConnectionBackup backup : mExternalConnections) {
-            mController.restoreGroupVirtualPortConnection(backup.boundaryNodeId(), backup.snapshot());
-        }
-    }
 }

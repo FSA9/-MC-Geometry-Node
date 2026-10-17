@@ -286,7 +286,10 @@ public class GraphViewportPanel extends LinearLayout {
         DocumentManager docMgr = DocumentManager.INSTANCE;
         applyOpenedSession(docMgr);
         GraphSession selectedSession = resolveSelectedSession(docMgr);
-        mViewport.getController().bindSession(selectedSession);
+        // Dirty/title/reorder notifications must preserve live widgets and pending input.
+        if (mViewport.getController().getCurrentSession() != selectedSession) {
+            mViewport.getController().bindSession(selectedSession);
+        }
         if (mSessionChangedListener != null && selectedSession != mLastNotifiedSession) {
             mLastNotifiedSession = selectedSession;
             mSessionChangedListener.accept(selectedSession);
@@ -332,8 +335,10 @@ public class GraphViewportPanel extends LinearLayout {
             if (mBeforeSessionSaveListener != null) {
                 mBeforeSessionSaveListener.accept(session);
             }
+            // Capture before save: saved/tab listeners may themselves make another edit.
+            long savedRevision = session.revision();
             if (DocumentManager.INSTANCE.saveSession(session)) {
-                v.post(() -> docMgr.closeSession(session));
+                v.post(() -> docMgr.closeSessionIfSaved(session, savedRevision));
             }
         });
         contentArea.addView(closeBtn);

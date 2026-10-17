@@ -23,8 +23,4 @@ public class CmdAddNode implements ICommand {
         mController.addNode(mNodeData);
     }
 
-    @Override
-    public void undo() {
-        mController.removeNode(mNodeData.id);
-    }
 }

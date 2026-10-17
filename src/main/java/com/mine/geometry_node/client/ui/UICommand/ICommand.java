@@ -12,9 +12,10 @@ public interface ICommand {
         return true;
     }
 
+    /** Translation key for the history action label. */
+    default String historyLabel() { return "geometry_node.history.graph.edit"; }
+
     /** 执行操作 */
     void execute();
 
-    /** 旧版局部逆操作；完整 Undo/Redo 必须调用 CommandManager，不直接调用此方法。 */
-    void undo();
 }

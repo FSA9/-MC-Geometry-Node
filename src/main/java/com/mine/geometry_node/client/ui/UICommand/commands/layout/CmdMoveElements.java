@@ -12,20 +12,15 @@ import java.util.Map;
 
 public class CmdMoveElements implements ICommand {
     private final GraphController mController;
-    private final float mDx, mDy;
 
     // 统筹记录所有发生移动的节点和图框
-    private final Map<String, float[]> mOldNodePos = new HashMap<>();
     private final Map<String, float[]> mNewNodePos = new HashMap<>();
 
     // 如果你希望图框在空载时也能移动，需要记录纯图框的位置
-    private final Map<String, float[]> mOldFramePos = new HashMap<>();
     private final Map<String, float[]> mNewFramePos = new HashMap<>();
 
     public CmdMoveElements(GraphController controller, List<String> nodeIds, List<String> frameIds, float dx, float dy) {
         this.mController = controller;
-        this.mDx = dx;
-        this.mDy = dy;
 
         List<String> allAffectedNodes = new ArrayList<>(nodeIds);
         List<String> allAffectedFrames = new ArrayList<>(frameIds);
@@ -38,8 +33,7 @@ public class CmdMoveElements implements ICommand {
         // 2. 记录 Node 坐标
         for (String id : allAffectedNodes) {
             float[] oldPos = controller.getNodePosition(id);
-            if (oldPos != null && !mOldNodePos.containsKey(id)) {
-                mOldNodePos.put(id, new float[]{oldPos[0], oldPos[1]});
+            if (oldPos != null && !mNewNodePos.containsKey(id)) {
                 mNewNodePos.put(id, new float[]{oldPos[0] + dx, oldPos[1] + dy});
             }
         }
@@ -47,8 +41,7 @@ public class CmdMoveElements implements ICommand {
         // 3. 记录空图框坐标 (有子节点的图框会自动通过 Controller 重新算 bounds，无需在此移动)
         for (String id : allAffectedFrames) {
             FrameData frame = controller.getContext().getGraph().getFrame(id); // 需要在 Controller 提供获取方法
-            if (frame != null && !mOldFramePos.containsKey(id)) {
-                mOldFramePos.put(id, new float[]{frame.uiPos[0], frame.uiPos[1]});
+            if (frame != null && !mNewFramePos.containsKey(id)) {
                 mNewFramePos.put(id, new float[]{frame.uiPos[0] + dx, frame.uiPos[1] + dy});
             }
         }
@@ -84,13 +77,4 @@ public class CmdMoveElements implements ICommand {
         }
     }
 
-    @Override
-    public void undo() {
-        for (Map.Entry<String, float[]> entry : mOldNodePos.entrySet()) {
-            mController.setNodePosition(entry.getKey(), entry.getValue()[0], entry.getValue()[1]);
-        }
-        for (Map.Entry<String, float[]> entry : mOldFramePos.entrySet()) {
-            mController.setFramePosition(entry.getKey(), entry.getValue()[0], entry.getValue()[1]);
-        }
-    }
 }

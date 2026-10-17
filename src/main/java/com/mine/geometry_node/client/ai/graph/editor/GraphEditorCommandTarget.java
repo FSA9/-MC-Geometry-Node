@@ -23,7 +23,11 @@ import java.util.Locale;
 import java.util.UUID;
 
 /** Adapts the editor document to the runtime-neutral graph command target. */
-public record GraphEditorCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget {
+public record GraphEditorCommandTarget(GraphSession session) implements GraphCommandTarget, GraphQueryTarget, com.mine.geometry_node.client.ai.command.HistoryQueryTarget {
+    @Override public CommandResult getHistoryState(String surfaceRef) {
+        return com.mine.geometry_node.client.ai.history.HistorySurfaceQueries.get(surfaceRef);
+    }
+
     @Override public boolean hasGraph() { return session != null; }
 
     @Override

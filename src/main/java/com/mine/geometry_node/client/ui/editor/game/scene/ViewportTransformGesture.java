@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
 import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.scene.SceneEditCapabilities;
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
@@ -35,6 +36,7 @@ final class ViewportTransformGesture {
         Vec3 sum=Vec3.ZERO;for(var o:originals.values())sum=sum.add(o.position());center=sum.scale(1.0/originals.size());
     }
     boolean begin() {
+        if (!SceneEditCapabilities.evaluate(SceneEditCapabilities.Action.valueOf(operation.name()), originals.values(), false).allowed()) return false;
         Map<UUID, Long> revisions = new LinkedHashMap<>();
         originals.forEach((id, object) -> revisions.put(id, object.revision()));
         return service.beginPreview(this, frame.scene().worldGeneration(), revisions, originals);
@@ -135,7 +137,7 @@ final class ViewportTransformGesture {
                     case ROTATE -> {position=center.add(SceneTransforms.rotate(turn,position.subtract(center)));var e= new Quaterniond(turn).mul(SceneTransforms.rotation(rotation)).getEulerAnglesXYZ(new Vector3d());rotation=new Vec3(e.x,e.y,e.z);}
                     case SCALE -> {position=center.add(position.subtract(center).multiply(factors));scale=scale.multiply(factors);}
                 }
-                next.put(o.id(),o.withTransform(position,rotation,scale));
+                next.put(o.id(),SceneObjectCapabilities.transformed(o,position,rotation,scale));
             }
             service.previewObjects(this, next);
             valid = true;

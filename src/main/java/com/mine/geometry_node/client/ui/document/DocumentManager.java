@@ -97,6 +97,16 @@ public class DocumentManager {
         notifyTabChanged();
     }
 
+    /** Revalidates a queued save-and-close on the same UI thread that owns graph edits. */
+    public boolean closeSessionIfSaved(GraphSession session, long savedRevision) {
+        if (session == null || !mSessions.contains(session)) return false;
+        var commands = session.editorContext.getCommandManager();
+        if (!commands.canSave() || commands.historyState().dirty()
+                || commands.revision() != savedRevision) return false;
+        closeSession(session);
+        return true;
+    }
+
     public int closeSessionsUnder(List<Path> deletionTargets) {
         List<Path> targetPaths = normalizePaths(deletionTargets);
         if (targetPaths.isEmpty()) {
@@ -171,7 +181,7 @@ public class DocumentManager {
     }
 
     public boolean saveSession(GraphSession session) {
-        if (session == null) return false;
+        if (session == null || !session.editorContext.getCommandManager().canSave()) return false;
         try {
             // 1. 序列化当前图纸
             String json = GraphJsonIO.toJson(session.editorContext.getGraph());
@@ -180,7 +190,7 @@ public class DocumentManager {
             GraphDocumentStore.INSTANCE.writeStringAtomic(session.fileReference(), json);
 
             // 3. 清除脏标记
-            session.isDirty = false;
+            session.editorContext.getCommandManager().markSaved();
 
             // 4. Notify file-backed consumers before refreshing tab state.
             notifySessionSaved(session);

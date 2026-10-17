@@ -30,12 +30,17 @@ public class EditorContext {
 
     // --- 事件监听器列表 ---
     private final List<EditorListener> mListeners = new ArrayList<>();
+    private List<Runnable> historyNotifications;
 
     public EditorContext(NodeGraph graph) {
+        this(graph, java.util.UUID.randomUUID().toString());
+    }
+
+    public EditorContext(NodeGraph graph, String historyScopeId) {
         // 如果传入 null，则默认创建一个空的新图
         this.mGraph = (graph != null) ? graph : new NodeGraph();
         this.mCurrentGraph = this.mGraph;
-        this.mCommandManager = new CommandManager(this);
+        this.mCommandManager = new CommandManager(this, historyScopeId);
         this.mGraphController = new GraphController(this);
     }
 
@@ -58,10 +63,8 @@ public class EditorContext {
         if (boundariesMissing) {
             // Repairing a legacy/incomplete group is a real document edit, not an untracked side
             // effect of navigation. The manager captures its complete reversible state.
-            var previousChildren = groupNode.subNodes == null ? null : new LinkedHashMap<>(groupNode.subNodes);
             mCommandManager.execute(new ICommand() {
                 @Override public void execute() { GroupNodeFactory.ensureBoundaryNodes(groupNode); }
-                @Override public void undo() { groupNode.subNodes = previousChildren; }
             });
         }
         mCurrentGroupNode = groupNode;
@@ -240,7 +243,27 @@ public class EditorContext {
         notifyListeners("changing frame title", listener -> listener.onFrameTitleChanged(frameId, title));
     }
 
+    void beginHistoryNotifications() {
+        if (historyNotifications != null) throw new IllegalStateException("Graph notification batch already active");
+        historyNotifications = new ArrayList<>();
+    }
+
+    void discardHistoryNotifications() {
+        if (historyNotifications != null) historyNotifications.clear();
+    }
+
+    void finishHistoryNotifications() {
+        if (historyNotifications == null) return;
+        List<Runnable> pending = historyNotifications;
+        historyNotifications = null;
+        for (Runnable notification : pending) notification.run();
+    }
+
     private void notifyListeners(String event, Consumer<EditorListener> notification) {
+        if (historyNotifications != null) {
+            historyNotifications.add(() -> notifyListeners(event, notification));
+            return;
+        }
         for (EditorListener listener : List.copyOf(mListeners)) {
             try {
                 notification.accept(listener);

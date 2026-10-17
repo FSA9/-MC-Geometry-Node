@@ -14,6 +14,7 @@ public final class SceneDocument {
         if (revision < 0 || loaded.size() > MAX_OBJECTS) throw new IllegalArgumentException("Invalid scene document");
         this.revision = revision;
         for (SceneObject object : loaded) {
+            requireAuthored(object);
             SceneObjectTypes.validate(object);
             if (object.revision() > revision || objects.putIfAbsent(object.id(), object) != null)
                 throw new IllegalArgumentException("Invalid persisted object identity/revision");
@@ -37,6 +38,7 @@ public final class SceneDocument {
             if (version(change.id()) != change.expectedRevision()) throw new IllegalStateException("Scene changed; refresh and retry");
             SceneObject current = objects.get(change.id());
             if (change.replacement() != null) {
+                requireAuthored(change.replacement());
                 SceneObjectTypes.validate(change.replacement());
                 if (current == null) size++;
                 if (!change.replacement().sameContent(current)) changed = true;
@@ -61,5 +63,10 @@ public final class SceneDocument {
         while (deleted.size() > MAX_TOMBSTONES) deleted.remove(deleted.keySet().iterator().next());
         revision = next;
         return true;
+    }
+
+    private static void requireAuthored(SceneObject object) {
+        if (SceneObjectTypes.require(object.typeId()).storage() != SceneObjectTypes.Storage.AUTHORED)
+            throw new IllegalArgumentException("Native objects cannot be stored in an authored scene document");
     }
 }

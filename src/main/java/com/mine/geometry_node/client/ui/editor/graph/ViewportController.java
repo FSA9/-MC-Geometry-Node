@@ -345,9 +345,9 @@ public class ViewportController implements EditorContext.EditorListener,
                 .equals(mEditorContext.getGraph().getGraphTypeId());
     }
 
-    public void executeRenamePort(String nodeId, String category, String portId, String oldName, String newName) {
+    public void executeRenamePort(String nodeId, String category, String portId, String newName) {
         if (mEditorContext == null) return;
-        CmdRenamePort cmd = new CmdRenamePort(mEditorContext.getGraphController(), nodeId, category, portId, oldName, newName);
+        CmdRenamePort cmd = new CmdRenamePort(mEditorContext.getGraphController(), nodeId, category, portId, newName);
         mEditorContext.getCommandManager().execute(cmd);
     }
 
@@ -528,18 +528,23 @@ public class ViewportController implements EditorContext.EditorListener,
                     actionRequest.nodeId(),
                     actionRequest.portCategory(),
                     actionRequest.portId(),
-                    actionRequest.oldName(),
                     actionRequest.newName()
             );
         }
     }
 
+    public com.mine.geometry_node.client.history.HistoryTarget historyTarget() {
+        return mEditorContext == null ? null : mEditorContext.getCommandManager();
+    }
+
     private void undo() {
-        if (mEditorContext != null) mEditorContext.getCommandManager().undo();
+        var history = historyTarget();
+        if (history != null) history.undo();
     }
 
     private void redo() {
-        if (mEditorContext != null) mEditorContext.getCommandManager().redo();
+        var history = historyTarget();
+        if (history != null) history.redo();
     }
 
     private void save() {

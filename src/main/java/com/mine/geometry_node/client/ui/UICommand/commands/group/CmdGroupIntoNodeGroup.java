@@ -33,7 +33,6 @@ public class CmdGroupIntoNodeGroup implements ICommand {
 
     private boolean mPrepared;
     private boolean mCanExecute;
-    private Map<String, NodeData> mBeforeNodes;
     private Map<String, NodeData> mAfterNodes;
 
     public CmdGroupIntoNodeGroup(GraphController controller, NodeGraph graph, List<String> selectedNodeIds, float groupX, float groupY) {
@@ -57,12 +56,6 @@ public class CmdGroupIntoNodeGroup implements ICommand {
         replaceNodes(mAfterNodes);
     }
 
-    @Override
-    public void undo() {
-        if (!mCanExecute || mBeforeNodes == null) return;
-        replaceNodes(mBeforeNodes);
-    }
-
     private void prepare() {
         if (mPrepared) return;
         mPrepared = true;
@@ -71,8 +64,7 @@ public class CmdGroupIntoNodeGroup implements ICommand {
             return;
         }
 
-        mBeforeNodes = deepCopyNodes(mGraph.nodes);
-        mAfterNodes = buildGroupedNodes(deepCopyNodes(mBeforeNodes));
+        mAfterNodes = buildGroupedNodes(deepCopyNodes(mGraph.nodes));
         mCanExecute = mAfterNodes != null;
     }
 

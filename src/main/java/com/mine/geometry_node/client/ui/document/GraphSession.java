@@ -13,6 +13,7 @@ public class GraphSession implements AutoCloseable {
     private final GraphFileReference mFileReference;
     public String tabName;
     public boolean isDirty = false;
+    private boolean closed;
     public final EditorContext editorContext;
 
     // --- 相机状态 ---
@@ -30,10 +31,10 @@ public class GraphSession implements AutoCloseable {
         mFileReference = fileReference;
         Path path = fileReference.requireActivePath();
         this.tabName = path.getFileName() != null ? path.getFileName().toString() : path.toString();
-        this.editorContext = new EditorContext(graph);
-        this.editorContext.getCommandManager().setDirtyListener(() -> {
-            if (!isDirty) {
-                isDirty = true;
+        this.editorContext = new EditorContext(graph, mSessionId.toString());
+        this.editorContext.getCommandManager().subscribeHistory(state -> {
+            if (isDirty != state.dirty()) {
+                isDirty = state.dirty();
                 DocumentManager.INSTANCE.notifyTabChanged();
             }
         });
@@ -63,6 +64,9 @@ public class GraphSession implements AutoCloseable {
 
     @Override
     public void close() {
+        if (closed) return;
+        editorContext.getCommandManager().close();
+        closed = true;
         mFileReference.releaseDocument();
     }
 }

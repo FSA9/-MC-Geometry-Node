@@ -14,9 +14,13 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import java.util.List;
 
 /** Graph-independent node catalog target available even when no viewport is open. */
-public final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget {
+public final class NodeCatalogQueryTarget implements GraphQueryTarget, UiSurfaceQueryTarget, com.mine.geometry_node.client.ai.command.HistoryQueryTarget {
     private final GraphQueryService queries = new GraphQueryService((NodeGraph) null);
     private final ViewportGraphContextService graphContexts = ViewportGraphContextService.INSTANCE;
+
+    @Override public CommandResult getHistoryState(String surfaceRef) {
+        return com.mine.geometry_node.client.ai.history.HistorySurfaceQueries.get(surfaceRef);
+    }
 
     @Override public boolean hasGraph() { return false; }
     @Override public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {

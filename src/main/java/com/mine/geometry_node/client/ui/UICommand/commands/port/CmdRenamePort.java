@@ -8,15 +8,13 @@ public class CmdRenamePort implements ICommand {
     private final String mNodeId;
     private final String mCategory;
     private final String mPortId;
-    private final String mOldName;
     private final String mNewName;
 
-    public CmdRenamePort(GraphController controller, String nodeId, String category, String portId, String oldName, String newName) {
+    public CmdRenamePort(GraphController controller, String nodeId, String category, String portId, String newName) {
         this.mController = controller;
         this.mNodeId = nodeId;
         this.mCategory = category;
         this.mPortId = portId;
-        this.mOldName = oldName;
         this.mNewName = newName;
     }
 
@@ -25,8 +23,4 @@ public class CmdRenamePort implements ICommand {
         mController.setPortCustomName(mNodeId, mCategory, mPortId, mNewName);
     }
 
-    @Override
-    public void undo() {
-        mController.setPortCustomName(mNodeId, mCategory, mPortId, mOldName);
-    }
 }

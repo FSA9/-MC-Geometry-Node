@@ -12,7 +12,6 @@ public final class ViewportActionRequest {
     private final String mFrameId;
     private final String mPortCategory;
     private final String mPortId;
-    private final String mOldName;
     private final String mNewName;
     private final String mTitle;
     private final Integer mColor;
@@ -28,7 +27,6 @@ public final class ViewportActionRequest {
         mFrameId = builder.mFrameId;
         mPortCategory = builder.mPortCategory;
         mPortId = builder.mPortId;
-        mOldName = builder.mOldName;
         mNewName = builder.mNewName;
         mTitle = builder.mTitle;
         mColor = builder.mColor;
@@ -44,7 +42,6 @@ public final class ViewportActionRequest {
     public String frameId() { return mFrameId; }
     public String portCategory() { return mPortCategory; }
     public String portId() { return mPortId; }
-    public String oldName() { return mOldName; }
     public String newName() { return mNewName; }
     public String title() { return mTitle; }
     public Integer color() { return mColor; }
@@ -70,7 +67,6 @@ public final class ViewportActionRequest {
         private String mFrameId;
         private String mPortCategory;
         private String mPortId;
-        private String mOldName;
         private String mNewName;
         private String mTitle;
         private Integer mColor;
@@ -109,8 +105,7 @@ public final class ViewportActionRequest {
             return this;
         }
 
-        public Builder rename(String oldName, String newName) {
-            mOldName = oldName;
+        public Builder rename(String newName) {
             mNewName = newName;
             return this;
         }

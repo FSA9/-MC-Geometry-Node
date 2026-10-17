@@ -374,6 +374,9 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     // 6. InteractionContext 实现
     // ==========================================
 
+    @Override public com.mine.geometry_node.client.history.HistoryTarget historyTarget() {
+        return mController == null ? null : mController.historyTarget();
+    }
     @Override public boolean isReady() { return mController != null && mController.hasActiveSession(); }
     @Override public NodeVisualAdapter findNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findNodeAt(uiX, uiY) : null; }
     public NodeVisualAdapter findInteractiveNodeAt(float uiX, float uiY) { return mNodeLayer != null ? mNodeLayer.findInteractiveNodeAt(uiX, uiY) : null; }

@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigEntry;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
+import com.mine.geometry_node.client.input.binding.InputBinding;
 
 public class ScopedAction<T> {
     public interface EnabledReader<S> {
@@ -49,6 +50,10 @@ public class ScopedAction<T> {
         if (mShortcutEntry == null || config == null || config.keyBindings == null) return "";
         String shortcut = mShortcutEntry.get(config);
         return shortcut != null ? shortcut : "";
+    }
+
+    public InputBinding inputBinding(AppConfig config) {
+        return InputBinding.parse(shortcutText(config));
     }
 
     public KeyBinding keyBinding(AppConfig config) {

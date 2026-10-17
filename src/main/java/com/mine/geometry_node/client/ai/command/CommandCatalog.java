@@ -24,6 +24,7 @@ public final class CommandCatalog {
         registry.register(delete());
         registry.register(connect());
         QueryCommandCatalog.registerInto(registry);
+        HistoryCommandCatalog.registerInto(registry);
         registry.register(applyGraphPatch());
         registry.register(help(registry));
         return registry;

@@ -35,7 +35,7 @@ public final class UIHintValueBinder {
             return false;
         }
         if (editorContext != null) {
-            CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, oldValue, newValue);
+            CmdChangeInputValue cmd = new CmdChangeInputValue(editorContext.getGraphController(), nodeData.id, portId, newValue);
             return editorContext.getCommandManager().execute(cmd);
         } else if (newValue == null) {
             nodeData.inputs.remove(portId);

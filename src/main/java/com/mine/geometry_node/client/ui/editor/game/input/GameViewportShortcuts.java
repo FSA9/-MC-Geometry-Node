@@ -11,7 +11,7 @@ import java.util.List;
 
 /** Commands use the same configuration and scoped dispatch as the node editor. */
 public final class GameViewportShortcuts {
-    public enum Action { SNAP_TOGGLE, PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
+    public enum Action { SNAP_TOGGLE, PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, ENTITY_MOVE, COPY, PASTE, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
 
     public static final List<ScopedAction<Action>> ACTIONS = List.of(
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.SNAP_TOGGLE, "geometry_node.game_view.scene.snap", BuiltinConfigEntries.GAME_VIEW_SNAP, null),
@@ -29,6 +29,12 @@ public final class GameViewportShortcuts {
                     BuiltinConfigEntries.GAME_VIEW_ADD, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.FOCUS, "geometry_node.game_view.scene.focus",
                     BuiltinConfigEntries.GAME_VIEW_FOCUS, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.ENTITY_MOVE, "geometry_node.game_view.entities.move",
+                    BuiltinConfigEntries.GAME_VIEW_ENTITY_MOVE, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.COPY, "geometry_node.game_view.scene.copy",
+                    BuiltinConfigEntries.GAME_VIEW_COPY, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.PASTE, "geometry_node.game_view.scene.paste",
+                    BuiltinConfigEntries.GAME_VIEW_PASTE, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.DELETE, "geometry_node.game_view.scene.delete",
                     BuiltinConfigEntries.GAME_VIEW_DELETE, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.UNDO, "geometry_node.game_view.scene.undo",

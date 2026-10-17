@@ -54,7 +54,7 @@ public class NetworkHandler {
         ClientboundPayloadRegistry.registerDedicatedServerTypes();
         com.mine.geometry_node.core.engine.system.scene.ServerSceneService.init();
         com.mine.geometry_node.core.engine.system.viewport.entity.ViewportEntityOrders.init();
-        com.mine.geometry_node.core.engine.system.viewport.entity.ViewportInteractionCreation.init();
+        com.mine.geometry_node.core.engine.system.viewport.entity.ViewportNativeEntityEditing.init();
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,
                 com.mine.geometry_node.core.network.packet.viewport.PacketViewportEntityMove.TYPE,
                 com.mine.geometry_node.core.network.packet.viewport.PacketViewportEntityMove.STREAM_CODEC,

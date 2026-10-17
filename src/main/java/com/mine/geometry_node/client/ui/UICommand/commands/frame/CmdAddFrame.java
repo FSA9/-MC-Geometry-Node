@@ -18,8 +18,4 @@ public class CmdAddFrame implements ICommand {
         mController.addFrame(mFrameData);
     }
 
-    @Override
-    public void undo() {
-        mController.removeFrame(mFrameData.id);
-    }
 }

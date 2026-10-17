@@ -23,7 +23,6 @@ public class CmdDissolveNodeGroup implements ICommand {
 
     private boolean mPrepared;
     private boolean mCanExecute;
-    private Map<String, NodeData> mBeforeNodes;
     private Map<String, NodeData> mAfterNodes;
 
     public CmdDissolveNodeGroup(GraphController controller, NodeGraph graph, String groupNodeId) {
@@ -44,12 +43,6 @@ public class CmdDissolveNodeGroup implements ICommand {
         replaceNodes(mAfterNodes);
     }
 
-    @Override
-    public void undo() {
-        if (!mCanExecute || mBeforeNodes == null) return;
-        replaceNodes(mBeforeNodes);
-    }
-
     private void prepare() {
         if (mPrepared) return;
         mPrepared = true;
@@ -58,8 +51,7 @@ public class CmdDissolveNodeGroup implements ICommand {
             return;
         }
 
-        mBeforeNodes = deepCopyNodes(mGraph.nodes);
-        mAfterNodes = buildDissolvedNodes(deepCopyNodes(mBeforeNodes));
+        mAfterNodes = buildDissolvedNodes(deepCopyNodes(mGraph.nodes));
         mCanExecute = mAfterNodes != null;
     }
 

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.runtime.game.selection;
 
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
+import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
@@ -52,6 +53,7 @@ public final class ViewportSelectionRenderer {
     }
 
     public static void render(PoseStack pose, Vec3 camera) {
+        if (!ViewportVisualization.current().selectable(ViewportVisualization.Layer.ENTITY)) return;
         var selected = EditViewportRuntime.renderedSelection();
         if (selected.isEmpty()) return;
         var buffers = Minecraft.getInstance().renderBuffers().bufferSource();

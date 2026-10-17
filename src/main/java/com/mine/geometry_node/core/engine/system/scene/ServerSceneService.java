@@ -65,7 +65,7 @@ public final class ServerSceneService {
         Receipt receipt = receipts.get(request.requestId());
         if (receipt != null) {
             if (!receipt.request.equals(request)) reply(player, request.requestId(), false, "Request ID reused with different content");
-            else NetworkHandler.sendToPlayer(player, receipt.response);
+            else NetworkHandler.sendToPlayer(player, receipt.response(RemoteAssetPermissions.canManageAssets(player)));
             return;
         }
         boolean success = false;
@@ -102,5 +102,11 @@ public final class ServerSceneService {
         return new PacketSceneSnapshot(id, dimension, success, message, RemoteAssetPermissions.canManageAssets(player),
                 document.revision(), document.objects(), document.deletedVersions());
     }
-    private record Receipt(PacketSceneEdit request, PacketSceneSnapshot response) {}
+    record Receipt(PacketSceneEdit request, PacketSceneSnapshot response) {
+        /** Replay the original result and version proof, but never cached permission. */
+        PacketSceneSnapshot response(boolean canEdit) {
+            return new PacketSceneSnapshot(response.requestId(), response.dimension(), response.success(),
+                    response.message(), canEdit, response.revision(), response.objects(), response.deletedVersions());
+        }
+    }
 }

@@ -11,6 +11,7 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.actions.area.CreateArea;
 import com.mine.geometry_node.core.node.nodes.actions.collision.CreateGeometryCollision;
 import com.mine.geometry_node.core.node.nodes.actions.geometry.CreateMesh;
+import com.mine.geometry_node.core.node.nodes.actions.display_entity.SpawnInteractionEntity;
 import com.mine.geometry_node.core.node.nodes.actions.light.LightActionNode;
 import com.mine.geometry_node.core.node.nodes.actions.light.SetLightPropertyNode;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
@@ -35,10 +36,21 @@ public final class SceneNodeInputs {
     private static synchronized Model model(String typeId) { return MODELS.computeIfAbsent(typeId, SceneNodeInputs::build); }
     private static Model build(String typeId) {
         Builder b = new Builder();
-        if (!typeId.equals(SceneObject.POINT_LIGHT) && !Set.of("geometry", "collision", "area").stream()
+        if (!typeId.equals(SceneObject.POINT_LIGHT) && !typeId.equals(SceneNativeInteractions.TYPE_ID) && !Set.of("geometry", "collision", "area").stream()
                 .anyMatch(category -> List.of("cube", "cylinder", "uv_sphere").stream().anyMatch(shape -> typeId.equals(category + "/" + shape))))
             return new Model(List.of(), new Schema(List.copyOf(b.fields.values())), List.of());
-        if (SceneObject.POINT_LIGHT.equals(typeId)) {
+        if (SceneNativeInteractions.TYPE_ID.equals(typeId)) {
+            b.fields.remove("name");
+            for (String axis : List.of("x", "y", "z")) b.fields.remove("rotation." + axis);
+            b.vectorFields("scale", StandardPorts.SIZE_3.toInput().displayName(), SceneObject::scale,
+                    (o, value) -> SceneObjectCapabilities.transformed(o, o.position(), o.rotation(), value));
+            b.consume(new SpawnInteractionEntity().getDefinition(new NodeData()), Map.of(
+                    StandardPorts.XYZ.getId(), row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition),
+                    // The type validator bounds effective dimensions after generic scale is applied.
+                    StandardPorts.WIDTH.getId(), row -> b.scalar(row, "width", Double.MIN_VALUE, Double.MAX_VALUE),
+                    StandardPorts.HEIGHT.getId(), row -> b.scalar(row, "height", Double.MIN_VALUE, Double.MAX_VALUE),
+                    StandardPorts.RESPONSIVE.getId(), row -> b.scalar(row, "responsive", 0, 1)));
+        } else if (SceneObject.POINT_LIGHT.equals(typeId)) {
             NodeData data = data("create_light", "type", "point");
             NodeDef def = new LightActionNode(LightActionNode.Operation.CREATE).getDefinition(data);
             b.consume(def, Map.of(

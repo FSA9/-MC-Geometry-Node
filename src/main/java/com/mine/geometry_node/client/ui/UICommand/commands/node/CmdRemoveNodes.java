@@ -16,17 +16,6 @@ public class CmdRemoveNodes implements ICommand {
     // 保存被删除的节点数据
     private final List<NodeData> mRemovedNodes = new ArrayList<>();
 
-    // 记录被斩断的连线快照 (现在不论数据流还是执行流，都可以完美存储 inPortId 了！)
-    private record ConnectionSnapshot(String outNodeId, String outPortId, String inNodeId, String inPortId) {}
-
-    // 别人指向被删节点的连线
-    private final List<ConnectionSnapshot> mBrokenIncomingLinks = new ArrayList<>();
-    private final List<ConnectionSnapshot> mBrokenIncomingExecs = new ArrayList<>();
-
-    // 被删节点指向别人的连线 (修复 Bug 1 必须记录这些)
-    private final List<ConnectionSnapshot> mBrokenOutgoingLinks = new ArrayList<>();
-    private final List<ConnectionSnapshot> mBrokenOutgoingExecs = new ArrayList<>();
-
     public CmdRemoveNodes(GraphController controller, NodeGraph graph, List<String> nodeIdsToRemove) {
         this.mController = controller;
         this.mGraph = graph;
@@ -41,14 +30,9 @@ public class CmdRemoveNodes implements ICommand {
 
     @Override
     public void execute() {
-        mBrokenIncomingLinks.clear();
-        mBrokenIncomingExecs.clear();
-        mBrokenOutgoingLinks.clear();
-        mBrokenOutgoingExecs.clear();
-
         List<String> targetIds = mRemovedNodes.stream().map(n -> n.id).toList();
 
-        // 1. 扫描全图，找出所有【别人指向即将被删除节点】的连线，记录并断开
+        // 1. 扫描全图，找出所有【别人指向即将被删除节点】的连线并断开
         for (NodeData otherNode : mGraph.nodes.values()) {
             if (targetIds.contains(otherNode.id)) continue;
 
@@ -58,7 +42,6 @@ public class CmdRemoveNodes implements ICommand {
                     List<Connection> links = new ArrayList<>(otherNode.getConnections(outPort));
                     for (Connection link : links) {
                         if (targetIds.contains(link.targetNodeId())) {
-                            mBrokenIncomingLinks.add(new ConnectionSnapshot(otherNode.id, outPort, link.targetNodeId(), link.targetPortName()));
                             mController.removeConnection(otherNode.id, outPort, link.targetNodeId(), link.targetPortName());
                         }
                     }
@@ -69,7 +52,6 @@ public class CmdRemoveNodes implements ICommand {
                 for (String outPort : new ArrayList<>(otherNode.execOutputs.keySet())) {
                     Connection link = otherNode.execOutputs.get(outPort);
                     if (link != null && targetIds.contains(link.targetNodeId())) {
-                        mBrokenIncomingExecs.add(new ConnectionSnapshot(otherNode.id, outPort, link.targetNodeId(), link.targetPortName()));
                         mController.removeExecutionConnection(otherNode.id, outPort);
                     }
                 }
@@ -83,7 +65,6 @@ public class CmdRemoveNodes implements ICommand {
             if (node.outputs != null) {
                 for (String outPort : new ArrayList<>(node.outputs.keySet())) {
                     for (Connection link : new ArrayList<>(node.getConnections(outPort))) {
-                        mBrokenOutgoingLinks.add(new ConnectionSnapshot(node.id, outPort, link.targetNodeId(), link.targetPortName()));
                         mController.removeConnection(node.id, outPort, link.targetNodeId(), link.targetPortName());
                     }
                 }
@@ -93,7 +74,6 @@ public class CmdRemoveNodes implements ICommand {
                 for (String outPort : new ArrayList<>(node.execOutputs.keySet())) {
                     Connection link = node.execOutputs.get(outPort);
                     if (link != null) {
-                        mBrokenOutgoingExecs.add(new ConnectionSnapshot(node.id, outPort, link.targetNodeId(), link.targetPortName()));
                         mController.removeExecutionConnection(node.id, outPort);
                     }
                 }
@@ -106,26 +86,4 @@ public class CmdRemoveNodes implements ICommand {
         }
     }
 
-    @Override
-    public void undo() {
-        // 1. 把节点主体加回图中
-        for (NodeData node : mRemovedNodes) {
-            mController.addNode(node);
-        }
-        // 2. 依靠全量快照，恢复被删节点发出的连线
-        for (ConnectionSnapshot snap : mBrokenOutgoingLinks) {
-            mController.addConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
-        for (ConnectionSnapshot snap : mBrokenOutgoingExecs) {
-            mController.addExecutionConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
-
-        // 3. 依靠全量快照，恢复外部指向它们的连线
-        for (ConnectionSnapshot snap : mBrokenIncomingLinks) {
-            mController.addConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
-        for (ConnectionSnapshot snap : mBrokenIncomingExecs) {
-            mController.addExecutionConnection(snap.outNodeId, snap.outPortId, snap.inNodeId, snap.inPortId);
-        }
-    }
 }

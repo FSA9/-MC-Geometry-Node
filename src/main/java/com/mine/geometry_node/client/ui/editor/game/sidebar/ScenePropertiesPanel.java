@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.game.sidebar;
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.scene.SceneEditCapabilities;
 import com.mine.geometry_node.client.ui.components.common.*;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.sidebar.api.*;
@@ -142,7 +143,8 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
         if (updatingFields) return;
         var snapshot = service.confirmedSnapshot();
         SceneObject object = snapshot.active() == null ? null : snapshot.object(snapshot.active());
-        boolean editable = editingMode.getAsBoolean() && snapshot.canEdit();
+        boolean editable = editingMode.getAsBoolean() && snapshot.canEdit() && object != null
+                && SceneEditCapabilities.evaluate(SceneEditCapabilities.Action.PROPERTIES, List.of(object), false).allowed();
         form.setVisibility(object == null ? GONE : VISIBLE);
         if (object == null) {
             discardDraft();

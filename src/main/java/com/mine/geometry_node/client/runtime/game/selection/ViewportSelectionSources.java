@@ -10,6 +10,9 @@ public final class ViewportSelectionSources {
     public interface Source {
         String id();
         List<ViewportTarget> capture(PresentedViewportFrame frame);
+        /** Optional common edit identity. Selection-only plugins leave this unset. */
+        default UUID editableObject(String id) { return null; }
+        default boolean editableType(String typeId) { return false; }
         default Set<com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer> selectableLayers() {
             return Set.of();
         }
@@ -54,5 +57,27 @@ public final class ViewportSelectionSources {
             if (!ids.isEmpty()) handled |= source.action(ids, frame, ray, feedback);
         }
         return handled;
+    }
+    public static UUID editableObject(ViewportTarget.Key key) {
+        for (Source source : SOURCES) if (source.id().equals(key.source())) return source.editableObject(key.id());
+        return null;
+    }
+    /** A runtime edit mirror does not make a diagnostic target visible in every view. */
+    public static boolean presented(com.mine.geometry_node.core.engine.system.scene.SceneObject object,
+                                    PresentedViewportFrame frame) {
+        for (Source source : SOURCES) if (source.editableType(object.typeId())) {
+            return frame != null && frame.targets().stream().anyMatch(target -> target.key().source().equals(source.id())
+                    && object.id().equals(source.editableObject(target.key().id())));
+        }
+        return true;
+    }
+    /** Native render bounds follow this image's interpolated pose, independently of query cadence. */
+    public static net.minecraft.world.phys.AABB presentedBounds(com.mine.geometry_node.core.engine.system.scene.SceneObject object,
+                                                              PresentedViewportFrame frame) {
+        if(frame==null)return null;
+        for(Source source:SOURCES)if(source.editableType(object.typeId()))
+            for(ViewportTarget target:frame.targets())if(target.key().source().equals(source.id())
+                    &&object.id().equals(source.editableObject(target.key().id())))return target.bounds();
+        return null;
     }
 }

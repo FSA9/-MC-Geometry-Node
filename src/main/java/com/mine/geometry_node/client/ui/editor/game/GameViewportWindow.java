@@ -48,7 +48,7 @@ import com.mine.geometry_node.client.ui.components.common.UiSplitButton;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
-public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware, EditViewportFlightInput.ViewMenuOwner {
+public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, com.mine.geometry_node.client.ui.workspace.surface.HistorySurface, SurfaceRegistrationAware, EditViewportFlightInput.ViewMenuOwner {
     private final com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization visualization = new com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization();
     private final com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus sceneMenus;
     private final com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel propertiesPanel;
@@ -81,6 +81,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final TextView transformStatus;
     private boolean toolOrthographic;
     private long nextSidebarRefresh;
+    private long creationRequest;
     private final Runnable refresh = this::refresh;
     private final Runnable refreshVisibility = this::updateVisibility;
 
@@ -205,8 +206,9 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         if (registered && mode().usesEditorCamera()) com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.publish(this,visualization.snapshot());
         viewport.invalidate();
     }
-    void closeSceneMenus() { if(sceneMenus != null) sceneMenus.dismiss(); }
+    void closeSceneMenus() { creationRequest++; if(sceneMenus != null) sceneMenus.dismiss(); }
     private void openModeMenu() {
+        closeSceneMenus();
         closeViewMenu();
         viewport.prepareViewMenu();
         sceneMenus.modes(modeButton, mode(), this::setMode);
@@ -214,20 +216,29 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     private void openVisualization() {
         if (!mode().usesEditorCamera()) return;
+        closeSceneMenus();
         closeViewMenu(); viewport.prepareViewMenu(); sceneMenus.visualization(visibilityButton);
     }
-    void openCreateMenu(float rootX,float rootY,net.minecraft.world.phys.Vec3 position) {
-        if(mode()!=ViewportMode.EDIT || !viewport.canNavigate())return;
+    void openCreateMenu(float rootX,float rootY,
+                        com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.Request placement) {
+        if(mode()!=ViewportMode.EDIT || !viewport.canNavigate() || placement == null)return;
+        closeSceneMenus();
         closeViewMenu(); viewport.prepareViewMenu();
         if(!Float.isFinite(rootX)||!Float.isFinite(rootY)){
             icyllis.modernui.graphics.Matrix matrix=new icyllis.modernui.graphics.Matrix();viewport.transformMatrixToGlobal(matrix);
             float[] point={viewport.getWidth()*.5f,viewport.getHeight()*.5f};matrix.mapPoint(point);rootX=point[0];rootY=point[1];
         }
-        sceneMenus.createAt(rootX,rootY,position,()->{
-            sidebarLayout.setVisible(true,true);
-            sidebar.selectPanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID);
-            viewport.requestFocus();
-        });
+        long request = ++creationRequest;
+        float menuX = rootX, menuY = rootY;
+        com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.resolve(placement, position -> post(() -> {
+            if (request != creationRequest || disposed || !registered || mode() != ViewportMode.EDIT
+                    || !viewport.canNavigate() || !placement.current(com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot())) return;
+            sceneMenus.createAt(menuX,menuY,position,()->{
+                sidebarLayout.setVisible(true,true);
+                sidebar.selectPanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID);
+                viewport.requestFocus();
+            });
+        }));
     }
 
     public ViewportMode mode() { return modes.current(); }
@@ -337,6 +348,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     }
 
     private void openSnapSettings(){
+        closeSceneMenus();
         if(mode()!=ViewportMode.EDIT)return;
         closeViewMenu();viewport.prepareViewMenu();
         sceneMenus.snapping(snapOptionsButton,()->moveSnap,settings->{moveSnap=settings;viewport.setMoveSnap(settings);updateTools();});
@@ -406,6 +418,11 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
             SharedGameFrame.setVisible(this, false);
             EditViewportRuntime.setVisible(this, editCamera, false);
         }
+    }
+
+    @Override
+    public com.mine.geometry_node.client.history.HistoryTarget historyTarget() {
+        return mode() == ViewportMode.EDIT ? com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE : null;
     }
 
     private void refresh() {
