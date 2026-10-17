@@ -51,6 +51,10 @@ public final class ClientNetworkReceiverRegistry {
         initialized = true;
         com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
+                com.mine.geometry_node.core.network.packet.viewport.PacketViewportEntityMoveResult.TYPE,
+                (payload, context) -> context.queue(() ->
+                        com.mine.geometry_node.client.runtime.game.selection.ViewportWorldActions.accept(payload)));
+        ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.scene.PacketSceneSnapshot.TYPE,
                 (payload, context) -> {
                     long generation = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();

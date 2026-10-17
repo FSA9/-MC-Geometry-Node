@@ -561,9 +561,9 @@ public final class BehaviorEntityExecutors {
     }
 
     private static boolean startNavigation(Mob owner, Object target, double speed) {
-        if (target instanceof Entity entity) return owner.getNavigation().moveTo(entity, speed);
+        if (target instanceof Entity entity) return BehaviorNavigationService.INSTANCE.moveTo(owner, entity, speed);
         Vec3 position = requireTargetPosition(target);
-        return owner.getNavigation().moveTo(position.x, position.y, position.z, speed);
+        return BehaviorNavigationService.INSTANCE.moveTo(owner, position, speed);
     }
 
     private static boolean validMoveTarget(Mob owner, Object target) {

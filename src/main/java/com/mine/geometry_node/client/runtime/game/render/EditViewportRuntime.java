@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import java.util.WeakHashMap;
 import java.lang.ref.WeakReference;
 
@@ -47,6 +49,8 @@ public final class EditViewportRuntime {
     private static final class Request {
         final EditViewportCamera camera;
         double demand = 1;
+        long selectionGeneration = -1;
+        Set<ViewportTarget.Key> selection = Set.of();
         Request(EditViewportCamera camera) { this.camera = camera; }
     }
     private static final class Session implements AutoCloseable {
@@ -57,6 +61,7 @@ public final class EditViewportRuntime {
         EditViewportRenderContext context;
         TextureTarget target;
         ClientSceneService.Snapshot sceneSnapshot;
+        Set<ViewportTarget.Key> selection = Set.of();
         GameFrameImage.Size requestedSize = new GameFrameImage.Size(0, 0);
         Session(EditViewportCamera camera) { this.camera = camera; }
         @Override public void close() {
@@ -80,6 +85,18 @@ public final class EditViewportRuntime {
     public static synchronized void setDemand(Object owner, double scale) {
         Request request = VISIBLE.get(owner);
         if (request != null) request.demand = Double.isFinite(scale) ? Math.clamp(scale, 0, 1) : 0;
+    }
+    /** UI publishes immutable identities; the render thread freezes them with this view's frame. */
+    public static synchronized void setSelection(Object owner, long generation, Set<ViewportTarget.Key> selection) {
+        Request request = VISIBLE.get(owner);
+        if (request != null) {
+            request.selectionGeneration = generation;
+            request.selection = Set.copyOf(selection);
+        }
+    }
+    public static Set<ViewportTarget.Key> renderedSelection() {
+        Session session = frame;
+        return session == null ? Set.of() : session.selection;
     }
     public static synchronized void setPreferred(Object owner, boolean active) {
         if (active) preferred = owner;
@@ -149,6 +166,7 @@ public final class EditViewportRuntime {
     /** Freeze membership and camera before the normal update/extract/render sequence. */
     public static synchronized void beginFrame(Camera playerCamera) {
         Minecraft mc = Minecraft.getInstance();
+        com.mine.geometry_node.client.runtime.game.selection.ViewportEntitySource.begin();
         targetActive = false;
         frame = null;
         frameSource = null;
@@ -202,6 +220,9 @@ public final class EditViewportRuntime {
         frame = SESSIONS.get(frameSource);
         if (frame != null) {
             frame.sceneSnapshot = ClientSceneService.INSTANCE.snapshot();
+            Request request = VISIBLE.get(frameSource);
+            frame.selection = request.selectionGeneration == frame.sceneSnapshot.worldGeneration()
+                    ? request.selection : Set.of();
             frame.renderCamera.configure(mc.level, mc.player, frame.camera.snapshot());
             // Construction is lazy: at most one terrain context is created per client frame.
             try (var ignored = EditViewportShaderScope.enter(true)) {
@@ -258,9 +279,12 @@ public final class EditViewportRuntime {
     public static void endWorldTarget() { targetActive = false; }
     static void captureFrame() {
         Session session = frame;
-        if (session != null && session.target != null)
-            session.surface.capture(session.target.getColorTexture(),
-                    session.renderCamera.presented(++publicationSequence, session.sceneSnapshot));
+        if (session != null && session.target != null) {
+            var published = session.renderCamera.presented(++publicationSequence, session.sceneSnapshot);
+            if (published != null) published = published.withTargets(
+                    com.mine.geometry_node.client.runtime.game.selection.ViewportSelectionSources.capture(published));
+            session.surface.capture(session.target.getColorTexture(), published);
+        }
     }
 
     public static void resetToPlayer(Object owner) {

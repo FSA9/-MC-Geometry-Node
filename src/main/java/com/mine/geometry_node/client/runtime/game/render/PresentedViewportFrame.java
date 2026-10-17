@@ -15,6 +15,7 @@ public final class PresentedViewportFrame {
     private final float aspect, near, far;
     private final boolean zeroToOne;
     private final ClientSceneService.Snapshot scene;
+    private final java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets;
     private final Matrix4d viewProjection;
     private final Matrix4d inverseViewProjection;
 
@@ -26,6 +27,13 @@ public final class PresentedViewportFrame {
     PresentedViewportFrame(long frameId, EditViewportCamera.Snapshot camera, float aspect,
                            float near, float far, boolean zeroToOne, ClientSceneService.Snapshot scene,
                            Matrix4fc actualViewProjection) {
+        this(frameId, camera, aspect, near, far, zeroToOne, scene, actualViewProjection, java.util.List.of());
+    }
+
+    private PresentedViewportFrame(long frameId, EditViewportCamera.Snapshot camera, float aspect,
+            float near, float far, boolean zeroToOne, ClientSceneService.Snapshot scene, Matrix4fc actualViewProjection,
+            java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets) {
+        this.targets = java.util.List.copyOf(targets);
         this.frameId = frameId;
         this.camera = camera;
         this.aspect = aspect;
@@ -45,6 +53,11 @@ public final class PresentedViewportFrame {
                 .rotateY((float) Math.toRadians(camera.yaw() + 180));
     }
 
+    public PresentedViewportFrame withTargets(java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets) {
+        return new PresentedViewportFrame(frameId, camera, aspect, near, far, zeroToOne, scene,
+                new Matrix4f(viewProjection), targets);
+    }
+    public java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets() { return targets; }
     public long frameId() { return frameId; }
     public EditViewportCamera.Snapshot camera() { return camera; }
     public float aspect() { return aspect; }

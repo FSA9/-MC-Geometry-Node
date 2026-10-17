@@ -119,6 +119,14 @@ public final class BehaviorNavigationService {
         return new ProbeResult(reachable, false);
     }
 
+    /** Starts live movement for both behavior actions and editor orders. Caller owns MOVEMENT. */
+    public boolean moveTo(Mob owner, net.minecraft.world.phys.Vec3 target, double speed) {
+        return owner.getNavigation().moveTo(target.x, target.y, target.z, speed);
+    }
+    public boolean moveTo(Mob owner, Entity target, double speed) {
+        return owner.getNavigation().moveTo(target, speed);
+    }
+
     /** Creates a path on the live navigator; future world work quotas will gate this entry. */
     public LivePathResult requestLivePath(Mob owner, BlockPos target, int reachRange) {
         Objects.requireNonNull(owner, "owner");

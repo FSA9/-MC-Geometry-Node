@@ -2076,5 +2076,14 @@
   "geometry_node.game_view.scene.rz": "旋转 Z (°)",
   "geometry_node.game_view.scene.sz": "缩放 Z",
   "geometry_node.game_view.scene.grid": "网格",
-  "geometry_node.game_view.scene.snap": "吸附"
+  "geometry_node.game_view.scene.snap": "吸附",
+  "geometry_node.game_view.entities.waiting": "正在发送移动命令…",
+  "geometry_node.game_view.entities.accepted": "已向 %s/%s 个实体下达移动命令",
+  "geometry_node.game_view.entities.permission": "移动实体需要世界管理权限及有效编辑视角",
+  "geometry_node.game_view.entities.rate_limit": "移动命令队列已满，请稍后再试",
+  "geometry_node.game_view.entities.no_target": "未命中已加载的目标方块",
+  "geometry_node.game_view.entities.unavailable": "无法移动：无可用路径、无寻路能力或实体无法接管",
+  "geometry_node.game_view.entities.too_many": "一次最多指挥 128 个实体",
+  "geometry_node.game_view.entities.timeout": "移动命令未收到服务器确认",
+  "geometry_node.game_view.entities.too_far": "视角距离过远，请靠近目标后再试"
 }

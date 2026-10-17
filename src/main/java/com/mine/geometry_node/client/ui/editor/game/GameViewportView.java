@@ -42,6 +42,7 @@ final class GameViewportView extends View {
     private EditViewportCamera.Axis pressedAxis;
     private boolean activationPressed;
     private boolean navigating;
+    private boolean contextPressed;
     private boolean panning;
     private float pointerRootX = Float.NaN, pointerRootY = Float.NaN;
     private float lastX;
@@ -56,7 +57,7 @@ final class GameViewportView extends View {
         super(context);
         this.inputOwner = inputOwner;
         this.editCamera = editCamera;
-        scene = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction(inputOwner.visualization(), this::invalidate);
+        scene = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction(inputOwner.visualization(), this::selectionChanged);
         this.onInteraction = onInteraction;
         this.onProjectionChanged = onProjectionChanged;
         this.onSizeChanged = onSizeChanged;
@@ -71,8 +72,19 @@ final class GameViewportView extends View {
         setBackground(background);
     }
 
+    private void selectionChanged() {
+        publishSelection();
+        invalidate();
+    }
+
+    private void publishSelection() {
+        if (!Boolean.getBoolean("gn.standalone"))
+            scene.publishWorldSelection(inputOwner, active && inputOwner.mode() == ViewportMode.EDIT);
+    }
+
     void setActive(boolean active) {
         this.active = active;
+        publishSelection();
         firstFrameStart = active ? GameViewTiming.start() : 0;
         if (!active) releaseInteraction();
         displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
@@ -98,6 +110,7 @@ final class GameViewportView extends View {
                     root.getWidth(), root.getHeight(), localToRoot, visibleBounds);
         }
         EditViewportRuntime.setDemand(inputOwner, demand);
+        publishSelection();
     }
 
     void releaseInteraction() {
@@ -119,6 +132,7 @@ final class GameViewportView extends View {
         EditViewportFlightInput.release(inputOwner);
         activationPressed = false;
         navigating = false;
+        contextPressed = false;
         panning = false;
         orientationPressed = false;
         pressedAxis = null;
@@ -169,6 +183,7 @@ final class GameViewportView extends View {
             displayedBounds = bounds;
             if (editing()) {
                 scene.presented(presented, bounds);
+                publishSelection();
                 if (inputOwner.mode() == ViewportMode.EDIT) scene.draw(canvas);
                 var pose = presented.camera();
                 orientation.layout(bounds, UIUtils.dp2px(1), pose.yaw(), pose.pitch());
@@ -280,6 +295,10 @@ final class GameViewportView extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 if (!canNavigate() || !displayedBounds.contains(eventX(event), eventY(event))) return false;
+                if(event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)||event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
+                    if(!contextPressed){contextPressed=scene.contextAction(eventX(event),eventY(event));}
+                    if(contextPressed){requestFocus();onInteraction.run();return true;}
+                }
                 navigating = event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)
                         || event.getActionButton() == MotionEvent.BUTTON_TERTIARY;
                 // ModernUI's native ACTION_MOVE currently omits modifier flags.
@@ -313,10 +332,11 @@ final class GameViewportView extends View {
                     lastY = eventY(event);
                     invalidate();
                 }
-                return navigating || activationPressed;
+                return navigating || activationPressed || contextPressed;
             }
             case MotionEvent.ACTION_UP -> {
-                boolean handled = navigating || activationPressed;
+                boolean handled = navigating || activationPressed || contextPressed;
+                contextPressed=false;
                 if (scene.busy()) scene.up(eventX(event),eventY(event));
                 cancelInteraction();
                 if (handled) performClick();
@@ -331,6 +351,15 @@ final class GameViewportView extends View {
         if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_SCROLL)return true;
         if(scene.busy() && event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS
                 && event.getActionButton()==MotionEvent.BUTTON_SECONDARY){cancelInteraction();return true;}
+        if(event.getActionMasked()==MotionEvent.ACTION_BUTTON_RELEASE&&event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
+            boolean handled=contextPressed;contextPressed=false;if(handled)return true;
+        }
+        if(inputOwner.mode()==ViewportMode.EDIT&&canNavigate()&&!scene.busy()
+                &&!orientation.contains(eventX(event),eventY(event))
+                &&event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS&&event.getActionButton()==MotionEvent.BUTTON_SECONDARY){
+            if(!contextPressed)contextPressed=scene.contextAction(eventX(event),eventY(event));
+            if(contextPressed){requestFocus();onInteraction.run();return true;}
+        }
         if (editing() && orientation.contains(eventX(event), eventY(event))
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL) return true;
         if (inputOwner.mode() == ViewportMode.EDIT
@@ -418,7 +447,7 @@ final class GameViewportView extends View {
                 case PROJECTION -> { scene.cancel(); editCamera.toggleOrthographic(); onProjectionChanged.run(); }
                 case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }
                 case FOCUS -> scene.focus(editCamera);
-                case SELECT_ALL -> scene.selectAll();
+                case SELECT_ALL -> { scene.selectAll(); selectionChanged(); }
                 case DELETE -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.deleteSelected(); }
                 case UNDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.undo(); }
                 case REDO -> { scene.cancel(); com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.redo(); }

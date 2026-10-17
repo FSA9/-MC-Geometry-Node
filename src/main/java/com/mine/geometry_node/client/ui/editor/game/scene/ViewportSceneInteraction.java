@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
 import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.runtime.game.selection.*;
+import com.mine.geometry_node.client.ui.editor.game.selection.ViewportSelectionOverlay;
 import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
@@ -26,7 +28,41 @@ public final class ViewportSceneInteraction {
     private GameViewportLayout bounds,gestureBounds;
     private float startX,startY,currentX,currentY;
     private boolean pressed,additive,subtractive,marquee;
-    private Set<UUID> selectionAtPress=Set.of();
+    private Set<ViewportTarget.Key> selectionAtPress=Set.of();
+    private Set<ViewportTarget.Key> worldSelection=Set.of();
+    private Set<UUID> expectedSceneSelection=Set.of();
+    private long selectionGeneration=-1;
+    private final ViewportWorldActions worldActions=new ViewportWorldActions();
+    private final ViewportSelectionOverlay worldOverlay=new ViewportSelectionOverlay();
+    private static ViewportTarget.Key sceneKey(UUID id){return new ViewportTarget.Key("geometry_node:scene",id.toString());}
+    public void publishWorldSelection(Object owner, boolean enabled) {
+        var snapshot = service.snapshot();
+        boolean valid = enabled && selectionGeneration == snapshot.worldGeneration()
+                && snapshot.selected().equals(expectedSceneSelection);
+        com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime.setSelection(
+                owner, snapshot.worldGeneration(), valid ? worldSelection : Set.of());
+    }
+    public Set<ViewportTarget.Key> selectedTargets(){return Set.copyOf(combinedSelection());}
+    private Set<ViewportTarget.Key> combinedSelection(){
+        Set<ViewportTarget.Key> result=new LinkedHashSet<>(worldSelection);
+        for(UUID id:service.snapshot().selected())result.add(sceneKey(id));
+        return result;
+    }
+    private void applySelection(Set<ViewportTarget.Key> selected){applySelection(selected,null);}
+    private void applySelection(Set<ViewportTarget.Key> selected,ViewportTarget.Key preferred){
+        Set<UUID> scene=new LinkedHashSet<>();Set<ViewportTarget.Key> world=new LinkedHashSet<>();
+        for(var key:selected)if(key.source().equals("geometry_node:scene"))scene.add(UUID.fromString(key.id()));else world.add(key);
+        if(!worldSelection.equals(world))worldActions.clear();
+        worldSelection=Set.copyOf(world);expectedSceneSelection=Set.copyOf(scene);
+        UUID active=preferred!=null&&preferred.source().equals("geometry_node:scene")?UUID.fromString(preferred.id()):service.snapshot().active();
+        if(active==null||!scene.contains(active))active=scene.isEmpty()?null:scene.iterator().next();
+        service.select(scene,active);
+    }
+    public boolean contextAction(float x,float y){
+        if(busy()||!current(frame)||bounds==null||!bounds.contains(x,y)||worldSelection.isEmpty())return false;
+        boolean result=ViewportSelectionSources.action(worldSelection,frame,ViewportSceneMath.ray(frame,u(bounds,x),v(bounds,y)),worldActions);
+        if(result)changed.run();return result;
+    }
     private EditViewportCamera.Axis dragAxis;
     private Vec3 dragOrigin;
     private Map<UUID,Vec3> originals=Map.of();
@@ -34,14 +70,14 @@ public final class ViewportSceneInteraction {
     private ViewportTransformGesture transform;
     private boolean snap;
     public void setSnap(boolean enabled){snap=enabled;if(transforming())transform.setSnap(enabled);changed.run();}
-    public String transformLabel(){return transforming()?transform.label():"";}
+    public String transformLabel(){return transforming()?transform.label():worldActions.message();}
     public boolean transforming(){if(transform!=null&&!transform.active())transform=null;return transform!=null;}
     public void transformAxis(int bit){if(transforming()){transform.axis(bit);changed.run();}}
     public void confirmTransform(){if(transforming()&&transform.confirm())transform=null;changed.run();}
     public boolean transformNumberKey(int key){if(!transforming()||!transform.numberKey(key))return false;changed.run();return true;}
     public void transformMove(float x,float y){if(transforming()){transform.move(x,y);changed.run();}}
     public void beginTransform(String operation,float x,float y){
-        cancel();if(!current(frame)||bounds==null)return;
+        cancel();if(!worldSelection.isEmpty()||!current(frame)||bounds==null)return;
         if(!Float.isFinite(x)||!Float.isFinite(y)||!bounds.contains(x,y)){x=(bounds.left()+bounds.right())/2;y=(bounds.top()+bounds.bottom())/2;}
         var snapshot=service.snapshot();Map<UUID,SceneObject> objects=new LinkedHashMap<>();
         for(var o:frame.scene().objects())if(snapshot.selected().contains(o.id())&&selectable(o))objects.put(o.id(),o);
@@ -51,14 +87,21 @@ public final class ViewportSceneInteraction {
     }
     public ViewportSceneInteraction(ViewportVisualization visibility,Runnable changed){this(ClientSceneService.INSTANCE,visibility,changed);}
     ViewportSceneInteraction(ClientSceneService service,ViewportVisualization visibility,Runnable changed){this.service=service;this.visibility=visibility;this.changed=changed;paint.setAntiAlias(true);}
-    public void presented(PresentedViewportFrame frame,GameViewportLayout bounds){this.frame=frame;this.bounds=bounds;}
+    public void presented(PresentedViewportFrame frame,GameViewportLayout bounds){
+        this.frame=frame;this.bounds=bounds;
+        var snapshot=service.snapshot();
+        if(selectionGeneration!=snapshot.worldGeneration()||!snapshot.selected().equals(expectedSceneSelection)){
+            worldSelection=Set.of();worldActions.clear();expectedSceneSelection=snapshot.selected();
+            selectionGeneration=snapshot.worldGeneration();
+        }
+    }
     public void clearFrame(){frame=null;bounds=null;cancel();}
     public boolean busy(){return pressed||transforming();}
     public void cancel(){if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
     public boolean down(float x,float y,boolean shift){return down(x,y,shift,false);}
     public boolean down(float x,float y,boolean shift,boolean control){
         if(!current(frame)||bounds==null||!bounds.contains(x,y))return false;
-        gestureFrame=frame;gestureBounds=bounds;startX=currentX=x;startY=currentY=y;subtractive=control;additive=shift&&!control;pressed=true;selectionAtPress=service.snapshot().selected();
+        gestureFrame=frame;gestureBounds=bounds;startX=currentX=x;startY=currentY=y;subtractive=control;additive=shift&&!control;pressed=true;selectionAtPress=combinedSelection();
         dragAxis=shift||control?null:hitAxis(x,y);
         if(dragAxis!=null){
             var snapshot=service.snapshot();
@@ -91,21 +134,27 @@ public final class ViewportSceneInteraction {
         if(!pressed)return true;
         if(dragAxis!=null)service.commitPreview(this);
         else {
-            Set<UUID> selection=new LinkedHashSet<>();
-            if(additive||subtractive)selection.addAll(selectionAtPress);
-            UUID active=null;
+            Set<ViewportTarget.Key> hits=new LinkedHashSet<>();
             if(marquee){
                 double minU=Math.min(u(gestureBounds,startX),u(gestureBounds,x)),maxU=Math.max(u(gestureBounds,startX),u(gestureBounds,x));
                 double minV=Math.min(v(gestureBounds,startY),v(gestureBounds,y)),maxV=Math.max(v(gestureBounds,startY),v(gestureBounds,y));
-                for(var object:gestureFrame.scene().objects())if(selectable(object)&&ViewportSceneMath.intersects(gestureFrame,ViewportSceneMath.bounds(object),minU,minV,maxU,maxV)){
-                    if(subtractive)selection.remove(object.id());else{selection.add(object.id());active=object.id();}
-                }
+                for(var object:gestureFrame.scene().objects())if(selectable(object)&&ViewportSceneMath.intersects(gestureFrame,ViewportSceneMath.bounds(object),minU,minV,maxU,maxV))hits.add(sceneKey(object.id()));
+                for(var target:gestureFrame.targets())if(ViewportSceneMath.intersects(gestureFrame,target.bounds(),minU,minV,maxU,maxV))hits.add(target.key());
             }else{
-                active=pick(gestureFrame,gestureBounds,x,y);
-                if(active!=null){if(subtractive){selection.remove(active);active=null;}else if(additive&&!selection.add(active)){selection.remove(active);active=null;}else selection.add(active);}
+                UUID object=pick(gestureFrame,gestureBounds,x,y);
+                double depth=Double.POSITIVE_INFINITY;
+                ViewportTarget.Key hit=object==null?null:sceneKey(object);
+                if(object!=null)for(var o:gestureFrame.scene().objects())if(o.id().equals(object))
+                    depth=ScenePresentations.pointMarker(o)?lightDepth(gestureFrame,o):ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),ViewportSceneMath.bounds(o));
+                for(var target:gestureFrame.targets()){
+                    double d=ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),target.bounds());
+                    if(d<depth){depth=d;hit=target.key();}
+                }
+                if(hit!=null)hits.add(hit);
             }
-            if(active==null&&!selection.isEmpty())active=selection.iterator().next();
-            service.select(selection,active);
+            applySelection(ViewportSelection.apply(selectionAtPress,hits,additive,subtractive,!marquee),
+                    !marquee&&!hits.isEmpty()?hits.iterator().next():null);
+            if(hits.isEmpty()&&!additive&&!subtractive)worldActions.clear();
         }
         pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;
     }
@@ -125,10 +174,11 @@ public final class ViewportSceneInteraction {
             if(dx*dx+dy*dy<=Math.pow(UIUtils.dp2px(11),2)&&lightDepth(f,object)<depth){depth=lightDepth(f,object);best=object.id();}
         }return best;
     }
-    public void selectAll(){if(!current(frame))return;Set<UUID> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())if(selectable(o))ids.add(o.id());service.select(ids,ids.isEmpty()?null:ids.iterator().next());}
+    public void selectAll(){if(!current(frame))return;Set<ViewportTarget.Key> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())if(selectable(o))ids.add(sceneKey(o.id()));for(var t:frame.targets())ids.add(t.key());applySelection(ids);}
     public void focus(EditViewportCamera camera){
         var s=service.snapshot();AABB box=null;
         for(var o:s.objects())if(s.selected().contains(o.id())){AABB b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);}
+        if(current(frame))for(var target:frame.targets())if(worldSelection.contains(target.key()))box=box==null?target.bounds():box.minmax(target.bounds());
         if(box!=null){cancel();camera.focus(box,frame==null?1:frame.aspect(),1.2);changed.run();}
     }
     public Vec3 creationPosition(EditViewportCamera camera){var p=camera.snapshot();return new Vec3(p.pivotX(),p.pivotY(),p.pivotZ());}
@@ -154,6 +204,7 @@ public final class ViewportSceneInteraction {
             }
             if(visibility.gizmo())drawAxes(canvas);
         }
+        worldOverlay.draw(canvas,frame,bounds,worldSelection,worldActions.target());
         if(pressed&&marquee){
             paint.setStyle(Paint.FILL);paint.setColor(0x224C9AFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
             paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0xFF75AFFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
@@ -188,7 +239,7 @@ public final class ViewportSceneInteraction {
         }
     }
     private static Vec3 ring(int plane,double a,double b){return plane==0?new Vec3(a,b,0):plane==1?new Vec3(a,0,b):new Vec3(0,a,b);}
-    private Vec3 selectedCenter(){List<Vec3> points=new ArrayList<>();var selected=service.snapshot().selected();for(var o:frame.scene().objects())if(selected.contains(o.id())&&selectable(o))points.add(o.position());return points.isEmpty()?null:center(points);}
+    private Vec3 selectedCenter(){if(!worldSelection.isEmpty())return null;List<Vec3> points=new ArrayList<>();var selected=service.snapshot().selected();for(var o:frame.scene().objects())if(selected.contains(o.id())&&selectable(o))points.add(o.position());return points.isEmpty()?null:center(points);}
     private double axisLength(Vec3 origin){
         var c=frame.camera();double pixels=Math.max(1,bounds.bottom()-bounds.top());
         double height=c.orthographic()?c.orthographicHeight():2*Math.max(.1,new Vec3(c.x(),c.y(),c.z()).distanceTo(origin))*Math.tan(Math.toRadians(c.verticalFovDegrees())/2);

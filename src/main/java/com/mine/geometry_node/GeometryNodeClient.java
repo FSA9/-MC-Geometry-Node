@@ -58,6 +58,7 @@ public class GeometryNodeClient {
 
         // 监听世界渲染
         NeoForge.EVENT_BUS.addListener(this::onRenderLevelStage);
+        NeoForge.EVENT_BUS.addListener(this::onSelectionDiscs);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
         NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
@@ -94,6 +95,11 @@ public class GeometryNodeClient {
         DialogueStyleRenderer.tick();
 
         ClientBlueprintInputManager.tick();
+    }
+
+    private void onSelectionDiscs(RenderLevelStageEvent.AfterOpaqueFeatures event) {
+        com.mine.geometry_node.client.runtime.game.selection.ViewportSelectionRenderer.render(
+                event.getPoseStack(), event.getLevelRenderState().cameraRenderState.pos);
     }
 
     private void onRenderLevelStage(RenderLevelStageEvent.AfterTranslucentParticles event) {

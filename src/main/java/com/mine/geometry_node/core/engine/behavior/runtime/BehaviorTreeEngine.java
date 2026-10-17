@@ -56,6 +56,9 @@ public final class BehaviorTreeEngine {
         if (owner.level() != level || owner.isRemoved() || !owner.isAlive()) {
             throw new IllegalArgumentException("Behavior owner must be alive in the target server level");
         }
+        if (ExternalMovementLease.conflicts(owner, Set.of(BehaviorExecutableNode.Resource.MOVEMENT))) {
+            throw new IllegalStateException("Owner is executing an external movement order: " + owner.getUUID());
+        }
         requireExecutable(plan);
         ServerState server = state(level.getServer());
         if (server.instances.size() >= budget.targetLoadedInstances()) {
@@ -567,7 +570,7 @@ public final class BehaviorTreeEngine {
         @Override
         public boolean acquireResources(int nodeIndex, Set<BehaviorExecutableNode.Resource> resources) {
             Mob mob = owner.get();
-            return mob != null && nativeAi.acquire(resources);
+            return mob != null && !ExternalMovementLease.conflicts(mob, resources) && nativeAi.acquire(resources);
         }
 
         @Override
