@@ -17,7 +17,7 @@ public final class ViewportEntitySource implements ViewportSelectionSources.Sour
     static List<ViewportTarget> extractedTargets() { return List.copyOf(EXTRACTED); }
     public static void begin() { EXTRACTED.clear(); }
     public static void extract(Entity entity, EntityRenderState state) {
-        if (entity.isRemoved() || !entity.isAlive() || state.isInvisible || entity.isSpectator()) return;
+        if (entity instanceof net.minecraft.world.entity.Interaction || entity.isRemoved() || !entity.isAlive() || state.isInvisible || entity.isSpectator()) return;
         Vec3 offset = new Vec3(state.x - entity.getX(), state.y - entity.getY(), state.z - entity.getZ());
         EXTRACTED.add(new ViewportTarget(new ViewportTarget.Key(ID, entity.getUUID().toString()),
                 entity.getBoundingBox().move(offset), ViewportTarget.Decoration.DISC, List.of()));

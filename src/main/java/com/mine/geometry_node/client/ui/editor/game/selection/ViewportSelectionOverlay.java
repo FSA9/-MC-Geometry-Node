@@ -15,8 +15,9 @@ public final class ViewportSelectionOverlay {
     private final Paint paint = new Paint();
     public ViewportSelectionOverlay() { paint.setAntiAlias(true); }
     public void draw(Canvas canvas, PresentedViewportFrame frame, GameViewportLayout layout,
-                     Set<ViewportTarget.Key> selected, BlockPos destination) {
-        for (var target : frame.targets()) if (selected.contains(target.key())) {
+                     Set<ViewportTarget.Key> selected, BlockPos destination,
+                     java.util.function.Predicate<ViewportTarget> selectable) {
+        for (var target : frame.targets()) if (selected.contains(target.key()) && selectable.test(target)) {
             if (target.decoration() == ViewportTarget.Decoration.BOX) box(canvas, frame, layout, target.bounds());
         }
         if (destination != null) box(canvas, frame, layout, new AABB(destination).inflate(.005));

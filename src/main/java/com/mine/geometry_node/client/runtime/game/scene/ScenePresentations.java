@@ -68,6 +68,11 @@ public final class ScenePresentations {
         var presentation = presentation(object);
         return presentation == null ? null : presentation.layer();
     }
+    public static synchronized ViewportVisualization.Layer layer(String typeId) {
+        var presentation = TYPES.get(typeId);
+        if (presentation == null) presentation = CATEGORIES.get(SceneObjectTypes.require(typeId).category());
+        return presentation == null ? null : presentation.layer();
+    }
 
     public static boolean pointMarker(SceneObject object) {
         var presentation = presentation(object);
@@ -76,6 +81,7 @@ public final class ScenePresentations {
 
     public static synchronized boolean selectable(ViewportVisualization.Layer layer) {
         return CATEGORIES.values().stream().anyMatch(p -> p.layer() == layer)
-                || TYPES.values().stream().anyMatch(p -> p.layer() == layer);
+                || TYPES.values().stream().anyMatch(p -> p.layer() == layer)
+                || com.mine.geometry_node.client.runtime.game.selection.ViewportSelectionSources.selectable(layer);
     }
 }

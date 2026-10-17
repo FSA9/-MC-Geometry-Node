@@ -10,11 +10,17 @@ public final class ViewportSelectionSources {
     public interface Source {
         String id();
         List<ViewportTarget> capture(PresentedViewportFrame frame);
+        default Set<com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer> selectableLayers() {
+            return Set.of();
+        }
+        default boolean selectable(com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Snapshot settings) {
+            return selectableLayers().isEmpty() || selectableLayers().stream().anyMatch(settings::selectable);
+        }
         default boolean action(Set<String> ids, PresentedViewportFrame frame, ViewportSceneMath.Ray ray,
                                ViewportWorldActions feedback) { return false; }
     }
     private static final List<Source> SOURCES = new CopyOnWriteArrayList<>();
-    static { register(new ViewportEntitySource()); }
+    static { register(new ViewportEntitySource()); register(new ViewportInteractionSource()); }
     private ViewportSelectionSources() {}
     public static synchronized void register(Source source) {
         Objects.requireNonNull(source);
@@ -31,6 +37,13 @@ public final class ViewportSelectionSources {
             result.add(target);
         }
         return List.copyOf(result);
+    }
+    public static boolean selectable(com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer layer) {
+        return SOURCES.stream().anyMatch(source -> source.selectableLayers().contains(layer));
+    }
+    public static boolean selectable(ViewportTarget.Key key,
+            com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Snapshot settings) {
+        return SOURCES.stream().anyMatch(source -> source.id().equals(key.source()) && source.selectable(settings));
     }
     public static boolean action(Set<ViewportTarget.Key> selected, PresentedViewportFrame frame,
                                  ViewportSceneMath.Ray ray, ViewportWorldActions feedback) {

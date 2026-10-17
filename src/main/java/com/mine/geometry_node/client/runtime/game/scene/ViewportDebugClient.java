@@ -44,5 +44,9 @@ public final class ViewportDebugClient {
         layers.forEach((layer,data) -> { if (state.visible(ViewportVisualization.Layer.valueOf(layer.name()))) result.addAll(data.meshes()); });
         return result;
     }
+    public static List<PacketGeometryDebugSnapshot.Mesh> meshes(ViewportDebugLayer layer) {
+        var snapshot = layers.get(layer);
+        return snapshot == null ? List.of() : snapshot.meshes();
+    }
     public static void clear() { world=null; layers=Map.of(); lastMask=ticks=0; }
 }

@@ -10,13 +10,10 @@ import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
-import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
-import net.minecraft.nbt.CompoundTag;
+import com.mine.geometry_node.core.engine.system.entity.InteractionEntityFactory;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Interaction;
-import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 public class SpawnInteractionEntity extends BaseNode {
@@ -38,8 +35,8 @@ public class SpawnInteractionEntity extends BaseNode {
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         context.setNodeResult(StandardPorts.ENTITY.getId(), null);
-        Level level = context.getLevel();
-        if (level == null || level.isClientSide()) return next(StandardPorts.FLOW_OUT.getId());
+        var level = context.getLevel();
+        if (!(level instanceof ServerLevel serverLevel)) return next(StandardPorts.FLOW_OUT.getId());
 
         Vec3 pos = getInput(context, StandardPorts.XYZ.getId(), Vec3.class);
         if (pos == null) pos = Vec3.ZERO;
@@ -48,19 +45,9 @@ public class SpawnInteractionEntity extends BaseNode {
         Float height = getInput(context, StandardPorts.HEIGHT.getId(), Float.class);
         Boolean responsive = getInput(context, StandardPorts.RESPONSIVE.getId(), Boolean.class);
 
-        Interaction interaction = EntityType.INTERACTION.create(level, EntitySpawnReason.COMMAND);
-        if (interaction != null) {
-            interaction.setPos(pos.x, pos.y, pos.z);
-
-            CompoundTag nbt = EntityNbtCompat.saveWithoutId(interaction);
-            nbt.putFloat("width", width != null ? width : 1.0f);
-            nbt.putFloat("height", height != null ? height : 1.0f);
-            nbt.putBoolean("response", responsive != null && responsive);
-            EntityNbtCompat.load(interaction, nbt);
-
-            level.addFreshEntity(interaction);
-            context.setNodeResult(StandardPorts.ENTITY.getId(), interaction);
-        }
+        Interaction interaction = InteractionEntityFactory.spawn(serverLevel, pos,
+                width != null ? width : 1.0f, height != null ? height : 1.0f, responsive != null && responsive);
+        context.setNodeResult(StandardPorts.ENTITY.getId(), interaction);
 
         return next(StandardPorts.FLOW_OUT.getId());
     }

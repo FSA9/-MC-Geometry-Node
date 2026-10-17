@@ -24,7 +24,7 @@ final class InteractionDebugProvider {
                 AABB bounds = interaction.getBoundingBox();
                 Vec3 center = bounds.getCenter();
                 DebugRenderShape shape = new DebugRenderShape(
-                        DebugRenderChannel.INTERACTION.id() + ":" + interaction.getStringUUID(),
+                        interaction.getStringUUID(),
                         "interaction", "box", center,
                         new Vec3(bounds.getXsize(), bounds.getYsize(), bounds.getZsize()),
                         Vec3.ZERO, DebugRenderChannel.INTERACTION.color()

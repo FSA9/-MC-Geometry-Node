@@ -18,7 +18,7 @@ public final class ViewportVisualization {
         public boolean selectable(Layer layer) { return visible(layer) && selectable.contains(layer); }
     }
     private static final Snapshot DEFAULT = new Snapshot(EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.MODEL, Layer.SCHEMATIC, Layer.AREA, Layer.COLLISION),
-            EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.AREA, Layer.COLLISION), true, true);
+            EnumSet.of(Layer.LIGHT, Layer.GEOMETRY, Layer.AREA, Layer.COLLISION, Layer.INTERACTION), true, true);
     private static final Map<Object, Snapshot> VIEWS = new ConcurrentHashMap<>();
     private final EnumSet<Layer> visible = EnumSet.copyOf(DEFAULT.visible());
     private final EnumSet<Layer> selectable = EnumSet.copyOf(DEFAULT.selectable());

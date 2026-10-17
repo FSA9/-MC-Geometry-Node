@@ -139,7 +139,7 @@ public final class ViewportSceneInteraction {
                 double minU=Math.min(u(gestureBounds,startX),u(gestureBounds,x)),maxU=Math.max(u(gestureBounds,startX),u(gestureBounds,x));
                 double minV=Math.min(v(gestureBounds,startY),v(gestureBounds,y)),maxV=Math.max(v(gestureBounds,startY),v(gestureBounds,y));
                 for(var object:gestureFrame.scene().objects())if(selectable(object)&&ViewportSceneMath.intersects(gestureFrame,ViewportSceneMath.bounds(object),minU,minV,maxU,maxV))hits.add(sceneKey(object.id()));
-                for(var target:gestureFrame.targets())if(ViewportSceneMath.intersects(gestureFrame,target.bounds(),minU,minV,maxU,maxV))hits.add(target.key());
+                for(var target:gestureFrame.targets())if(selectable(target)&&ViewportSceneMath.intersects(gestureFrame,target.bounds(),minU,minV,maxU,maxV))hits.add(target.key());
             }else{
                 UUID object=pick(gestureFrame,gestureBounds,x,y);
                 double depth=Double.POSITIVE_INFINITY;
@@ -147,6 +147,7 @@ public final class ViewportSceneInteraction {
                 if(object!=null)for(var o:gestureFrame.scene().objects())if(o.id().equals(object))
                     depth=ScenePresentations.pointMarker(o)?lightDepth(gestureFrame,o):ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),ViewportSceneMath.bounds(o));
                 for(var target:gestureFrame.targets()){
+                    if(!selectable(target))continue;
                     double d=ViewportSceneMath.pickBounds(gestureFrame,u(gestureBounds,x),v(gestureBounds,y),target.bounds());
                     if(d<depth){depth=d;hit=target.key();}
                 }
@@ -174,11 +175,11 @@ public final class ViewportSceneInteraction {
             if(dx*dx+dy*dy<=Math.pow(UIUtils.dp2px(11),2)&&lightDepth(f,object)<depth){depth=lightDepth(f,object);best=object.id();}
         }return best;
     }
-    public void selectAll(){if(!current(frame))return;Set<ViewportTarget.Key> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())if(selectable(o))ids.add(sceneKey(o.id()));for(var t:frame.targets())ids.add(t.key());applySelection(ids);}
+    public void selectAll(){if(!current(frame))return;Set<ViewportTarget.Key> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())if(selectable(o))ids.add(sceneKey(o.id()));for(var t:frame.targets())if(selectable(t))ids.add(t.key());applySelection(ids);}
     public void focus(EditViewportCamera camera){
         var s=service.snapshot();AABB box=null;
         for(var o:s.objects())if(s.selected().contains(o.id())){AABB b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);}
-        if(current(frame))for(var target:frame.targets())if(worldSelection.contains(target.key()))box=box==null?target.bounds():box.minmax(target.bounds());
+        if(current(frame))for(var target:frame.targets())if(selectable(target)&&worldSelection.contains(target.key()))box=box==null?target.bounds():box.minmax(target.bounds());
         if(box!=null){cancel();camera.focus(box,frame==null?1:frame.aspect(),1.2);changed.run();}
     }
     public Vec3 creationPosition(EditViewportCamera camera){var p=camera.snapshot();return new Vec3(p.pivotX(),p.pivotY(),p.pivotZ());}
@@ -204,7 +205,7 @@ public final class ViewportSceneInteraction {
             }
             if(visibility.gizmo())drawAxes(canvas);
         }
-        worldOverlay.draw(canvas,frame,bounds,worldSelection,worldActions.target());
+        worldOverlay.draw(canvas,frame,bounds,worldSelection,worldActions.target(),this::selectable);
         if(pressed&&marquee){
             paint.setStyle(Paint.FILL);paint.setColor(0x224C9AFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
             paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0xFF75AFFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
@@ -214,6 +215,9 @@ public final class ViewportSceneInteraction {
     private boolean selectable(SceneObject object){
         var layer=ScenePresentations.layer(object);
         return layer!=null&&visibility.selectable(layer);
+    }
+    private boolean selectable(ViewportTarget target){
+        return ViewportSelectionSources.selectable(target.key(),visibility.snapshot());
     }
     private static double lightDepth(PresentedViewportFrame f,SceneObject o){
         var ray=ViewportSceneMath.ray(f,.5,.5);

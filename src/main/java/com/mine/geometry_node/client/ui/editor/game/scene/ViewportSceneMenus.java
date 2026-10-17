@@ -65,7 +65,10 @@ public final class ViewportSceneMenus {
                 String name=Component.translatable(entry.labelKey()).getString();
                 if(!name.toLowerCase(java.util.Locale.ROOT).contains(needle)&&!entry.typeId().contains(needle))continue;
                 View row=createItem(name,snapshot.canEdit()&&!snapshot.pending(),()->{
-                    if(token!=epoch||!isOpen())return;dismiss();entry.create().accept(snapshot.worldGeneration(),position);created.run();
+                    if(token!=epoch||!isOpen())return;dismiss();
+                    if(entry.layer()!=null){state.setVisible(entry.layer(),true);state.setSelectable(entry.layer(),true);}
+                    if(entry.layer()==ViewportVisualization.Layer.INTERACTION)state.setHelpers(true);
+                    entry.create().accept(snapshot.worldGeneration(),position);created.run();changed.run();
                 });
                 choices.addView(row,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(30)));
             }
