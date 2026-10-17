@@ -11,9 +11,10 @@ import java.util.List;
 
 /** Commands use the same configuration and scoped dispatch as the node editor. */
 public final class GameViewportShortcuts {
-    public enum Action { PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
+    public enum Action { SNAP_TOGGLE, PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
 
     public static final List<ScopedAction<Action>> ACTIONS = List.of(
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.SNAP_TOGGLE, "geometry_node.game_view.scene.snap", BuiltinConfigEntries.GAME_VIEW_SNAP, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.MOVE, "geometry_node.game_view.scene.move", BuiltinConfigEntries.GAME_VIEW_MOVE, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.ROTATE, "geometry_node.game_view.scene.rotate", BuiltinConfigEntries.GAME_VIEW_ROTATE, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.SCALE, "geometry_node.game_view.scene.scale", BuiltinConfigEntries.GAME_VIEW_SCALE, null),

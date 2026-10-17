@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.ui.editor.game.gizmo.ViewportOrientationOverlay;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
@@ -58,6 +59,9 @@ final class GameViewportView extends View {
         this.inputOwner = inputOwner;
         this.editCamera = editCamera;
         scene = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction(inputOwner.visualization(), this::selectionChanged);
+        scene.setSnapQueryPublisher(query -> {
+            if(!Boolean.getBoolean("gn.standalone"))EditViewportRuntime.setSnapQuery(inputOwner,query);
+        });
         this.onInteraction = onInteraction;
         this.onProjectionChanged = onProjectionChanged;
         this.onSizeChanged = onSizeChanged;
@@ -393,7 +397,7 @@ final class GameViewportView extends View {
         onInteraction.run();
     }
 
-    void setMoveSnap(boolean enabled){scene.setSnap(enabled);}
+    void setMoveSnap(ViewportSnapSettings settings){scene.setSnapSettings(settings);}
 
     String transformLabel(){return scene.transformLabel();}
 
@@ -407,7 +411,7 @@ final class GameViewportView extends View {
     private java.util.List<com.mine.geometry_node.client.ui.shortcut.ScopedAction<GameViewportShortcuts.Action>> availableShortcuts() {
         return GameViewportShortcuts.ACTIONS.stream().filter(action -> {
             if (inputOwner.mode()!=ViewportMode.EDIT) return false;
-            if(scene.transforming())return switch(action.id()){case AXIS_X,AXIS_Y,AXIS_Z,CONFIRM,CANCEL -> true;default -> false;};
+            if(scene.transforming())return switch(action.id()){case AXIS_X,AXIS_Y,AXIS_Z,CONFIRM,CANCEL,SNAP_TOGGLE -> true;default -> false;};
             return switch(action.id()){case AXIS_X,AXIS_Y,AXIS_Z,CONFIRM -> false;case CANCEL -> scene.busy();default -> true;};
         }).toList();
     }
@@ -443,6 +447,7 @@ final class GameViewportView extends View {
                 case AXIS_X -> scene.transformAxis(1);
                 case AXIS_Y -> scene.transformAxis(2);
                 case AXIS_Z -> scene.transformAxis(4);
+                case SNAP_TOGGLE -> inputOwner.toggleMoveSnap();
                 case CONFIRM -> scene.confirmTransform();
                 case PROJECTION -> { scene.cancel(); editCamera.toggleOrthographic(); onProjectionChanged.run(); }
                 case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }

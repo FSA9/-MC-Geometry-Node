@@ -39,14 +39,16 @@ abstract class AbstractConfigEntryEditor<T> extends LinearLayout implements Conf
                 0, compact ? UIUtils.dp2pxInt(3) : UIUtils.dp2pxInt(7));
 
         if (compact) {
+            setBaselineAligned(false);
             TextView title = text(context, tr(entry.labelTranslationKey()), 10.5f, SettingsEditorStyle.TEXT);
             title.setSingleLine(true);
             addView(title, new LayoutParams(0, UIUtils.dp2pxInt(30), 0.24f));
 
             TextView description = text(context, tr(entry.descriptionTranslationKey()), 9.5f,
                     SettingsEditorStyle.MUTED);
-            description.setSingleLine(true);
-            LayoutParams descriptionParams = new LayoutParams(0, UIUtils.dp2pxInt(30), 0.36f);
+            description.setSingleLine(false);
+            description.setMinHeight(UIUtils.dp2pxInt(30));
+            LayoutParams descriptionParams = new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.36f);
             descriptionParams.leftMargin = UIUtils.dp2pxInt(8);
             addView(description, descriptionParams);
 

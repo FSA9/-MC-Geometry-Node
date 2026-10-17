@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.runtime.game.render;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSources;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.chunk.EditCameraChunkClient;
@@ -48,6 +50,7 @@ public final class EditViewportRuntime {
 
     private static final class Request {
         final EditViewportCamera camera;
+        ViewportSnapGeometry.Query snapQuery;
         double demand = 1;
         long selectionGeneration = -1;
         Set<ViewportTarget.Key> selection = Set.of();
@@ -61,6 +64,7 @@ public final class EditViewportRuntime {
         EditViewportRenderContext context;
         TextureTarget target;
         ClientSceneService.Snapshot sceneSnapshot;
+        ViewportSnapGeometry.Query snapQuery;
         Set<ViewportTarget.Key> selection = Set.of();
         GameFrameImage.Size requestedSize = new GameFrameImage.Size(0, 0);
         Session(EditViewportCamera camera) { this.camera = camera; }
@@ -93,6 +97,10 @@ public final class EditViewportRuntime {
             request.selectionGeneration = generation;
             request.selection = Set.copyOf(selection);
         }
+    }
+    public static synchronized void setSnapQuery(Object owner, ViewportSnapGeometry.Query query) {
+        Request request = VISIBLE.get(owner);
+        if (request != null) request.snapQuery = query;
     }
     public static Set<ViewportTarget.Key> renderedSelection() {
         Session session = frame;
@@ -221,6 +229,7 @@ public final class EditViewportRuntime {
         if (frame != null) {
             frame.sceneSnapshot = ClientSceneService.INSTANCE.snapshot();
             Request request = VISIBLE.get(frameSource);
+            frame.snapQuery = request.snapQuery;
             frame.selection = request.selectionGeneration == frame.sceneSnapshot.worldGeneration()
                     ? request.selection : Set.of();
             frame.renderCamera.configure(mc.level, mc.player, frame.camera.snapshot());
@@ -283,6 +292,8 @@ public final class EditViewportRuntime {
             var published = session.renderCamera.presented(++publicationSequence, session.sceneSnapshot);
             if (published != null) published = published.withTargets(
                     com.mine.geometry_node.client.runtime.game.selection.ViewportSelectionSources.capture(published));
+            if (published != null && session.snapQuery != null) published = published.withSnapGeometry(
+                    ViewportSnapSources.capture(published, session.snapQuery));
             session.surface.capture(session.target.getColorTexture(), published);
         }
     }

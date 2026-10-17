@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.runtime.game.render;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
+import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
+import java.util.List;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportProjection;
 import com.mine.geometry_node.client.scene.ClientSceneService;
@@ -15,7 +18,8 @@ public final class PresentedViewportFrame {
     private final float aspect, near, far;
     private final boolean zeroToOne;
     private final ClientSceneService.Snapshot scene;
-    private final java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets;
+    private final List<ViewportTarget> targets;
+    private final ViewportSnapGeometry snapGeometry;
     private final Matrix4d viewProjection;
     private final Matrix4d inverseViewProjection;
 
@@ -27,13 +31,15 @@ public final class PresentedViewportFrame {
     PresentedViewportFrame(long frameId, EditViewportCamera.Snapshot camera, float aspect,
                            float near, float far, boolean zeroToOne, ClientSceneService.Snapshot scene,
                            Matrix4fc actualViewProjection) {
-        this(frameId, camera, aspect, near, far, zeroToOne, scene, actualViewProjection, java.util.List.of());
+        this(frameId, camera, aspect, near, far, zeroToOne, scene, actualViewProjection, List.of(), ViewportSnapGeometry.EMPTY);
     }
 
     private PresentedViewportFrame(long frameId, EditViewportCamera.Snapshot camera, float aspect,
             float near, float far, boolean zeroToOne, ClientSceneService.Snapshot scene, Matrix4fc actualViewProjection,
-            java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets) {
-        this.targets = java.util.List.copyOf(targets);
+            List<ViewportTarget> targets,
+            ViewportSnapGeometry snapGeometry) {
+        this.snapGeometry = snapGeometry;
+        this.targets = List.copyOf(targets);
         this.frameId = frameId;
         this.camera = camera;
         this.aspect = aspect;
@@ -53,11 +59,16 @@ public final class PresentedViewportFrame {
                 .rotateY((float) Math.toRadians(camera.yaw() + 180));
     }
 
-    public PresentedViewportFrame withTargets(java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets) {
+    public PresentedViewportFrame withTargets(List<ViewportTarget> targets) {
         return new PresentedViewportFrame(frameId, camera, aspect, near, far, zeroToOne, scene,
-                new Matrix4f(viewProjection), targets);
+                new Matrix4f(viewProjection), targets, snapGeometry);
     }
-    public java.util.List<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget> targets() { return targets; }
+    public PresentedViewportFrame withSnapGeometry(ViewportSnapGeometry geometry) {
+        return new PresentedViewportFrame(frameId, camera, aspect, near, far, zeroToOne, scene,
+                new Matrix4f(viewProjection), targets, geometry);
+    }
+    public ViewportSnapGeometry snapGeometry() { return snapGeometry; }
+    public List<ViewportTarget> targets() { return targets; }
     public long frameId() { return frameId; }
     public EditViewportCamera.Snapshot camera() { return camera; }
     public float aspect() { return aspect; }

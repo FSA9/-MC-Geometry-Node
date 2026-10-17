@@ -429,6 +429,10 @@ final class ConfigSanitizer {
                 : readKeyBinding(gameView, "cancel", defaults.keyBindings.gameView.cancel);
         config.keyBindings.gameView.cancel = sceneCANCEL.value;
         changed |= sceneCANCEL.changed;
+        ReadKeyBinding toggleSnap = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleSnap)
+                : readKeyBinding(gameView, "toggleSnap", defaults.keyBindings.gameView.toggleSnap);
+        config.keyBindings.gameView.toggleSnap = toggleSnap.value;
+        changed |= toggleSnap.changed;
         ReadKeyBinding transformmove = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.move)
                 : readKeyBinding(gameView, "move", defaults.keyBindings.gameView.move);
         config.keyBindings.gameView.move = transformmove.value;

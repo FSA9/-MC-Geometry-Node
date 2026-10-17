@@ -126,6 +126,9 @@ public final class BuiltinConfigEntries {
     public static final ConfigEntry<String> GAME_VIEW_MENU = key("keyBindings.gameView.viewMenu", SHORTCUT_GAME_VIEW_GENERAL, 350, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.viewMenu, (config, value) -> config.keyBindings.gameView.viewMenu = value);
 
+    public static final ConfigEntry<String> GAME_VIEW_SNAP = key("keyBindings.gameView.toggleSnap", SHORTCUT_GAME_VIEW_EDIT, 465, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.toggleSnap, (config,value) -> config.keyBindings.gameView.toggleSnap = value);
+
     public static final ConfigEntry<String> GAME_VIEW_MOVE = key("keyBindings.gameView.move", SHORTCUT_GAME_VIEW_EDIT, 470, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.move, (config,value) -> config.keyBindings.gameView.move = value);
     public static final ConfigEntry<String> GAME_VIEW_ROTATE = key("keyBindings.gameView.rotate", SHORTCUT_GAME_VIEW_EDIT, 480, KeyScope.GAME_VIEW,
@@ -190,7 +193,7 @@ public final class BuiltinConfigEntries {
             VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
             GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
-            GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
+            GAME_VIEW_SNAP, GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
             GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_DELETE, GAME_VIEW_UNDO, GAME_VIEW_REDO, GAME_VIEW_CANCEL, GAME_VIEW_SELECT_ALL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 

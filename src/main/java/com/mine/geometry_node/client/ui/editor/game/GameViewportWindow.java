@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
@@ -43,6 +44,7 @@ import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.common.UiSplitButton;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
@@ -53,8 +55,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final EditorSidebar sidebar;
     private final UiActionButton visibilityButton;
     private final UiActionButton snapButton;
+    private final UiSplitButton snapControl;
     private final UiActionButton gridButton;
-    private boolean moveSnap;
+    private ViewportSnapSettings moveSnap=ViewportSnapSettings.defaults();
+    private final UiActionButton snapOptionsButton;
     private final EditViewportCamera editCamera = new EditViewportCamera();
     private final GameViewportView viewport;
     private final UiRadialMenu viewMenu;
@@ -107,8 +111,11 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         transformStatus=UIUtils.createLockedTextView(context,"",11,UiTheme.Text.SECONDARY);
         transformStatus.setSingleLine(true);
         header.addView(transformStatus, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        snapButton = action(context, "scene.snap", this::toggleMoveSnap);
-        header.addView(snapButton, toolbarButtonLayout());
+        snapControl = new UiSplitButton(context, tr("scene.snap"), toolbarPalette(false),
+                this::toggleMoveSnap, this::openSnapSettings);
+        snapButton = snapControl.primaryButton();
+        snapOptionsButton = snapControl.secondaryButton();
+        header.addView(snapControl, toolbarButtonLayout());
         gridButton = action(context, "scene.grid", () -> {
             visualization.setGrid(!visualization.grid());
             visualizationChanged();
@@ -321,14 +328,18 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     }
 
     private static UiActionButton.Palette toolbarPalette(boolean selected) {
-        return new UiActionButton.Palette(selected ? UiTheme.Control.CHECKED : UiTheme.Control.ICON,
-                UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                selected ? UiTheme.Text.STRONG : UiTheme.Text.NORMAL);
+        return UiActionButton.Palette.toggle(selected);
     }
 
-    private void toggleMoveSnap() {
+    void toggleMoveSnap() {
         if(mode()!=ViewportMode.EDIT)return;
-        moveSnap=!moveSnap;viewport.setMoveSnap(moveSnap);updateTools();
+        moveSnap=moveSnap.withEnabled(!moveSnap.enabled());viewport.setMoveSnap(moveSnap);updateTools();
+    }
+
+    private void openSnapSettings(){
+        if(mode()!=ViewportMode.EDIT)return;
+        closeViewMenu();viewport.prepareViewMenu();
+        sceneMenus.snapping(snapOptionsButton,()->moveSnap,settings->{moveSnap=settings;viewport.setMoveSnap(settings);updateTools();});
     }
 
     private void updateTools() {
@@ -337,8 +348,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         modeButton.setText(tr("mode." + mode().name().toLowerCase(java.util.Locale.ROOT)) + " ▾");
         gridButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         gridButton.setSelected(visualization.grid());
-        snapButton.setVisibility(editing ? View.VISIBLE : View.GONE);
-        snapButton.setSelected(moveSnap);
+        snapControl.setVisibility(editing ? View.VISIBLE : View.GONE);
+        snapButton.setSelected(moveSnap.enabled());
+        snapOptionsButton.setTooltipText(tr("snap.options"));
+        snapButton.setTooltipText(tr("scene.snap")+" ("+GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_SNAP)+")");
         projectionButton.setVisibility(editing ? View.VISIBLE : View.GONE);
         resetButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         visibilityButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
@@ -466,6 +479,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         KeyBinding menuBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_MENU));
         if (menuKey.dispatch(event, menuBinding, !(findFocus() instanceof EditText) && viewport.canNavigate()
                 && !EditViewportFlightInput.isCaptured(), this::openViewMenu, this::confirmViewMenu, viewMenu::dismiss)) return true;
+        if (sceneMenus.isOpen() && event.getAction()==KeyEvent.ACTION_DOWN && !(findFocus() instanceof EditText)) {
+            KeyBinding snap=KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_SNAP));
+            if(snap!=null&&UiInputBindings.matches(snap,event)&&viewport.dispatchShortcut(event))return true;
+        }
         if (sceneMenus.isOpen()) {
             KeyBinding cancel=KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_CANCEL));
             if(event.getAction()==KeyEvent.ACTION_DOWN&&cancel!=null&&UiInputBindings.matches(cancel,event)) {

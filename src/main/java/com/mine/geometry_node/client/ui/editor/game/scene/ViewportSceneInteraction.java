@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.selection.*;
 import com.mine.geometry_node.client.ui.editor.game.selection.ViewportSelectionOverlay;
@@ -68,12 +70,19 @@ public final class ViewportSceneInteraction {
     private Map<UUID,Vec3> originals=Map.of();
     private UUID hovered;
     private ViewportTransformGesture transform;
-    private boolean snap;
-    public void setSnap(boolean enabled){snap=enabled;if(transforming())transform.setSnap(enabled);changed.run();}
+    private final ViewportMoveSnap snapping;
+    private ViewportSnapSettings snapSettings=ViewportSnapSettings.defaults();
+    public void setSnapQueryPublisher(java.util.function.Consumer<ViewportSnapGeometry.Query> publisher){snapping.publisher(publisher);}
+    public void setSnap(boolean enabled){setSnapSettings(snapSettings.withEnabled(enabled));}
+    public void setSnapSettings(ViewportSnapSettings settings){
+        snapSettings=settings;snapping.settings(settings);
+        if(transforming())transform.refresh();else if(dragAxis!=null)move(currentX,currentY);
+        changed.run();
+    }
     public String transformLabel(){return transforming()?transform.label():worldActions.message();}
-    public boolean transforming(){if(transform!=null&&!transform.active())transform=null;return transform!=null;}
+    public boolean transforming(){if(transform!=null&&!transform.active()){transform=null;snapping.end();}return transform!=null;}
     public void transformAxis(int bit){if(transforming()){transform.axis(bit);changed.run();}}
-    public void confirmTransform(){if(transforming()&&transform.confirm())transform=null;changed.run();}
+    public void confirmTransform(){if(transforming()&&transform.confirm()){transform=null;snapping.end();}changed.run();}
     public boolean transformNumberKey(int key){if(!transforming()||!transform.numberKey(key))return false;changed.run();return true;}
     public void transformMove(float x,float y){if(transforming()){transform.move(x,y);changed.run();}}
     public void beginTransform(String operation,float x,float y){
@@ -82,13 +91,16 @@ public final class ViewportSceneInteraction {
         var snapshot=service.snapshot();Map<UUID,SceneObject> objects=new LinkedHashMap<>();
         for(var o:frame.scene().objects())if(snapshot.selected().contains(o.id())&&selectable(o))objects.put(o.id(),o);
         if(objects.isEmpty()||objects.size()!=snapshot.selected().size())return;
-        var gesture=new ViewportTransformGesture(service,frame,bounds,objects,ViewportTransformGesture.Operation.valueOf(operation),x,y);
-        if(gesture.begin()){transform=gesture;transform.setSnap(snap);}changed.run();
+        var gesture=new ViewportTransformGesture(service,frame,bounds,objects,ViewportTransformGesture.Operation.valueOf(operation),x,y,snapping);
+        if(gesture.begin()){transform=gesture;snapping.begin(frame,bounds,objects.values());transform.refresh();}changed.run();
     }
     public ViewportSceneInteraction(ViewportVisualization visibility,Runnable changed){this(ClientSceneService.INSTANCE,visibility,changed);}
-    ViewportSceneInteraction(ClientSceneService service,ViewportVisualization visibility,Runnable changed){this.service=service;this.visibility=visibility;this.changed=changed;paint.setAntiAlias(true);}
+    ViewportSceneInteraction(ClientSceneService service,ViewportVisualization visibility,Runnable changed){this.service=service;this.visibility=visibility;this.changed=changed;snapping=new ViewportMoveSnap(visibility);paint.setAntiAlias(true);}
     public void presented(PresentedViewportFrame frame,GameViewportLayout bounds){
         this.frame=frame;this.bounds=bounds;
+        if(snapping.presented(frame)){
+            if(transforming())transform.refresh();else if(dragAxis!=null)move(currentX,currentY);
+        }
         var snapshot=service.snapshot();
         if(selectionGeneration!=snapshot.worldGeneration()||!snapshot.selected().equals(expectedSceneSelection)){
             worldSelection=Set.of();worldActions.clear();expectedSceneSelection=snapshot.selected();
@@ -97,7 +109,7 @@ public final class ViewportSceneInteraction {
     }
     public void clearFrame(){frame=null;bounds=null;cancel();}
     public boolean busy(){return pressed||transforming();}
-    public void cancel(){if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
+    public void cancel(){snapping.end();if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
     public boolean down(float x,float y,boolean shift){return down(x,y,shift,false);}
     public boolean down(float x,float y,boolean shift,boolean control){
         if(!current(frame)||bounds==null||!bounds.contains(x,y))return false;
@@ -112,18 +124,19 @@ public final class ViewportSceneInteraction {
             originals=Map.copyOf(positions);dragOrigin=center(positions.values());
             Map<UUID,Long> revisions=new LinkedHashMap<>();for(var o:frame.scene().objects())if(originals.containsKey(o.id()))revisions.put(o.id(),o.revision());
             if(originals.isEmpty()||!service.beginPreview(this,frame.scene().worldGeneration(),revisions,originals)){dragAxis=null;pressed=false;}
+            else snapping.begin(frame,bounds,frame.scene().objects().stream().filter(o->originals.containsKey(o.id())).toList());
         }
         return true;
     }
     public boolean move(float x,float y){
         if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}currentX=x;currentY=y;
         if(dragAxis!=null){
-            if(!service.previewActive(this)){pressed=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;}
+            if(!service.previewActive(this)){snapping.end();pressed=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;}
             double amount=ViewportSceneMath.axisDrag(gestureFrame,dragOrigin,dragAxis,u(gestureBounds,startX),v(gestureBounds,startY),u(gestureBounds,x),v(gestureBounds,y));
             if(Double.isFinite(amount)){
                 Vec3 movement=new Vec3(dragAxis.x*amount,dragAxis.y*amount,dragAxis.z*amount);
                 int mask=dragAxis.x!=0?1:dragAxis.y!=0?2:4;
-                Vec3 delta=snap?ViewportMoveSnap.delta(dragOrigin,movement,mask):movement;
+                Vec3 delta=snapping.apply(dragOrigin,movement,mask,x,y);
                 Map<UUID,Vec3> next=new LinkedHashMap<>();originals.forEach((id,p)->next.put(id,p.add(delta)));try { service.previewPositions(this,next); } catch (IllegalArgumentException invalid) { cancel(); }
             }
         }else if(Math.hypot(x-startX,y-startY)>UIUtils.dp2px(4))marquee=true;
@@ -132,7 +145,7 @@ public final class ViewportSceneInteraction {
     public boolean up(float x,float y){
         if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}move(x,y);
         if(!pressed)return true;
-        if(dragAxis!=null)service.commitPreview(this);
+        if(dragAxis!=null){service.commitPreview(this);snapping.end();}
         else {
             Set<ViewportTarget.Key> hits=new LinkedHashSet<>();
             if(marquee){

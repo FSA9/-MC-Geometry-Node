@@ -124,5 +124,21 @@ public final class UiActionButton extends Button {
     }
 
     public record Palette(int normal, int hover, int pressed, int text) {
+        /** Hover and press retain the toggle's current hue, including its enabled blue. */
+        public static Palette toggle(boolean selected) {
+            int base = selected ? UiTheme.Control.CHECKED : UiTheme.Control.ICON;
+            return new Palette(base, shade(base, 0.12f), shade(base, -0.12f),
+                    selected ? UiTheme.Text.STRONG : UiTheme.Text.NORMAL);
+        }
+
+        private static int shade(int color, float amount) {
+            int target = amount > 0 ? 255 : 0;
+            float fraction = Math.abs(amount);
+            int r = (color >>> 16) & 255, g = (color >>> 8) & 255, b = color & 255;
+            r += Math.round((target - r) * fraction);
+            g += Math.round((target - g) * fraction);
+            b += Math.round((target - b) * fraction);
+            return (color & 0xFF000000) | (r << 16) | (g << 8) | b;
+        }
     }
 }

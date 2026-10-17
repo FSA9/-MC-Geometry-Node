@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
@@ -121,6 +122,12 @@ public final class ViewportSceneMenus {
         option(column,"helpers",state.helpers(),b->{state.setHelpers(b);changed.run();});
         option(column,"gizmo",state.gizmo(),b->{state.setGizmo(b);changed.run();});
         open=new UiPopover(owner.getContext(),column,240);open.showBelow(anchor,host);
+    }
+    public void snapping(View anchor,Supplier<ViewportSnapSettings> get,
+                         Consumer<ViewportSnapSettings> set){
+        dismiss();long token=epoch;
+        var panel=new ViewportSnapPanel(owner.getContext(),get,value->{if(token==epoch&&isOpen())set.accept(value);});
+        open=new UiPopover(owner.getContext(),panel,220);open.showBelow(anchor,host);
     }
     private void option(LinearLayout column,String key,boolean value,Consumer<Boolean> change){
         LinearLayout row=new LinearLayout(owner.getContext());row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);

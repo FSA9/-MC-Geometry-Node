@@ -61,13 +61,13 @@ public final class UiPopover extends FrameLayout {
         background.setStroke(UIUtils.dp2pxInt(1), UiTheme.Control.BORDER);
         panel.setBackground(background);
         int padding = UIUtils.dp2pxInt(7);
-        panel.setPadding(padding,padding,padding,padding);
-        // Reserve actual resolved padding plus a scrollbar gutter even if currently hidden.
-        // Extra breathing room also keeps fractional-density rounding away from the wrap threshold.
-        width = contentWidth
-                ? widthDp + panel.getPaddingLeft() + panel.getPaddingRight()
-                    + panel.getVerticalScrollbarWidth() + Math.max(2, UIUtils.dp2pxInt(8))
-                : UIUtils.dp2pxInt(widthDp);
+        // Every content type needs symmetric margins. An inset scrollbar changes the
+        // resolved padding on one side even when no scrollbar is currently visible.
+        // Overlay only the reserved outer margin; controls remain clear of the track.
+        panel.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
+        int side = Math.max(padding, panel.getVerticalScrollbarWidth()) + Math.max(1, UIUtils.dp2pxInt(4));
+        panel.setPadding(side,padding,side,padding);
+        width = contentWidth ? widthDp + side * 2 : UIUtils.dp2pxInt(widthDp);
         panel.addView(content, new ViewGroup.LayoutParams(-1,-2));
         addView(panel, new FrameLayout.LayoutParams(width,-2));
     }

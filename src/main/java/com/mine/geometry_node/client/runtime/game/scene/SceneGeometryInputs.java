@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.runtime.game.scene;
 
+import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.core.engine.system.scene.*;
@@ -61,6 +62,29 @@ public final class SceneGeometryInputs {
                 presentation.style().color(), presentation.style().showPoints() && mesh.showPoints(),
                 p.x, p.y, p.z, size.x, size.y, size.z, rotation.x, rotation.y, rotation.z,
                 mesh.vertices(), mesh.edges(), mesh.faces());
+    }
+
+    /** Snap targets use the same transformed mesh as the visible debug geometry; render-thread only. */
+    public static ViewportSnapGeometry.Mesh snapMesh(SceneObject object) {
+        var mesh=mesh(object);if(mesh==null)return null;
+        float[] positions=mesh.vertices();int[] edgeIndices=mesh.edges(),faceIndices=mesh.faces();
+        Vec3 center=new Vec3(mesh.centerX(),mesh.centerY(),mesh.centerZ());
+        // Analytic area renderers have no stored vertices; tessellate their actual primitive for snapping.
+        if(positions.length==0){
+            var plugin=ScenePrimitiveTypes.find(object.typeId());if(plugin==null)return null;
+            var primitive=primitiveMesh(object,plugin.primitive().apply(object));
+            positions=primitive.vertices();edgeIndices=primitive.edges();faceIndices=primitive.faces();center=object.position().add(primitive.center());
+        }
+        var vertices=new ArrayList<Vec3>();var edges=new ArrayList<ViewportSnapGeometry.Edge>();
+        var faces=new ArrayList<ViewportSnapGeometry.Triangle>();
+        for(int i=0;i<positions.length;i+=3)vertices.add(center.add(positions[i],positions[i+1],positions[i+2]));
+        for(int i=0;i+1<edgeIndices.length;i+=2)edges.add(new ViewportSnapGeometry.Edge(vertices.get(edgeIndices[i]),vertices.get(edgeIndices[i+1])));
+        for(int i=0;i+3<faceIndices.length;i+=4){
+            int a=faceIndices[i],b=faceIndices[i+1],c=faceIndices[i+2],d=faceIndices[i+3];
+            faces.add(new ViewportSnapGeometry.Triangle(vertices.get(a),vertices.get(b),vertices.get(c)));
+            if(d!=a&&d!=c)faces.add(new ViewportSnapGeometry.Triangle(vertices.get(a),vertices.get(c),vertices.get(d)));
+        }
+        return new ViewportSnapGeometry.Mesh(vertices,edges,faces);
     }
 
     static GeometryDebugElement primitiveMesh(SceneObject object, GeometryValue.Primitive primitive) {

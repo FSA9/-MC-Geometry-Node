@@ -21,7 +21,7 @@ public final class ViewportInteractionSource implements ViewportSelectionSources
     }
     @Override public List<ViewportTarget> capture(PresentedViewportFrame frame) {
         var state = ViewportVisualization.current();
-        if (!selectable(state))
+        if (!state.helpers() || !state.visible(ViewportVisualization.Layer.INTERACTION))
             return List.of();
         List<ViewportTarget> result = new ArrayList<>();
         for (var mesh : ViewportDebugClient.meshes(ViewportDebugLayer.INTERACTION)) {

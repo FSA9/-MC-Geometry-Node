@@ -22,15 +22,16 @@ final class ViewportTransformGesture {
     private final float startX,startY;
     private float x,y;
     private int axes;
-    private boolean snap;
+    private final ViewportMoveSnap snapping;
     private final ViewportTransformNumber number=new ViewportTransformNumber();
     private boolean valid=true;
-    void setSnap(boolean enabled){snap=enabled;move(x,y);}
+    void refresh(){move(x,y);}
     private final Operation operation;
     ViewportTransformGesture(ClientSceneService service,PresentedViewportFrame frame,GameViewportLayout bounds,
-                             Map<UUID,SceneObject> originals,Operation operation,float x,float y){
+                             Map<UUID,SceneObject> originals,Operation operation,float x,float y,ViewportMoveSnap snapping){
         this.service=service;this.frame=frame;this.bounds=bounds;this.originals=Map.copyOf(originals);this.operation=operation;
         this.startX=this.x=x;this.startY=this.y=y;
+        this.snapping=snapping;
         Vec3 sum=Vec3.ZERO;for(var o:originals.values())sum=sum.add(o.position());center=sum.scale(1.0/originals.size());
     }
     boolean begin(){
@@ -98,7 +99,8 @@ final class ViewportTransformGesture {
                 delta=direction.normalize().scale(numeric);
             }
         }
-        if(operation==Operation.MOVE && snap && numeric==null)delta=ViewportMoveSnap.delta(center,delta,axes);
+        if(operation==Operation.MOVE && numeric==null)delta=snapping.apply(center,delta,axes,x,y);
+        else snapping.suspend();
         if(operation==Operation.ROTATE&&axes!=0){
             int bit=count==2?7^axes:axes;normal=new Vec3((bit&1)!=0?1:0,(bit&2)!=0?1:0,(bit&4)!=0?1:0);
         }

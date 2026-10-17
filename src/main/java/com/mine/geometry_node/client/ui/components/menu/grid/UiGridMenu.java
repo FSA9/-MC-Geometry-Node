@@ -135,9 +135,11 @@ public final class UiGridMenu<T> {
         }
         @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
             int gap = UIUtils.dp2pxInt(style.gapDp());
+            int gridWidth = columns * cardWidth + (columns - 1) * gap;
+            int inset = Math.max(0, (r - l - gridWidth) / 2);
             for (int i = 0; i < getChildCount(); i++) {
                 View card = getChildAt(i);
-                int x = (i % columns) * (cardWidth + gap), y = (i / columns) * (rowHeight + gap);
+                int x = inset + (i % columns) * (cardWidth + gap), y = (i / columns) * (rowHeight + gap);
                 card.layout(x, y, x + cardWidth, y + card.getMeasuredHeight());
             }
         }

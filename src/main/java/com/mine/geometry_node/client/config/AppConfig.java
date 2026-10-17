@@ -172,6 +172,7 @@ public class AppConfig {
         public String undo = "CTRL+Z";
         public String redo = "CTRL+SHIFT+Z";
         public String cancel = "ESCAPE";
+        public String toggleSnap = "SHIFT+TAB";
         public String move = "G";
         public String rotate = "R";
         public String scale = "S";
@@ -201,6 +202,7 @@ public class AppConfig {
             copy.undo = undo;
             copy.redo = redo;
             copy.cancel = cancel;
+            copy.toggleSnap = toggleSnap;
             copy.move = move;
             copy.rotate = rotate;
             copy.scale = scale;
