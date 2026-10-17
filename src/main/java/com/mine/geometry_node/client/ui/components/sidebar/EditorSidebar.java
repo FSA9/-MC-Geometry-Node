@@ -230,6 +230,10 @@ public final class EditorSidebar extends LinearLayout {
         SidebarTabView tab = new SidebarTabView(getContext(), resolvedTitle, icon);
         PanelEntry entry = new PanelEntry(normalizedId, resolvedTitle, panel, tab);
         tab.setOnClickListener(v -> {
+            if (mContentVisible && mSelected == entry) {
+                if (mOnCollapseRequested != null) mOnCollapseRequested.run();
+                return;
+            }
             selectPanel(normalizedId);
             if (!mContentVisible && mOnExpandRequested != null) mOnExpandRequested.run();
         });

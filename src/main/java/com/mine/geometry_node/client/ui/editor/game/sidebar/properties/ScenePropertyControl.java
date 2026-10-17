@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.Field;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.Kind;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.text.TextUtils;
+import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.TextView;
 
@@ -25,7 +27,11 @@ public final class ScenePropertyControl {
         this.field = field;
         this.changed = changed;
         if (!field.editable()) {
-            view = UIUtils.createLockedTextView(context, "", 11, UiTheme.Text.MUTED);
+            TextView text = UIUtils.createLockedTextView(context, "", 11, UiTheme.Text.MUTED);
+            text.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            text.setSingleLine(true);
+            text.setEllipsize(TextUtils.TruncateAt.END);
+            view = text;
             return;
         }
         view = switch (field.kind()) {
@@ -72,6 +78,7 @@ public final class ScenePropertyControl {
             TextView text = (TextView) view;
             String label = field.kind() == Kind.CHOICE ? choiceLabel(value) : value;
             if (!text.getText().toString().equals(label)) text.setText(label);
+            if (!field.editable()) text.setTooltipText(label);
         }
     }
 

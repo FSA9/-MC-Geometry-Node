@@ -42,6 +42,7 @@ public class SvgIconView extends View {
         DATA_LIBRARY("editors/data_library.svg"),
         TERMINAL("editors/console.svg"),
         PERFORMANCE("editors/analysis.svg"),
+        COPY("actions/copy.svg"),
         SEARCH("actions/search.svg"),
         PLUS("actions/plus.svg"),
         MORE_HORIZONTAL("actions/more_h.svg"),

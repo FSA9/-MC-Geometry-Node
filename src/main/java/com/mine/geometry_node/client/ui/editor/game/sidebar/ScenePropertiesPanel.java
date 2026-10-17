@@ -16,12 +16,14 @@ import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.*;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.Minecraft;
 
 import java.util.*;
 
@@ -35,6 +37,7 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
     private final java.util.function.BooleanSupplier editingMode;
     private final Map<String, UiTextInput> fields = new LinkedHashMap<>();
     private final Map<String, ScenePropertyControl> controls = new LinkedHashMap<>();
+    private final Map<String, UiIconButton> copyButtons = new LinkedHashMap<>();
     private final LinearLayout form;
     private final TextView status;
     private Schema schema;
@@ -197,6 +200,7 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
                     control.setValue(preserved.containsKey(field.key()) ? preserved.get(field.key()) : field.value(object));
                 }
                 control.setEditable(editable);
+                copyButtons.get(field.key()).setVisibility(control.view().isEnabled() ? GONE : VISIBLE);
             }
         } finally {
             updatingFields = false;
@@ -215,6 +219,7 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
         dismissChoices();
         fields.clear();
         controls.clear();
+        copyButtons.clear();
         form.removeAllViews();
         formSignature = signature;
         for (Field field : schema.fields()) {
@@ -228,11 +233,32 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
             TextView label = UIUtils.createLockedTextView(getContext(), field.label().getString(), 11, UiTheme.Text.SECONDARY);
-            row.addView(label, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(80), -2));
+            label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            label.setSingleLine(true);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+            label.setTooltipText(field.label().getString());
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(80), UIUtils.dp2pxInt(28));
+            labelParams.rightMargin = UIUtils.dp2pxInt(8);
+            row.addView(label, labelParams);
             boolean checkbox = control.view() instanceof UiCheckBox;
             row.addView(control.view(), checkbox
                     ? new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20), UIUtils.dp2pxInt(20))
                     : new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1));
+            if (checkbox) row.addView(new View(getContext()), new LinearLayout.LayoutParams(0, 0, 1));
+            UiIconButton copy = new UiIconButton(getContext(),
+                    new SvgIconView(getContext(), SvgIconView.Icon.COPY, UiTheme.Text.SECONDARY),
+                    new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER, 0))
+                    .tooltip(Component.translatable("geometry_node.game_view.scene.copy_value").getString());
+            copy.setOnClickListener(v -> {
+                if (controls.get(field.key()) != control) return;
+                String value = control.value();
+                Minecraft minecraft = Minecraft.getInstance();
+                minecraft.execute(() -> minecraft.keyboardHandler.setClipboard(value));
+            });
+            copyButtons.put(field.key(), copy);
+            LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24));
+            copyParams.leftMargin = UIUtils.dp2pxInt(6);
+            row.addView(copy, copyParams);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = UIUtils.dp2pxInt(5);
             form.addView(row, lp);

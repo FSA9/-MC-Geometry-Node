@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.game.scene;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
+import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.menu.UiSearchMenuLayout;
 import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
@@ -14,6 +15,10 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.text.Typeface;
+import icyllis.modernui.text.SpannableString;
+import icyllis.modernui.text.Spanned;
+import icyllis.modernui.text.style.StyleSpan;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
@@ -106,18 +111,43 @@ public final class ViewportSceneMenus {
 
     public void visualization(View anchor){
         dismiss();LinearLayout column=column();
-        column.addView(label(tr("visibility")),new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(26)));
+        TextView title = label(tr("visibility"));
+        SpannableString titleText = new SpannableString(title.getText());
+        titleText.setSpan(new StyleSpan(Typeface.BOLD), 0, titleText.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setText(titleText);
+        column.addView(title,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(26)));
         LinearLayout headings=new LinearLayout(owner.getContext());headings.setOrientation(LinearLayout.HORIZONTAL);
         headings.addView(label(tr("type")),new LinearLayout.LayoutParams(0,UIUtils.dp2pxInt(24),1));
         headings.addView(centeredLabel(tr("selectable")),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(24)));
         headings.addView(centeredLabel(tr("visible")),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(24)));
         column.addView(headings);
+        java.util.List<Runnable> refresh = new java.util.ArrayList<>();
+        var layers = ViewportVisualization.Layer.values();
+        LinearLayout all = new LinearLayout(owner.getContext());
+        all.setOrientation(LinearLayout.HORIZONTAL);
+        all.setGravity(Gravity.CENTER_VERTICAL);
+        all.addView(label(tr("all_types")), new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1));
+        all.addView(iconToggle(SvgIconView.Icon.SCENE_CURSOR,
+                () -> java.util.Arrays.stream(layers).filter(ScenePresentations::selectable)
+                        .allMatch(layer -> state.snapshot().selectable().contains(layer)),
+                () -> java.util.Arrays.stream(layers).anyMatch(layer -> ScenePresentations.selectable(layer) && state.visible(layer)),
+                value -> {
+                    for (var layer : layers) if (ScenePresentations.selectable(layer)) state.setSelectable(layer, value);
+                    changed.run();
+                }, refresh), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48), UIUtils.dp2pxInt(20)));
+        all.addView(iconToggle(SvgIconView.Icon.SCENE_EYE,
+                () -> java.util.Arrays.stream(layers).allMatch(state::visible), () -> true,
+                value -> {
+                    for (var layer : layers) state.setVisible(layer, value);
+                    changed.run();
+                }, refresh), new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48), UIUtils.dp2pxInt(20)));
+        column.addView(all);
         for(var layer:ViewportVisualization.Layer.values()){
             LinearLayout row=new LinearLayout(owner.getContext());row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);
             row.addView(label(tr("layer."+layer.name().toLowerCase(java.util.Locale.ROOT))),new LinearLayout.LayoutParams(0,UIUtils.dp2pxInt(28),1));
-            View selectToggle=iconToggle(SvgIconView.Icon.SCENE_CURSOR,state.snapshot().selectable().contains(layer),com.mine.geometry_node.client.runtime.game.scene.ScenePresentations.selectable(layer)&&state.visible(layer),b->{state.setSelectable(layer,b);changed.run();});
+            View selectToggle=iconToggle(SvgIconView.Icon.SCENE_CURSOR,()->state.snapshot().selectable().contains(layer),()->ScenePresentations.selectable(layer)&&state.visible(layer),b->{state.setSelectable(layer,b);changed.run();},refresh);
             row.addView(selectToggle,new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
-            row.addView(iconToggle(SvgIconView.Icon.SCENE_EYE,state.visible(layer),true,b->{state.setVisible(layer,b);selectToggle.setEnabled(b&&com.mine.geometry_node.client.runtime.game.scene.ScenePresentations.selectable(layer));changed.run();}),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
+            row.addView(iconToggle(SvgIconView.Icon.SCENE_EYE,()->state.visible(layer),()->true,b->{state.setVisible(layer,b);changed.run();},refresh),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));
             column.addView(row);
         }
         option(column,"helpers",state.helpers(),b->{state.setHelpers(b);changed.run();});
@@ -135,13 +165,20 @@ public final class ViewportSceneMenus {
         row.addView(label(tr(key)),new LinearLayout.LayoutParams(0,UIUtils.dp2pxInt(28),1));
         row.addView(toggle(value,true,change),new LinearLayout.LayoutParams(UIUtils.dp2pxInt(48),UIUtils.dp2pxInt(20)));column.addView(row);
     }
-    private View iconToggle(SvgIconView.Icon kind,boolean value,boolean enabled,Consumer<Boolean> change){
-        boolean[] checked={value};long token=epoch;
-        SvgIconView icon=new SvgIconView(owner.getContext(),kind,value?UiTheme.Text.STRONG:UiTheme.Text.DISABLED);
+    private View iconToggle(SvgIconView.Icon kind,BooleanSupplier value,BooleanSupplier enabled,Consumer<Boolean> change,java.util.List<Runnable> refresh){
+        long token=epoch;
+        SvgIconView icon=new SvgIconView(owner.getContext(),kind,UiTheme.Text.STRONG);
         UiIconButton button=new UiIconButton(owner.getContext(),icon,new UiIconButton.Style(2,0,0,UiTheme.Control.ICON_HOVER,0));
-        button.setEnabled(enabled);button.setSelected(value);
-        button.tooltip(enabled?tr(kind==SvgIconView.Icon.SCENE_EYE?"visible":"selectable"):tr("selection_unavailable"));
-        button.setOnClickListener(v->{if(token!=epoch||!isOpen())return;checked[0]=!checked[0];button.setSelected(checked[0]);icon.setIconColor(checked[0]?UiTheme.Text.STRONG:UiTheme.Text.DISABLED);change.accept(checked[0]);});
+        Runnable update = () -> {
+            button.setEnabled(enabled.getAsBoolean());
+            boolean selected = value.getAsBoolean();
+            button.setSelected(selected);
+            icon.setIconColor(selected ? UiTheme.Text.STRONG : UiTheme.Text.DISABLED);
+            button.tooltip(button.isEnabled()?tr(kind==SvgIconView.Icon.SCENE_EYE?"visible":"selectable"):tr("selection_unavailable"));
+        };
+        refresh.add(update);
+        update.run();
+        button.setOnClickListener(v->{if(token!=epoch||!isOpen())return;change.accept(!value.getAsBoolean());refresh.forEach(Runnable::run);});
         return button;
     }
     private View toggle(boolean value,boolean enabled,Consumer<Boolean> change){
