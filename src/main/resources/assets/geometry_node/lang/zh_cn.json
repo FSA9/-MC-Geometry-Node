@@ -1027,8 +1027,10 @@
     "geometry_node.node.format_dialogue_text":  "格式化对话文本",
     "geometry_node.button.edit_shop":  "编辑商店",
     "geometry_node.button.preview":  "预览",
+    "geometry_node.button.nativepreview":  "预览",
     "geometry_node.preview.dialogue.speaker":  "预览",
     "geometry_node.graph_properties.quest.preview":  "预览当前任务界面",
+    "geometry_node.graph_properties.quest.nativepreview":  "预览当前任务界面",
     "geometry_node.port.player":  "玩家",
     "geometry_node.port.speaker_entity":  "对话实体",
     "geometry_node.port.graph_id":  "图 ID",
@@ -2070,5 +2072,6 @@
   "geometry_node.game_view.scene.sy": "缩放 Y",
   "geometry_node.game_view.scene.rz": "旋转 Z (°)",
   "geometry_node.game_view.scene.sz": "缩放 Z",
-    "geometry_node.game_view.scene.snap": "吸附"
+  "geometry_node.game_view.scene.grid": "网格",
+  "geometry_node.game_view.scene.snap": "吸附"
 }

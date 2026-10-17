@@ -83,6 +83,22 @@ public final class ViewportSceneMenus {
         row.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);row.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);
         row.setMinWidth(0);row.setMinHeight(0);row.setEnabled(enabled);row.setOnClickListener(v->action.run());return row;
     }
+    public void modes(View anchor, com.mine.geometry_node.client.ui.editor.game.ViewportMode current,
+                      Consumer<com.mine.geometry_node.client.ui.editor.game.ViewportMode> select) {
+        dismiss();
+        LinearLayout column = column();
+        for (var mode : com.mine.geometry_node.client.ui.editor.game.ViewportMode.values()) {
+            String name = Component.translatable("geometry_node.game_view.mode."
+                    + mode.name().toLowerCase(java.util.Locale.ROOT)).getString();
+            column.addView(createItem((mode == current ? "✓ " : "   ") + name, true, () -> {
+                dismiss();
+                select.accept(mode);
+            }), new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(30)));
+        }
+        open = new UiPopover(owner.getContext(), column, 150);
+        open.showBelow(anchor, host);
+    }
+
     public void visualization(View anchor){
         dismiss();LinearLayout column=column();
         column.addView(label(tr("visibility")),new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(26)));

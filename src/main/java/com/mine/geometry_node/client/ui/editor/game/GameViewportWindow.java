@@ -51,14 +51,13 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final EditorSidebar sidebar;
     private final UiActionButton visibilityButton;
     private final UiActionButton snapButton;
+    private final UiActionButton gridButton;
     private boolean moveSnap;
     private final EditViewportCamera editCamera = new EditViewportCamera();
     private final GameViewportView viewport;
     private final UiRadialMenu viewMenu;
     private final HeldMenuKey menuKey = new HeldMenuKey();
-    private final UiActionButton gameButton;
-    private final UiActionButton editButton;
-    private final UiActionButton flyButton;
+    private final UiActionButton modeButton;
     private final UiActionButton projectionButton;
     private final UiActionButton resetButton;
     private final TextView waiting;
@@ -91,12 +90,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         tools.setOrientation(HORIZONTAL);
         tools.setGravity(Gravity.CENTER_VERTICAL);
         tools.setBackground(background(UiTheme.Surface.HEADER));
-        gameButton = action(context, "mode.game", () -> setMode(ViewportMode.GAME));
-        editButton = action(context, "mode.edit", () -> setMode(ViewportMode.EDIT));
-        flyButton = action(context, "mode.fly", this::selectFlightMode);
+        modeButton = action(context, "mode.game", this::openModeMenu);
         projectionButton = action(context, "projection.perspective", this::toggleProjection);
         resetButton = action(context, "reset_camera", this::resetCamera);
-        for (TextView button : new TextView[]{gameButton, editButton, flyButton, projectionButton, resetButton}) {
+        for (TextView button : new TextView[]{modeButton, projectionButton, resetButton}) {
             tools.addView(button, toolbarButtonLayout());
         }
         HorizontalScrollView toolScroller = new HorizontalScrollView(context);
@@ -110,6 +107,12 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         header.addView(transformStatus, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         snapButton = action(context, "scene.snap", this::toggleMoveSnap);
         header.addView(snapButton, toolbarButtonLayout());
+        gridButton = action(context, "scene.grid", () -> {
+            visualization.setGrid(!visualization.grid());
+            visualizationChanged();
+            updateTools();
+        });
+        header.addView(gridButton, toolbarButtonLayout());
         visibilityButton = action(context, "scene.visibility", this::openVisualization);
         header.addView(visibilityButton, toolbarButtonLayout());
         addView(header, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(28)));
@@ -194,6 +197,12 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         viewport.invalidate();
     }
     void closeSceneMenus() { if(sceneMenus != null) sceneMenus.dismiss(); }
+    private void openModeMenu() {
+        closeViewMenu();
+        viewport.prepareViewMenu();
+        sceneMenus.modes(modeButton, mode(), this::setMode);
+    }
+
     private void openVisualization() {
         if (!mode().usesEditorCamera()) return;
         closeViewMenu(); viewport.prepareViewMenu(); sceneMenus.visualization(visibilityButton);
@@ -323,20 +332,17 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private void updateTools() {
         toolOrthographic = editCamera.isOrthographic();
         boolean editing = mode() == ViewportMode.EDIT;
-        gameButton.setTextColor(mode() == ViewportMode.GAME ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
-        flyButton.setTextColor(mode() == ViewportMode.FLY ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
-        editButton.setTextColor(editing ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+        modeButton.setText(tr("mode." + mode().name().toLowerCase(java.util.Locale.ROOT)) + " ▾");
+        gridButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
+        gridButton.setSelected(visualization.grid());
         snapButton.setVisibility(editing ? View.VISIBLE : View.GONE);
         snapButton.setSelected(moveSnap);
         projectionButton.setVisibility(editing ? View.VISIBLE : View.GONE);
         resetButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         visibilityButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
-        gameButton.setSelected(mode() == ViewportMode.GAME);
-        editButton.setSelected(editing);
-        flyButton.setSelected(mode() == ViewportMode.FLY);
         projectionButton.setText(tr("projection.orthographic"));
         projectionButton.setSelected(editCamera.isOrthographic());
-        for (UiActionButton button : new UiActionButton[]{gameButton, editButton, flyButton, projectionButton, snapButton})
+        for (UiActionButton button : new UiActionButton[]{modeButton, projectionButton, snapButton, gridButton})
             button.setPalette(toolbarPalette(button.isSelected()));
         if (sidebarPanel != null) sidebarPanel.refresh();
         if (propertiesPanel != null) propertiesPanel.refresh();

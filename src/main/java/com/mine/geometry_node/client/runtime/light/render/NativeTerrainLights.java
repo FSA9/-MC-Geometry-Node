@@ -57,6 +57,12 @@ public final class NativeTerrainLights {
     }
 
     public static void draw(Runnable draw) {
+        try (var grid = com.mine.geometry_node.client.runtime.game.render.ViewportSurfaceGrid.bind()) {
+            drawWithLights(draw);
+        }
+    }
+
+    private static void drawWithLights(Runnable draw) {
         if (active != null) { draw.run(); return; }
         begin();
         try { draw.run(); }
@@ -67,7 +73,7 @@ public final class NativeTerrainLights {
         return java.util.Map.of("passes",passes,"failure",failure);
     }
 
-    public static void deleted(int program) { programs.remove(program); loggedPrograms.remove(program); }
+    public static void deleted(int program) { com.mine.geometry_node.client.runtime.game.render.ViewportSurfaceGrid.deleted(program); programs.remove(program); loggedPrograms.remove(program); }
 
     private static final class Locations {
         final int marker, translucent, bvh, world;

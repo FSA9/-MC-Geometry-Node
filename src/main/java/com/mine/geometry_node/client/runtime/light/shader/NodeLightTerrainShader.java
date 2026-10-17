@@ -43,8 +43,10 @@ public final class NodeLightTerrainShader {
 
     private static String fragmentDeclarations() {
         return "in vec3 nodeTerrainPosition;\nin vec4 nodeTerrainTint;\nuniform int nodeTerrainReceiver;\nuniform int nodeTerrainTranslucent;\n"
+                +com.mine.geometry_node.client.runtime.game.render.ViewportSurfaceGrid.declarations()
                 +ModelSundialHeldLight.declarations()+"\n"+NodeLightShader.nativeDeclarations()+"\n"
                 +"vec3 nodeTerrainShade(vec3 color,vec3 albedo,float opacity) {\n"
+                +"color=viewportSurfaceGrid(color,nodeTerrainPosition);\n"
                 +"if(nodeTerrainReceiver==0 || nodeLightCount==0)return color;\n"
                 +"vec3 n=cross(dFdx(nodeTerrainPosition),dFdy(nodeTerrainPosition));\n"
                 +"float len=dot(n,n);if(len<1e-12)return color;n*=inversesqrt(len);\n"

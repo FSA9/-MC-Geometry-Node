@@ -1027,8 +1027,10 @@
     "geometry_node.node.format_dialogue_text":  "Format Dialogue Text",
     "geometry_node.button.edit_shop":  "Edit Shop",
     "geometry_node.button.preview":  "Preview",
+    "geometry_node.button.nativepreview":  "Preview",
     "geometry_node.preview.dialogue.speaker":  "Dialogue Speaker",
     "geometry_node.graph_properties.quest.preview":  "Quest Preview",
+    "geometry_node.graph_properties.quest.nativepreview":  "Quest Preview",
     "geometry_node.port.player":  "Player",
     "geometry_node.port.speaker_entity":  "Dialogue Entity",
     "geometry_node.port.graph_id":  "Graph ID",
@@ -2070,5 +2072,6 @@
   "geometry_node.game_view.scene.sy": "Scale Y",
   "geometry_node.game_view.scene.rz": "Rotation Z (°)",
   "geometry_node.game_view.scene.sz": "Scale Z",
-    "geometry_node.game_view.scene.snap": "Snap"
+  "geometry_node.game_view.scene.grid": "Grid",
+  "geometry_node.game_view.scene.snap": "Snap"
 }

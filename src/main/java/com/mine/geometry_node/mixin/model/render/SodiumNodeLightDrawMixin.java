@@ -10,13 +10,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Pseudo
 @Mixin(targets="net.caffeinemc.mods.sodium.client.render.chunk.ShaderChunkRenderer",remap=false)
 public abstract class SodiumNodeLightDrawMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private com.mine.geometry_node.client.runtime.game.render.ViewportSurfaceGrid.Binding geometryNode$grid;
     @Inject(method="begin",at=@At("RETURN"),remap=false)
     private void nodeLight$begin(CallbackInfo callback) {
         if(!NativeTerrainLights.enabled())
             com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.uploadForward(
                     org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL20C.GL_CURRENT_PROGRAM));
+        geometryNode$grid = com.mine.geometry_node.client.runtime.game.render.ViewportSurfaceGrid.bind();
         NativeTerrainLights.begin();
     }
     @Inject(method="end",at=@At("HEAD"),remap=false)
-    private void nodeLight$end(CallbackInfo callback) {NativeTerrainLights.end();}
+    private void nodeLight$end(CallbackInfo callback) {
+        try { NativeTerrainLights.end(); }
+        finally { if (geometryNode$grid != null) geometryNode$grid.close(); geometryNode$grid = null; }
+    }
 }
