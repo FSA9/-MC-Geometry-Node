@@ -13,6 +13,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 
 /** Runs exclusively on the client render thread, only while a geometry-snapped move is active. */
 public final class ViewportSnapSources {
@@ -21,11 +22,42 @@ public final class ViewportSnapSources {
     }
     /** Shared bounded budget also applies to plugin sources. */
     public static final class Collector {
+        public static final int MAX_MESHES = 512;
+        public static final int MAX_VERTICES = 32768;
+        public static final int MAX_EDGES = 65536;
+        public static final int MAX_FACES = 65536;
         private final List<ViewportSnapGeometry.Mesh> meshes = new ArrayList<>();
         private int vertices;
+        private int edges;
+        private int faces;
+
+        public boolean isFull() {
+            return meshes.size() >= MAX_MESHES;
+        }
+
+        public boolean canAdd(int vertexCount, int edgeCount, int faceCount) {
+            return !isFull() && vertexCount >= 0 && edgeCount >= 0 && faceCount >= 0
+                    && vertexCount <= MAX_VERTICES - vertices
+                    && edgeCount <= MAX_EDGES - edges
+                    && faceCount <= MAX_FACES - faces;
+        }
+
         public boolean add(ViewportSnapGeometry.Mesh mesh) {
-            if (meshes.size() >= 512 || vertices + mesh.vertices().size() > 32768) return false;
-            meshes.add(mesh); vertices += mesh.vertices().size(); return true;
+            if (!canAdd(mesh.vertices().size(), mesh.edges().size(), mesh.faces().size())) return false;
+            meshes.add(mesh);
+            vertices += mesh.vertices().size();
+            edges += mesh.edges().size();
+            faces += mesh.faces().size();
+            return true;
+        }
+
+        /** Plugin sources can also avoid constructing candidates that cannot fit. Recheck actual counts. */
+        public boolean add(ViewportSnapMeshCounts counts, Supplier<ViewportSnapGeometry.Mesh> build) {
+            return counts.fits(this) && add(build.get());
+        }
+
+        public boolean addBox(net.minecraft.world.phys.AABB box) {
+            return add(ViewportSnapMeshCounts.BOX, () -> ViewportSnapGeometry.Mesh.box(box));
         }
     }
     private static final List<Source> SOURCES = new CopyOnWriteArrayList<>();
@@ -34,10 +66,15 @@ public final class ViewportSnapSources {
     public static void register(Source source) { SOURCES.add(Objects.requireNonNull(source)); }
     public static ViewportSnapGeometry capture(PresentedViewportFrame frame, ViewportSnapGeometry.Query query) {
         var mc=Minecraft.getInstance();
+        if (mc.level == null) SceneGeometryInputs.beginWorld(Long.MIN_VALUE);
         if(query==null || query.generation()!=frame.scene().worldGeneration() || mc.level==null || mc.player==null
                 || !mc.level.dimension().identifier().toString().equals(frame.scene().dimension())) return ViewportSnapGeometry.EMPTY;
+        SceneGeometryInputs.beginWorld(frame.scene().worldGeneration());
         Collector result=new Collector();
-        for(var source:SOURCES)source.capture(frame,query,result);
+        for (var source : SOURCES) {
+            if (result.isFull()) break;
+            source.capture(frame, query, result);
+        }
         return new ViewportSnapGeometry(query.generation(),query.queryToken(),result.meshes);
     }
     private static void blocks(PresentedViewportFrame frame, ViewportSnapGeometry.Query query, Collector result) {
@@ -56,7 +93,7 @@ public final class ViewportSnapSources {
             var state=level.getBlockState(pos);
             if(state.isAir())continue;
             for(var box:state.getShape(level,pos).toAabbs())
-                if(!result.add(ViewportSnapGeometry.Mesh.box(box.move(pos))))return;
+                if (!result.addBox(box.move(pos))) return;
         }
     }
     private static void addNeighbors(Set<BlockPos> positions,BlockPos center) {
@@ -68,17 +105,18 @@ public final class ViewportSnapSources {
     }
     private static void objects(PresentedViewportFrame frame, ViewportSnapGeometry.Query query, Collector result) {
         for(var object:frame.scene().objects()) {
+            if (result.isFull()) return;
             var layer=ScenePresentations.layer(object);
             if(query.excluded().contains(object.id()) || !object.enabled() || layer==null || !query.visibility().visible(layer)
                     || query.excludeUnselectable()&&!query.visibility().selectable().contains(layer)
                     || !near(frame,ViewportSceneMath.bounds(object),query))continue;
-            var mesh=SceneGeometryInputs.snapMesh(object);
-            if(mesh==null)mesh=ViewportSnapGeometry.Mesh.box(ViewportSceneMath.bounds(object));
-            if(!result.add(mesh))return;
+            // An oversized object is skipped; smaller objects later in the scene may still fit.
+            SceneGeometryInputs.captureSnapMesh(object, result);
         }
         for(var target:frame.targets()) {
+            if (result.isFull()) return;
             if(query.excludeUnselectable()&&!ViewportSelectionSources.selectable(target.key(),query.visibility()))continue;
-            if(near(frame,target.bounds(),query)&&!result.add(ViewportSnapGeometry.Mesh.box(target.bounds())))return;
+            if (near(frame, target.bounds(), query)) result.addBox(target.bounds());
         }
     }
 }

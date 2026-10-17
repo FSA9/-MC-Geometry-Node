@@ -172,20 +172,21 @@ public final class ClientSceneService {
         for (UUID id : ids) expected.put(id, versions.getOrDefault(id, -1L));
         return beginPreview(this, generation, expected);
     }
-    /** Validates the actually presented frame, atomically with taking ownership of the gesture. */
+    /** Checks server versions atomically with taking ownership of a logical preview. */
     public synchronized boolean beginPreview(Object owner, long expectedGeneration, Map<UUID, Long> expectedRevisions) {
         return beginPreview(owner, expectedGeneration, expectedRevisions, null);
     }
-    /** Also guards a displayed, cancelled-preview image whose object revision has not changed. */
+    /** Presented-image gestures also validate full contents while acquiring ownership.
+     * A cancelled position/rotation/scale preview retains the same server revision. */
     public synchronized boolean beginPreview(Object owner, long expectedGeneration, Map<UUID, Long> expectedRevisions,
-                                              Map<UUID, Vec3> expectedPositions) {
+                                              Map<UUID, SceneObject> expectedObjects) {
         Objects.requireNonNull(owner);
         if (!editable(expectedGeneration) || expectedRevisions.isEmpty() || !previewBase.isEmpty()) return false;
         Map<UUID, SceneObject> base = new LinkedHashMap<>();
         for (var entry : expectedRevisions.entrySet()) {
             SceneObject object = objects.get(entry.getKey());
             if (object == null || object.revision() != entry.getValue()) return false;
-            if (expectedPositions != null && !object.position().equals(expectedPositions.get(entry.getKey()))) return false;
+            if (expectedObjects != null && !object.sameContent(expectedObjects.get(entry.getKey()))) return false;
             base.put(entry.getKey(), object);
         }
         previewBase = Map.copyOf(base); preview = Map.of(); previewOwner = owner;

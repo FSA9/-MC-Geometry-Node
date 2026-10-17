@@ -118,13 +118,24 @@ public final class ViewportSceneInteraction {
         if(dragAxis!=null){
             var snapshot=service.snapshot();
             if(!snapshot.canEdit()||snapshot.pending()){dragAxis=null;pressed=false;return true;}
-            Map<UUID,Vec3> positions=new LinkedHashMap<>();
-            for(var object:frame.scene().objects())if(snapshot.selected().contains(object.id())&&selectable(object))positions.put(object.id(),object.position());
-            if(positions.isEmpty()||positions.size()!=snapshot.selected().size()){dragAxis=null;pressed=false;return true;}
-            originals=Map.copyOf(positions);dragOrigin=center(positions.values());
-            Map<UUID,Long> revisions=new LinkedHashMap<>();for(var o:frame.scene().objects())if(originals.containsKey(o.id()))revisions.put(o.id(),o.revision());
-            if(originals.isEmpty()||!service.beginPreview(this,frame.scene().worldGeneration(),revisions,originals)){dragAxis=null;pressed=false;}
-            else snapping.begin(frame,bounds,frame.scene().objects().stream().filter(o->originals.containsKey(o.id())).toList());
+            Map<UUID, SceneObject> objects = new LinkedHashMap<>();
+            Map<UUID, Vec3> positions = new LinkedHashMap<>();
+            Map<UUID, Long> revisions = new LinkedHashMap<>();
+            for (var object : frame.scene().objects()) {
+                if (!snapshot.selected().contains(object.id()) || !selectable(object)) continue;
+                objects.put(object.id(), object);
+                positions.put(object.id(), object.position());
+                revisions.put(object.id(), object.revision());
+            }
+            if (objects.isEmpty() || objects.size() != snapshot.selected().size()
+                    || !service.beginPreview(this, frame.scene().worldGeneration(), revisions, objects)) {
+                dragAxis = null;
+                pressed = false;
+                return true;
+            }
+            originals = Map.copyOf(positions);
+            dragOrigin = center(positions.values());
+            snapping.begin(frame, bounds, objects.values());
         }
         return true;
     }
@@ -188,7 +199,14 @@ public final class ViewportSceneInteraction {
             if(dx*dx+dy*dy<=Math.pow(UIUtils.dp2px(11),2)&&lightDepth(f,object)<depth){depth=lightDepth(f,object);best=object.id();}
         }return best;
     }
-    public void selectAll(){if(!current(frame))return;Set<ViewportTarget.Key> ids=new LinkedHashSet<>();for(var o:frame.scene().objects())if(selectable(o))ids.add(sceneKey(o.id()));for(var t:frame.targets())if(selectable(t))ids.add(t.key());applySelection(ids);}
+    public void selectAll() {
+        cancel();
+        if (!current(frame)) return;
+        Set<ViewportTarget.Key> ids = new LinkedHashSet<>();
+        for (var object : frame.scene().objects()) if (selectable(object)) ids.add(sceneKey(object.id()));
+        for (var target : frame.targets()) if (selectable(target)) ids.add(target.key());
+        applySelection(ids);
+    }
     public void focus(EditViewportCamera camera){
         var s=service.snapshot();AABB box=null;
         for(var o:s.objects())if(s.selected().contains(o.id())){AABB b=ViewportSceneMath.focusBounds(o);box=box==null?b:box.minmax(b);}

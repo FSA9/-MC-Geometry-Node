@@ -128,7 +128,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
         FrameLayout content = new FrameLayout(context);
         viewport = new GameViewportView(context, this, editCamera, this::markInteracted,
-                this::updateTools, this::scheduleVisibilityRefresh);
+                this::scheduleVisibilityRefresh);
         content.addView(viewport, new FrameLayout.LayoutParams(-1, -1));
         sceneMenus = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus(this,content,visualization,this::visualizationChanged);
         waiting = UIUtils.createLockedTextView(context, tr("waiting"), 12.0f, UiTheme.Text.MUTED);

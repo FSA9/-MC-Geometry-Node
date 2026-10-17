@@ -72,12 +72,13 @@ public final class ViewportEntityOrders {
             reply(player,packet,0,BlockPos.ZERO,"permission"); return;
         }
         var hit = ViewportBlockRaycast.clip(level,packet.origin(),packet.origin().add(packet.direction().scale(packet.length())));
-        if (hit.getType() != HitResult.Type.BLOCK || !level.hasChunkAt(hit.getBlockPos())
+        var chunk = level.getChunkSource().getChunkNow(hit.getBlockPos().getX() >> 4, hit.getBlockPos().getZ() >> 4);
+        if (hit.getType() != HitResult.Type.BLOCK || chunk == null
                 || !level.getWorldBorder().isWithinBounds(hit.getBlockPos())) {
             reply(player,packet,0,BlockPos.ZERO,"no_target"); return;
         }
         BlockPos block = hit.getBlockPos();
-        var shape = level.getBlockState(block).getCollisionShape(level,block);
+        var shape = chunk.getBlockState(block).getCollisionShape(level,block);
         if (shape.isEmpty()) { reply(player,packet,0,block,"no_target"); return; }
         Vec3 destination = new Vec3(block.getX()+.5,block.getY()+shape.bounds().maxY,block.getZ()+.5);
         // A new click supersedes this player's unstarted batch. Ownership takeover is immediate;
@@ -86,10 +87,11 @@ public final class ViewportEntityOrders {
             QUEUED.remove(old); cancelPending(old);
             reply(player,old.packet,old.accepted,old.block,old.accepted>0?"accepted":"unavailable");
         }
+        Batch batch = new Batch(player,level,packet,block);
         int reserved=0;
-        for (UUID id : packet.entities()) if (reserve(player,packet,id,destination)) reserved++;
+        for (UUID id : packet.entities()) if (reserve(batch,id,destination)) reserved++;
         if (reserved==0) { reply(player,packet,0,block,"unavailable"); return; }
-        QUEUED.addLast(new Batch(player,level,packet,block));
+        QUEUED.addLast(batch);
     }
     /** Fair round-robin queue; at most eight entity attempts per world tick. */
     private static void processQueued(net.minecraft.server.level.ServerLevel level) {
@@ -98,9 +100,10 @@ public final class ViewportEntityOrders {
             Batch batch = QUEUED.removeFirst();
             if (batch.level != level) { QUEUED.addLast(batch); skipped++; continue; }
             skipped = 0;
+            var chunk = level.getChunkSource().getChunkNow(batch.block.getX() >> 4, batch.block.getZ() >> 4);
             if (batch.player.hasDisconnected() || !batch.player.isAlive() || batch.player.level()!=level
                     || !RemoteAssetPermissions.canManageAssets(batch.player)
-                    || !level.hasChunkAt(batch.block) || level.getBlockState(batch.block).isAir()) {
+                    || chunk == null || chunk.getBlockState(batch.block).isAir()) {
                 cancelPending(batch);
                 if (!batch.player.hasDisconnected()) reply(batch.player,batch.packet,batch.accepted,batch.block,
                         batch.accepted > 0 ? "accepted" : "unavailable");
@@ -112,12 +115,12 @@ public final class ViewportEntityOrders {
             else reply(batch.player,batch.packet,batch.accepted,batch.block,batch.accepted>0?"accepted":"unavailable");
         }
     }
-    private static boolean reserve(ServerPlayer player, PacketViewportEntityMove packet, UUID id, Vec3 destination) {
-        var level=player.level();
+    private static boolean reserve(Batch batch, UUID id, Vec3 destination) {
+        var level=batch.level;
         if (!(level.getEntity(id) instanceof Mob mob) || !mob.isAlive() || mob.isRemoved() || mob.isNoAi()
                 || mob.isPassenger() || mob.isVehicle()
                 || mob.position().distanceToSqr(destination)>128*128
-                || mob.position().distanceToSqr(packet.camera())>512*512) return false;
+                || mob.position().distanceToSqr(batch.packet.camera())>512*512) return false;
         if (!ORDERS.containsKey(mob) && ORDERS.size()>=512) return false;
         // Any authorized editor may supersede an older editor's order as well.
         stop(mob);
@@ -125,7 +128,7 @@ public final class ViewportEntityOrders {
         try {
             lease=ExternalMovementLease.takeOver(mob);
             if(lease==null)return false;
-            ORDERS.put(mob,new Order(player,level,packet.requestId(),destination,lease,level.getGameTime(),mob.position()));
+            ORDERS.put(mob,new Order(batch,destination,lease,level.getGameTime(),mob.position()));
             return true;
         } catch(RuntimeException failure) {
             if(lease!=null)release(lease);
@@ -137,7 +140,7 @@ public final class ViewportEntityOrders {
         if (!(batch.level.getEntity(id) instanceof Mob mob)) return false;
         Order order=ORDERS.get(mob);
         // Superseded batches must never reacquire control, even when sent by a different player.
-        if(order==null||!order.requestId.equals(batch.packet.requestId()))return false;
+        if(!batch.owns(order))return false;
         boolean retained=false;
         try {
             if(mob.isRemoved()||!mob.isAlive()||mob.isNoAi()||mob.isPassenger()||mob.isVehicle())return false;
@@ -154,7 +157,7 @@ public final class ViewportEntityOrders {
         } finally {if(!retained)stop(mob);}
     }
     private static void cancelPending(Batch batch) {
-        clear(o -> !o.started && o.requestId.equals(batch.packet.requestId()));
+        clear(o -> !o.started && batch.owns(o));
     }
     private static final class Batch {
         final ServerPlayer player; final net.minecraft.server.level.ServerLevel level;
@@ -164,6 +167,7 @@ public final class ViewportEntityOrders {
               PacketViewportEntityMove packet, BlockPos block) {
             this.player=player;this.level=level;this.packet=packet;this.block=block;
         }
+        boolean owns(Order order) { return order != null && order.batch == this; }
     }
     private static void reply(ServerPlayer p, PacketViewportEntityMove request, int count, BlockPos target, String reason) {
         NetworkHandler.sendToPlayer(p,new PacketViewportEntityMoveResult(request.requestId(),count,request.entities().size(),target,reason));
@@ -184,12 +188,12 @@ public final class ViewportEntityOrders {
     }
     private static final class Order {
         final ServerPlayer player; final net.minecraft.server.level.ServerLevel level;
-        final UUID requestId;
+        final Batch batch;
         final Vec3 target; final ExternalMovementLease lease; final long expires;
         Vec3 lastPosition; long lastProgress; boolean started;
-        Order(ServerPlayer player, net.minecraft.server.level.ServerLevel level, UUID requestId, Vec3 target,
+        Order(Batch batch, Vec3 target,
               ExternalMovementLease lease, long tick, Vec3 position) {
-            this.player=player;this.level=level;this.requestId=requestId;this.target=target;this.lease=lease;
+            this.batch=batch;this.player=batch.player;this.level=batch.level;this.target=target;this.lease=lease;
             expires=tick+600;lastProgress=tick;lastPosition=position;
         }
     }

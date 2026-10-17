@@ -34,7 +34,6 @@ final class GameViewportView extends View {
     private final GameViewportWindow inputOwner;
     private final EditViewportCamera editCamera;
     private final Runnable onInteraction;
-    private final Runnable onProjectionChanged;
     private final Runnable onSizeChanged;
     private final Rect visibleBounds = new Rect();
     private final Matrix localToRoot = new Matrix();
@@ -54,7 +53,7 @@ final class GameViewportView extends View {
     private GameViewportLayout displayedBounds = GameViewportLayout.fit(0, 0, 0, 0);
 
     GameViewportView(Context context, GameViewportWindow inputOwner, EditViewportCamera editCamera,
-                     Runnable onInteraction, Runnable onProjectionChanged, Runnable onSizeChanged) {
+                     Runnable onInteraction, Runnable onSizeChanged) {
         super(context);
         this.inputOwner = inputOwner;
         this.editCamera = editCamera;
@@ -63,7 +62,6 @@ final class GameViewportView extends View {
             if(!Boolean.getBoolean("gn.standalone"))EditViewportRuntime.setSnapQuery(inputOwner,query);
         });
         this.onInteraction = onInteraction;
-        this.onProjectionChanged = onProjectionChanged;
         this.onSizeChanged = onSizeChanged;
         shortcuts = new ScopedKeyManager<>(this, KeyScope.GAME_VIEW,
                 this::availableShortcuts, this::executeShortcut);
@@ -449,7 +447,7 @@ final class GameViewportView extends View {
                 case AXIS_Z -> scene.transformAxis(4);
                 case SNAP_TOGGLE -> inputOwner.toggleMoveSnap();
                 case CONFIRM -> scene.confirmTransform();
-                case PROJECTION -> { scene.cancel(); editCamera.toggleOrthographic(); onProjectionChanged.run(); }
+                case PROJECTION -> inputOwner.toggleProjection();
                 case ADD -> { scene.cancel(); inputOwner.openCreateMenu(pointerRootX,pointerRootY,scene.creationPosition(editCamera)); }
                 case FOCUS -> scene.focus(editCamera);
                 case SELECT_ALL -> { scene.selectAll(); selectionChanged(); }

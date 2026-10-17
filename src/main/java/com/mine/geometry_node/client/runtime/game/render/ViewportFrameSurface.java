@@ -23,13 +23,13 @@ final class ViewportFrameSurface {
         }
         try {
             RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(source, texture, 0, 0, 0, 0, 0, width, height);
+            if (fresh && !image.publish(texture)) { texture.close(); texture = null; }
         } catch (RuntimeException | Error failure) {
             if (fresh) texture.close(); // Not published: no UI/GPU bridge owns it yet.
             else image.clear();
             texture = null;
             throw failure;
         }
-        if (fresh && !image.publish(texture)) { texture.close(); texture = null; }
     }
 
     /** Each EDIT publication owns immutable pixels until all recorded/GPU draws retire. */

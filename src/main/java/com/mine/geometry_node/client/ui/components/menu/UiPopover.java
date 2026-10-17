@@ -22,9 +22,7 @@ public final class UiPopover extends FrameLayout {
     private final ScrollView panel;
     private final int width;
     private final int maxHeight;
-    private View focusAnchor;
-    private View returnFocus;
-    private AreaLifecycle focusArea;
+    private final UiMenuFocus focus = new UiMenuFocus();
 
     /** Size from the required child width in pixels, after individual UI dimensions are rounded. */
     public static UiPopover forContentWidth(Context context, View content, int contentWidthPx, int maxHeightDp) {
@@ -86,11 +84,7 @@ public final class UiPopover extends FrameLayout {
         lp.leftMargin = Math.round(Math.clamp(point[0],0,host.getWidth()-w));
         lp.topMargin = Math.round(Math.clamp(point[1],0,Math.max(0,host.getHeight()-lp.height)));
         panel.setLayoutParams(lp);
-        focusAnchor = owner;
-        focusArea = AreaLifecycle.find(owner);
-        View focused = owner.getRootView().findFocus();
-        returnFocus = focused != null && (focusArea == null || AreaLifecycle.find(focused) == focusArea)
-                ? focused : null;
+        focus.capture(owner);
         host.addView(this,new FrameLayout.LayoutParams(-1,-1));
         binding = AreaTransientUi.bind(owner,this,this::dismiss);
         requestFocus();
@@ -118,7 +112,8 @@ public final class UiPopover extends FrameLayout {
     public void dismiss() {
         outsidePressed = false;
         binding.close(); binding = AreaLifecycle.Subscription.NONE;
-        restoreOwnerFocus();
+        focus.restoreAndClear(this);
+        if (getParent() != null) clearTooltipState(this);
         if (getParent() != null && isInLayout()) {
             // A sibling's size callback can close us while FrameLayout is iterating
             // its original child count. Hide now; mutate the child array after layout.
@@ -131,27 +126,10 @@ public final class UiPopover extends FrameLayout {
         }
         finishDismiss();
     }
-    private void restoreOwnerFocus() {
-        if (!hasFocus() || focusAnchor == null || focusAnchor.getRootView() != getRootView()
-                || focusArea != null && !focusArea.isActive()) return;
-        // Removing a focused child makes ModernUI search the entire root for a replacement.
-        // Transfer focus first so another area's first focusable child cannot activate itself.
-        if (returnFocus != null && returnFocus.getRootView() == getRootView()
-                && (focusArea == null || AreaLifecycle.find(returnFocus) == focusArea)
-                && returnFocus.requestFocus()) return;
-        for (View candidate = focusAnchor; candidate != null;
-             candidate = candidate.getParent() instanceof View parent ? parent : null) {
-            if (focusArea != null && AreaLifecycle.find(candidate) != focusArea) break;
-            if (candidate.requestFocus()) return;
-        }
-    }
     private void finishDismiss() {
         removeCallbacks(deferredDismiss);
         dismissPending = false;
-        if(getParent()!=null)clearTooltips(this);
         if (getParent() instanceof ViewGroup group) group.removeView(this);
-        focusAnchor = returnFocus = null;
-        focusArea = null;
     }
     /** ModernUI offsets child events before the inherited ancestor scale. Rebase once at this
      * unscaled popup boundary, then retain native scrolling, text editing and click dispatch. */
@@ -194,9 +172,17 @@ public final class UiPopover extends FrameLayout {
         return x >= panel.getLeft() && x < panel.getRight() && y >= panel.getTop() && y < panel.getBottom();
     }
 
-    private static void clearTooltips(View view) {
-        view.setTooltipText(null);
-        if(view instanceof ViewGroup group) for(int i=0;i<group.getChildCount();i++) clearTooltips(group.getChildAt(i));
+    private static void clearTooltipState(View view) {
+        CharSequence text = view.getTooltipText();
+        if (text != null) {
+            // The public setter cancels pending callbacks and hides an active tooltip.
+            // Restore only its configuration so reusable content can show it again.
+            view.setTooltipText(null);
+            view.setTooltipText(text);
+        }
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) clearTooltipState(group.getChildAt(i));
+        }
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if(event.getAction()==KeyEvent.ACTION_DOWN&&event.getKeyCode()==KeyEvent.KEY_ESCAPE){dismiss();return true;}

@@ -24,7 +24,7 @@ final class ViewportTransformGesture {
     private int axes;
     private final ViewportMoveSnap snapping;
     private final ViewportTransformNumber number=new ViewportTransformNumber();
-    private boolean valid=true;
+    private boolean valid;
     void refresh(){move(x,y);}
     private final Operation operation;
     ViewportTransformGesture(ClientSceneService service,PresentedViewportFrame frame,GameViewportLayout bounds,
@@ -34,12 +34,10 @@ final class ViewportTransformGesture {
         this.snapping=snapping;
         Vec3 sum=Vec3.ZERO;for(var o:originals.values())sum=sum.add(o.position());center=sum.scale(1.0/originals.size());
     }
-    boolean begin(){
-        Map<UUID,Long> revisions=new LinkedHashMap<>();Map<UUID,Vec3> positions=new LinkedHashMap<>();
-        for(var o:originals.values()){revisions.put(o.id(),o.revision());positions.put(o.id(),o.position());}
-        // A throttled frame may still show an older cancelled preview with the same revision.
-        for(var o:service.snapshot().objects())if(originals.containsKey(o.id())&&!originals.get(o.id()).sameContent(o))return false;
-        return service.beginPreview(this,frame.scene().worldGeneration(),revisions,positions);
+    boolean begin() {
+        Map<UUID, Long> revisions = new LinkedHashMap<>();
+        originals.forEach((id, object) -> revisions.put(id, object.revision()));
+        return service.beginPreview(this, frame.scene().worldGeneration(), revisions, originals);
     }
     int axes(){return axes;}
     String label(){return net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene."+operation.name().toLowerCase(java.util.Locale.ROOT)).getString()+(axes==0?"":" · "+((axes&1)!=0?"X":"")+((axes&2)!=0?"Y":"")+((axes&4)!=0?"Z":""))+(number.active()?" · "+number.text()+(operation==Operation.ROTATE?"°":operation==Operation.SCALE?"×":" m"):"")+(valid?"":" · "+net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene.invalid_transform").getString());}
@@ -70,11 +68,26 @@ final class ViewportTransformGesture {
         return -(x-startX)/(bounds.right()-bounds.left())*Math.PI*2;
     }
     void move(float x,float y){
-        if(!active()||!Float.isFinite(x)||!Float.isFinite(y))return;this.x=x;this.y=y;
-        var ray=ViewportSceneMath.ray(frame,.5,.5);if(ray==null)return;
+        if (!active()) return;
+        // A failed recomputation must never leave an older preview confirmable.
+        valid = false;
+        if (!Float.isFinite(x) || !Float.isFinite(y)) {
+            snapping.suspend();
+            return;
+        }
+        this.x = x;
+        this.y = y;
+        var ray = ViewportSceneMath.ray(frame, .5, .5);
+        if (ray == null) {
+            snapping.suspend();
+            return;
+        }
         Vec3 normal=ray.direction(),delta=Vec3.ZERO;
         Double numeric=number.active()?number.value():null;
-        if(number.active()&&numeric==null){valid=false;return;}
+        if (number.active() && numeric == null) {
+            snapping.suspend();
+            return;
+        }
         int count=Integer.bitCount(axes);
         if(operation==Operation.MOVE && numeric==null){
             if(count==1){
@@ -83,7 +96,12 @@ final class ViewportTransformGesture {
                 delta=new Vec3(axis.x*amount,axis.y*amount,axis.z*amount);
             }else{
                 if(count==2)normal=axes==3?new Vec3(0,0,1):axes==5?new Vec3(0,1,0):new Vec3(1,0,0);
-                Vec3 a=plane(startX,startY,normal),b=plane(x,y,normal);if(a==null||b==null)return;delta=b.subtract(a);
+                Vec3 a = plane(startX, startY, normal), b = plane(x, y, normal);
+                if (a == null || b == null) {
+                    snapping.suspend();
+                    return;
+                }
+                delta = b.subtract(a);
             }
         }
         if(operation==Operation.MOVE && numeric!=null){
@@ -119,7 +137,10 @@ final class ViewportTransformGesture {
                 }
                 next.put(o.id(),o.withTransform(position,rotation,scale));
             }
-            service.previewObjects(this,next);valid=true;
-        }catch(IllegalArgumentException invalid){valid=false; /* Keep the last valid preview; never confirm stale input. */ }
+            service.previewObjects(this, next);
+            valid = true;
+        } catch (IllegalArgumentException invalid) {
+            // Keep the last preview visible, but leave confirmation blocked.
+        }
     }
 }

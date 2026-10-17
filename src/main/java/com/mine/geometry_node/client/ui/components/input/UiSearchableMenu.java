@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.input;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuFocus;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -72,6 +73,8 @@ public class UiSearchableMenu extends FrameLayout {
     private View mAnchor;
 
     private ViewGroup mContext;
+    private final UiMenuFocus focus = new UiMenuFocus();
+    private int preferredScrollHeight;
     private final Matrix anchorMatrix = new Matrix();
     private final Matrix hostMatrix = new Matrix();
     private final float[] anchorPoint = new float[2];
@@ -232,12 +235,10 @@ public class UiSearchableMenu extends FrameLayout {
 
     private void updateScrollHeight(int itemCount) {
         int visibleItems = Math.min(Math.max(itemCount, 1), style.maxVisibleItems());
-        int targetHeightPx = UIUtils.dp2pxInt(visibleItems * (ITEM_HEIGHT_DP + 2));
-
-        LinearLayout.LayoutParams svLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
-        if (svLp.height != targetHeightPx) {
-            svLp.height = targetHeightPx;
-            mScrollView.setLayoutParams(svLp);
+        int targetHeightPx = visibleItems * (UIUtils.dp2pxInt(ITEM_HEIGHT_DP) + 2 * UIUtils.dp2pxInt(1));
+        if (preferredScrollHeight != targetHeightPx) {
+            preferredScrollHeight = targetHeightPx;
+            requestLayout();
         }
     }
 
@@ -268,6 +269,7 @@ public class UiSearchableMenu extends FrameLayout {
         renderList();
         if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
 
+        focus.capture(anchor);
         context.addView(this);
         areaBinding = AreaTransientUi.bind(anchor, this, this::dismiss);
         mSearchBox.post(focusSearch);
@@ -283,9 +285,28 @@ public class UiSearchableMenu extends FrameLayout {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int width = Math.min(UIUtils.dp2pxInt(style.widthDp()), MeasureSpec.getSize(widthMeasureSpec));
+        int width = UIUtils.dp2pxInt(style.widthDp());
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            width = Math.min(width, Math.max(0, MeasureSpec.getSize(widthMeasureSpec)
+                    - getPaddingLeft() - getPaddingRight()));
+        }
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
         lp.width = width;
+        // Title/search rows have fixed heights. Reserve their actual rounded dimensions
+        // and margins, then give the list only the remaining host height.
+        int chromeHeight = mContentLayout.getPaddingTop() + mContentLayout.getPaddingBottom();
+        for (int i = 0; i < mContentLayout.getChildCount(); i++) {
+            View child = mContentLayout.getChildAt(i);
+            if (child == mScrollView || child.getVisibility() == GONE) continue;
+            LinearLayout.LayoutParams childLp = (LinearLayout.LayoutParams) child.getLayoutParams();
+            chromeHeight += childLp.height + childLp.topMargin + childLp.bottomMargin;
+        }
+        int availableHeight = MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED
+                ? chromeHeight + preferredScrollHeight
+                : Math.max(0, MeasureSpec.getSize(heightMeasureSpec) - getPaddingTop() - getPaddingBottom());
+        LinearLayout.LayoutParams scrollLp = (LinearLayout.LayoutParams) mScrollView.getLayoutParams();
+        scrollLp.height = Math.min(preferredScrollHeight, Math.max(0, availableHeight - chromeHeight));
+        lp.height = Math.min(availableHeight, chromeHeight + scrollLp.height);
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
@@ -333,6 +354,7 @@ public class UiSearchableMenu extends FrameLayout {
         areaBinding.close();
         areaBinding = AreaLifecycle.Subscription.NONE;
         stopTracking();
+        focus.restoreAndClear(this);
         if (getParent() != null) ((ViewGroup) getParent()).removeView(this);
         mAnchor = null;
         mContext = null;

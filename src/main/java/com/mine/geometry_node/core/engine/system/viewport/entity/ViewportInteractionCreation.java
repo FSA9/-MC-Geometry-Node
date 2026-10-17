@@ -41,7 +41,8 @@ public final class ViewportInteractionCreation {
         BlockPos block = BlockPos.containing(packet.position());
         boolean nearby = EditCameraChunkService.positions(player).stream()
                 .anyMatch(camera -> camera.distanceToSqr(packet.position()) <= 4096.0 * 4096.0);
-        if (!nearby || !player.level().hasChunkAt(block) || !player.level().getWorldBorder().isWithinBounds(block)) {
+        if (!nearby || player.level().getChunkSource().getChunkNow(block.getX() >> 4, block.getZ() >> 4) == null
+                || !player.level().getWorldBorder().isWithinBounds(block)) {
             failure(player, "unavailable"); return;
         }
         if (InteractionEntityFactory.spawn(player.level(), packet.position(), 1, 1, false) == null)

@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4d;
+import org.joml.Vector4d;
 
 import java.util.List;
 
@@ -28,36 +30,72 @@ public final class ViewportSnapSolver {
         if(!settings.enabled())return movement;
         Vec3 reference=origin.add(movement);
         Search search=new Search(settings,origin,movement,axes,sourceBounds,frame,cursorU,cursorV,radiusU,radiusV);
-        Vec3 frontFace=null,nearestFace=null;double frontDistance=Double.POSITIVE_INFINITY,nearestDistance=Double.POSITIVE_INFINITY;
-        if(geometry.generation()==frame.scene().worldGeneration())for(var mesh:geometry.meshes()) {
-            if(settings.targets().contains(Target.VERTEX))for(var vertex:mesh.vertices())search.offer(vertex);
-            if(settings.targets().contains(Target.EDGE)||settings.targets().contains(Target.EDGE_MIDPOINT))for(var edge:mesh.edges()) {
-                if(settings.targets().contains(Target.EDGE_MIDPOINT))search.offer(edge.a().add(edge.b()).scale(.5));
-                if(settings.targets().contains(Target.EDGE))search.offer(search.edge(edge));
+        var targets = settings.targets();
+        boolean vertices = targets.contains(Target.VERTEX);
+        boolean edges = targets.contains(Target.EDGE);
+        boolean midpoints = targets.contains(Target.EDGE_MIDPOINT);
+        boolean faceHit = targets.contains(Target.FACE);
+        boolean volume = targets.contains(Target.VOLUME);
+        boolean nearest = targets.contains(Target.FACE_NEAREST);
+        boolean project = targets.contains(Target.FACE_PROJECT);
+        var projectionRay = project && search.ray != null
+                ? new ViewportSceneMath.Ray(reference.subtract(search.ray.direction().scale(1024)),
+                        search.ray.direction(), 2048) : null;
+        Vec3 frontFace = null, nearestFace = null;
+        double frontDistance = Double.POSITIVE_INFINITY, nearestDistance = Double.POSITIVE_INFINITY;
+        if (geometry.generation() == frame.scene().worldGeneration()) for (var mesh : geometry.meshes()) {
+            if (vertices) {
+                for (var vertex : mesh.vertices()) search.offer(vertex);
             }
-            double entry=Double.POSITIVE_INFINITY,exit=Double.NEGATIVE_INFINITY;
-            var projectionRay=search.ray==null?null:new ViewportSceneMath.Ray(reference.subtract(search.ray.direction().scale(1024)),search.ray.direction(),2048);
-            double projectDistance=Double.POSITIVE_INFINITY;
-            Vec3 projected=null;
-            for(var face:mesh.faces()) {
-                double hit=intersection(search.ray,face);
-                if(Double.isFinite(hit)) {
-                    entry=Math.min(entry,hit);exit=Math.max(exit,hit);
-                    if(hit<frontDistance){frontDistance=hit;frontFace=search.ray.origin().add(search.ray.direction().scale(hit));}
-                }
-                if(settings.targets().contains(Target.FACE_NEAREST)) {
-                    var point=closest(reference,face);double distance=point.distanceToSqr(reference);
-                    if(distance<nearestDistance){nearestDistance=distance;nearestFace=point;}
-                }
-                if(settings.targets().contains(Target.FACE_PROJECT)) {
-                    double t=intersection(projectionRay,face),distance=Math.abs(t-1024);
-                    if(Double.isFinite(t)&&distance<projectDistance){projectDistance=distance;projected=projectionRay.origin().add(projectionRay.direction().scale(t));}
+            if (edges || midpoints) {
+                for (var edge : mesh.edges()) {
+                    if (midpoints) search.offer(edge.a().add(edge.b()).scale(.5));
+                    if (edges) search.offer(search.edge(edge));
                 }
             }
-            if(projected!=null)search.offer(projected);
+            boolean volumeHit = volume && mesh.closed();
+            boolean cursorHit = (faceHit || volumeHit) && search.ray != null;
+            if (!cursorHit && !nearest && projectionRay == null) continue;
+
+            double entry = Double.POSITIVE_INFINITY, exit = Double.NEGATIVE_INFINITY;
+            double projectDistance = Double.POSITIVE_INFINITY;
+            Vec3 projected = null;
+            for (var face : mesh.faces()) {
+                if (cursorHit) {
+                    double hit = intersection(search.ray, face);
+                    if (Double.isFinite(hit)) {
+                        if (volumeHit) {
+                            entry = Math.min(entry, hit);
+                            exit = Math.max(exit, hit);
+                        }
+                        if (faceHit && hit < frontDistance) {
+                            frontDistance = hit;
+                            frontFace = search.ray.origin().add(search.ray.direction().scale(hit));
+                        }
+                    }
+                }
+                if (nearest) {
+                    var point = closest(reference, face);
+                    double distance = point.distanceToSqr(reference);
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestFace = point;
+                    }
+                }
+                if (projectionRay != null) {
+                    double t = intersection(projectionRay, face);
+                    double distance = Math.abs(t - 1024);
+                    if (Double.isFinite(t) && distance < projectDistance) {
+                        projectDistance = distance;
+                        projected = projectionRay.origin().add(projectionRay.direction().scale(t));
+                    }
+                }
+            }
+            if (projected != null) search.offer(projected);
             // A volume requires entry AND exit, not a single open triangle hit.
-            if(settings.targets().contains(Target.VOLUME)&&mesh.closed()&&Double.isFinite(entry)&&exit-entry>1e-7)
-                search.offer(search.ray.origin().add(search.ray.direction().scale((entry+exit)*.5)));
+            if (volumeHit && Double.isFinite(entry) && exit - entry > 1e-7) {
+                search.offer(search.ray.origin().add(search.ray.direction().scale((entry + exit) * .5)));
+            }
         }
         if(settings.targets().contains(Target.FACE)&&frontFace!=null)search.offer(frontFace);
         if(nearestFace!=null)search.offer(nearestFace);
@@ -66,10 +104,16 @@ public final class ViewportSnapSolver {
             Vec3 anchor=origin;
             if(settings.base()==ViewportSnapSettings.Base.CLOSEST&&!sourceBounds.isEmpty()) {
                 double best=Double.POSITIVE_INFINITY;
-                for(var box:sourceBounds)for(var vertex:ViewportSnapGeometry.Mesh.box(box).vertices()) {
-                    Vec3 delta=grid(vertex,movement,axes);
-                    double distance=delta.distanceToSqr(movement);
-                    if(distance<best){best=distance;anchor=vertex;}
+                for (var box : sourceBounds) for (int corner = 0; corner < 8; corner++) {
+                    Vec3 vertex = new Vec3((corner & 1) == 0 ? box.minX : box.maxX,
+                            (corner & 2) == 0 ? box.minY : box.maxY,
+                            (corner & 4) == 0 ? box.minZ : box.maxZ);
+                    Vec3 delta = grid(vertex, movement, axes);
+                    double distance = delta.distanceToSqr(movement);
+                    if (distance < best) {
+                        best = distance;
+                        anchor = vertex;
+                    }
                 }
             }
             return grid(anchor,movement,axes);
@@ -96,18 +140,53 @@ public final class ViewportSnapSolver {
                     ?ViewportSceneMath.ray(frame,cursorU,cursorV):null;
         }
         Vec3 edge(ViewportSnapGeometry.Edge edge) {
-            // Minimize image-space distance, then recover perspective-correct world interpolation.
-            var a=ViewportSceneMath.project(frame,edge.a());var b=ViewportSceneMath.project(frame,edge.b());
-            if(!a.visible()||!b.visible())return null;
-            double x=(b.u()-a.u())/radiusU,y=(b.v()-a.v())/radiusV,den=x*x+y*y;
-            double t=den<1e-16?0:Math.clamp(((cursorU-a.u())/radiusU*x+(cursorV-a.v())/radiusV*y)/den,0,1);
-            if(!frame.camera().orthographic()) {
-                var centerRay=ViewportSceneMath.ray(frame,.5,.5);
-                var camera=frame.camera();var eye=new Vec3(camera.x(),camera.y(),camera.z());
-                double da=edge.a().subtract(eye).dot(centerRay.direction()),db=edge.b().subtract(eye).dot(centerRay.direction());
-                if(da>0&&db>0)t=(t/db)/((1-t)/da+t/db);
+            if (ray == null || !(radiusU > 0) || !(radiusV > 0)) return null;
+            var camera = frame.camera();
+            var matrix = frame.viewProjection(new Matrix4d());
+            var a = new Vector4d(edge.a().x - camera.x(), edge.a().y - camera.y(),
+                    edge.a().z - camera.z(), 1);
+            var b = new Vector4d(edge.b().x - camera.x(), edge.b().y - camera.y(),
+                    edge.b().z - camera.z(), 1);
+            matrix.transform(a);
+            matrix.transform(b);
+
+            // Clip in homogeneous space: offscreen endpoints and near-plane crossings are valid edges.
+            double lower = 0, upper = 1;
+            for (int plane = 0; plane < 7; plane++) {
+                double first = clipDistance(a, plane, frame.zeroToOne());
+                double last = clipDistance(b, plane, frame.zeroToOne());
+                if (!Double.isFinite(first) || !Double.isFinite(last)) return null;
+                if (first < 0 && last < 0) return null;
+                if (first < 0) lower = Math.max(lower, first / (first - last));
+                else if (last < 0) upper = Math.min(upper, first / (first - last));
+                if (lower > upper) return null;
             }
-            return edge.a().add(edge.b().subtract(edge.a()).scale(t));
+            var start = new Vector4d(a).lerp(b, lower);
+            var end = new Vector4d(a).lerp(b, upper);
+            double startU = (start.x / start.w + 1) * .5;
+            double startV = (1 - start.y / start.w) * .5;
+            double endU = (end.x / end.w + 1) * .5;
+            double endV = (1 - end.y / end.w) * .5;
+            double x = (endU - startU) / radiusU, y = (endV - startV) / radiusV;
+            double denominator = x * x + y * y;
+            double screenT = denominator < 1e-16 ? 0 : Math.clamp(
+                    ((cursorU - startU) / radiusU * x + (cursorV - startV) / radiusV * y) / denominator, 0, 1);
+            // Reciprocal clip-W interpolation also works for orthographic projections (constant W).
+            double segmentT = (screenT / end.w) / ((1 - screenT) / start.w + screenT / end.w);
+            double worldT = lower + (upper - lower) * segmentT;
+            return edge.a().add(edge.b().subtract(edge.a()).scale(worldT));
+        }
+
+        private static double clipDistance(Vector4d p, int plane, boolean zeroToOne) {
+            return switch (plane) {
+                case 0 -> p.w + p.x;
+                case 1 -> p.w - p.x;
+                case 2 -> p.w + p.y;
+                case 3 -> p.w - p.y;
+                case 4 -> zeroToOne ? p.z : p.w + p.z;
+                case 5 -> p.w - p.z;
+                default -> p.w - 1e-9;
+            };
         }
         void offer(Vec3 target) {
             if(target==null)return;

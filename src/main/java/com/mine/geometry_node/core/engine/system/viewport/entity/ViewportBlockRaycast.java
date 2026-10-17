@@ -17,10 +17,12 @@ public final class ViewportBlockRaycast {
         BlockGetter loaded = new BlockGetter() {
             @Override public BlockEntity getBlockEntity(BlockPos p) { return null; }
             @Override public BlockState getBlockState(BlockPos p) {
-                return level.hasChunkAt(p) ? level.getBlockState(p) : Blocks.AIR.defaultBlockState();
+                var chunk = level.getChunkSource().getChunkNow(p.getX() >> 4, p.getZ() >> 4);
+                return chunk != null ? chunk.getBlockState(p) : Blocks.AIR.defaultBlockState();
             }
             @Override public FluidState getFluidState(BlockPos p) {
-                return level.hasChunkAt(p) ? level.getFluidState(p) : Fluids.EMPTY.defaultFluidState();
+                var chunk = level.getChunkSource().getChunkNow(p.getX() >> 4, p.getZ() >> 4);
+                return chunk != null ? chunk.getFluidState(p) : Fluids.EMPTY.defaultFluidState();
             }
             @Override public int getHeight() { return level.getHeight(); }
             @Override public int getMinY() { return level.getMinY(); }
