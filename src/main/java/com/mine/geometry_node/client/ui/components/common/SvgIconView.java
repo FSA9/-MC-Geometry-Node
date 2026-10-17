@@ -23,7 +23,7 @@ import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,7 +88,7 @@ public class SvgIconView extends View {
 
     private static final int DEFAULT_COLOR = 0xFFB8C0CC;
     private static final int MAX_CACHED_IMAGES = 64;
-    private static final Map<Icon, SvgDocument> DOCUMENTS = new EnumMap<>(Icon.class);
+    private static final Map<String, SvgDocument> DOCUMENTS = new HashMap<>();
     private static final Map<RenderKey, Image> IMAGES = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<RenderKey, Image> eldest) {
@@ -101,22 +101,27 @@ public class SvgIconView extends View {
     };
 
     private final Paint mPaint = new Paint();
-    private Icon mIcon;
+    private String mResourcePath;
     private int mColor;
 
     public SvgIconView(Context context, Icon icon, int color) {
+        this(context, icon.resourcePath(), color);
+    }
+
+    /** Classpath SVG resource, including addon namespaces, without a built-in enum entry. */
+    public SvgIconView(Context context, String resourcePath, int color) {
         super(context);
-        mIcon = icon;
+        mResourcePath = java.util.Objects.requireNonNull(resourcePath);
         mColor = resolveColor(color);
         mPaint.setAntiAlias(true);
         setWillNotDraw(false);
     }
 
     public void setIcon(Icon icon) {
-        if (mIcon == icon) {
+        if (mResourcePath.equals(icon.resourcePath())) {
             return;
         }
-        mIcon = icon;
+        mResourcePath = icon.resourcePath();
         invalidate();
     }
 
@@ -137,7 +142,7 @@ public class SvgIconView extends View {
             return;
         }
 
-        Image image = getImage(mIcon, size, mColor);
+        Image image = getImage(mResourcePath, size, mColor);
         float left = (getWidth() - size) * 0.5f;
         float top = (getHeight() - size) * 0.5f;
         canvas.drawImage(image, left, top, mPaint);
@@ -147,23 +152,23 @@ public class SvgIconView extends View {
         return color == 0 ? DEFAULT_COLOR : color;
     }
 
-    private static synchronized Image getImage(Icon icon, int size, int color) {
-        RenderKey key = new RenderKey(icon, size, color);
+    private static synchronized Image getImage(String resourcePath, int size, int color) {
+        RenderKey key = new RenderKey(resourcePath, size, color);
         Image cached = IMAGES.get(key);
         if (cached != null && !cached.isClosed()) {
             return cached;
         }
 
-        SvgDocument document = DOCUMENTS.computeIfAbsent(icon, SvgIconView::loadDocument);
+        SvgDocument document = DOCUMENTS.computeIfAbsent(resourcePath, SvgIconView::loadDocument);
         Image image = rasterize(document, size, color);
         IMAGES.put(key, image);
         return image;
     }
 
-    private static SvgDocument loadDocument(Icon icon) {
-        try (InputStream input = SvgIconView.class.getResourceAsStream(icon.resourcePath())) {
+    private static SvgDocument loadDocument(String resourcePath) {
+        try (InputStream input = SvgIconView.class.getResourceAsStream(resourcePath)) {
             if (input == null) {
-                throw new IllegalStateException("Missing SVG icon resource: " + icon.resourcePath());
+                throw new IllegalStateException("Missing SVG icon resource: " + resourcePath);
             }
 
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -177,11 +182,11 @@ public class SvgIconView extends View {
             List<SvgLayer> layers = new ArrayList<>();
             collectLayers(root, SvgStyle.DEFAULT, layers);
             if (layers.isEmpty()) {
-                throw new IllegalArgumentException("SVG icon has no drawable paths: " + icon.resourcePath());
+                throw new IllegalArgumentException("SVG icon has no drawable paths: " + resourcePath);
             }
             return new SvgDocument(viewBox[0], viewBox[1], viewBox[2], viewBox[3], List.copyOf(layers));
         } catch (Exception exception) {
-            throw new IllegalStateException("Unable to load SVG icon " + icon.resourcePath(), exception);
+            throw new IllegalStateException("Unable to load SVG icon " + resourcePath, exception);
         }
     }
 
@@ -281,7 +286,7 @@ public class SvgIconView extends View {
         return result;
     }
 
-    private record RenderKey(Icon icon, int size, int color) {
+    private record RenderKey(String resourcePath, int size, int color) {
     }
 
     private record SvgDocument(float minX, float minY, float width, float height, List<SvgLayer> layers) {

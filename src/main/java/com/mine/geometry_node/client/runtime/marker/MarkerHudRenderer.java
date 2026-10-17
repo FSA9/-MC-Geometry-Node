@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.runtime.marker;
 
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.BuiltinMarkerTypes;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.network.packet.marker.MarkerPayload;
 import net.minecraft.client.DeltaTracker;
@@ -25,7 +26,9 @@ public final class MarkerHudRenderer {
     }
 
     public static void init() {
-        ClientMarkerRendererRegistry.register(MarkerTypeRegistry.DEFAULT_RENDERER_ID, FALLBACK_RENDERER);
+        for (var style : BuiltinMarkerTypes.values()) {
+            ClientMarkerRendererRegistry.register(style.id(), new DefaultMarkerRenderer(style.key()));
+        }
     }
 
     public static void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {

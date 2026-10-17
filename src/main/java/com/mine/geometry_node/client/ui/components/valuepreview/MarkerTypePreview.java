@@ -1,37 +1,34 @@
 package com.mine.geometry_node.client.ui.components.valuepreview;
 
+import com.mine.geometry_node.client.runtime.marker.ClientMarkerRenderer;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.runtime.marker.ClientMarkerRendererRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.Canvas;
-import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
+import icyllis.modernui.widget.FrameLayout;
 
-/** Passive marker swatch using registered color metadata, without creating a world marker. */
-public final class MarkerTypePreview extends View {
-    private final int color;
-    private final Paint paint = new Paint();
+/** Passive preview delegated to the same registered renderer as the in-game HUD. */
+public final class MarkerTypePreview extends FrameLayout {
+    private final View icon;
     public MarkerTypePreview(Context context, String typeId) {
         super(context);
         MarkerType type = MarkerTypeRegistry.INSTANCE.get(typeId);
-        color = type == null ? 0xFFFFFFFF : type.color();
-        setWillNotDraw(false);
+        ClientMarkerRenderer renderer = type == null ? null : ClientMarkerRendererRegistry.get(type.rendererId());
+        int color = type == null ? 0xFF55CFFF : type.color();
+        icon = renderer == null
+                ? new SvgIconView(context,
+                        "/assets/geometry_node/icons/markers/default.svg", color)
+                : renderer.createPreview(context, color);
+        addView(icon, new FrameLayout.LayoutParams(0, 0, Gravity.CENTER));
     }
-    @Override protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        float size = Math.min(getWidth(), getHeight());
-        float cx = getWidth() / 2f, cy = getHeight() / 2f;
-        float radius = size * 0.22f;
-        paint.setColor(color);
-        canvas.drawRect(cx-radius, cy-radius, cx+radius, cy+radius, paint);
-        paint.setColor(0xFF101214);
-        float inset = size * 0.025f;
-        canvas.drawRect(cx-radius+inset, cy-radius+inset, cx+radius-inset, cy+radius-inset, paint);
-        paint.setColor(color);
-        radius *= 0.54f;
-        canvas.drawRect(cx-radius, cy-radius, cx+radius, cy+radius, paint);
-        paint.setColor(0xFFFFFFFF);
-        radius *= 0.4f;
-        canvas.drawRect(cx-radius, cy-radius, cx+radius, cy+radius, paint);
+    @Override protected void onMeasure(int widthSpec, int heightSpec) {
+        int size = Math.round(Math.min(MeasureSpec.getSize(widthSpec), MeasureSpec.getSize(heightSpec)) * 0.62f);
+        icon.getLayoutParams().width = size;
+        icon.getLayoutParams().height = size;
+        super.onMeasure(widthSpec, heightSpec);
     }
 }
