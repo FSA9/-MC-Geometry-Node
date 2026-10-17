@@ -141,7 +141,7 @@ final class ColorRampView extends LinearLayout {
             UiSearchableMenu menu = new UiSearchableMenu(
                     getContext(), title, options, Map.of(), onSelect);
             if (interactionContext instanceof ViewGroup host) {
-                menu.showAt(anchor, host, interactionContext.getCamera().getScale());
+                menu.showAt(anchor, host);
             }
         }
     }

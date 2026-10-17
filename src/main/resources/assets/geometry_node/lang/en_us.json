@@ -1488,6 +1488,8 @@
     "geometry_node.graph_properties.quest.objective_expand":  "Quest Objective Expand",
     "geometry_node.graph_properties.quest.objective_collapse":  "Quest Objective Collapse",
     "geometry_node.graph_properties.quest.objective_placeholder":  "Quest Objective Placeholder",
+    "geometry_node.graph_properties.quest.objective_display": "Display",
+    "geometry_node.graph_properties.quest.reward_hint_enabled": "Switch reward display: None / Item",
     "geometry_node.graph_properties.quest.quantity_enabled":  "Quest Quantity Enabled",
     "geometry_node.graph_properties.quest.quantity_value":  "Quest Quantity Value",
     "geometry_node.graph_properties.quest.counter_enabled":  "Quest Counter Enabled",

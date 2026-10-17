@@ -28,6 +28,7 @@ public class ItemSlotView extends ViewportNativePreviewView {
     private static final float ITEM_SIZE_GUI = 16f;
     private static final float ITEM_PADDING_DP = 4.0f;
     private static final float ITEM_MAX_SCALE = 1.25f;
+    private static final float ITEM_VISUAL_SCALE = 0.8f;
 
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
@@ -79,7 +80,7 @@ public class ItemSlotView extends ViewportNativePreviewView {
             float slotGuiH = heightPx / guiScale;
             float padding = UIUtils.dp2px(ITEM_PADDING_DP) * viewportScale / guiScale;
             float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
-            float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI);
+            float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI) * ITEM_VISUAL_SCALE;
             float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
             float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
 

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.terminal.TerminalExit;
@@ -688,7 +690,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         return drawable;
     }
 
-    private final class TerminalScrollView extends ScrollView {
+    private final class TerminalScrollView extends UiScrollView {
         private boolean contentChangePending;
         private boolean applyingLayoutScroll;
         private boolean pointerScrollGesture;

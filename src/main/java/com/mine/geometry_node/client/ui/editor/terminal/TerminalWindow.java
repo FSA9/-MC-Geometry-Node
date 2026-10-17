@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntimeFactory;
 import com.mine.geometry_node.client.terminal.TerminalSession;
@@ -55,7 +57,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mInitializing = true;
         setOrientation(VERTICAL);
 
-        mTabScrollView = new HorizontalScrollView(context);
+        mTabScrollView = new UiHorizontalScrollView(context);
         mTabScrollView.setFillViewport(true);
         mTabScrollView.setHorizontalScrollBarEnabled(false);
         mTabScrollView.setBackground(colorDrawable(UiTheme.Surface.PANEL));
@@ -85,7 +87,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mShellMode.setOnClickListener(ignored -> switchMode(TerminalMode.SHELL));
         mModeBar.addView(mCommandMode, new LayoutParams(UIUtils.dp2pxInt(92), ViewGroup.LayoutParams.MATCH_PARENT));
         mModeBar.addView(mShellMode, new LayoutParams(UIUtils.dp2pxInt(108), ViewGroup.LayoutParams.MATCH_PARENT));
-        HorizontalScrollView modeScroller = new HorizontalScrollView(context);
+        HorizontalScrollView modeScroller = new UiHorizontalScrollView(context);
         modeScroller.setFillViewport(true);
         modeScroller.setHorizontalScrollBarEnabled(false);
         modeScroller.addView(mModeBar, new ViewGroup.LayoutParams(

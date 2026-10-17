@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.config.ConfigCategory;
 import com.mine.geometry_node.client.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
@@ -41,7 +43,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
 
     ConfigEntriesSettingsPage(SettingsPageContext context, Predicate<ConfigCategory> retainedCategory,
                               Predicate<ConfigEntry<?>> filter) {
-        root = new ScrollView(context.uiContext());
+        root = new UiScrollView(context.uiContext());
         root.setFillViewport(true);
 
         LinearLayout content = new LinearLayout(context.uiContext());

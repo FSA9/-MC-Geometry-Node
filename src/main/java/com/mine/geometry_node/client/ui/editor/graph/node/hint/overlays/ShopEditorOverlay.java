@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -114,7 +116,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(44)));
         window.addView(createDivider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
 
-        ScrollView scrollView = new ScrollView(context);
+        ScrollView scrollView = new UiScrollView(context);
         mOfferList = new LinearLayout(context);
         mOfferList.setOrientation(LinearLayout.VERTICAL);
         scrollView.addView(mOfferList, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

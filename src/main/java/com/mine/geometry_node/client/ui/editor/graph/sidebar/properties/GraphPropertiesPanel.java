@@ -1,6 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -58,12 +62,9 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     private static final int COLOR_TEXT = 0xFFE3E3E3;
     private static final int COLOR_MUTED = 0xFF777777;
     private static final int COLOR_ERROR = 0xFFE18A8A;
-    private static final int COLOR_BUTTON = 0xFF4A4A4A;
-    private static final int COLOR_BUTTON_HOVER = 0xFF5A5A5A;
     private static final int COLOR_TAG = 0xFF424242;
     private static final int COLOR_TAG_HOVER = 0xFF505050;
     private static final int COLOR_TAG_BORDER = 0xFF5C5C5C;
-    private static final int COLOR_REMOVE_HOVER = 0xFF744646;
 
     private final ScrollView mScroll;
     private final LinearLayout mContent;
@@ -88,7 +89,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         super(context);
         setBackground(rect(COLOR_BACKGROUND, 0.0f, 0, 0));
 
-        mScroll = new ScrollView(context);
+        mScroll = new UiScrollView(context);
         mContent = new LinearLayout(context);
         mContent.setOrientation(LinearLayout.VERTICAL);
         mContent.setPadding(
@@ -115,7 +116,8 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         mQuestSection = new QuestPropertiesSection(
                 context,
                 this::commitPendingEdits,
-                this::previewQuest);
+                this::previewQuest,
+                this::captureQuestTarget);
         mContent.addView(mQuestSection, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -179,14 +181,10 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 1.0f));
 
-        TextView addTag = GraphPropertiesUi.button(context, "+", tr("geometry_node.graph_properties.tags"),
-                COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
-        UIUtils.setLockedTextSize(addTag, 16);
+        UiIconButton addTag = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.PLUS,
+                "geometry_node.graph_properties.tags");
         addTag.setOnClickListener(v -> addInputTags());
-        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(
-                UIUtils.dp2pxInt(30),
-                ViewGroup.LayoutParams.MATCH_PARENT);
-        addParams.leftMargin = UIUtils.dp2pxInt(6);
+        LinearLayout.LayoutParams addParams = GraphPropertiesUi.actionParams();
         inputRow.addView(addTag, addParams);
 
         mSaveStatus = label(context, "", 10.0f, COLOR_ERROR);
@@ -415,14 +413,14 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
             TextView empty = label(getContext(), tr("geometry_node.graph_properties.no_tags"), 11.0f, COLOR_MUTED);
             mTagList.addView(empty, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    UIUtils.dp2pxInt(24)));
+                    UIUtils.dp2pxInt(30)));
             return;
         }
 
         for (String tag : new ArrayList<>(mTags)) {
             mTagList.addView(createTagChip(tag), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    UIUtils.dp2pxInt(24)));
+                    UIUtils.dp2pxInt(30)));
         }
     }
 
@@ -445,12 +443,10 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        TextView remove = GraphPropertiesUi.button(getContext(), "x", tr("geometry_node.common.delete"),
-                0xFFBBBBBB, 0x00000000, COLOR_REMOVE_HOVER);
+        UiIconButton remove = GraphPropertiesUi.actionIcon(getContext(), SvgIconView.Icon.CLOSE,
+                "geometry_node.common.delete");
         remove.setOnClickListener(v -> removeTag(tag));
-        chip.addView(remove, new LinearLayout.LayoutParams(
-                UIUtils.dp2pxInt(18),
-                UIUtils.dp2pxInt(18)));
+        chip.addView(remove, GraphPropertiesUi.actionParams());
         return chip;
     }
 
@@ -497,6 +493,11 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         mQuestSection.setVisibility(questGraph ? View.VISIBLE : View.GONE);
         mCommentSectionTitle.setVisibility(questGraph ? View.GONE : View.VISIBLE);
         mCommentInput.setVisibility(questGraph ? View.GONE : View.VISIBLE);
+    }
+
+    private GraphPropertiesTarget captureQuestTarget() {
+        commitPendingEdits();
+        return mTarget;
     }
 
     private void previewQuest() {

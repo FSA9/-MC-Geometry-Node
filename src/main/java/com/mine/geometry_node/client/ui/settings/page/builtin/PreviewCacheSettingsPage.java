@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.SvgIconView;
@@ -41,7 +43,7 @@ public final class PreviewCacheSettingsPage implements SettingsPage {
     private boolean disposed;
 
     public PreviewCacheSettingsPage(SettingsPageContext context) {
-        root = new ScrollView(context.uiContext());
+        root = new UiScrollView(context.uiContext());
         root.setFillViewport(true);
         LinearLayout content = new LinearLayout(context.uiContext());
         content.setOrientation(LinearLayout.VERTICAL);

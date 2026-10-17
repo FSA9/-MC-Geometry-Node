@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.navigation;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -18,7 +20,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 
 import java.io.File;
@@ -26,7 +27,7 @@ import java.util.List;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
-public class AssetNavigationPanel extends ScrollView {
+public class AssetNavigationPanel extends UiScrollView {
 
     private final AssetBrowserCoordinator mCoordinator;
     private final QuickAccessListLayout mLeftSidebar;

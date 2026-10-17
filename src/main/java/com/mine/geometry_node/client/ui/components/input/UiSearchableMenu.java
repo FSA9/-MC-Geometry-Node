@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.input;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
@@ -8,6 +10,7 @@ import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
 import net.minecraft.network.chat.Component;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 
@@ -64,8 +67,18 @@ public class UiSearchableMenu extends FrameLayout {
     private View mAnchor;
 
     private ViewGroup mContext;
-    private float mAnchorScale = 1.0f;
-    private boolean mIsTracking = false;
+    private final Matrix anchorMatrix = new Matrix();
+    private final Matrix hostMatrix = new Matrix();
+    private final float[] anchorPoint = new float[2];
+    private ViewTreeObserver positionObserver;
+    private final ViewTreeObserver.OnPreDrawListener trackPosition = () -> {
+        if (getVisibility() != VISIBLE || getParent() == null || !anchorInHost()) {
+            dismiss();
+        } else {
+            updatePosition();
+        }
+        return true;
+    };
     private AreaLifecycle.Subscription areaBinding = AreaLifecycle.Subscription.NONE;
     private final Runnable focusSearch = () -> {
         if (getVisibility() != VISIBLE || getParent() == null || mAnchor == null || !anchorInHost()) return;
@@ -134,7 +147,7 @@ public class UiSearchableMenu extends FrameLayout {
         searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(8));
         mContentLayout.addView(mSearchBox, searchLp);
 
-        mScrollView = new ScrollView(context);
+        mScrollView = new UiScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
         mScrollView.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -166,12 +179,15 @@ public class UiSearchableMenu extends FrameLayout {
             tv.setGravity(Gravity.CENTER_VERTICAL);
 
             tv.setOnClickListener(v -> { mOnSelect.accept(item); post(this::dismiss); });
+            // Keep one drawable: replacing null/background on every hover requests layout.
+            ShapeDrawable hoverBackground = createRectDrawable(0x00000000, ITEM_RADIUS_DP);
+            tv.setBackground(hoverBackground);
             tv.setOnHoverListener((v, event) -> {
                 if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                    tv.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
+                    hoverBackground.setColor(COLOR_HOVER_BG);
                     tv.setTextColor(UiTheme.Text.STRONG);
                 } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                    tv.setBackground(null);
+                    hoverBackground.setColor(0x00000000);
                     tv.setTextColor(COLOR_NODE_TEXT);
                 }
                 return false;
@@ -232,91 +248,74 @@ public class UiSearchableMenu extends FrameLayout {
 
     /** Shows the same searchable selector outside the graph viewport. */
     public void showAt(View anchor, ViewGroup context) {
-        showAt(anchor, context, 1.0f);
-    }
-
-    public void showAt(View anchor, ViewGroup context, float anchorScale) {
         if (anchor == null || context == null) return;
         dismiss();
         setVisibility(VISIBLE);
         this.mAnchor = anchor;
         this.mContext = context;
-        this.mAnchorScale = anchorScale;
 
         renderList();
-        updatePosition();
-
         if (this.getParent() != null) ((ViewGroup) this.getParent()).removeView(this);
 
         context.addView(this);
         areaBinding = AreaTransientUi.bind(anchor, this, this::dismiss);
         mSearchBox.post(focusSearch);
 
-        if (!mIsTracking) {
-            mIsTracking = true;
-            post(mTrackTask);
-        }
+        startTracking();
     }
 
-    private final Runnable mTrackTask = new Runnable() {
-        @Override
-        public void run() {
-            if (getVisibility() != VISIBLE || getParent() == null || !anchorInHost()) {
-                mIsTracking = false;
-                dismiss();
-                return;
-            }
-            updatePosition();
-            postDelayed(this, 16);
-        }
-    };
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (mAnchor != null) startTracking();
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int width = Math.min(UIUtils.dp2pxInt(MENU_WIDTH_DP), MeasureSpec.getSize(widthMeasureSpec));
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
+        lp.width = width;
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        updatePosition();
+    }
+
+    private void startTracking() {
+        if (positionObserver != null && positionObserver.isAlive()) return;
+        positionObserver = getViewTreeObserver();
+        positionObserver.addOnPreDrawListener(trackPosition);
+    }
 
     private void updatePosition() {
-        if (mAnchor == null || mContext == null) return;
-
-        ViewGroup parentView = mContext;
-
-        int[] btnLoc = new int[2]; mAnchor.getLocationOnScreen(btnLoc);
-        int[] vpLoc = new int[2]; parentView.getLocationOnScreen(vpLoc);
-
-        float relX = btnLoc[0] - vpLoc[0];
-        float relY = btnLoc[1] - vpLoc[1];
-
-        int targetWidth = UIUtils.dp2pxInt(MENU_WIDTH_DP);
-        float scaledHeight = mAnchor.getHeight() * mAnchorScale;
-
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mContentLayout.getLayoutParams();
-        int oldWidth = lp.width;
-
-        int targetX = (int) relX;
-        int targetY = (int) (relY + scaledHeight);
-
-        int widthSpec = MeasureSpec.makeMeasureSpec(targetWidth, MeasureSpec.EXACTLY);
-        int heightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-        mContentLayout.measure(widthSpec, heightSpec);
-        int contentHeight = mContentLayout.getMeasuredHeight();
-
-        // 边缘溢出检测
-        if (targetX + targetWidth > parentView.getWidth()) {
-            targetX = Math.max(0, parentView.getWidth() - targetWidth);
+        if (mAnchor == null || mContext == null || getWidth() <= 0) return;
+        // Both corners are transformed into this overlay's local pixels. Ancestor zoom,
+        // translation and scrolling are part of the matrix, not a separately sampled scale.
+        anchorMatrix.setIdentity();
+        mAnchor.transformMatrixToGlobal(anchorMatrix);
+        anchorPoint[0] = 0;
+        anchorPoint[1] = 0;
+        anchorMatrix.mapPoint(anchorPoint);
+        if (!UIUtils.rootToLocal(this, anchorPoint[0], anchorPoint[1], hostMatrix, anchorPoint)) return;
+        float anchorLeft = anchorPoint[0], anchorTop = anchorPoint[1];
+        anchorPoint[0] = 0;
+        anchorPoint[1] = mAnchor.getHeight();
+        anchorMatrix.mapPoint(anchorPoint);
+        if (!UIUtils.rootToLocal(this, anchorPoint[0], anchorPoint[1], hostMatrix, anchorPoint)) return;
+        int width = mContentLayout.getWidth(), height = mContentLayout.getHeight();
+        int x = Math.round(Math.clamp(anchorLeft, 0, Math.max(0, getWidth() - width)));
+        int y = Math.round(anchorPoint[1]);
+        if (y + height > getHeight()) {
+            y = Math.round(anchorTop - height);
         }
-        if (targetY + contentHeight > parentView.getHeight()) {
-            int popUpY = (int) (relY - contentHeight);
-            if (popUpY > 0) {
-                targetY = popUpY;
-            } else {
-                targetY = Math.max(0, parentView.getHeight() - contentHeight);
-            }
-        }
-
-        if (lp.leftMargin != targetX || lp.topMargin != targetY || oldWidth != targetWidth
-                || lp.gravity != (Gravity.TOP | Gravity.LEFT)) {
-            lp.gravity = Gravity.TOP | Gravity.LEFT;
-            lp.width = targetWidth;
-            lp.leftMargin = targetX;
-            lp.topMargin = targetY;
-            mContentLayout.setLayoutParams(lp);
-        }
+        y = Math.clamp(y, 0, Math.max(0, getHeight() - height));
+        // Keep layout margins at zero so placement cannot change the available height.
+        // Move the actual frame after layout / before drawing, without a second layout pass.
+        mContentLayout.offsetLeftAndRight(x - mContentLayout.getLeft());
+        mContentLayout.offsetTopAndBottom(y - mContentLayout.getTop());
     }
 
     public void dismiss() {
@@ -335,8 +334,11 @@ public class UiSearchableMenu extends FrameLayout {
     }
 
     private void stopTracking() {
-        mIsTracking = false;
-        removeCallbacks(mTrackTask);
+        if (positionObserver != null) {
+            ViewTreeObserver observer = positionObserver.isAlive() ? positionObserver : getViewTreeObserver();
+            if (observer.isAlive()) observer.removeOnPreDrawListener(trackPosition);
+            positionObserver = null;
+        }
         mSearchBox.removeCallbacks(focusSearch);
     }
 

@@ -68,8 +68,8 @@ public abstract class BaseQuestConditionsNode extends BaseNode {
     }
 
     private static PortRow dynamicInput(PortDef port, UIHint hint, int index, boolean removeButton) {
-        return PortRow.passthrough(
-                port, hint,
+        return new PortRow(
+                port, null, hint,
                 null,
                 Map.of(
                         PortMetaKeys.IS_DYNAMIC, true,

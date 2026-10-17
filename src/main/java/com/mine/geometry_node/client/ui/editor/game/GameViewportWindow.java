@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
@@ -96,7 +98,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         for (TextView button : new TextView[]{modeButton, projectionButton, resetButton}) {
             tools.addView(button, toolbarButtonLayout());
         }
-        HorizontalScrollView toolScroller = new HorizontalScrollView(context);
+        HorizontalScrollView toolScroller = new UiHorizontalScrollView(context);
         toolScroller.setHorizontalScrollBarEnabled(false);
         toolScroller.setFillViewport(true);
         toolScroller.addView(tools, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));

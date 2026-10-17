@@ -190,6 +190,10 @@ public class RegistryDataManager {
      * here intentionally display their raw ids.
      */
     public static Map<String, String> getDynamicOptionLabelKeys(String registryId) {
+        if (QuestStatusRegistry.DYNAMIC_REGISTRY_ID.equals(registryId)
+                || QuestStatusRegistry.ASSIGNABLE_DYNAMIC_REGISTRY_ID.equals(registryId)) {
+            return QuestStatusRegistry.INSTANCE.translationKeys();
+        }
         if (MarkerTypeRegistry.DYNAMIC_REGISTRY_ID.equals(registryId)) {
             return MarkerTypeRegistry.INSTANCE.translationKeys();
         }

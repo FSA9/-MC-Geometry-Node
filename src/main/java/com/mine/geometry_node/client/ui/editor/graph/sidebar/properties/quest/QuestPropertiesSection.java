@@ -1,6 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
+import java.util.function.Supplier;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
+import icyllis.modernui.view.View;
 
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 
@@ -29,8 +35,8 @@ public final class QuestPropertiesSection extends LinearLayout {
     private static final int COLOR_LABEL = 0xFFA8A8A8;
     private static final int COLOR_TEXT = 0xFFE3E3E3;
     private static final int COLOR_MUTED = 0xFF777777;
-    private static final int COLOR_BUTTON = 0xFF4A4A4A;
-    private static final int COLOR_BUTTON_HOVER = 0xFF5A5A5A;
+    private static final int COLOR_BUTTON = GraphPropertiesUi.ACTION_BACKGROUND;
+    private static final int COLOR_BUTTON_HOVER = GraphPropertiesUi.ACTION_HOVER;
 
     private final Runnable mOnChanged;
     private final Runnable mOnPreview;
@@ -45,7 +51,8 @@ public final class QuestPropertiesSection extends LinearLayout {
     private boolean mHasDefinition;
     private boolean mUpdating;
 
-    public QuestPropertiesSection(Context context, Runnable onChanged, Runnable onPreview) {
+    public QuestPropertiesSection(Context context, Runnable onChanged, Runnable onPreview,
+                                  Supplier<GraphPropertiesTarget> captureTarget) {
         super(context);
         mOnChanged = onChanged;
         mOnPreview = onPreview;
@@ -84,11 +91,9 @@ public final class QuestPropertiesSection extends LinearLayout {
             if (!hasFocus) changed();
         });
         titleRow.addView(mTitleInput, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        TextView editTitle = richTextButton();
+        UiIconButton editTitle = richTextButton();
         editTitle.setOnClickListener(v -> openTitleEditor(editTitle));
-        LayoutParams titleButtonParams = new LayoutParams(
-                UIUtils.dp2pxInt(30), ViewGroup.LayoutParams.MATCH_PARENT);
-        titleButtonParams.leftMargin = UIUtils.dp2pxInt(6);
+        LayoutParams titleButtonParams = GraphPropertiesUi.actionParams();
         titleRow.addView(editTitle, titleButtonParams);
         addView(titleRow, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
 
@@ -110,11 +115,9 @@ public final class QuestPropertiesSection extends LinearLayout {
         });
         descriptionRow.addView(mDescriptionInput,
                 new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        TextView editDescription = richTextButton();
+        UiIconButton editDescription = richTextButton();
         editDescription.setOnClickListener(v -> openDescriptionEditor(editDescription));
-        LayoutParams descriptionButtonParams = new LayoutParams(
-                UIUtils.dp2pxInt(30), UIUtils.dp2pxInt(30));
-        descriptionButtonParams.leftMargin = UIUtils.dp2pxInt(6);
+        LayoutParams descriptionButtonParams = GraphPropertiesUi.actionParams();
         descriptionRow.addView(editDescription, descriptionButtonParams);
         addView(descriptionRow,
                 new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(76)));
@@ -125,13 +128,13 @@ public final class QuestPropertiesSection extends LinearLayout {
         conditionParams.topMargin = UIUtils.dp2pxInt(8);
         addView(mConditionOverview, conditionParams);
 
-        mObjectivesEditor = new QuestObjectivesEditor(context, this::changed);
+        mObjectivesEditor = new QuestObjectivesEditor(context, this::changed, captureTarget);
         LayoutParams objectiveParams = new LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         objectiveParams.topMargin = UIUtils.dp2pxInt(8);
         addView(mObjectivesEditor, objectiveParams);
 
-        mRewardsEditor = new QuestRewardsEditor(context, this::changed);
+        mRewardsEditor = new QuestRewardsEditor(context, this::changed, captureTarget);
         LayoutParams rewardParams = new LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rewardParams.topMargin = UIUtils.dp2pxInt(8);
@@ -183,7 +186,7 @@ public final class QuestPropertiesSection extends LinearLayout {
         return mDefinition;
     }
 
-    private void openTitleEditor(TextView anchor) {
+    private void openTitleEditor(View anchor) {
         QuestDefinition current = definition();
         int generation = mGeneration;
         ExpandedTextInputOverlay.showRichText(
@@ -202,7 +205,7 @@ public final class QuestPropertiesSection extends LinearLayout {
                 });
     }
 
-    private void openDescriptionEditor(TextView anchor) {
+    private void openDescriptionEditor(View anchor) {
         QuestDefinition current = definition();
         int generation = mGeneration;
         ExpandedTextInputOverlay.showRichText(
@@ -242,12 +245,9 @@ public final class QuestPropertiesSection extends LinearLayout {
         return input;
     }
 
-    private TextView richTextButton() {
-        TextView button = label(getContext(), "...", 12.0f, COLOR_TEXT);
-        button.setGravity(Gravity.CENTER);
-        button.setTooltipText(tr("geometry_node.graph_properties.quest.edit_rich_text"));
-        styleButton(button, COLOR_BUTTON, COLOR_BUTTON_HOVER);
-        return button;
+    private UiIconButton richTextButton() {
+        return GraphPropertiesUi.actionIcon(getContext(), SvgIconView.Icon.MORE_HORIZONTAL,
+                "geometry_node.graph_properties.quest.edit_rich_text");
     }
 
     private TextView actionButton(String text, String tooltip) {

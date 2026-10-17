@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.picker;
 
 import com.mine.geometry_node.core.node.value.SlotRef;
+import icyllis.modernui.mc.MuiModApi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -164,17 +165,17 @@ public final class VanillaInventoryPicker {
             if (mFinished) return;
             mFinished = true;
             Minecraft.getInstance().setScreen(mPreviousScreen);
-            if (mOnPicked != null) {
-                mOnPicked.accept(selected);
-            }
-            notifyDismissed();
+            MuiModApi.postToUiThread(() -> {
+                if (mOnPicked != null) mOnPicked.accept(selected);
+                notifyDismissed();
+            });
         }
 
         private void cancel() {
             if (mFinished) return;
             mFinished = true;
             Minecraft.getInstance().setScreen(mPreviousScreen);
-            notifyDismissed();
+            MuiModApi.postToUiThread(this::notifyDismissed);
         }
 
         private void notifyDismissed() {

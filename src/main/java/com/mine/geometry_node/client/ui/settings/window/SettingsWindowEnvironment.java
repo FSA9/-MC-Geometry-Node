@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsChoice;
@@ -145,7 +147,7 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
 
         @Override
         public View createView(Context context) {
-            ScrollView scroll = new ScrollView(context);
+            ScrollView scroll = new UiScrollView(context);
             scroll.setFillViewport(true);
             scroll.setBackground(background(COLOR_BACKGROUND, COLOR_BORDER));
             LinearLayout rows = new LinearLayout(context);

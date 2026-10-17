@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
@@ -18,14 +20,13 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 import java.util.Set;
 
 /** Settings for the owning viewport; it never owns another frame or camera. */
-public final class GameViewportSidebarPanel extends ScrollView implements SidebarPanel {
+public final class GameViewportSidebarPanel extends UiScrollView implements SidebarPanel {
     public static final String PANEL_ID = "game_view";
     public static final SidebarPanelDefinition DEFINITION = new SidebarPanelDefinition(
             PANEL_ID, "geometry_node.game_view.sidebar.title", 100,

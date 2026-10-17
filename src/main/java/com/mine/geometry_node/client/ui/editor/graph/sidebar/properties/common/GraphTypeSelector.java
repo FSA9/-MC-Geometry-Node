@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.common;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
@@ -48,16 +49,14 @@ public final class GraphTypeSelector extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        UiIconButton.Style menuStyle = new UiIconButton.Style(2.0f, 0.0f, COLOR_BUTTON,
-                COLOR_BUTTON_HOVER, COLOR_BUTTON_HOVER, COLOR_BUTTON, 0, 16.0f, 0.5f);
-        UiIconButton menuButton = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, COLOR_MUTED), menuStyle);
+        UiIconButton menuButton = GraphPropertiesUi.actionIcon(context, VectorIconView.Kind.CHEVRON_DOWN,
+                "geometry_node.graph_properties.type");
         menuButton.setOnClickListener(v -> toggleMenu());
         FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
-                UIUtils.dp2pxInt(28),
-                ViewGroup.LayoutParams.MATCH_PARENT);
+                UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP),
+                UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP));
         buttonParams.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
-        buttonParams.setMargins(0, UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2));
+        buttonParams.rightMargin = UIUtils.dp2pxInt(1);
         addView(menuButton, buttonParams);
     }
 

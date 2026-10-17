@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
@@ -118,7 +120,7 @@ public class ViewportMenu extends FrameLayout {
         searchLp.setMargins(0, 0, 0, UIUtils.dp2pxInt(SEARCH_BOTTOM_MARGIN_DP));
         mContentLayout.addView(mSearchBox, searchLp);
 
-        mScrollView = new ScrollView(context);
+        mScrollView = new UiScrollView(context);
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
         mScrollView.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

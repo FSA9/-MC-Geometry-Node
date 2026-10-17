@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
@@ -72,7 +74,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     public AssetTransferPanel(Context context) {
         super(context);
         setBackground(rect(COLOR_BACKGROUND, 0, 0));
-        scroll = new ScrollView(context);
+        scroll = new UiScrollView(context);
         content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
         for (Section section : Section.values()) expandedSections.put(section, true);

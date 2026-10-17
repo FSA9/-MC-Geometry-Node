@@ -1,7 +1,10 @@
 package com.mine.geometry_node.client.runtime.quest.ui;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
+import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
-import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -42,9 +45,9 @@ public final class QuestScreenFragment extends Fragment {
     private static final String ALL_STATUS_TRANSLATION_KEY = "geometry_node.quest.status.all";
     private static final int ALL_STATUS_COLOR = 0xFFE6E6E6;
     private static final int SCREEN_DIM = 0x52000000;
-    private static final int SCREEN_PANEL = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0xA8);
-    private static final int BODY_SURFACE = DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0x62);
-    private static final int DETAIL_SURFACE = DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0x4E);
+    private static final int SCREEN_PANEL = QuestScreenTheme.withAlpha(QuestScreenTheme.PANEL, 0xA8);
+    private static final int BODY_SURFACE = QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x62);
+    private static final int DETAIL_SURFACE = QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x4E);
 
     private FrameLayout root;
     private LinearLayout screenContent;
@@ -108,7 +111,7 @@ public final class QuestScreenFragment extends Fragment {
 
         if (snapshot == null) {
             screenContent.addView(label(tr("geometry_node.quest.screen.unavailable"), 11.5f,
-                    DialogueHudTheme.TEXT_MUTED, Gravity.CENTER),
+                    QuestScreenTheme.TEXT_MUTED, Gravity.CENTER),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             return;
         }
@@ -128,11 +131,11 @@ public final class QuestScreenFragment extends Fragment {
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = label(tr("geometry_node.quest.screen.title"), 14.5f,
-                DialogueHudTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+                QuestScreenTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         if (!snapshot.actionResult().isBlank()) {
-            int color = snapshot.actionSuccessful() ? DialogueHudTheme.SUCCESS : DialogueHudTheme.ERROR;
+            int color = snapshot.actionSuccessful() ? QuestScreenTheme.SUCCESS : QuestScreenTheme.ERROR;
             String feedbackText = snapshot.actionMessage().isBlank()
                     ? actionResult(snapshot.actionResult())
                     : snapshot.actionMessage();
@@ -150,7 +153,7 @@ public final class QuestScreenFragment extends Fragment {
     }
 
     private View createStatusBar(PacketQuestScreenSnapshot snapshot) {
-        HorizontalScrollView scroll = new HorizontalScrollView(getContext());
+        HorizontalScrollView scroll = new UiHorizontalScrollView(getContext());
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setOnGenericMotionListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_SCROLL) {
@@ -174,13 +177,13 @@ public final class QuestScreenFragment extends Fragment {
         for (PacketQuestScreenSnapshot.StatusView status : statusTabs) {
             boolean selected = status.id().equals(selectedStatusId);
             int baseColor = selected
-                    ? DialogueHudTheme.SURFACE_HOVER
-                    : DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0x80);
+                    ? QuestScreenTheme.SURFACE_HOVER
+                    : QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x80);
             TextView tab = label(tr(status.translationKey()) + "  " + countForStatus(snapshot, status.id()),
-                    9.5f, selected ? status.color() : DialogueHudTheme.TEXT_MUTED, Gravity.CENTER);
+                    9.5f, selected ? status.color() : QuestScreenTheme.TEXT_MUTED, Gravity.CENTER);
             tab.setSingleLine(true);
             tab.setEllipsize(TextUtils.TruncateAt.END);
-            setSquareBackground(tab, baseColor, selected ? 1 : 0, status.color());
+            setPanelBackground(tab, baseColor, 0, 0);
             tab.setOnClickListener(v -> {
                 if (!status.id().equals(selectedStatusId)) {
                     selectedStatusId = status.id();
@@ -189,7 +192,7 @@ public final class QuestScreenFragment extends Fragment {
                     refresh(ClientQuestScreenState.current());
                 }
             });
-            bindSquareHover(tab, baseColor, DialogueHudTheme.BUTTON_HOVER, selected ? 1 : 0, status.color());
+            bindHover(tab, baseColor, QuestScreenTheme.BUTTON_HOVER, 0, 0);
             LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(dp(104), dp(30));
             if (bar.getChildCount() > 0) tabLp.leftMargin = dp(3);
             bar.addView(tab, tabLp);
@@ -209,8 +212,6 @@ public final class QuestScreenFragment extends Fragment {
                 new LinearLayout.LayoutParams(dp(LIST_WIDTH_DP), ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(dp(1), ViewGroup.LayoutParams.MATCH_PARENT);
-        dividerLp.topMargin = dp(10);
-        dividerLp.bottomMargin = dp(10);
         body.addView(divider(), dividerLp);
         body.addView(createDetails(snapshot), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
         return body;
@@ -219,15 +220,15 @@ public final class QuestScreenFragment extends Fragment {
     private View createQuestList(PacketQuestScreenSnapshot snapshot) {
         LinearLayout column = new LinearLayout(getContext());
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setBackground(rect(DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0x54), 0.0f, 0, 0));
-        column.setPadding(dp(10), dp(8), dp(8), dp(8));
+        column.setBackground(rect(QuestScreenTheme.withAlpha(QuestScreenTheme.PANEL, 0x54), 0.0f, 0, 0));
+        column.setPadding(dp(12), dp(8), dp(12), dp(8));
         TextView listTitle = label(tr("geometry_node.quest.screen.list"), 9.0f,
-                DialogueHudTheme.TEXT_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+                QuestScreenTheme.TEXT_MUTED, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         listTitle.setPadding(dp(6), 0, 0, 0);
         column.addView(listTitle,
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)));
 
-        ScrollView scroll = new ScrollView(getContext());
+        ScrollView scroll = new UiScrollView(getContext());
         LinearLayout list = new LinearLayout(getContext());
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(0, dp(3), 0, 0);
@@ -237,7 +238,7 @@ public final class QuestScreenFragment extends Fragment {
         List<PacketQuestScreenSnapshot.QuestView> quests = questsForStatus(snapshot, selectedStatusId);
         if (quests.isEmpty()) {
             list.addView(label(tr("geometry_node.quest.screen.empty"), 9.5f,
-                            DialogueHudTheme.TEXT_MUTED, Gravity.CENTER),
+                            QuestScreenTheme.TEXT_MUTED, Gravity.CENTER),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
             return column;
         }
@@ -245,20 +246,20 @@ public final class QuestScreenFragment extends Fragment {
         for (PacketQuestScreenSnapshot.QuestView quest : quests) {
             boolean selected = quest.taskKey().equals(selectedTaskKey);
             int baseColor = selected
-                    ? DialogueHudTheme.BUTTON_HOVER
-                    : DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0xA0);
+                    ? QuestScreenTheme.BUTTON_HOVER
+                    : QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0xA0);
             int color = statusColor(snapshot, quest.statusId());
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
-            setSquareBackground(row, baseColor, 0, 0);
+            setPanelBackground(row, baseColor, 0, 0);
 
             View statusMarker = new View(getContext());
             statusMarker.setBackground(rect(color, 0.0f, 0, 0));
             row.addView(statusMarker, new LinearLayout.LayoutParams(dp(6), ViewGroup.LayoutParams.MATCH_PARENT));
 
             TextView rowTitle = label(ModernDialogueText.display(ModernDialogueText.parse(quest.title())),
-                    10.0f, selected ? DialogueHudTheme.TEXT_PRIMARY : DialogueHudTheme.TEXT_MUTED,
+                    10.0f, selected ? QuestScreenTheme.TEXT_PRIMARY : QuestScreenTheme.TEXT_MUTED,
                     Gravity.LEFT | Gravity.CENTER_VERTICAL);
             rowTitle.setSingleLine(true);
             rowTitle.setEllipsize(TextUtils.TruncateAt.END);
@@ -270,9 +271,9 @@ public final class QuestScreenFragment extends Fragment {
                 pendingAbandonTaskKey = "";
                 refresh(ClientQuestScreenState.current());
             });
-            bindSquareHover(row, baseColor, DialogueHudTheme.SURFACE_HOVER, 0, 0);
-            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32));
-            rowLp.bottomMargin = dp(2);
+            bindHover(row, baseColor, QuestScreenTheme.SURFACE_HOVER, 0, 0);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36));
+            rowLp.bottomMargin = dp(3);
             list.addView(row, rowLp);
         }
         return column;
@@ -281,12 +282,12 @@ public final class QuestScreenFragment extends Fragment {
     private View createDetails(PacketQuestScreenSnapshot snapshot) {
         LinearLayout details = new LinearLayout(getContext());
         details.setOrientation(LinearLayout.VERTICAL);
-        details.setPadding(dp(16), dp(10), dp(14), dp(10));
+        details.setPadding(dp(12), dp(10), dp(12), dp(10));
 
         PacketQuestScreenSnapshot.QuestView quest = selectedQuest(snapshot);
         if (quest == null) {
             details.addView(label(tr("geometry_node.quest.screen.select_hint"), 10.0f,
-                            DialogueHudTheme.TEXT_MUTED, Gravity.CENTER),
+                            QuestScreenTheme.TEXT_MUTED, Gravity.CENTER),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             return details;
         }
@@ -295,37 +296,50 @@ public final class QuestScreenFragment extends Fragment {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = label(ModernDialogueText.display(ModernDialogueText.parse(quest.title())),
-                15.5f, DialogueHudTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+                15.5f, QuestScreenTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+        PacketQuestScreenSnapshot.StatusView status = findStatus(snapshot, quest.statusId());
+        if (status != null) {
+            TextView state = label(tr(status.translationKey()), 9.0f, status.color(), Gravity.CENTER);
+            state.setPadding(dp(10), 0, dp(10), 0);
+            state.setBackground(rect(QuestScreenTheme.withAlpha(status.color(), 0x18), 0, 0, 0));
+            header.addView(state, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(24)));
+        }
         details.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
         details.addView(divider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
-        LinearLayout grid = new LinearLayout(getContext());
-        grid.setOrientation(LinearLayout.VERTICAL);
+        // One scroll surface keeps long descriptions, objectives and rewards together.
+        ScrollView scroll = new UiScrollView(getContext());
+        scroll.setFillViewport(true);
+        LinearLayout main = new LinearLayout(getContext());
+        main.setOrientation(LinearLayout.VERTICAL);
+        main.addView(createDetailSection("geometry_node.quest.screen.content", createDescriptionContent(quest)));
+        LinearLayout.LayoutParams objectivesLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        objectivesLp.topMargin = dp(12);
+        main.addView(createDetailSection("geometry_node.quest.screen.objectives", createObjectivesContent(quest)), objectivesLp);
 
-        LinearLayout topRow = detailRow(
-                createDetailSection("geometry_node.quest.screen.content", DialogueHudTheme.ACCENT,
-                        createDescriptionContent(quest)),
-                createDetailSection("geometry_node.quest.screen.conditions", DialogueHudTheme.WARNING,
-                        createConditionsContent(quest)));
-        grid.addView(topRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
-        grid.addView(spacer(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8)));
+        LinearLayout side = new LinearLayout(getContext());
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.addView(createDetailSection("geometry_node.quest.screen.conditions", createConditionsContent(quest)));
+        LinearLayout.LayoutParams rewardsLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rewardsLp.topMargin = dp(12);
+        side.addView(createDetailSection("geometry_node.quest.screen.rewards", createRewardsContent(quest)), rewardsLp);
 
-        LinearLayout bottomRow = detailRow(
-                createDetailSection("geometry_node.quest.screen.objectives", DialogueHudTheme.ACCENT,
-                        createObjectivesContent(quest)),
-                createDetailSection("geometry_node.quest.screen.rewards", DialogueHudTheme.SUCCESS,
-                        createRewardsContent(quest)));
-        grid.addView(bottomRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
-
-        LinearLayout.LayoutParams gridLp = new LinearLayout.LayoutParams(
+        LinearLayout columns = new LinearLayout(getContext());
+        columns.setOrientation(LinearLayout.HORIZONTAL);
+        columns.addView(main, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.6f));
+        columns.addView(spacer(), new LinearLayout.LayoutParams(dp(12), 1));
+        columns.addView(side, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+        scroll.addView(columns, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
-        gridLp.topMargin = dp(8);
-        details.addView(grid, gridLp);
+        scrollLp.topMargin = dp(12);
+        details.addView(scroll, scrollLp);
 
         View actions = createActions(snapshot, quest);
         if (actions != null) {
@@ -337,16 +351,7 @@ public final class QuestScreenFragment extends Fragment {
         return details;
     }
 
-    private LinearLayout detailRow(View left, View right) {
-        LinearLayout row = new LinearLayout(getContext());
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        row.addView(spacer(), new LinearLayout.LayoutParams(dp(8), ViewGroup.LayoutParams.MATCH_PARENT));
-        row.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        return row;
-    }
-
-    private View createDetailSection(String titleKey, int markerColor, View content) {
+    private View createDetailSection(String titleKey, View content) {
         LinearLayout section = new LinearLayout(getContext());
         section.setOrientation(LinearLayout.VERTICAL);
         section.setBackground(rect(DETAIL_SURFACE, 0.0f, 0, 0));
@@ -354,43 +359,35 @@ public final class QuestScreenFragment extends Fragment {
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        View marker = new View(getContext());
-        marker.setBackground(rect(markerColor, 0.0f, 0, 0));
-        header.addView(marker, new LinearLayout.LayoutParams(dp(3), ViewGroup.LayoutParams.MATCH_PARENT));
-        TextView title = label(tr(titleKey), 9.0f, DialogueHudTheme.TEXT_MUTED,
+        TextView title = label(tr(titleKey), 9.0f, QuestScreenTheme.TEXT_PRIMARY,
                 Gravity.LEFT | Gravity.CENTER_VERTICAL);
         title.setPadding(dp(8), 0, dp(6), 0);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
         section.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
         section.addView(divider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
         section.addView(content, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return section;
     }
 
     private View createDescriptionContent(PacketQuestScreenSnapshot.QuestView quest) {
-        ScrollView scroll = new ScrollView(getContext());
         TextView description = label(ModernDialogueText.display(ModernDialogueText.parse(quest.description())),
-                10.5f, DialogueHudTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.TOP);
+                10.5f, QuestScreenTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.TOP);
         description.setPadding(dp(10), dp(9), dp(10), dp(9));
-        scroll.addView(description, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        return scroll;
+        return description;
     }
 
     private View createConditionsContent(PacketQuestScreenSnapshot.QuestView quest) {
         LinearLayout columns = new LinearLayout(getContext());
-        columns.setOrientation(LinearLayout.HORIZONTAL);
+        columns.setOrientation(LinearLayout.VERTICAL);
         columns.setPadding(dp(9), dp(7), dp(9), dp(8));
         columns.addView(createConditionColumn(
                         "geometry_node.quest.screen.acceptance_conditions", quest.acceptanceConditions()),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-        columns.addView(spacer(), new LinearLayout.LayoutParams(dp(7), ViewGroup.LayoutParams.MATCH_PARENT));
-        columns.addView(divider(), new LinearLayout.LayoutParams(dp(1), ViewGroup.LayoutParams.MATCH_PARENT));
-        columns.addView(spacer(), new LinearLayout.LayoutParams(dp(7), ViewGroup.LayoutParams.MATCH_PARENT));
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        columns.addView(spacer(), new LinearLayout.LayoutParams(1, dp(8)));
         columns.addView(createConditionColumn(
                         "geometry_node.quest.screen.completion_conditions", quest.completionConditions()),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return columns;
     }
 
@@ -399,49 +396,43 @@ public final class QuestScreenFragment extends Fragment {
             List<PacketQuestScreenSnapshot.ConditionView> conditions) {
         LinearLayout column = new LinearLayout(getContext());
         column.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label(tr(titleKey), 8.5f, DialogueHudTheme.WARNING,
+        TextView title = label(tr(titleKey), 8.5f, QuestScreenTheme.WARNING,
                 Gravity.LEFT | Gravity.CENTER_VERTICAL);
         column.addView(title, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(20)));
 
-        ScrollView scroll = new ScrollView(getContext());
         LinearLayout list = new LinearLayout(getContext());
         list.setOrientation(LinearLayout.VERTICAL);
         List<PacketQuestScreenSnapshot.ConditionView> values = conditions != null ? conditions : List.of();
         for (PacketQuestScreenSnapshot.ConditionView condition : values) {
             int stateColor = !condition.evaluated()
-                    ? DialogueHudTheme.TEXT_MUTED
-                    : condition.allowed() ? DialogueHudTheme.SUCCESS : DialogueHudTheme.ERROR;
+                    ? QuestScreenTheme.TEXT_MUTED
+                    : condition.allowed() ? QuestScreenTheme.SUCCESS : QuestScreenTheme.ERROR;
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setBackground(rect(
-                    DialogueHudTheme.withAlpha(stateColor, 0x24),
-                    0.0f,
-                    1,
-                    DialogueHudTheme.withAlpha(stateColor, 0xA0)));
+                    QuestScreenTheme.withAlpha(stateColor, 0x24),
+                    0.0f, 0, 0));
             View marker = new View(getContext());
             marker.setBackground(rect(stateColor, 0.0f, 0, 0));
             row.addView(marker, new LinearLayout.LayoutParams(dp(3), ViewGroup.LayoutParams.MATCH_PARENT));
-            TextView text = label(condition.text(), 9.0f, DialogueHudTheme.TEXT_PRIMARY,
+            TextView text = label(condition.text(), 9.0f, QuestScreenTheme.TEXT_PRIMARY,
                     Gravity.LEFT | Gravity.CENTER_VERTICAL);
             text.setMinHeight(dp(26));
             text.setPadding(dp(7), dp(3), dp(6), dp(3));
             row.addView(text, new LinearLayout.LayoutParams(
-                    0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
             LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rowLp.bottomMargin = dp(2);
             list.addView(row, rowLp);
         }
-        scroll.addView(list, new ViewGroup.LayoutParams(
+        column.addView(list, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        column.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
         return column;
     }
 
     private View createObjectivesContent(PacketQuestScreenSnapshot.QuestView quest) {
-        ScrollView scroll = new ScrollView(getContext());
         LinearLayout list = new LinearLayout(getContext());
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -451,13 +442,10 @@ public final class QuestScreenFragment extends Fragment {
             objectiveLp.bottomMargin = dp(4);
             list.addView(createObjectiveView(objective), objectiveLp);
         }
-        scroll.addView(list, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        return scroll;
+        return list;
     }
 
     private View createRewardsContent(PacketQuestScreenSnapshot.QuestView quest) {
-        ScrollView scroll = new ScrollView(getContext());
         LinearLayout list = new LinearLayout(getContext());
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -467,9 +455,7 @@ public final class QuestScreenFragment extends Fragment {
             rewardLp.bottomMargin = dp(4);
             list.addView(createRewardView(reward), rewardLp);
         }
-        scroll.addView(list, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        return scroll;
+        return list;
     }
 
     private View createObjectiveView(PacketQuestScreenSnapshot.ObjectiveView objective) {
@@ -480,8 +466,9 @@ public final class QuestScreenFragment extends Fragment {
                 && objective.targetValue() > 0.0
                 && objective.currentValue() >= objective.targetValue();
         row.setBackground(rect(
-                DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0xA8),
-                2.0f, 1, completed ? DialogueHudTheme.SUCCESS : DialogueHudTheme.DIVIDER));
+                completed ? QuestScreenTheme.withAlpha(QuestScreenTheme.SUCCESS, 0x14)
+                        : QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x48),
+                0.0f, 0, 0));
 
         LinearLayout contentRow = new LinearLayout(getContext());
         contentRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -496,29 +483,30 @@ public final class QuestScreenFragment extends Fragment {
         }
 
         TextView content = label(ModernDialogueText.display(ModernDialogueText.parse(objective.content())),
-                10.0f, completed ? DialogueHudTheme.SUCCESS : DialogueHudTheme.TEXT_PRIMARY,
+                10.0f, completed ? QuestScreenTheme.SUCCESS : QuestScreenTheme.TEXT_PRIMARY,
                 Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        contentRow.addView(content, new LinearLayout.LayoutParams(0, dp(30), 1.0f));
+        content.setMinHeight(dp(30));
+        contentRow.addView(content, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
 
         if (objective.quantityEnabled()) {
             String quantity = objective.counterEnabled()
                     ? formatNumber(objective.currentValue()) + " / " + formatNumber(objective.targetValue())
                     : "x " + formatNumber(objective.targetValue());
-            TextView amount = label(quantity, 9.0f, DialogueHudTheme.TEXT_MUTED,
+            TextView amount = label(quantity, 9.0f, QuestScreenTheme.TEXT_MUTED,
                     Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(dp(86), dp(30));
+            LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
             amountLp.leftMargin = dp(6);
             contentRow.addView(amount, amountLp);
         }
 
         row.addView(contentRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         if (objective.counterEnabled()) {
             QuestProgressBar progress = new QuestProgressBar(
                     getContext(), objective.currentValue(), objective.targetValue());
             LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(4));
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(2));
             progressLp.topMargin = dp(4);
             row.addView(progress, progressLp);
         }
@@ -531,8 +519,8 @@ public final class QuestScreenFragment extends Fragment {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(7), dp(5), dp(7), dp(5));
         row.setBackground(rect(
-                DialogueHudTheme.withAlpha(DialogueHudTheme.SURFACE, 0xA8),
-                2.0f, 1, DialogueHudTheme.DIVIDER));
+                QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x48),
+                0.0f, 0, 0));
 
         QuestHintType hintType = QuestHintType.fromId(reward.hintType());
         if (hintType != QuestHintType.NONE) {
@@ -544,12 +532,13 @@ public final class QuestScreenFragment extends Fragment {
         }
 
         TextView content = label(ModernDialogueText.display(ModernDialogueText.parse(reward.content())),
-                10.0f, DialogueHudTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        row.addView(content, new LinearLayout.LayoutParams(0, dp(30), 1.0f));
+                10.0f, QuestScreenTheme.TEXT_PRIMARY, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        content.setMinHeight(dp(30));
+        row.addView(content, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
 
         TextView amount = label("x " + formatNumber(reward.amount()), 9.5f,
-                DialogueHudTheme.TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(dp(86), dp(30));
+                QuestScreenTheme.TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
         amountLp.leftMargin = dp(6);
         row.addView(amount, amountLp);
         return row;
@@ -563,7 +552,7 @@ public final class QuestScreenFragment extends Fragment {
 
         if ("unaccepted".equals(quest.statusId()) && quest.acceptEnabled()) {
             actions.addView(actionButton(tr("geometry_node.quest.screen.accept"),
-                            DialogueHudTheme.BUTTON, DialogueHudTheme.BUTTON_HOVER,
+                            QuestScreenTheme.BUTTON, QuestScreenTheme.BUTTON_HOVER,
                             () -> ClientQuestScreenState.accept(quest.taskKey())),
                     new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.MATCH_PARENT));
             return actions;
@@ -575,13 +564,13 @@ public final class QuestScreenFragment extends Fragment {
                     : tr("geometry_node.quest.screen.abandon");
             TextView abandon = actionButton(
                     abandonText,
-                    DialogueHudTheme.withAlpha(DialogueHudTheme.ERROR, 0x82),
-                    DialogueHudTheme.withAlpha(DialogueHudTheme.ERROR, 0xB8),
+                    QuestScreenTheme.withAlpha(QuestScreenTheme.ERROR, 0x82),
+                    QuestScreenTheme.withAlpha(QuestScreenTheme.ERROR, 0xB8),
                     () -> abandonQuest(quest));
             actions.addView(abandon, new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.MATCH_PARENT));
 
             TextView submit = actionButton(tr("geometry_node.quest.screen.submit"),
-                    DialogueHudTheme.BUTTON, DialogueHudTheme.BUTTON_HOVER,
+                    QuestScreenTheme.BUTTON, QuestScreenTheme.BUTTON_HOVER,
                     () -> ClientQuestScreenState.submit(quest.taskKey(), quest.instanceId()));
             LinearLayout.LayoutParams submitLp = new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.MATCH_PARENT);
             submitLp.leftMargin = dp(8);
@@ -687,7 +676,7 @@ public final class QuestScreenFragment extends Fragment {
 
     private static int statusColor(PacketQuestScreenSnapshot snapshot, String statusId) {
         PacketQuestScreenSnapshot.StatusView status = findStatus(snapshot, statusId);
-        return status != null ? status.color() : DialogueHudTheme.TEXT_MUTED;
+        return status != null ? status.color() : QuestScreenTheme.TEXT_MUTED;
     }
 
     private static String actionResult(String result) {
@@ -706,8 +695,8 @@ public final class QuestScreenFragment extends Fragment {
         button.setContentDescription(tr("geometry_node.common.cancel"));
         button.setTooltipText(tr("geometry_node.common.cancel"));
         button.setOnClickListener(v -> ClientQuestScreenState.close());
-        bindHover(button, 0x00000000, DialogueHudTheme.BUTTON_HOVER, 0, 0);
-        VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, DialogueHudTheme.TEXT_MUTED);
+        bindHover(button, 0x00000000, QuestScreenTheme.BUTTON_HOVER, 0, 0);
+        VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, QuestScreenTheme.TEXT_MUTED);
         FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(17), dp(17));
         iconLp.gravity = Gravity.CENTER;
         button.addView(icon, iconLp);
@@ -715,33 +704,22 @@ public final class QuestScreenFragment extends Fragment {
     }
 
     private void bindHover(View view, int normalColor, int hoverColor, int strokeWidth, int strokeColor) {
+        ShapeDrawable background = rect(normalColor, 0, strokeWidth, strokeColor);
+        view.setBackground(background);
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                setPanelBackground(v, hoverColor, strokeWidth, strokeColor);
+                background.setColor(hoverColor);
+                v.invalidate();
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                setPanelBackground(v, normalColor, strokeWidth, strokeColor);
+                background.setColor(normalColor);
+                v.invalidate();
             }
             return false;
         });
     }
 
     private void setPanelBackground(View view, int color, int strokeWidth, int strokeColor) {
-        view.setBackground(rect(color, 2.0f, strokeWidth, strokeColor));
-    }
-
-    private void bindSquareHover(View view, int normalColor, int hoverColor, int strokeWidth, int strokeColor) {
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                setSquareBackground(v, hoverColor, strokeWidth, strokeColor);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                setSquareBackground(v, normalColor, strokeWidth, strokeColor);
-            }
-            return false;
-        });
-    }
-
-    private void setSquareBackground(View view, int color, int strokeWidth, int strokeColor) {
-        view.setBackground(rect(color, 0.0f, strokeWidth, strokeColor));
+        view.setBackground(rect(color, 0, strokeWidth, strokeColor));
     }
 
     private void registerBackPressedCallback() {
@@ -756,7 +734,7 @@ public final class QuestScreenFragment extends Fragment {
 
     private View divider() {
         View divider = new View(getContext());
-        divider.setBackground(rect(DialogueHudTheme.DIVIDER, 0.0f, 0, 0));
+        divider.setBackground(rect(QuestScreenTheme.DIVIDER, 0.0f, 0, 0));
         return divider;
     }
 

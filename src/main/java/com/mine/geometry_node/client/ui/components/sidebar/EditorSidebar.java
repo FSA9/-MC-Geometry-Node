@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.sidebar;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -80,8 +82,7 @@ public final class EditorSidebar extends LinearLayout {
         mTitleView = label(context, "", 12.0f, COLOR_TEXT);
         header.addView(mTitleView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        TextView collapseIcon = label(context, "›", 18.0f, COLOR_MUTED);
-        collapseIcon.setGravity(Gravity.CENTER);
+        SvgIconView collapseIcon = new SvgIconView(context, SvgIconView.Icon.SIDEBAR_COLLAPSE, COLOR_MUTED);
         UiIconButton collapse = new UiIconButton(context, collapseIcon).tooltip(tr("geometry_node.sidebar.collapse"));
         collapse.setOnClickListener(v -> {
             if (mOnCollapseRequested != null) mOnCollapseRequested.run();
@@ -93,7 +94,7 @@ public final class EditorSidebar extends LinearLayout {
         mContentHost = new FrameLayout(context);
         mPanelColumn.addView(mContentHost, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
 
-        mTabScroll = new ScrollView(context);
+        mTabScroll = new UiScrollView(context);
         mTabScroll.setVerticalScrollBarEnabled(false);
         mTabScroll.setBackground(rect(COLOR_TAB_RAIL, 0.0f, 0, 0));
         mTabStrip = new LinearLayout(context) {

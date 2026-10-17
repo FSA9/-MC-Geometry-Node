@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
@@ -187,7 +189,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         addClearSearchButton(searchRow, context);
 
         mBodyFrame = new FrameLayout(context);
-        mScrollView = new ScrollView(context);
+        mScrollView = new UiScrollView(context);
         mFileContent = new FileContentLayout(context, this);
         configureBody();
     }

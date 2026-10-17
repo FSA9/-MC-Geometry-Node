@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils;
 
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.common.SvgIconView;
 import com.mine.geometry_node.client.ui.components.common.UiIconButton;
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
 import com.mine.geometry_node.client.ui.components.common.UiTextInput;
@@ -21,6 +22,33 @@ import net.minecraft.network.chat.Component;
  * Stateless view factories and styling shared by graph-properties components.
  */
 public final class GraphPropertiesUi {
+    public static final int ACTION_SIZE_DP = 26;
+    public static final int ACTION_BACKGROUND = 0xFF4A4A4A;
+    public static final int ACTION_HOVER = 0xFF5A5A5A;
+    public static final int ACTION_PRESSED = 0xFF3A3A3A;
+
+    public static UiIconButton.Style actionStyle(float iconSizeDp) {
+        return new UiIconButton.Style(3, 0, ACTION_BACKGROUND, ACTION_HOVER,
+                ACTION_PRESSED, UiTheme.Surface.PANEL, 0, iconSizeDp, UiTheme.Metrics.DISABLED_ALPHA);
+    }
+
+    public static UiIconButton actionIcon(Context context, SvgIconView.Icon icon, String tooltipKey) {
+        return new UiIconButton(context, new SvgIconView(context, icon, UiTheme.Text.NORMAL), actionStyle(14))
+                .tooltip(tr(tooltipKey));
+    }
+
+    public static UiIconButton actionIcon(Context context, VectorIconView.Kind icon, String tooltipKey) {
+        return new UiIconButton(context, new VectorIconView(context, icon, UiTheme.Text.NORMAL), actionStyle(14))
+                .tooltip(tr(tooltipKey));
+    }
+
+    public static LinearLayout.LayoutParams actionParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                UIUtils.dp2pxInt(ACTION_SIZE_DP), UIUtils.dp2pxInt(ACTION_SIZE_DP));
+        lp.leftMargin = UIUtils.dp2pxInt(4);
+        return lp;
+    }
+
     private GraphPropertiesUi() {
     }
 
@@ -87,44 +115,25 @@ public final class GraphPropertiesUi {
         return new UiIconButton(context, icon, style).tooltip(tooltip);
     }
 
-    public static LinearLayout orderButtons(
-            Context context,
-            Runnable moveUp,
-            Runnable moveDown,
-            String upTooltip,
-            String downTooltip,
-            int iconColor,
-            int normalColor,
-            int hoverColor) {
+    /** Two half-height controls share one square toolbar slot. */
+    public static LinearLayout orderButtons(Context context, Runnable moveUp, Runnable moveDown,
+                                            String upTooltipKey, String downTooltipKey) {
         LinearLayout order = new LinearLayout(context);
         order.setOrientation(LinearLayout.VERTICAL);
-        FrameLayout up = iconButton(
-                context,
-                VectorIconView.Kind.CHEVRON_UP,
-                upTooltip,
-                9,
-                iconColor,
-                normalColor,
-                hoverColor);
+        UiIconButton up = new UiIconButton(context,
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiTheme.Text.NORMAL), actionStyle(8))
+                .tooltip(tr(upTooltipKey));
         up.setOnClickListener(v -> moveUp.run());
-        order.addView(up, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(14)));
-
-        FrameLayout down = iconButton(
-                context,
-                VectorIconView.Kind.CHEVRON_DOWN,
-                downTooltip,
-                9,
-                iconColor,
-                normalColor,
-                hoverColor);
+        order.addView(up, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        View divider = new View(context);
+        divider.setBackground(rect(ACTION_PRESSED, 0));
+        order.addView(divider, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, UIUtils.dp2pxInt(1))));
+        UiIconButton down = new UiIconButton(context,
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, UiTheme.Text.NORMAL), actionStyle(8))
+                .tooltip(tr(downTooltipKey));
         down.setOnClickListener(v -> moveDown.run());
-        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(14));
-        downParams.topMargin = UIUtils.dp2pxInt(2);
-        order.addView(down, downParams);
+        order.addView(down, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         return order;
     }
 

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.ui.components.common.*;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
@@ -23,7 +25,7 @@ import net.minecraft.network.chat.Component;
 import java.util.*;
 
 /** Schema-driven edits form one transaction and wait for server acknowledgement. */
-public final class ScenePropertiesPanel extends ScrollView implements SidebarPanel {
+public final class ScenePropertiesPanel extends UiScrollView implements SidebarPanel {
     public static final String PANEL_ID = "scene_properties";
     public static final SidebarPanelDefinition DEFINITION = new SidebarPanelDefinition(PANEL_ID,
             "geometry_node.game_view.scene.properties", 90, Set.of(SidebarPanelScope.GAME_VIEWPORT),

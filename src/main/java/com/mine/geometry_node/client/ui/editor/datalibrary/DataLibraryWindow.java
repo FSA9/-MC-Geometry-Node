@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.components.common.UiActionButton;
@@ -162,7 +164,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         deleteButton = toolbar.deleteButton;
         addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(76)));
 
-        scrollHost = new ScrollView(context);
+        scrollHost = new UiScrollView(context);
         scrollHost.setFillViewport(true);
         groupsHost = new DataLibraryTreeLayout(context);
         groupsHost.setOrientation(VERTICAL);
@@ -172,7 +174,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rightHost = new DataLibraryTreeLayout(context);
         rightHost.setOrientation(VERTICAL);
         rightHost.setPadding(px(8), px(4), px(8), px(8));
-        rightScroll = new ScrollView(context);
+        rightScroll = new UiScrollView(context);
         rightScroll.setFillViewport(true);
         rightScroll.addView(rightHost, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

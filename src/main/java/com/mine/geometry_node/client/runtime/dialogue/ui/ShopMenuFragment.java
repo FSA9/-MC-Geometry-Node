@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.runtime.dialogue.ui;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.components.common.VectorIconView;
@@ -132,7 +134,7 @@ public class ShopMenuFragment extends Fragment {
         window.addView(createHeader(state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         window.addView(createDivider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
-        ScrollView scrollView = new ScrollView(getContext());
+        ScrollView scrollView = new UiScrollView(getContext());
         scrollView.setClipChildren(false);
         LinearLayout offerList = new LinearLayout(getContext());
         offerList.setClipChildren(false);

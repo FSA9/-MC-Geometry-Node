@@ -68,7 +68,7 @@ public class SelectHintRenderer implements UIHintRenderer {
                 });
 
                 if (interactionContext instanceof ViewGroup host) {
-                    menu.showAt(v, host, interactionContext.getCamera().getScale());
+                    menu.showAt(v, host);
                 }
             }
         });

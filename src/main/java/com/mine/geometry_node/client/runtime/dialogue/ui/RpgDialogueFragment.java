@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.runtime.dialogue.ui;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -166,7 +168,7 @@ public class RpgDialogueFragment extends Fragment {
         bodyView = body;
         body.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
                 adjustPanelHeight(body, packet.choices().size()));
-        ScrollView bodyScroll = new ScrollView(context);
+        ScrollView bodyScroll = new UiScrollView(context);
         bodyScroll.setFillViewport(true);
         bodyScroll.addView(body, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -240,7 +242,7 @@ public class RpgDialogueFragment extends Fragment {
         column.setPadding(dp(18), 0, 0, 0);
 
         if (!packet.choices().isEmpty()) {
-            ScrollView choiceScroll = new ScrollView(context);
+            ScrollView choiceScroll = new UiScrollView(context);
             choiceScroll.setFillViewport(true);
             choiceScroll.addView(createChoices(packet), new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,

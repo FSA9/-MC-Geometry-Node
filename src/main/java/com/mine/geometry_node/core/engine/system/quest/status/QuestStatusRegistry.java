@@ -62,6 +62,14 @@ public final class QuestStatusRegistry {
                 .toList());
     }
 
+    public synchronized Map<String, String> translationKeys() {
+        LinkedHashMap<String, String> labels = new LinkedHashMap<>();
+        for (QuestStatus status : statuses.values()) {
+            labels.put(status.id(), status.translationKey());
+        }
+        return Collections.unmodifiableMap(labels);
+    }
+
     public synchronized List<String> allIds() {
         return statuses.values().stream().map(QuestStatus::id).toList();
     }

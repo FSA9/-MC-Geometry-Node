@@ -16,6 +16,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
@@ -43,11 +44,13 @@ public class SvgIconView extends View {
         PERFORMANCE("editors/analysis.svg"),
         SEARCH("actions/search.svg"),
         PLUS("actions/plus.svg"),
+        MORE_HORIZONTAL("actions/more_h.svg"),
         CLEAR("actions/clear.svg"),
         RESET("actions/refresh.svg"),
         CLOSE("actions/close.svg"),
         EXPAND("navigation/chevrons-up-down-64px.svg"),
         COLLAPSE("navigation/chevrons-down-up-64px.svg"),
+        SIDEBAR_COLLAPSE("navigation/sidebar-collapse.svg"),
         SQUARE_CHECK("actions/square-check-64px.svg"),
         SQUARE_PLUS("actions/square-plus-64px.svg"),
         BLUEPRINT("editors/graph_editor.svg", "blueprint"),
@@ -187,6 +190,12 @@ public class SvgIconView extends View {
         Shape shape = switch (element.getTagName()) {
             case "path" -> parsePath(element.getAttribute("d"), style.evenOdd());
             case "rect" -> parseRect(element);
+            case "circle" -> {
+                float radius = number(element.getAttribute("r"), 0.0f);
+                float cx = number(element.getAttribute("cx"), 0.0f);
+                float cy = number(element.getAttribute("cy"), 0.0f);
+                yield new Ellipse2D.Float(cx - radius, cy - radius, radius * 2, radius * 2);
+            }
             default -> null;
         };
 

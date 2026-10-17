@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryDragPayload;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
@@ -81,7 +83,7 @@ public class GraphViewportPanel extends LinearLayout {
         setOrientation(LinearLayout.VERTICAL);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
-        mTabScrollView = new HorizontalScrollView(context);
+        mTabScrollView = new UiHorizontalScrollView(context);
         mTabScrollView.setHorizontalScrollBarEnabled(false);
         mTabScrollView.setBackground(createColorDrawable(0xFF1E1E1E));
 

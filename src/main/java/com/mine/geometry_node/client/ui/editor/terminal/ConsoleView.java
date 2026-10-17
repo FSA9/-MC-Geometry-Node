@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
@@ -57,7 +59,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         LinearLayout mainLayout = new LinearLayout(context);
         mainLayout.setOrientation(LinearLayout.VERTICAL);
 
-        mScrollView = new ScrollView(context);
+        mScrollView = new UiScrollView(context);
         mLogContainer = new LinearLayout(context);
         mLogContainer.setOrientation(LinearLayout.VERTICAL);
         mLogContainer.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(8));
