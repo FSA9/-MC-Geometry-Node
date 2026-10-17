@@ -37,7 +37,8 @@ public final class ViewportSceneInteraction {
     public String transformLabel(){return transforming()?transform.label():"";}
     public boolean transforming(){if(transform!=null&&!transform.active())transform=null;return transform!=null;}
     public void transformAxis(int bit){if(transforming()){transform.axis(bit);changed.run();}}
-    public void confirmTransform(){if(transforming())transform.confirm();transform=null;changed.run();}
+    public void confirmTransform(){if(transforming()&&transform.confirm())transform=null;changed.run();}
+    public boolean transformNumberKey(int key){if(!transforming()||!transform.numberKey(key))return false;changed.run();return true;}
     public void transformMove(float x,float y){if(transforming()){transform.move(x,y);changed.run();}}
     public void beginTransform(String operation,float x,float y){
         cancel();if(!current(frame)||bounds==null)return;

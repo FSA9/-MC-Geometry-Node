@@ -385,6 +385,11 @@ final class GameViewportView extends View {
 
     boolean dispatchShortcut(KeyEvent event) {
         if (!canNavigate() || EditViewportFlightInput.isCaptured()) return false;
+        if (inputOwner.mode()==ViewportMode.EDIT && scene.transforming()
+                && !event.isControlPressed() && !event.isAltPressed() && !event.isSuperPressed()
+                && !event.isShiftPressed() && scene.transformNumberKey(event.getKeyCode())) {
+            invalidate();return true;
+        }
         handlingRepeat = event.getRepeatCount() != 0;
         return shortcuts.onKeyDown(event);
     }

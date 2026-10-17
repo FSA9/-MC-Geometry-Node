@@ -4,6 +4,7 @@ import java.util.*;
 import java.util.function.*;
 import net.minecraft.world.phys.*;
 import com.mine.geometry_node.core.engine.system.scene.geometry.SceneGeometryTypes;
+import com.mine.geometry_node.core.engine.system.scene.property.SceneNodeInputs;
 
 /** Common type plugin contract; contains no client/UI or render dependencies. */
 public final class SceneObjectTypes {
@@ -23,9 +24,10 @@ public final class SceneObjectTypes {
     private static final Map<String,Type> TYPES=new LinkedHashMap<>();
     static {
         register(new Type(SceneObject.POINT_LIGHT,"geometry_node.game_view.scene.point_light","",
-                List.of(SceneProperty.number("intensity",3,0,1024,false),SceneProperty.number("range",16,.01,32,false)),
+                SceneNodeInputs.properties(SceneObject.POINT_LIGHT),
                 o->new AABB(o.position().subtract(.5,.5,.5),o.position().add(.5,.5,.5)),o->{}));
         SceneGeometryTypes.register();
+        com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeTypes.register();
     }
     private SceneObjectTypes(){}
     public static synchronized void register(Type type){if(TYPES.putIfAbsent(type.id(),type)!=null)throw new IllegalArgumentException("Duplicate scene type: "+type.id());}

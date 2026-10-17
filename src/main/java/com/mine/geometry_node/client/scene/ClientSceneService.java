@@ -29,6 +29,7 @@ public final class ClientSceneService {
     private volatile Snapshot published = new Snapshot("", 0, List.of(), Set.of(), null, false, false, "", 0);
     private volatile Snapshot confirmed = published;
     private final SceneHistory history = new SceneHistory();
+    private final com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime collisions = new com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime();
     private final Consumer<PacketSceneEdit> transport;
     private Map<UUID, SceneObject> objects = Map.of();
     private Map<UUID, Long> versions = Map.of();
@@ -61,6 +62,7 @@ public final class ClientSceneService {
         if (world != level) reset(level);
         ticks++;
         if (level == null || minecraft.getConnection() == null) return;
+        collisions.synchronize(level, confirmed.objects());
         // Join packets may arrive before ClientLevel exists; retry a bounded sync until one is accepted.
         if ((!received && ticks - lastSyncTick >= 20) || ticks - lastSyncTick >= 200) {
             lastSyncTick = ticks;
@@ -79,6 +81,7 @@ public final class ClientSceneService {
     }
     synchronized void bindWorld(Object identity, String dimensionId) {
         if (identity == world && dimension.equals(dimensionId)) return;
+        if (world instanceof ClientLevel previous) collisions.clear(previous);
         generation++;
         world = identity;
         dimension = dimensionId;

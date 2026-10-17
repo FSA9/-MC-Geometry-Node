@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.graph.debug;
 
 public enum DebugRenderChannel {
-    AREA("area", 0xFF4FC3E8),
-    GEOMETRY("geometry", 0xFFFFFFFF),
+    AREA("area", DebugRenderStyle.AREA.color()),
+    GEOMETRY("geometry", DebugRenderStyle.GEOMETRY.color()),
     SCHEMATIC("schematic", 0xFFB58CFF),
     INTERACTION("interaction", 0xFFF2B36D),
     PATHFINDING("pathfinding", 0xFF4FC3E8);

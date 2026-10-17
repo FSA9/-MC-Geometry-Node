@@ -21,7 +21,6 @@ import java.util.PriorityQueue;
 final class CollisionDebugProvider {
     private static final int MAX_FACES = 8192;
     private static final int CHUNK_FACES = 512;
-    private static final int COLOR = 0xFF56E39F;
     private final boolean nodeCollision;
     private final String channel;
 
@@ -68,6 +67,7 @@ final class CollisionDebugProvider {
         PriorityQueue<Part> nearest = new PriorityQueue<>(order.reversed());
         boolean truncated = false;
         for (ModelCollisionScene.Entry entry : ModelCollisionScene.snapshots(level)) {
+            if (entry.instanceId() instanceof com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime.Key) continue;
             if (isNodeCollision(entry.instanceId()) != nodeCollision) continue;
             for (ModelCollisionMesh.Part part : entry.geometry().mesh().parts()) {
                 availableParts++;
@@ -154,7 +154,8 @@ final class CollisionDebugProvider {
             float[] positions = new float[vertices.size()];
             for (int i = 0; i < positions.length; i++) positions[i] = vertices.get(i);
             return new GeometryDebugElement(channel + ":" + index, channel, GeometryDebugType.MESH,
-                    COLOR, false, center, Vec3.ZERO, Vec3.ZERO, positions,
+                    DebugRenderStyle.COLLISION.color(), DebugRenderStyle.COLLISION.showPoints(),
+                    center, Vec3.ZERO, Vec3.ZERO, positions,
                     edges.stream().mapToInt(Integer::intValue).toArray(), faces.stream().mapToInt(Integer::intValue).toArray());
         }
     }

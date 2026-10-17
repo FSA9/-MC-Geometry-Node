@@ -20,11 +20,20 @@ public final class GeometryCollisionMeshBuilder {
     /** World translation is applied by the collision index, preserving local-coordinate precision. */
     public static ModelCollisionMesh build(GeometryValue geometry, Vec3 worldRotation,
             Vec3 pivot, Vec3 translation, Vec3 localRotation, Vec3 scale) {
+        return build(geometry, new Transform(worldRotation, pivot, translation, localRotation, scale));
+    }
+
+    /** Authored scenes use XYZ radians; avoid converting through the graph's YXZ degree convention. */
+    public static ModelCollisionMesh buildScene(GeometryValue geometry, Vec3 rotation, Vec3 scale) {
+        return build(geometry, new Transform(new Quaterniond(), Vec3.ZERO, Vec3.ZERO,
+                new Quaterniond().rotationXYZ(rotation.x, rotation.y, rotation.z), scale));
+    }
+
+    private static ModelCollisionMesh build(GeometryValue geometry, Transform transform) {
         if (geometry == null || geometry.isEmpty())
             throw new IllegalArgumentException("collision geometry is empty");
         if (geometry.primitiveCount() > MAX_PRIMITIVES)
             throw new IllegalArgumentException("collision geometry exceeds 256 primitives");
-        Transform transform = new Transform(worldRotation, pivot, translation, localRotation, scale);
         List<ModelCollisionMesh.Part> parts = new ArrayList<>();
         long geometryBytes = 0;
         int triangles = 0;

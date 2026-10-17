@@ -23,6 +23,8 @@ final class ViewportTransformGesture {
     private float x,y;
     private int axes;
     private boolean snap;
+    private final ViewportTransformNumber number=new ViewportTransformNumber();
+    private boolean valid=true;
     void setSnap(boolean enabled){snap=enabled;move(x,y);}
     private final Operation operation;
     ViewportTransformGesture(ClientSceneService service,PresentedViewportFrame frame,GameViewportLayout bounds,
@@ -39,10 +41,11 @@ final class ViewportTransformGesture {
         return service.beginPreview(this,frame.scene().worldGeneration(),revisions,positions);
     }
     int axes(){return axes;}
-    String label(){return net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene."+operation.name().toLowerCase(java.util.Locale.ROOT)).getString()+(axes==0?"":" · "+((axes&1)!=0?"X":"")+((axes&2)!=0?"Y":"")+((axes&4)!=0?"Z":""));}
+    String label(){return net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene."+operation.name().toLowerCase(java.util.Locale.ROOT)).getString()+(axes==0?"":" · "+((axes&1)!=0?"X":"")+((axes&2)!=0?"Y":"")+((axes&4)!=0?"Z":""))+(number.active()?" · "+number.text()+(operation==Operation.ROTATE?"°":operation==Operation.SCALE?"×":" m"):"")+(valid?"":" · "+net.minecraft.network.chat.Component.translatable("geometry_node.game_view.scene.invalid_transform").getString());}
     boolean active(){return service.previewActive(this);}
     void cancel(){service.cancelPreview(this);}
-    void confirm(){service.commitPreview(this);}
+    boolean confirm(){if(!valid)return false;service.commitPreview(this);return true;}
+    boolean numberKey(int key){if(!number.key(key))return false;move(x,y);return true;}
     void axis(int bit){axes^=bit;if(axes==7)axes=0;move(x,y);}
     private double u(float px){return (px-bounds.left())/(bounds.right()-bounds.left());}
     private double v(float py){return (py-bounds.top())/(bounds.bottom()-bounds.top());}
@@ -69,8 +72,10 @@ final class ViewportTransformGesture {
         if(!active()||!Float.isFinite(x)||!Float.isFinite(y))return;this.x=x;this.y=y;
         var ray=ViewportSceneMath.ray(frame,.5,.5);if(ray==null)return;
         Vec3 normal=ray.direction(),delta=Vec3.ZERO;
+        Double numeric=number.active()?number.value():null;
+        if(number.active()&&numeric==null){valid=false;return;}
         int count=Integer.bitCount(axes);
-        if(operation==Operation.MOVE){
+        if(operation==Operation.MOVE && numeric==null){
             if(count==1){
                 var axis=axes==1?EditViewportCamera.Axis.POSITIVE_X:axes==2?EditViewportCamera.Axis.POSITIVE_Y:EditViewportCamera.Axis.POSITIVE_Z;
                 double amount=ViewportSceneMath.axisDrag(frame,center,axis,u(startX),v(startY),u(x),v(y));
@@ -80,13 +85,26 @@ final class ViewportTransformGesture {
                 Vec3 a=plane(startX,startY,normal),b=plane(x,y,normal);if(a==null||b==null)return;delta=b.subtract(a);
             }
         }
-        if(operation==Operation.MOVE && snap)delta=ViewportMoveSnap.delta(center,delta,axes);
+        if(operation==Operation.MOVE && numeric!=null){
+            if(axes!=0)delta=new Vec3((axes&1)!=0?numeric:0,(axes&2)!=0?numeric:0,(axes&4)!=0?numeric:0);
+            else {
+                Vec3 a=plane(startX,startY,normal),b=plane(x,y,normal);
+                Vec3 direction=a!=null&&b!=null?b.subtract(a):Vec3.ZERO;
+                if(direction.lengthSqr()<1e-12){
+                    a=plane((bounds.left()+bounds.right())/2,(bounds.top()+bounds.bottom())/2,normal);
+                    b=plane((bounds.left()+bounds.right())/2+32,(bounds.top()+bounds.bottom())/2,normal);
+                    direction=a!=null&&b!=null?b.subtract(a):new Vec3(1,0,0);
+                }
+                delta=direction.normalize().scale(numeric);
+            }
+        }
+        if(operation==Operation.MOVE && snap && numeric==null)delta=ViewportMoveSnap.delta(center,delta,axes);
         if(operation==Operation.ROTATE&&axes!=0){
             int bit=count==2?7^axes:axes;normal=new Vec3((bit&1)!=0?1:0,(bit&2)!=0?1:0,(bit&4)!=0?1:0);
         }
-        double angle=operation==Operation.ROTATE?rotationAngle(x,y,normal):0;
+        double angle=operation==Operation.ROTATE?(numeric!=null?Math.toRadians(numeric):rotationAngle(x,y,normal)):0;
         Quaterniond turn=new Quaterniond().rotationAxis(angle,normal.x,normal.y,normal.z);
-        double factor=Math.exp(Math.clamp((x-startX)/(bounds.right()-bounds.left())*3,-6,6));
+        double factor=operation==Operation.SCALE&&numeric!=null?numeric:Math.exp(Math.clamp((x-startX)/(bounds.right()-bounds.left())*3,-6,6));
         Vec3 factors=new Vec3(axes==0||(axes&1)!=0?factor:1,axes==0||(axes&2)!=0?factor:1,axes==0||(axes&4)!=0?factor:1);
         Map<UUID,SceneObject> next=new LinkedHashMap<>();
         try{
@@ -99,7 +117,7 @@ final class ViewportTransformGesture {
                 }
                 next.put(o.id(),o.withTransform(position,rotation,scale));
             }
-            service.previewObjects(this,next);
-        }catch(IllegalArgumentException invalid){ /* Keep the last valid preview at world/scale limits. */ }
+            service.previewObjects(this,next);valid=true;
+        }catch(IllegalArgumentException invalid){valid=false; /* Keep the last valid preview; never confirm stale input. */ }
     }
 }

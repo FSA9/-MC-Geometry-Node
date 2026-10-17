@@ -26,8 +26,10 @@ public final class SceneLightInputs {
         List<ClientLightStore.ResolvedLight> result=new ArrayList<>();
         for(var object:objects) {
             if(!SceneObject.POINT_LIGHT.equals(object.typeId()) || !object.enabled() || object.intensity()<=0) continue;
+            var config=LightConfig.DEFAULT.withShadow(new LightConfig.Shadow(LightConfig.DEFAULT.shadow().enabled(),
+                    (float)object.number("source_size"))).withSourceVisible(Boolean.parseBoolean(object.parameters().get("source_visible")));
             var definition=new LightDefinition("point",object.color(),object.intensity(),object.range(),60,0.25f,
-                    object.position(),Vec3.ZERO,LightConfig.DEFAULT);
+                    object.position(),Vec3.ZERO,config);
             result.add(new ClientLightStore.ResolvedLight("scene:"+object.id(),definition,object.position(),
                     new Vec3(0,0,1),new Vec3(1,0,0),new Vec3(0,1,0),null));
         }

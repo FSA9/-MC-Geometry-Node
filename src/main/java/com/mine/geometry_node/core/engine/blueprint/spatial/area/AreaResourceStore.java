@@ -27,7 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
-/** Runtime store for public Areas. Entries are non-persistent and owned by graph bindings. */
+/** Public area queries share graph-owned transient regions and scene-owned persistent regions. */
 public final class AreaResourceStore {
     public static final AreaResourceStore INSTANCE = new AreaResourceStore();
 
@@ -47,6 +47,7 @@ public final class AreaResourceStore {
         AreaResource resource;
         synchronized (this) {
             ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
+            if (state.authored.containsKey(address) || address.id().startsWith("scene/")) throw new IllegalArgumentException("Reserved scene area address");
             resource = new AreaResource(address, owner, ++state.generation,
                     shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
             state.entries.put(address, resource);
@@ -56,10 +57,23 @@ public final class AreaResourceStore {
         return resource;
     }
 
+    /** Only the scene runtime writes this namespace; graph release cannot remove authored regions. */
+    public synchronized void putAuthored(MinecraftServer server, AreaResource area) {
+        if (!area.isAuthored() || !area.address().id().startsWith("scene/")) throw new IllegalArgumentException("Expected authored scene region");
+        ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
+        if (state.entries.containsKey(area.address())) throw new IllegalArgumentException("Area address already exists");
+        state.authored.put(area.address(), area);
+        state.snapshotsByDimension.remove(area.address().dimension());
+    }
+    public synchronized void removeAuthored(MinecraftServer server, AreaAddress address) {
+        ServerState state = servers.get(server);
+        if (state != null && state.authored.remove(address) != null) state.snapshotsByDimension.remove(address.dimension());
+    }
+
     @Nullable
     public synchronized AreaResource get(MinecraftServer server, AreaAddress address) {
         ServerState state = servers.get(server);
-        return state != null ? state.entries.get(address) : null;
+        return state == null ? null : state.entries.getOrDefault(address, state.authored.get(address));
     }
 
     @Nullable
@@ -87,11 +101,14 @@ public final class AreaResourceStore {
 
     public synchronized List<AreaResource> snapshot(ServerLevel level) {
         ServerState state = servers.get(level.getServer());
-        if (state == null || state.entries.isEmpty()) return List.of();
+        if (state == null || (state.entries.isEmpty() && state.authored.isEmpty())) return List.of();
         List<AreaResource> cached = state.snapshotsByDimension.get(level.dimension());
         if (cached != null) return cached;
         List<AreaResource> result = new ArrayList<>();
         for (AreaResource resource : state.entries.values()) {
+            if (resource.address().dimension().equals(level.dimension())) result.add(resource);
+        }
+        for (AreaResource resource : state.authored.values()) {
             if (resource.address().dimension().equals(level.dimension())) result.add(resource);
         }
         List<AreaResource> snapshot = List.copyOf(result);
@@ -107,6 +124,7 @@ public final class AreaResourceStore {
         Map<GraphResourceId, List<DebugRenderShape>> shapesByOwner = new LinkedHashMap<>();
         if (state != null && DebugRendererSessionManager.hasAreaSessions(level.getServer())) {
             for (AreaResource resource : snapshot(level)) {
+                if (resource.isAuthored()) continue; // Scene visualization uses the synchronized authored object.
                 AreaResource.Resolved resolved = resource.resolve(level);
                 if (resolved == null) continue;
                 DebugSourceId source = DebugSourceId.graph(DebugRenderChannel.AREA, resource.owner());
@@ -150,6 +168,7 @@ public final class AreaResourceStore {
 
     private static final class ServerState {
         private final Map<AreaAddress, AreaResource> entries = new LinkedHashMap<>();
+        private final Map<AreaAddress, AreaResource> authored = new LinkedHashMap<>();
         private final Map<ResourceKey<Level>, List<AreaResource>> snapshotsByDimension = new HashMap<>();
         private final Map<ResourceKey<Level>, Set<GraphResourceId>> debugOwnersByDimension = new HashMap<>();
         private long generation;

@@ -13,8 +13,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 import java.util.UUID;
 
-/** One live, binding-owned Area stored under a public dimension + id address. */
+/** A graph-owned live area or an immutable scene-owned area under a public dimension + id address. */
 public final class AreaResource {
+    private final Resolved authored;
     private final AreaAddress address;
     private final GraphResourceId owner;
     private final long generation;
@@ -39,6 +40,7 @@ public final class AreaResource {
                         LiveValue<Vec3> center, LiveValue<Vec3> size,
                         LiveValue<Vec3> rotation, LiveValue<Float> radius,
                         LiveValue<Float> height, @Nullable UUID anchorEntityId) {
+        this.authored = null;
         this.address = Objects.requireNonNull(address, "address");
         this.owner = Objects.requireNonNull(owner, "owner");
         this.generation = generation;
@@ -53,8 +55,25 @@ public final class AreaResource {
         this.anchorEntityId = anchorEntityId;
     }
 
+    /** Persistent scene ownership is deliberately separate from graph binding ownership. */
+    public static AreaResource authored(AreaAddress address, UUID id, long revision, long gameTime, Resolved resolved) {
+        return new AreaResource(address, id, revision, gameTime, resolved);
+    }
+    private AreaResource(AreaAddress address, UUID id, long revision, long gameTime, Resolved resolved) {
+        this.address = Objects.requireNonNull(address);
+        this.owner = null;
+        this.generation = revision;
+        this.incarnation = Objects.requireNonNull(id);
+        this.authored = Objects.requireNonNull(resolved);
+        this.shape = resolved.shape();
+        this.creationGameTime = gameTime;
+        this.center = this.size = this.rotation = null;
+        this.radius = this.height = null;
+        this.anchorEntityId = null;
+    }
+    public boolean isAuthored() { return authored != null; }
     public AreaAddress address() { return address; }
-    public GraphResourceId owner() { return owner; }
+    @Nullable public GraphResourceId owner() { return owner; }
     public long generation() { return generation; }
     public AreaRef reference() { return new AreaRef(address, incarnation); }
     public TransientScopedStateStore scopedState() { return scopedState; }
@@ -66,6 +85,7 @@ public final class AreaResource {
     @Nullable
     public synchronized Resolved resolve(ServerLevel level) {
         if (level == null || !level.dimension().equals(address.dimension())) return null;
+        if (authored != null) return authored;
         long gameTime = level.getGameTime();
         if (resolvedGameTime == gameTime) return resolved;
 

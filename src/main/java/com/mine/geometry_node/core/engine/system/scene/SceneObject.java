@@ -7,6 +7,7 @@ import java.util.*;
 public record SceneObject(UUID id, String typeId, String name, Vec3 position, Vec3 color,
                           boolean enabled, long revision, Map<String,String> parameters, Vec3 rotation, Vec3 scale) {
     public static final String POINT_LIGHT="point_light";
+    public static final int MAX_PARAMETERS = 32;
     public SceneObject {
         Objects.requireNonNull(id);Objects.requireNonNull(typeId);Objects.requireNonNull(name);
         if(typeId.isBlank()||typeId.length()>64||name.isBlank()||name.length()>96||revision<0)
@@ -17,27 +18,19 @@ public record SceneObject(UUID id, String typeId, String name, Vec3 position, Ve
             throw new IllegalArgumentException("Invalid scene color");
         if(!finite(rotation)||Math.max(Math.max(Math.abs(rotation.x),Math.abs(rotation.y)),Math.abs(rotation.z))>1e6||!finite(scale)||scale.x<.001||scale.y<.001||scale.z<.001||scale.x>1024||scale.y>1024||scale.z>1024)throw new IllegalArgumentException("Invalid transform");
         parameters=Map.copyOf(parameters);
-        if(parameters.size()>32)throw new IllegalArgumentException("Too many scene parameters");
+        if(parameters.size()>MAX_PARAMETERS)throw new IllegalArgumentException("Too many scene parameters");
         parameters.forEach((key,value)->{if(key.isBlank()||key.length()>64||value.length()>256)throw new IllegalArgumentException("Invalid scene parameter");});
     }
     public SceneObject(UUID id,String type,String name,Vec3 position,Vec3 color,boolean enabled,long revision,Map<String,String> parameters){
         this(id,type,name,position,color,enabled,revision,parameters,Vec3.ZERO,new Vec3(1,1,1));
     }
     public SceneObject withTransform(Vec3 position,Vec3 rotation,Vec3 scale){return new SceneObject(id,typeId,name,position,color,enabled,revision,parameters,rotation,scale);}
-    /** Compatibility bridge for existing light callers and version-one world saves. */
-    public SceneObject(UUID id,String type,String name,Vec3 position,Vec3 color,float intensity,float range,boolean enabled,long revision){
-        this(id,type,name,position,color,enabled,revision,Map.of("intensity",Float.toString(intensity),"range",Float.toString(range)));
-        if(!Float.isFinite(intensity)||intensity<0||intensity>1024||!Float.isFinite(range)||range<.01f||range>32)throw new IllegalArgumentException("Invalid light parameters");
-    }
     public double number(String key){return Double.parseDouble(parameters.get(key));}
     public float intensity(){return (float)number("intensity");}
     public float range(){return (float)number("range");}
     public static SceneObject pointLight(UUID id,Vec3 position){return SceneObjectTypes.require(POINT_LIGHT).create(id,position);}
     public SceneObject withPosition(Vec3 value){return new SceneObject(id,typeId,name,value,color,enabled,revision,parameters,rotation,scale);}
     public SceneObject withRevision(long value){return new SceneObject(id,typeId,name,position,color,enabled,value,parameters,rotation,scale);}
-    public SceneObject withProperties(String name,Vec3 color,float intensity,float range,boolean enabled){
-        return new SceneObject(id,typeId,name,position,color,intensity,range,enabled,revision).withTransform(position,rotation,scale);
-    }
     public SceneObject withProperties(String name,Vec3 color,boolean enabled,Map<String,String> parameters){
         return new SceneObject(id,typeId,name,position,color,enabled,revision,parameters,rotation,scale);
     }

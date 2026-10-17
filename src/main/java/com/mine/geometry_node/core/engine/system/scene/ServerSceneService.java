@@ -13,11 +13,19 @@ import java.util.*;
 /** The only authoritative writer for authored scene objects. Called exclusively on the server thread. */
 public final class ServerSceneService {
     private static final Map<ServerPlayer, LinkedHashMap<UUID, Receipt>> RECEIPTS = new IdentityHashMap<>();
+    private static final Map<net.minecraft.server.level.ServerLevel, com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime> VOLUMES = new IdentityHashMap<>();
     private static boolean initialized;
     private ServerSceneService() {}
     public static void init() {
         if (initialized) return;
         initialized = true;
+        dev.architectury.event.events.common.TickEvent.SERVER_LEVEL_PRE.register(ServerSceneService::updateVolumes);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Unload event) -> {
+            if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel level) {
+                var runtime = VOLUMES.remove(level);
+                if (runtime != null) runtime.clear(level);
+            }
+        });
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) synchronize(player);
         });
@@ -38,8 +46,12 @@ public final class ServerSceneService {
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) RECEIPTS.remove(player);
         });
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) ->
-                RECEIPTS.keySet().removeIf(player -> player.level().getServer() == event.getServer()));
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            RECEIPTS.keySet().removeIf(player -> player.level().getServer() == event.getServer());
+            for (var level : List.copyOf(VOLUMES.keySet())) if (level.getServer() == event.getServer()) {
+                VOLUMES.remove(level).clear(level);
+            }
+        });
     }
     public static void synchronize(ServerPlayer player) {
         NetworkHandler.sendToPlayer(player, snapshot(player, PacketSceneSnapshot.BROADCAST, true, ""));
@@ -61,6 +73,8 @@ public final class ServerSceneService {
         boolean changed = false;
         try {
             if (!RemoteAssetPermissions.canManageAssets(player)) throw new SecurityException("Scene editing requires world management permission");
+            VOLUMES.computeIfAbsent(player.level(), ignored -> new com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime())
+                    .prepareChanges(request.changes());
             changed = SceneSavedData.get(player.level().getServer()).apply(request.dimension(), request.changes());
             success = true;
         } catch (IllegalArgumentException | IllegalStateException | SecurityException | ArithmeticException failure) {
@@ -70,7 +84,14 @@ public final class ServerSceneService {
         receipts.put(request.requestId(), new Receipt(request, response));
         while (receipts.size() > 32) receipts.remove(receipts.keySet().iterator().next());
         NetworkHandler.sendToPlayer(player, response);
-        if (changed) for (ServerPlayer other : player.level().players()) if (other != player) synchronize(other);
+        if (changed) {
+            updateVolumes(player.level());
+            for (ServerPlayer other : player.level().players()) if (other != player) synchronize(other);
+        }
+    }
+    private static void updateVolumes(net.minecraft.server.level.ServerLevel level) {
+        VOLUMES.computeIfAbsent(level, ignored -> new com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime())
+                .synchronize(level, SceneSavedData.get(level.getServer()).document(level.dimension().identifier().toString()).objects());
     }
     private static void reply(ServerPlayer player, UUID id, boolean success, String message) {
         NetworkHandler.sendToPlayer(player, snapshot(player, id, success, message));

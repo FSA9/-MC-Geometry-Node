@@ -19,7 +19,7 @@ final class SceneWire {
         return new SceneObject(id,type,name,position,color,buf.readBoolean(),buf.readLong(),parameters(buf),rotation,scale);
     }
     private static java.util.Map<String,String> parameters(RegistryFriendlyByteBuf buf){
-        int count=count(buf,32);var result=new java.util.LinkedHashMap<String,String>();
+        int count=count(buf,SceneObject.MAX_PARAMETERS);var result=new java.util.LinkedHashMap<String,String>();
         for(int i=0;i<count;i++)if(result.putIfAbsent(buf.readUtf(64),buf.readUtf(256))!=null)throw new IllegalArgumentException("Duplicate parameter");
         return result;
     }

@@ -436,8 +436,10 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     public boolean dispatchTouchEvent(icyllis.modernui.view.MotionEvent event) {
         int action = event.getActionMasked();
         if (action == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
+            boolean dismissedProperties = propertiesPanel.dismissIfOutside(event.getRawX(), event.getRawY());
+            boolean dismissedScene = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
+            dismissingMenuGesture = dismissedProperties || dismissedScene;
             propertiesPanel.commitIfOutside(event.getRawX(),event.getRawY());
-            dismissingMenuGesture = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
         }
         if (dismissingMenuGesture) {
             if (action == icyllis.modernui.view.MotionEvent.ACTION_UP
@@ -449,6 +451,16 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (propertiesPanel.isMenuOpen()) {
+            if (sceneMenus.isOpen()) closeSceneMenus();
+            KeyBinding cancel = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_CANCEL));
+            if (event.getAction() == KeyEvent.ACTION_DOWN && cancel != null && UiInputBindings.matches(cancel, event)) {
+                propertiesPanel.dismissMenu();
+                viewport.requestFocus();
+                return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
         KeyBinding menuBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_MENU));
         if (menuKey.dispatch(event, menuBinding, !(findFocus() instanceof EditText) && viewport.canNavigate()
                 && !EditViewportFlightInput.isCaptured(), this::openViewMenu, this::confirmViewMenu, viewMenu::dismiss)) return true;

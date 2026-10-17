@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
-import com.mojang.serialization.Codec;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
@@ -12,6 +11,7 @@ import java.util.*;
 
 /** World save owns authored objects; Minecraft's SavedData storage handles atomic file replacement. */
 public final class SceneSavedData extends SavedData {
+    public static final int FORMAT_VERSION = 4;
     public static final SavedDataType<SceneSavedData> TYPE = new SavedDataType<>(
             Identifier.fromNamespaceAndPath("geometry_node", "editor_scene"), SceneSavedData::new,
             CompoundTag.CODEC.xmap(SceneSavedData::load, SceneSavedData::save));
@@ -28,7 +28,7 @@ public final class SceneSavedData extends SavedData {
     }
     public synchronized CompoundTag save() {
         CompoundTag root = new CompoundTag();
-        root.putInt("Version", 3);
+        root.putInt("Version", FORMAT_VERSION);
         ListTag list = new ListTag();
         dimensions.forEach((dimension, document) -> {
             CompoundTag tag = new CompoundTag();
@@ -43,16 +43,17 @@ public final class SceneSavedData extends SavedData {
         return root;
     }
     public static SceneSavedData load(CompoundTag root) {
-        if (root.getIntOr("Version", 1) < 1 || root.getIntOr("Version", 1) > 3) throw new IllegalArgumentException("Unsupported scene save version");
+        int version = root.getIntOr("Version", -1);
+        if (version != FORMAT_VERSION) throw new IllegalArgumentException("Unsupported scene save version");
         SceneSavedData result = new SceneSavedData();
-        ListTag list = root.getListOrEmpty("Dimensions");
+        ListTag list = required(root.getList("Dimensions"), "Dimensions");
         for (int i = 0; i < list.size(); i++) {
             CompoundTag tag = list.getCompoundOrEmpty(i);
-            String dimension = Identifier.parse(tag.getStringOr("Dimension", "")).toString();
+            String dimension = Identifier.parse(required(tag.getString("Dimension"), "Dimension")).toString();
             List<SceneObject> objects = new ArrayList<>();
-            ListTag values = tag.getListOrEmpty("Objects");
+            ListTag values = required(tag.getList("Objects"), "Objects");
             for (int j = 0; j < values.size(); j++) objects.add(readObject(values.getCompoundOrEmpty(j)));
-            if (result.dimensions.putIfAbsent(dimension, new SceneDocument(tag.getLongOr("Revision", 0), objects)) != null)
+            if (result.dimensions.putIfAbsent(dimension, new SceneDocument(required(tag.getLong("Revision"), "Revision"), objects)) != null)
                 throw new IllegalArgumentException("Duplicate scene dimension");
         }
         return result;
@@ -70,18 +71,16 @@ public final class SceneSavedData extends SavedData {
     }
     private static SceneObject readObject(CompoundTag tag) {
         java.util.Map<String,String> parameters=new java.util.LinkedHashMap<>();
-        if(tag.contains("Parameters")){
-            CompoundTag values=tag.getCompoundOrEmpty("Parameters");
-            for(String key:values.keySet())parameters.put(key,values.getStringOr(key,""));
-        }else{
-            parameters.put("intensity",Float.toString(tag.getFloatOr("Intensity",3)));
-            parameters.put("range",Float.toString(tag.getFloatOr("Range",16)));
-        }
-        return new SceneObject(UUID.fromString(tag.getStringOr("Id", "")), tag.getStringOr("Type", ""),
-                tag.getStringOr("Name", ""), new Vec3(tag.getDoubleOr("X", 0), tag.getDoubleOr("Y", 0), tag.getDoubleOr("Z", 0)),
-                new Vec3(tag.getDoubleOr("R", 1), tag.getDoubleOr("G", 1), tag.getDoubleOr("B", 1)),
-                tag.getBooleanOr("Enabled", true), tag.getLongOr("Revision", 0), parameters,
-                new Vec3(tag.getDoubleOr("RX",0),tag.getDoubleOr("RY",0),tag.getDoubleOr("RZ",0)),
-                new Vec3(tag.getDoubleOr("SX",1),tag.getDoubleOr("SY",1),tag.getDoubleOr("SZ",1)));
+        CompoundTag values=required(tag.getCompound("Parameters"), "Parameters");
+        for(String key:values.keySet())parameters.put(key,required(values.getString(key), key));
+        return new SceneObject(UUID.fromString(required(tag.getString("Id"), "Id")), required(tag.getString("Type"), "Type"),
+                required(tag.getString("Name"), "Name"), new Vec3(required(tag.getDouble("X"), "X"), required(tag.getDouble("Y"), "Y"), required(tag.getDouble("Z"), "Z")),
+                new Vec3(required(tag.getDouble("R"), "R"), required(tag.getDouble("G"), "G"), required(tag.getDouble("B"), "B")),
+                required(tag.getBoolean("Enabled"), "Enabled"), required(tag.getLong("Revision"), "Revision"), parameters,
+                new Vec3(required(tag.getDouble("RX"), "RX"),required(tag.getDouble("RY"), "RY"),required(tag.getDouble("RZ"), "RZ")),
+                new Vec3(required(tag.getDouble("SX"), "SX"),required(tag.getDouble("SY"), "SY"),required(tag.getDouble("SZ"), "SZ")));
+    }
+    private static <T> T required(Optional<T> value, String field) {
+        return value.orElseThrow(() -> new IllegalArgumentException("Missing or invalid scene field: " + field));
     }
 }
