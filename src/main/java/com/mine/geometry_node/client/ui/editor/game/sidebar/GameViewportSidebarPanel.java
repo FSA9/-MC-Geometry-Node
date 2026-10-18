@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;

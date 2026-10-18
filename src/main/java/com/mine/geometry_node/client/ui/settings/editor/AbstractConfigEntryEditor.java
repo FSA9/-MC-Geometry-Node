@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.settings.editor;
 
 import com.mine.geometry_node.client.config.ConfigDraft;
 import com.mine.geometry_node.client.config.ConfigEntry;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;

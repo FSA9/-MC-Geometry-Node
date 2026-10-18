@@ -5,8 +5,8 @@ import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
@@ -43,7 +43,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             "geometry_node.asset_transfer.panel.title",
             200,
             Set.of(SidebarPanelScope.ASSET_BROWSER),
-            AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.common.SvgIconView.Icon.TRANSFERS);
+            AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.icon.SvgIconView.Icon.TRANSFERS);
 
     private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
     private static final int COLOR_SECTION = UiTheme.Surface.PANEL;

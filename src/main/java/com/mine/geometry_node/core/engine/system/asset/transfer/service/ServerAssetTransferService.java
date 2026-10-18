@@ -175,8 +175,8 @@ public final class ServerAssetTransferService {
 
     private static boolean hasUploadPermission(ServerPlayer player, AssetTransferPurpose purpose) {
         return switch (purpose) {
-            case ASSET_REPOSITORY, DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE ->
-                    RemoteAssetPermissions.canUploadAssets(player);
+            case ASSET_REPOSITORY -> RemoteAssetPermissions.canUploadAssets(player);
+            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE -> RemoteAssetPermissions.canManageAssets(player);
             case DATA_LIBRARY_DOWNLOAD -> false;
         };
     }

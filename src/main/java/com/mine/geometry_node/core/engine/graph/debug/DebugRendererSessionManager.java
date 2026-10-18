@@ -39,7 +39,7 @@ public final class DebugRendererSessionManager {
     private static final double MOVE_REFRESH_DISTANCE = 32.0D;
     private static final double MOVE_REFRESH_DISTANCE_SQR = MOVE_REFRESH_DISTANCE * MOVE_REFRESH_DISTANCE;
     private static final int IDLE_CHECK_INTERVAL_TICKS = 20;
-    private static final int PATHFINDING_REFRESH_INTERVAL_TICKS = 5;
+    private static final int LIVE_REFRESH_INTERVAL_TICKS = 5;
     private static final int MAX_PATHFINDING_ENTITIES = 32;
     private static final int REQUESTED_TARGET_RETENTION_TICKS = 100;
     private static final int FOLLOW_TARGET_RETENTION_TICKS = 20;
@@ -125,6 +125,7 @@ public final class DebugRendererSessionManager {
         session.collisionEnabled = true;
         session.interactionEnabled = true;
         session.pathfindingEnabled = true;
+        session.forceFieldEnabled = true;
         hydrateSchematicChannel(player, session);
         refreshPlayer(player, session);
         player.sendSystemMessage(Component.literal("All debug channels enabled. radius="
@@ -264,6 +265,26 @@ public final class DebugRendererSessionManager {
         return changed ? 1 : 0;
     }
 
+    public static int enableForceField(ServerPlayer player, double radius) {
+        Session session = enableChannel(player, radius);
+        session.forceFieldEnabled = true;
+        finishEnable(player, session, "Force field");
+        return 1;
+    }
+
+    public static int disableForceField(ServerPlayer player, boolean notify) {
+        Session session = session(player);
+        boolean changed = session != null && session.forceFieldEnabled;
+        if (session != null) {
+            session.forceFieldEnabled = false;
+            finishDisableOrRefresh(player, session);
+        } else {
+            sendDisabledSnapshot(player);
+        }
+        notifyDisabled(player, notify, changed, "Force field");
+        return changed ? 1 : 0;
+    }
+
     public static int enablePathfinding(ServerPlayer player, double radius) {
         Session session = enableChannel(player, radius);
         session.pathfindingEnabled = true;
@@ -388,7 +409,7 @@ public final class DebugRendererSessionManager {
 
         long tick = level.getGameTime();
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
-        boolean pathfindingCadence = Math.floorMod(tick, PATHFINDING_REFRESH_INTERVAL_TICKS) == 0;
+        boolean liveCadence = Math.floorMod(tick, LIVE_REFRESH_INTERVAL_TICKS) == 0;
         boolean hasExpiredSources = state.sources.hasTransientExpired(level, tick);
         if (hasExpiredSources && state.sources.pruneExpired(level, tick)) markDirty(state);
 
@@ -399,7 +420,7 @@ public final class DebugRendererSessionManager {
                 && observationCache.needsPathfindingRefresh();
         refreshObservations(state, level,
                 hasInteractionObservers,
-                hasPathObservers && (pathfindingCadence || pathfindingInvalidated),
+                hasPathObservers && (liveCadence || pathfindingInvalidated),
                 false);
 
         for (ServerPlayer player : level.players()) {
@@ -416,7 +437,7 @@ public final class DebugRendererSessionManager {
                     && session.lastCollisionRevision != ModelCollisionScene.revision(level);
             boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources
                     || collisionChanged
-                    || session.pathfindingEnabled && pathfindingCadence;
+                    || (session.pathfindingEnabled || session.forceFieldEnabled) && liveCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
             DebugSnapshotAssembler.Snapshot snapshot = collectSnapshot(state, player, session);
@@ -477,6 +498,13 @@ public final class DebugRendererSessionManager {
 
     public static void removeSourceShapes(ServerLevel level, DebugSourceId sourceId) {
         removeSource(level, sourceId);
+    }
+
+    /** Real retained server geometry resources, independent of per-player debug visibility/radius. */
+    public static void visitWorldQuery(ServerLevel level,
+            java.util.function.Predicate<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> visitor) {
+        var state = getState(level.getServer());
+        if (state != null) state.sources.visitWorldQuery(level, visitor);
     }
 
     public static void replaceSourceGeometry(ServerLevel level,
@@ -817,6 +845,7 @@ public final class DebugRendererSessionManager {
         private final CollisionDebugProvider collision = new CollisionDebugProvider(true);
         private boolean interactionEnabled;
         private boolean pathfindingEnabled;
+        private boolean forceFieldEnabled;
         private Vec3 lastPosition;
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
@@ -824,7 +853,7 @@ public final class DebugRendererSessionManager {
         private long lastSignature = Long.MIN_VALUE;
 
         private boolean hasAnyChannel() {
-            return areaEnabled || schematicEnabled || geometryEnabled || modelCollisionEnabled || collisionEnabled || interactionEnabled || pathfindingEnabled;
+            return areaEnabled || schematicEnabled || geometryEnabled || modelCollisionEnabled || collisionEnabled || interactionEnabled || pathfindingEnabled || forceFieldEnabled;
         }
 
         private int channelMask() {
@@ -834,6 +863,7 @@ public final class DebugRendererSessionManager {
             if (geometryEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.GEOMETRY);
             if (interactionEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.INTERACTION);
             if (pathfindingEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.PATHFINDING);
+            if (forceFieldEnabled) mask |= DebugSnapshotAssembler.channelBit(DebugRenderChannel.FORCE_FIELD);
             return mask;
         }
 

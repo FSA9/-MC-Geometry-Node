@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

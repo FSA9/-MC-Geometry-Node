@@ -7,8 +7,8 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelConte
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelRegistry;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

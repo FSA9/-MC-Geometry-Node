@@ -11,13 +11,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class ClientDataLibraryRepository implements DataLibraryUiRepository {
     public static final ClientDataLibraryRepository INSTANCE = new ClientDataLibraryRepository();
 
-    private final RemoteDataLibraryGateway remote = NetworkRemoteDataLibraryGateway.INSTANCE;
+    private final RemoteDataLibraryGateway remote;
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final java.util.ArrayList<Runnable> pendingInitialLoad = new java.util.ArrayList<>();
     private boolean initialLoadInFlight;
     private long connectionGeneration;
 
-    private ClientDataLibraryRepository() {}
+    private ClientDataLibraryRepository() { this(NetworkRemoteDataLibraryGateway.INSTANCE); }
+
+    ClientDataLibraryRepository(RemoteDataLibraryGateway remote) {
+        this.remote = java.util.Objects.requireNonNull(remote);
+    }
 
     @Override
     public List<Folder> folders() {
@@ -69,15 +73,14 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
 
     @Override
     public void create(UUID parentId, PortType type) {
-        Entry entry = new Entry(UUID.randomUUID(), parentId, type,
-                uniqueKey(parentId, type), type.getDefaultValue());
-        remote.create(entry, this::notifyChanged);
+        remote.create(() -> new Entry(UUID.randomUUID(), parentId, type,
+                uniqueKey(parentId, type), type.getDefaultValue()), this::notifyChanged);
     }
 
     @Override
     public void createFolder(UUID parentId) {
-        Folder folder = new Folder(UUID.randomUUID(), parentId, uniqueFolderName(parentId));
-        remote.createFolder(folder, this::notifyChanged);
+        remote.createFolder(() -> new Folder(UUID.randomUUID(), parentId, uniqueFolderName(parentId)),
+                this::notifyChanged);
     }
 
     @Override

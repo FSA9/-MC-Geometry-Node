@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView
 
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;

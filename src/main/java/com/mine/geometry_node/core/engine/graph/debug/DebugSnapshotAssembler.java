@@ -46,6 +46,12 @@ final class DebugSnapshotAssembler {
             }
         }
 
+        if (isEnabled(channelMask, DebugRenderChannel.FORCE_FIELD)) {
+            for (GeometryDebugElement mesh : ForceFieldDebugProvider.collect(level, origin, radius)) {
+                candidates.add(new Candidate(mesh, mesh.center().distanceToSqr(origin)));
+            }
+        }
+
         if (observations != null && isEnabled(channelMask, DebugRenderChannel.INTERACTION)) {
             for (GeometryDebugElement mesh : observations.interactions()) {
                 // The provider already queried accessible entity sections. Level.isLoaded also

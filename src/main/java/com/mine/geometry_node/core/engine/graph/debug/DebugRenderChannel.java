@@ -5,7 +5,8 @@ public enum DebugRenderChannel {
     GEOMETRY("geometry", DebugRenderStyle.GEOMETRY.color()),
     SCHEMATIC("schematic", 0xFFB58CFF),
     INTERACTION("interaction", 0xFFF2B36D),
-    PATHFINDING("pathfinding", 0xFF4FC3E8);
+    PATHFINDING("pathfinding", 0xFF4FC3E8),
+    FORCE_FIELD("force_field", 0xFFCE93D8);
 
     private final String id;
     private final int color;

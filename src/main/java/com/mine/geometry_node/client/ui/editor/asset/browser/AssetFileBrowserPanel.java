@@ -2,16 +2,17 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
-import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
-import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.input.UiSearchSubmit;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
@@ -306,13 +307,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         UiSearchInput input = new UiSearchInput(context);
         input.setHint(hint);
         input.setOnQueryChanged(value -> pendingQuerySetter.accept(value.trim()));
-        input.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEY_ENTER) {
-                applySearch();
-                return true;
-            }
-            return false;
-        });
         return input;
     }
 
@@ -320,7 +314,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         UiIconButton btnSearch = createIconButton(context,
                 new SvgIconView(context, SvgIconView.Icon.SEARCH, UiTheme.Text.NORMAL),
                 tr("geometry_node.asset_library.toolbar.search"));
-        btnSearch.setOnClickListener(v -> applySearch());
+        UiSearchSubmit.bind(btnSearch, this::applySearch, mSearchInput, mTagSearchInput);
         LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
         navBar.addView(btnSearch, searchButtonLp);
     }

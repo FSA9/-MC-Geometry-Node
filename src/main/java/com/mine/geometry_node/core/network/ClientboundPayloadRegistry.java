@@ -70,6 +70,8 @@ public final class ClientboundPayloadRegistry {
         add(PacketCaptureEntityTemplateResponse.TYPE, PacketCaptureEntityTemplateResponse.STREAM_CODEC);
         add(PacketAssetPreviewResponse.TYPE, PacketAssetPreviewResponse.STREAM_CODEC);
         add(PacketRemoteDataLibraryResponse.TYPE, PacketRemoteDataLibraryResponse.STREAM_CODEC);
+        add(com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.TYPE,
+                com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.STREAM_CODEC);
     }
 
     private ClientboundPayloadRegistry() {

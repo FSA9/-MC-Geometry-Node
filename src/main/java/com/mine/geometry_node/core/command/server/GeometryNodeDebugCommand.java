@@ -90,6 +90,16 @@ public final class GeometryNodeDebugCommand {
                                                 .executes(GeometryNodeDebugCommand::disableInteraction)
                                         )
                                 )
+                                .then(Commands.literal("force_field")
+                                        .then(Commands.literal("on")
+                                                .executes(context -> DebugRendererSessionManager.enableForceField(
+                                                        context.getSource().getPlayerOrException(), DebugRendererSessionManager.DEFAULT_RADIUS))
+                                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0D, 2048.0D))
+                                                        .executes(context -> DebugRendererSessionManager.enableForceField(
+                                                                context.getSource().getPlayerOrException(), DoubleArgumentType.getDouble(context, "radius")))))
+                                        .then(Commands.literal("off")
+                                                .executes(context -> DebugRendererSessionManager.disableForceField(
+                                                        context.getSource().getPlayerOrException(), true))))
                                 .then(Commands.literal("pathfinding")
                                         .then(Commands.literal("on")
                                                 .executes(context -> enablePathfinding(context, DebugRendererSessionManager.DEFAULT_RADIUS))

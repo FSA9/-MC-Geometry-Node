@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
@@ -16,7 +18,6 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -203,25 +204,22 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
 
     private TextView choiceRow(Context context, ChoiceOverlay owner, SettingsChoice choice) {
         boolean selected = Objects.equals(owner.selected, choice.value());
-        TextView row = UIUtils.createLockedTextView(
-                context,
+        UiActionButton row = UiActionButton.withPalette(context,
                 (selected ? "\u2713  " : "    ") + choice.label(),
-                10.5f,
-                selected ? 0xFFFFFFFF : COLOR_TEXT
-        );
+                new UiActionButton.Palette(selected ? COLOR_SELECTED : 0, COLOR_HOVER,
+                        COLOR_SELECTED, selected ? 0xFFFFFFFF : COLOR_TEXT),
+                UiActionButton.Density.COMPACT,
+                new UiActionButton.Style(2, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+        row.setMinWidth(0);
+        row.setMinHeight(0);
+        row.setMinimumWidth(0);
+        row.setMinimumHeight(0);
+        row.setSingleLine(true);
+        UIUtils.setLockedTextSize(row, 10.5f);
         row.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(7.0f), 0, UIUtils.dp2pxInt(7.0f), 0);
         row.setClickable(true);
-        row.setBackground(selected ? background(COLOR_SELECTED, 0) : null);
         row.setOnClickListener(view -> select(owner, choice.value()));
-        row.setOnHoverListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                row.setBackground(background(COLOR_HOVER, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                row.setBackground(selected ? background(COLOR_SELECTED, 0) : null);
-            }
-            return true;
-        });
         return row;
     }
 

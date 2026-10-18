@@ -1,0 +1,127 @@
+package com.mine.geometry_node.client.ui.editor.database.sidebar;
+
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
+import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
+import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import icyllis.modernui.core.Context;
+import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.View;
+import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.TextView;
+
+import java.util.Set;
+import java.util.List;
+import java.util.stream.IntStream;
+
+import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.px;
+import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
+
+/** Registered database inspector; the selected source supplies every value and command. */
+public final class DatabaseDetailsPanel extends UiScrollView implements SidebarPanel {
+    public static final String PANEL_ID = "database_details";
+    public static final SidebarPanelDefinition DEFINITION = new SidebarPanelDefinition(
+            PANEL_ID, "geometry_node.database.details", 100, Set.of(SidebarPanelScope.DATA_LIBRARY),
+            context -> new DatabaseDetailsPanel(context.uiContext(), context.requireOwner(DatabaseWindow.class)),
+            SvgIconView.Icon.PROPERTIES);
+    private final DatabaseWindow owner;
+    private final LinearLayout content;
+    private DatabaseSelection current;
+    private boolean initialized;
+
+    private DatabaseDetailsPanel(Context context, DatabaseWindow owner) {
+        super(context);
+        this.owner = owner;
+        setHorizontalScrollBarEnabled(false);
+        content = DatabaseInspectorViews.vertical(context);
+        content.setPadding(px(18), px(17), px(18), px(18));
+        addView(content, new LayoutParams(-1, -2));
+        refresh();
+    }
+
+    @Override public View getView() { return this; }
+    @Override public void onSelected() { refresh(); }
+
+    public void refresh() {
+        DatabaseSelection selection = owner.selection();
+        boolean unchanged = initialized && (current == null ? selection == null : current.hasSamePresentation(selection));
+        current = selection;
+        if (unchanged) return;
+        initialized = true;
+        content.removeAllViews();
+        if (selection == null) {
+            showEmpty();
+            return;
+        }
+        View icon = selection.iconPath() == null || selection.iconPath().isBlank()
+                ? null
+                : new SvgIconView(getContext(), selection.iconPath(), selection.accent());
+        content.addView(DatabaseInspectorViews.identity(getContext(), selection.title(),
+                selection.subtitle(), icon, selection.accent()), new LinearLayout.LayoutParams(-1, -2));
+        if (!selection.actions().isEmpty()) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.topMargin = px(17);
+            // Callbacks can change with a new snapshot even if all displayed values stay identical.
+            List<DatabaseSelection.Action> actions = IntStream.range(0, selection.actions().size())
+                    .mapToObj(index -> new DatabaseSelection.Action(selection.actions().get(index).label(), () -> {
+                        if (current != null && index < current.actions().size()) current.actions().get(index).run().run();
+                    })).toList();
+            content.addView(DatabaseInspectorViews.actions(getContext(), actions), params);
+        }
+        if (!selection.fields().isEmpty()) {
+            LinearLayout section = DatabaseInspectorViews.section(getContext(), tr("details"), "");
+            for (DatabaseSelection.Field field : selection.fields()) addMetadata(section, field);
+            addSection(section);
+        }
+        for (DatabaseSelection.Section model : selection.sections()) {
+            LinearLayout section = DatabaseInspectorViews.section(getContext(), model.title(), model.subtitle());
+            switch (model.kind()) {
+                case POSITION -> section.addView(DatabaseInspectorViews.position(getContext(), model.fields()),
+                        new LinearLayout.LayoutParams(-1, -2));
+                case TAGS -> section.addView(DatabaseInspectorViews.tags(getContext(), model.fields()),
+                        new LinearLayout.LayoutParams(-1, -2));
+                case SOURCE -> section.addView(DatabaseInspectorViews.source(getContext(), model.fields()),
+                        new LinearLayout.LayoutParams(-1, -2));
+                case VALUE, REFERENCE -> {
+                    for (DatabaseSelection.Field field : model.fields()) {
+                        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+                        if (section.getChildCount() > 2) params.topMargin = px(6);
+                        section.addView(DatabaseInspectorViews.block(getContext(), field,
+                                model.kind() == DatabaseSelection.Kind.REFERENCE), params);
+                    }
+                }
+                case METADATA -> {
+                    for (DatabaseSelection.Field field : model.fields()) addMetadata(section, field);
+                }
+            }
+            addSection(section);
+        }
+    }
+
+    private void addMetadata(LinearLayout section, DatabaseSelection.Field field) {
+        section.addView(DatabaseInspectorViews.metadata(getContext(), field),
+                new LinearLayout.LayoutParams(-1, px(29)));
+    }
+
+    private void addSection(LinearLayout section) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = px(17);
+        content.addView(section, params);
+    }
+
+    private void showEmpty() {
+        LinearLayout empty = DatabaseInspectorViews.vertical(getContext());
+        empty.setGravity(Gravity.CENTER_HORIZONTAL);
+        empty.setPadding(px(8), px(24), px(8), px(24));
+        TextView hint = DatabaseInspectorViews.text(getContext(), tr("select_hint"), 11, UiTheme.Text.MUTED);
+        hint.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
+        hintParams.topMargin = px(14);
+        empty.addView(hint, hintParams);
+        content.addView(empty, new LinearLayout.LayoutParams(-1, -2));
+    }
+}

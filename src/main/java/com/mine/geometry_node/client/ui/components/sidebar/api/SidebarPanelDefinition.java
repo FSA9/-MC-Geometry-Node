@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.components.sidebar.api;
 
 import java.util.Objects;
 import java.util.Set;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 
 /**
  * Registration metadata and factory for one registration tab panel.

@@ -4,19 +4,16 @@ import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
-import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.TextView;
 
 public class SlotRefHintRenderer implements UIHintRenderer {
     @Override
@@ -29,9 +26,12 @@ public class SlotRefHintRenderer implements UIHintRenderer {
         String portId = row.leftPort().id();
         Object value = UIHintValueBinder.getValue(nodeData, row.leftPort());
         SlotRef slotRef = SlotRef.from(value);
-        SlotButton button = new SlotButton(context, slotRef != null ? slotRef : SlotRef.DEFAULT);
+        InlineActionButton button = new InlineActionButton(context,
+                (slotRef != null ? slotRef : SlotRef.DEFAULT).displayName());
+        button.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        button.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
         button.setOnClickListener(v -> VanillaInventoryPicker.openSlotRef(selected -> {
-            button.setSlotRef(selected);
+            button.setText(selected.displayName());
             UIHintValueBinder.commit(editorContext, nodeData, portId, selected.serialize());
         }, button::requestFocus));
         return button;
@@ -59,70 +59,5 @@ public class SlotRefHintRenderer implements UIHintRenderer {
         lp.leftMargin = UIUtils.dp2pxInt(startX);
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
         view.setLayoutParams(lp);
-    }
-
-    private static final class SlotButton extends TextView {
-        private SlotRef slotRef;
-        private boolean pressed;
-
-        private SlotButton(Context context, SlotRef slotRef) {
-            super(context);
-            setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
-            setTextColor(UIConstants.CLR_GRAY_LABEL);
-            UIUtils.setLockedTextSize(this, UIConstants.Node.TEXT_SIZE_LABEL);
-            setSingleLine(true);
-            setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-            setClickable(true);
-            setFocusable(true);
-            setFocusableInTouchMode(true);
-
-            ShapeDrawable bg = new ShapeDrawable();
-            bg.setColor(0xFF252525);
-            bg.setCornerRadius(UIUtils.dp2px(2.0f));
-            bg.setStroke(UIUtils.dp2pxInt(1), 0xFF333333);
-            setBackground(bg);
-            setSlotRef(slotRef);
-        }
-
-        private void setSlotRef(SlotRef slotRef) {
-            this.slotRef = slotRef != null ? slotRef : SlotRef.DEFAULT;
-            setText(this.slotRef.displayName());
-        }
-
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            return onTouchEvent(event);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN) {
-                requestFocus();
-                pressed = true;
-                setPressed(true);
-                return true;
-            }
-            if (action == MotionEvent.ACTION_UP) {
-                boolean wasPressed = pressed;
-                pressed = false;
-                setPressed(false);
-                if (wasPressed) {
-                    performClick();
-                }
-                return true;
-            }
-            if (action == MotionEvent.ACTION_CANCEL) {
-                pressed = false;
-                setPressed(false);
-                return true;
-            }
-            return true;
-        }
-
-        @Override
-        public PointerIcon onResolvePointerIcon(MotionEvent event) {
-            return PointerIcon.getSystemIcon(PointerIcon.TYPE_HAND);
-        }
     }
 }

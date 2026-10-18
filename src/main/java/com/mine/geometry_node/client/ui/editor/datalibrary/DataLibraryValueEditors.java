@@ -3,15 +3,15 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FilePickerDialog;
-import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
@@ -211,11 +211,11 @@ final class DataLibraryValueEditors {
         } else if (entry.type() == PortType.XYZ) {
             return createXyzValueEditor(current);
         } else if (entry.type() == PortType.AREA) {
-            TextView summary = label(getContext(), areaSummary(entry.value()), 10.5f, TEXT);
+            TextView summary = label(getContext(), areaSummary(entry.value()), 11, TEXT);
             summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             return summary;
         } else if (isSummaryType(entry.type())) {
-            TextView summary = label(getContext(), valueSummary(entry), 10.5f, TEXT);
+            TextView summary = label(getContext(), valueSummary(entry), 11, TEXT);
             summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             return summary;
         } else if (isInlineValueType(entry.type())) {
@@ -428,9 +428,10 @@ final class DataLibraryValueEditors {
     private void commitXyzComponent(AtomicReference<DataLibraryUiRepository.Entry> current,
                                     int component, String text) {
         try {
-            float value = Float.parseFloat(text.trim());
+            double value = Double.parseDouble(text.trim());
+            if (!Double.isFinite(value)) return;
             List<Double> values = new ArrayList<>(xyzComponents(current.get().value()));
-            values.set(component, (double) value);
+            values.set(component, value);
             updateValue(current, List.copyOf(values));
         } catch (NumberFormatException ignored) {
             // Keep the previous component when the temporary editor text is incomplete.
@@ -451,7 +452,9 @@ final class DataLibraryValueEditors {
     }
 
     private static String formatNumber(double value) {
-        return value == Math.rint(value) ? Long.toString((long) value) : Double.toString(value);
+        if (value == Math.rint(value) && value >= -0x1p63 && value < 0x1p63) return Long.toString((long) value);
+        // The numeric input filter rejects exponent markers, so keep large/small values in plain decimal.
+        return Double.isFinite(value) ? java.math.BigDecimal.valueOf(value).toPlainString() : Double.toString(value);
     }
 
     private static String valueSummary(DataLibraryUiRepository.Entry entry) {
@@ -487,7 +490,6 @@ final class DataLibraryValueEditors {
         host.addView(label, new LayoutParams(0, px(28), 1));
         UiCheckBox valueCheckBox = new UiCheckBox(getContext());
         valueCheckBox.setContentDescription(tr("geometry_node.data_library.edit_value"));
-        valueCheckBox.setTooltipText(tr("geometry_node.data_library.edit_value"));
         valueCheckBox.setChecked(Boolean.TRUE.equals(entry.value()));
         valueCheckBox.setOnCheckedChangeListener((button, checked) -> updateValue(current, checked));
         host.addView(valueCheckBox, fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP));
@@ -650,7 +652,13 @@ final class DataLibraryValueEditors {
     }
 
     private static UiActionButton button(Context context, String text, UiActionButton.Role role) {
-        return new UiActionButton(context, text, role, UiActionButton.Density.COMPACT);
+        UiActionButton button = new UiActionButton(context, text, role, UiActionButton.Density.COMPACT);
+        button.setMinWidth(0);
+        button.setMinHeight(0);
+        button.setPadding(px(8), 0, px(8), 0);
+        button.setSingleLine(true);
+        UIUtils.setLockedTextSize(button, 11);
+        return button;
     }
 
     private static TextView label(Context context, String text, float size, int color) {

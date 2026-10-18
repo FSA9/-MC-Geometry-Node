@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.components.valuepreview;
 
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerRenderer;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerRendererRegistry;
 import com.mine.geometry_node.core.engine.system.marker.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;

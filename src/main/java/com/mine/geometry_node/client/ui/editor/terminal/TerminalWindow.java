@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.terminal.TerminalSession;
 import com.mine.geometry_node.client.terminal.TerminalMode;
 import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;

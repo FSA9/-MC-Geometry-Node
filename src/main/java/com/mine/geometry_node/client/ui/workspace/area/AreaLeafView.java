@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;

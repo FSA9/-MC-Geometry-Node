@@ -1,9 +1,8 @@
 package com.mine.geometry_node.client.ui.components.overlay;
 
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.common.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;

@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.ButtonHintActionDispatcher;
@@ -10,11 +13,9 @@ import com.mine.geometry_node.core.node.meta.MetaKey;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
-import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
 public class ButtonHintRenderer implements UIHintRenderer {
@@ -44,14 +45,10 @@ public class ButtonHintRenderer implements UIHintRenderer {
         );
         String action = hintString(row, PortMetaKeys.BUTTON_ACTION);
 
-        TextView button = new TextView(context);
-        button.setText(displayLabel(label));
-        button.setGravity(Gravity.CENTER);
-        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
-        button.setTextColor(textColor);
-        button.setSingleLine(true);
+        InlineActionButton button = new InlineActionButton(context, displayLabel(label));
+        button.setPalette(new UiActionButton.Palette(bgColor, bgColor, bgColor, textColor));
+        button.setStyle(new UiActionButton.Style(2, 1, DEFAULT_STROKE, UiTheme.Metrics.DISABLED_ALPHA));
         button.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6), 0);
-        button.setBackground(buttonBackground(bgColor));
         button.setOnClickListener(v -> ButtonHintActionDispatcher.dispatch(editorContext, nodeData, row, action, v));
         return button;
     }
@@ -79,14 +76,6 @@ public class ButtonHintRenderer implements UIHintRenderer {
         lp.leftMargin = UIUtils.dp2pxInt(startX);
         lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
         view.setLayoutParams(lp);
-    }
-
-    private static ShapeDrawable buttonBackground(int bgColor) {
-        ShapeDrawable bg = new ShapeDrawable();
-        bg.setColor(bgColor);
-        bg.setCornerRadius(UIUtils.dp2px(2.0f));
-        bg.setStroke(UIUtils.dp2pxInt(1), DEFAULT_STROKE);
-        return bg;
     }
 
     private static String hintString(PortRow row, MetaKey<String> key) {

@@ -1,9 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.graphics.Canvas;
+import icyllis.modernui.graphics.Paint;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -18,7 +24,11 @@ final class DataLibraryDragSurface extends LinearLayout {
     private boolean pressed;
     private boolean dragging;
     private boolean secondaryPressed;
+    private final Paint rowPaint = new Paint();
+    private boolean resultRow;
+    private UiActionButton.Palette resultRowPalette;
     boolean shiftPressed;
+    boolean ctrlPressed;
 
     DataLibraryDragSurface(Context context, View source, Supplier<DataLibraryDragPayload> payload,
                            Runnable pressedAction, Runnable finishAction, Consumer<MotionEvent> draggedAction) {
@@ -68,10 +78,46 @@ final class DataLibraryDragSurface extends LinearLayout {
         return super.dispatchTouchEvent(event);
     }
 
+    void setResultRow() {
+        resultRow = true;
+        setWillNotDraw(false);
+        invalidate();
+    }
+
+    void setResultRowPalette(UiActionButton.Palette palette) {
+        resultRowPalette = palette;
+        applyResultRowPalette();
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        applyResultRowPalette();
+    }
+
+    private void applyResultRowPalette() {
+        if (!resultRow || resultRowPalette == null) return;
+        int color = !isEnabled() ? resultRowPalette.normal()
+                : isPressed() ? resultRowPalette.pressed()
+                : isHovered() ? resultRowPalette.hover() : resultRowPalette.normal();
+        ShapeDrawable background = new ShapeDrawable();
+        background.setColor(color);
+        setBackground(background);
+    }
+
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        if (!resultRow) return;
+        rowPaint.setColor(UiTableStyle.DIVIDER_COLOR);
+        canvas.drawRect(0, getHeight() - Math.max(1, UIUtils.dp2pxInt(1)), getWidth(), getHeight(), rowPaint);
+    }
+
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
         shiftPressed = event.isShiftPressed();
+        ctrlPressed = event.isCtrlPressed();
         if (action == MotionEvent.ACTION_DOWN) {
             secondaryPressed = (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0
                     || event.getActionButton() == MotionEvent.BUTTON_SECONDARY;

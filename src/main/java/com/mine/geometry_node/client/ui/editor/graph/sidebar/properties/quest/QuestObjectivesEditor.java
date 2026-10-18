@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
 import com.mine.geometry_node.client.runtime.quest.ui.QuestHintView;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
-import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;

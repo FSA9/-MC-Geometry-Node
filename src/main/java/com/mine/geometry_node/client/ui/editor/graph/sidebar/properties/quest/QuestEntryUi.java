@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
-import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;

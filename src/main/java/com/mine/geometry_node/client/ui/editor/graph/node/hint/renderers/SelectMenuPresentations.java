@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.components.menu.grid.UiGridMenu;
+import com.mine.geometry_node.client.ui.components.menu.UiGridMenu;
 import com.mine.geometry_node.client.ui.components.valuepreview.MarkerTypePreview;
 import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;

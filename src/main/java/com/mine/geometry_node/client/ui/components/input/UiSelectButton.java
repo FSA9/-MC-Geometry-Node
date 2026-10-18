@@ -33,8 +33,6 @@ public final class UiSelectButton extends View {
     private final FontMetricsInt mMetrics = new FontMetricsInt();
     private ShapedText mValueText;
     private ShapedText mArrowText;
-    private boolean mHovered;
-    private boolean mPressed;
 
     public UiSelectButton(Context context, String value, float textSizeDp,
                           java.util.function.DoubleSupplier cornerRadius) {
@@ -68,13 +66,14 @@ public final class UiSelectButton extends View {
         float radius = UIUtils.dp2px((float) cornerRadius.getAsDouble());
         float stroke = UIUtils.dp2px(1.0f);
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mPressed ? COLOR_BUTTON_BG_ACTIVE : (mHovered ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG));
+        mPaint.setColor(isEnabled() && isPressed() ? COLOR_BUTTON_BG_ACTIVE
+                : isEnabled() && isHovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG);
         mRect.set(0, 0, w, h);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(isEnabled() && (isFocused() || mHovered) ? COLOR_BUTTON_BORDER_HOVER : COLOR_BUTTON_BORDER);
+        mPaint.setColor(isEnabled() && (isFocused() || isHovered()) ? COLOR_BUTTON_BORDER_HOVER : COLOR_BUTTON_BORDER);
         mRect.set(stroke * 0.5f, stroke * 0.5f, w - stroke * 0.5f, h - stroke * 0.5f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
@@ -103,17 +102,9 @@ public final class UiSelectButton extends View {
     @Override
     protected void drawableStateChanged() {
         super.drawableStateChanged();
-        if (!isEnabled()) {
-            mPressed = false;
-            mHovered = false;
-        }
+        if (!isEnabled() && isPressed()) setPressed(false);
         setAlpha(isEnabled() ? 1 : UiTheme.Metrics.DISABLED_ALPHA);
         invalidate();
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        return onTouchEvent(event);
     }
 
     @Override
@@ -122,47 +113,28 @@ public final class UiSelectButton extends View {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             requestFocus();
-            mPressed = true;
-            invalidate();
+            setPressed(true);
             return true;
         }
         if (action == MotionEvent.ACTION_UP) {
-            boolean wasPressed = mPressed;
-            mPressed = false;
-            invalidate();
-            if (wasPressed) {
+            boolean wasPressed = isPressed();
+            setPressed(false);
+            if (wasPressed && containsPointer(event)) {
                 performClick();
             }
             return true;
         }
         if (action == MotionEvent.ACTION_CANCEL) {
-            mPressed = false;
-            invalidate();
+            setPressed(false);
             return true;
         }
+        if (action == MotionEvent.ACTION_MOVE && !containsPointer(event)) setPressed(false);
         return true;
     }
 
-    @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        int action = event.getActionMasked();
-        if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
-            setControlHovered(true);
-            return true;
-        }
-        if (action == MotionEvent.ACTION_HOVER_EXIT) {
-            setControlHovered(false);
-            return true;
-        }
-        return super.dispatchGenericMotionEvent(event);
-    }
-
-    private void setControlHovered(boolean hovered) {
-        if (mHovered == hovered) {
-            return;
-        }
-        mHovered = hovered;
-        invalidate();
+    private boolean containsPointer(MotionEvent event) {
+        return event.getX() >= 0 && event.getX() < getWidth()
+                && event.getY() >= 0 && event.getY() < getHeight();
     }
 
     private ShapedText shape(String text) {

@@ -1,14 +1,17 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.components.input.ColorSwatchView;
+import com.mine.geometry_node.client.ui.components.input.UiGradientStopEditor;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.input.UiSelectButton;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.functions.color.ColorRamp;
@@ -19,15 +22,10 @@ import com.mine.geometry_node.core.node.value.color.ColorGradientValue.ColorStop
 import com.mine.geometry_node.core.node.value.color.ColorGradientValue.Interpolation;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.Canvas;
-import icyllis.modernui.graphics.Paint;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.TextView;
 
 import java.util.List;
 import java.util.Map;
@@ -44,15 +42,12 @@ final class ColorRampView extends LinearLayout {
 
     private static final float TOOL_BUTTON_WIDTH_DP = 20.0f;
     private static final float STOP_FIELD_WIDTH_DP = 35.0f;
-    private static final int COLOR_FIELD = 0xFF252525;
-    private static final int COLOR_FIELD_BORDER = 0xFF333333;
-    private static final int COLOR_TEXT = UIConstants.CLR_GRAY_LABEL;
 
     private final NodeData mNodeData;
     private final EditorContext mEditorContext;
 
     private ColorGradientValue mGradient;
-    private GradientBarView mGradientBar;
+    private UiGradientStopEditor mGradientBar;
     private UiSelectButton mModeSelect;
     private UiSelectButton mInterpolationSelect;
     private NumericInputView mIndexInput;
@@ -95,7 +90,15 @@ final class ColorRampView extends LinearLayout {
                 interpolationOptions(mGradient.mode()), value -> commit(mGradient.withInterpolation(interpolationFromLabel(value)))));
         addView(mInterpolationSelect, fullRow());
 
-        mGradientBar = new GradientBarView(context);
+        mGradientBar = new UiGradientStopEditor(context, new UiGradientStopEditor.Binding() {
+            @Override public ColorGradientValue currentValue() { return readGradient(); }
+            @Override public Object currentCommitValue() { return currentStoredGradientValue(); }
+            @Override public void preview(ColorGradientValue value) { previewDrag(value); }
+            @Override public boolean commit(Object expected, ColorGradientValue value) {
+                return commitGradient(expected, value);
+            }
+        }, new UiGradientStopEditor.Style(CONTROL_HEIGHT_DP, GRADIENT_MARKER_GAP_DP,
+                GRADIENT_MARKER_DIAMETER_DP, 1));
         addView(mGradientBar, rowLp(GRADIENT_ROW_HEIGHT_DP));
 
         LinearLayout fields = row(context);
@@ -109,13 +112,8 @@ final class ColorRampView extends LinearLayout {
         addView(mColorSwatch, rowLp(CONTROL_HEIGHT_DP));
     }
 
-    private TextView button(Context context, String text, View.OnClickListener listener) {
-        TextView button = new TextView(context);
-        button.setText(text);
-        UIUtils.setLockedTextSize(button, UIConstants.Node.TEXT_SIZE_LABEL);
-        button.setTextColor(COLOR_TEXT);
-        button.setGravity(Gravity.CENTER);
-        button.setBackground(rect(COLOR_FIELD, 2.0f, 1, COLOR_FIELD_BORDER));
+    private InlineActionButton button(Context context, String text, View.OnClickListener listener) {
+        InlineActionButton button = new InlineActionButton(context, text);
         button.setOnClickListener(listener);
         return button;
     }
@@ -190,7 +188,7 @@ final class ColorRampView extends LinearLayout {
             mColorSwatch.setColor(selectedColor());
         }
         if (mGradientBar != null) {
-            mGradientBar.invalidate();
+            mGradientBar.setGradient(mGradient);
         }
     }
 
@@ -244,16 +242,6 @@ final class ColorRampView extends LinearLayout {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(widthDp), ViewGroup.LayoutParams.MATCH_PARENT);
         lp.setMargins(0, 0, UIUtils.dp2pxInt(GAP_DP), 0);
         return lp;
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeDp), strokeColor);
-        }
-        return drawable;
     }
 
     private boolean commitGradient(Object oldValue, ColorGradientValue next) {
@@ -339,189 +327,4 @@ final class ColorRampView extends LinearLayout {
         }
     }
 
-    private final class GradientBarView extends View {
-        private static final int COLOR_SELECTED = 0xFFFFFFFF;
-        private static final int COLOR_STOP = 0xFF101010;
-        private static final float MARKER_RADIUS_DP = GRADIENT_MARKER_DIAMETER_DP * 0.5f;
-        private static final float MARKER_HIT_PADDING_DP = 1.0f;
-
-        private final Paint mPaint = new Paint();
-        private boolean mDragging;
-        private float mDragWidthPx;
-        private Object mDragOldValue;
-
-        GradientBarView(Context context) {
-            super(context);
-            setWillNotDraw(false);
-            setFocusable(true);
-            setFocusableInTouchMode(true);
-            mPaint.setAntiAlias(true);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float w = getWidth();
-            float h = getHeight();
-            if (w <= 0 || h <= 0) {
-                return;
-            }
-
-            float barBottom = gradientTrackBottom(h);
-            drawGradientTrack(canvas, w, barBottom);
-            drawStopGuideLines(canvas, w, barBottom);
-
-            for (int i = 0; i < mGradient.stops().size(); i++) {
-                drawStop(canvas, i, w, barBottom);
-            }
-        }
-
-        private void drawStopGuideLines(Canvas canvas, float width, float barBottom) {
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setAntiAlias(false);
-            mPaint.setStrokeWidth(UIUtils.dp2px(1.0f));
-            for (int i = 0; i < mGradient.stops().size(); i++) {
-                float x = mGradient.stops().get(i).position() * width;
-                mPaint.setColor(i == mGradient.selectedIndex() ? COLOR_SELECTED : COLOR_STOP);
-                canvas.drawLine(x, 0, x, barBottom, mPaint);
-            }
-        }
-
-        private void drawStop(Canvas canvas, int index, float width, float barBottom) {
-            ColorStop stop = mGradient.stops().get(index);
-            float x = stop.position() * width;
-            float y = markerCenterY(barBottom);
-            float radius = UIUtils.dp2px(MARKER_RADIUS_DP);
-
-            mPaint.setStyle(Paint.Style.FILL);
-            mPaint.setAntiAlias(true);
-            mPaint.setColor(stop.color().toArgb());
-            canvas.drawCircle(x, y, radius, mPaint);
-
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(UIUtils.dp2px(1.0f));
-            mPaint.setColor(index == mGradient.selectedIndex() ? COLOR_SELECTED : COLOR_STOP);
-            canvas.drawCircle(x, y, radius - UIUtils.dp2px(0.5f), mPaint);
-        }
-
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            return onTouchEvent(event);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            int action = event.getActionMasked();
-            if (action == MotionEvent.ACTION_DOWN) {
-                requestFocus();
-                refreshUi(false);
-                mDragWidthPx = Math.max(1.0f, getWidth());
-                float barBottom = gradientTrackBottom(getHeight());
-                int hitIndex = hitStop(event.getX(), event.getY(), mDragWidthPx, barBottom);
-                if (hitIndex < 0) {
-                    mDragging = false;
-                    return true;
-                }
-                requestDisallowParentIntercept(true);
-                mDragging = true;
-                mDragOldValue = currentStoredGradientValue();
-                selectStop(hitIndex);
-                return true;
-            }
-            if (action == MotionEvent.ACTION_MOVE) {
-                if (mDragging) {
-                    float position = clamp01(event.getX() / mDragWidthPx);
-                    previewDrag(mGradient.withSelectedPosition(position));
-                }
-                return true;
-            }
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                boolean wasDragging = mDragging;
-                mDragging = false;
-                requestDisallowParentIntercept(false);
-                if (wasDragging) {
-                    if (action == MotionEvent.ACTION_CANCEL) {
-                        refreshUi(false);
-                    } else {
-                        commitGradient(mDragOldValue, mGradient);
-                    }
-                }
-                return true;
-            }
-            return true;
-        }
-
-        private void drawGradientTrack(Canvas canvas, float width, float barBottom) {
-            mPaint.setStyle(Paint.Style.FILL);
-            mPaint.setAntiAlias(false);
-            if (mGradient.interpolation() == Interpolation.CONSTANT) {
-                drawConstantGradient(canvas, width, barBottom);
-                return;
-            }
-
-            int columns = Math.max(1, (int) Math.ceil(width));
-            float overlap = 1.0f;
-            for (int x = 0; x < columns; x++) {
-                float position = columns <= 1 ? 0.0f : x / (float) (columns - 1);
-                mPaint.setColor(mGradient.sample(position).toArgb());
-                canvas.drawRect(x, 0, Math.min(width, x + 1.0f + overlap), barBottom, mPaint);
-            }
-        }
-
-        private void drawConstantGradient(Canvas canvas, float width, float barBottom) {
-            List<ColorStop> stops = mGradient.stops();
-            float overlap = 1.0f;
-            for (int i = 0; i < stops.size(); i++) {
-                ColorStop stop = stops.get(i);
-                float left = i == 0 ? 0.0f : stop.position() * width;
-                float right = i + 1 < stops.size() ? stops.get(i + 1).position() * width : width;
-                mPaint.setColor(stop.color().toArgb());
-                canvas.drawRect(left, 0, Math.min(width, right + overlap), barBottom, mPaint);
-            }
-        }
-
-        private int hitStop(float x, float y, float width, float barBottom) {
-            for (int i = mGradient.stops().size() - 1; i >= 0; i--) {
-                float markerX = mGradient.stops().get(i).position() * width;
-                if (isInsideMarker(x, y, markerX, markerCenterY(barBottom))) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        private boolean isInsideMarker(float x, float y, float markerX, float markerY) {
-            float padding = UIUtils.dp2px(MARKER_HIT_PADDING_DP);
-            float radius = UIUtils.dp2px(MARKER_RADIUS_DP) + padding;
-            float dx = x - markerX;
-            float dy = y - markerY;
-            return dx * dx + dy * dy <= radius * radius;
-        }
-
-        private float gradientTrackBottom(float height) {
-            return Math.min(height, UIUtils.dp2px(CONTROL_HEIGHT_DP));
-        }
-
-        private float markerCenterY(float barBottom) {
-            return barBottom + UIUtils.dp2px(GRADIENT_MARKER_GAP_DP + MARKER_RADIUS_DP);
-        }
-
-        private void selectStop(int index) {
-            mGradient = mGradient.withSelectedIndex(index);
-            previewDrag(mGradient);
-        }
-
-        private void requestDisallowParentIntercept(boolean disallow) {
-            icyllis.modernui.view.ViewParent parent = getParent();
-            while (parent != null) {
-                parent.requestDisallowInterceptTouchEvent(disallow);
-                parent = parent.getParent();
-            }
-        }
-
-    }
-
-    private static float clamp01(float value) {
-        return Math.max(0.0f, Math.min(1.0f, value));
-    }
 }

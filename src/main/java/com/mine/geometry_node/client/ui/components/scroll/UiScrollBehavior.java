@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.scroll;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 
@@ -20,6 +21,24 @@ final class UiScrollBehavior {
         // Outside means the track sits at the view edge, independently of user padding.
         // Inset reserves its width so no child button is painted underneath it.
         host.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_INSET);
+        // Native line strokes use the toolkit density and can exceed our scaled track.
+        // Filled rectangles stay inside the bounds that native scrollbar fading invalidates.
+        ShapeDrawable thumb = barDrawable(0x84ffffff);
+        ShapeDrawable track = barDrawable(0x39ffffff);
+        if (horizontal) {
+            host.setHorizontalScrollbarThumbDrawable(thumb);
+            host.setHorizontalScrollbarTrackDrawable(track);
+        } else {
+            host.setVerticalScrollbarThumbDrawable(thumb);
+            host.setVerticalScrollbarTrackDrawable(track);
+        }
+    }
+
+    private static ShapeDrawable barDrawable(int color) {
+        ShapeDrawable drawable = new ShapeDrawable();
+        drawable.setShape(ShapeDrawable.RECTANGLE);
+        drawable.setColor(color);
+        return drawable;
     }
 
     void syncSize(View host) {

@@ -1,16 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils;
 
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -79,7 +78,7 @@ public final class GraphPropertiesUi {
         return input;
     }
 
-    public static TextView button(
+    public static UiActionButton button(
             Context context,
             String text,
             String tooltip,
@@ -135,23 +134,6 @@ public final class GraphPropertiesUi {
         down.setOnClickListener(v -> moveDown.run());
         order.addView(down, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         return order;
-    }
-
-    public static void styleButton(View button, int normalColor, int hoverColor) {
-        if (button instanceof UiActionButton action) {
-            action.setPalette(new UiActionButton.Palette(normalColor, hoverColor, hoverColor,
-                    action.palette().text()));
-            return;
-        }
-        button.setBackground(rect(normalColor, 3.0f, 0, 0));
-        button.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                v.setBackground(rect(hoverColor, 3.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                v.setBackground(rect(normalColor, 3.0f, 0, 0));
-            }
-            return false;
-        });
     }
 
     public static ShapeDrawable rect(int color, float radiusDp) {

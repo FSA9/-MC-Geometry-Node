@@ -156,6 +156,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     public void openTemplateEditor() {
+        if (!isEnabled()) return;
         if (mDisplayClickAction != null) {
             mDisplayClickAction.run();
         } else {
@@ -265,13 +266,13 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        if (!mEditable) return false;
+        if (!isEnabled() || !mEditable) return false;
         return onTouchEvent(event);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!mEditable) return false;
+        if (!isEnabled() || !mEditable) return false;
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             mPressed = true;
@@ -330,7 +331,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (isFocused()) {
+        if (isEnabled() && mEditable && isFocused()) {
             KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
             if (copy != null && UiInputBindings.matches(copy, event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) sClipboardTemplate = mDisplayTemplate;
@@ -345,6 +346,17 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        if (!isEnabled()) {
+            mPressed = false;
+            mDragging = false;
+            if (isPressed()) setPressed(false);
+        }
+        invalidate();
     }
 
     protected void commitTemplate(EntityTemplateValue template) {

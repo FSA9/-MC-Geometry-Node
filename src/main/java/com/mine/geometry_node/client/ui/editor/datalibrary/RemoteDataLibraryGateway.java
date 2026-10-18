@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** Network boundary for the server-authoritative Data Library. */
 public interface RemoteDataLibraryGateway {
@@ -17,7 +18,8 @@ public interface RemoteDataLibraryGateway {
 
     void refresh(Runnable completion);
 
-    void create(DataLibraryUiRepository.Entry entry, Runnable completion);
+    /** Evaluated when the serialized mutation starts, after earlier mutations have refreshed the snapshot. */
+    void create(Supplier<DataLibraryUiRepository.Entry> entry, Runnable completion);
 
     void update(DataLibraryUiRepository.Entry expected, DataLibraryUiRepository.Entry replacement,
                 Runnable completion);
@@ -25,7 +27,7 @@ public interface RemoteDataLibraryGateway {
     void delete(Set<DataLibraryUiRepository.EntryKey> entries, Set<java.util.UUID> folders,
                 Runnable completion);
 
-    void createFolder(DataLibraryUiRepository.Folder folder, Runnable completion);
+    void createFolder(Supplier<DataLibraryUiRepository.Folder> folder, Runnable completion);
 
     void updateFolder(DataLibraryUiRepository.Folder expected, DataLibraryUiRepository.Folder replacement,
                       Runnable completion);

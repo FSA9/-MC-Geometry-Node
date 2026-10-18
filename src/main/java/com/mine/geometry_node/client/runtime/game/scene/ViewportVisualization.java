@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Per-view presentation, never changes the actual scene object's enabled state. */
 public final class ViewportVisualization {
-    public enum Layer { LIGHT, GEOMETRY, MODEL, SCHEMATIC, AREA, COLLISION, MODEL_COLLISION, INTERACTION, PATHFINDING, ENTITY }
+    public enum Layer { LIGHT, GEOMETRY, MODEL, SCHEMATIC, AREA, COLLISION, MODEL_COLLISION, INTERACTION, PATHFINDING, FORCE_FIELD, ENTITY }
     public record Snapshot(Set<Layer> visible, Set<Layer> selectable, boolean helpers, boolean gizmo, boolean grid) {
         public Snapshot(Set<Layer> visible, Set<Layer> selectable, boolean helpers, boolean gizmo) {
             this(visible, selectable, helpers, gizmo, false);

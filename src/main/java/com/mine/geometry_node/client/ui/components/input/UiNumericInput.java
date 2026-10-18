@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.components.input;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
 
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -165,8 +164,10 @@ public class UiNumericInput extends FrameLayout {
         super.drawableStateChanged();
         setAlpha(isEnabled() ? 1 : UiTheme.Metrics.DISABLED_ALPHA);
         if (mSpec != null && !isEnabled()) {
-            mPressed = false;
-            mDragging = false;
+            // A child EditText stays enabled when its parent is disabled. Cancel its draft
+            // now so re-enabling the control cannot commit a stale edit on later focus loss.
+            closeEditor(false);
+            clearInteractionState();
             setDisplayValue(mCommittedValue, false);
         }
         invalidate();
@@ -431,6 +432,7 @@ public class UiNumericInput extends FrameLayout {
     }
 
     private void setControlHovered(boolean hovered) {
+        hovered &= isEnabled();
         if (mHovered == hovered) {
             return;
         }

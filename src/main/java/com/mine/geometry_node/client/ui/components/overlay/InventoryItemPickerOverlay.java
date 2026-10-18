@@ -334,6 +334,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         private final float visualScale;
         private MinecraftSurfaceView surfaceView;
         private ItemStack stack;
+        private boolean pointerPressed;
 
         public ItemStackView(Context context, ItemStack stack, Consumer<ItemStack> onPicked, boolean pickOnClick) {
             this(context, stack, onPicked, pickOnClick, 1.0f);
@@ -431,6 +432,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
         @Override
         public boolean dispatchGenericMotionEvent(MotionEvent event) {
+            if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) return super.dispatchGenericMotionEvent(event);
             handleHover(event);
             super.dispatchGenericMotionEvent(event);
             return true;
@@ -461,6 +463,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
         @Override
         protected void onDetachedFromWindow() {
+            pointerPressed = false;
             super.onDetachedFromWindow();
             ItemTooltipProxy.clearTooltipTask();
             ItemStackTooltipOverlay.hide();
@@ -473,13 +476,31 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            if (event.getActionMasked() == MotionEvent.ACTION_UP && pickOnClick) {
-                if (onPicked != null) {
-                    onPicked.accept(stack.copy());
+            if (!isEnabled()) return false;
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN -> pointerPressed = true;
+                case MotionEvent.ACTION_MOVE -> {
+                    if (!containsPointer(event)) pointerPressed = false;
                 }
-                return true;
+                case MotionEvent.ACTION_UP -> {
+                    boolean picked = pointerPressed && containsPointer(event);
+                    pointerPressed = false;
+                    if (picked && pickOnClick && onPicked != null) onPicked.accept(stack.copy());
+                }
+                case MotionEvent.ACTION_CANCEL -> pointerPressed = false;
             }
             return true;
+        }
+
+        private boolean containsPointer(MotionEvent event) {
+            return event.getX() >= 0 && event.getX() < getWidth()
+                    && event.getY() >= 0 && event.getY() < getHeight();
+        }
+
+        @Override
+        public void setEnabled(boolean enabled) {
+            super.setEnabled(enabled);
+            if (!enabled) pointerPressed = false;
         }
     }
 

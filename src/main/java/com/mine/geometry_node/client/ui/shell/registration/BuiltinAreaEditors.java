@@ -2,8 +2,7 @@ package com.mine.geometry_node.client.ui.shell.registration;
 
 import com.mine.geometry_node.client.integration.terminal.McpTerminalRuntimeFactory;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserWindow;
-import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
-import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryWindow;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
 import com.mine.geometry_node.client.ui.editor.terminal.TerminalWindow;
@@ -31,7 +30,7 @@ public final class BuiltinAreaEditors {
         registry.register(AreaEditorType.ASSET_BROWSER, UiSurfaceType.ASSET_BROWSER,
                 (context, state, changed) -> new AssetBrowserWindow(context, state.assetBrowser, changed));
         registry.register(AreaEditorType.DATA_LIBRARY, UiSurfaceType.DATA_LIBRARY,
-                (context, state, changed) -> new DataLibraryWindow(context, ClientDataLibraryRepository.INSTANCE));
+                (context, state, changed) -> new DatabaseWindow(context));
         registry.register(AreaEditorType.TERMINAL, UiSurfaceType.TERMINAL,
                 (context, state, changed) -> new TerminalWindow(context, state.terminal, changed,
                         new McpTerminalRuntimeFactory()));

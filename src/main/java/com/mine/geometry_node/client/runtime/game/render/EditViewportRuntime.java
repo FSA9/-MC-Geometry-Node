@@ -298,6 +298,26 @@ public final class EditViewportRuntime {
         }
     }
 
+    /** Apply navigation on the render/client thread, including first-session camera/world binding. */
+    public static void focusWorldObjects(Object owner, String dimension, net.minecraft.world.phys.AABB bounds) {
+        Minecraft.getInstance().execute(() -> {
+            synchronized (EditViewportRuntime.class) {
+                Request request = VISIBLE.get(owner);
+                Minecraft mc = Minecraft.getInstance();
+                if (request == null || mc.level == null || mc.player == null
+                        || !mc.level.dimension().identifier().toString().equals(dimension)) return;
+                var previous = CAMERA_LEVELS.get(request.camera);
+                if (previous == null || previous.get() != mc.level) {
+                    Camera player = mc.gameRenderer.getMainCamera();
+                    request.camera.reset(player.position().x, player.position().y, player.position().z, player.yRot(), player.xRot());
+                    CAMERA_LEVELS.put(request.camera, new WeakReference<>(mc.level));
+                }
+                double aspect = (double) mc.getWindow().getWidth() / Math.max(1, mc.getWindow().getHeight());
+                request.camera.focus(bounds, aspect, 1.2);
+            }
+        });
+    }
+
     public static void resetToPlayer(Object owner) {
         if (Boolean.getBoolean("gn.standalone")) return;
         Minecraft.getInstance().execute(() -> {

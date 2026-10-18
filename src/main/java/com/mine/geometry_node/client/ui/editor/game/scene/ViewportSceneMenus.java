@@ -6,11 +6,11 @@ import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.menu.UiSearchMenuLayout;
-import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.common.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.view.View;
@@ -45,10 +45,7 @@ public final class ViewportSceneMenus {
         long token=epoch;
         var snapshot=ClientSceneService.INSTANCE.snapshot();
         LinearLayout column=column();
-        column.addView(label(tr("add")),new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(25)));
-        UiSearchInput search=new UiSearchInput(owner.getContext());
-        search.setHint(Component.translatable("geometry_node.asset_library.toolbar.search").getString());
-        column.addView(search,UiSearchMenuLayout.searchLayoutParams());
+        UiSearchInput search=UiSearchMenuLayout.addHeader(column,tr("add"),true);
         LinearLayout choices=column();column.addView(choices,new LinearLayout.LayoutParams(-1,-2));
         String[] category={""};
         java.util.concurrent.atomic.AtomicReference<Consumer<String>> filterRef=new java.util.concurrent.atomic.AtomicReference<>();
@@ -87,11 +84,7 @@ public final class ViewportSceneMenus {
         open=new UiPopover(owner.getContext(),column,220);open.showAtRoot(owner,host,rootX,rootY);search.post(()->{if(search.isAttachedToWindow())search.requestFocus();});
     }
     private View createItem(String name,boolean enabled,Runnable action){
-        UiActionButton row=UiActionButton.withPalette(owner.getContext(),name,
-                new UiActionButton.Palette(0,UiTheme.Control.SELECTED,UiTheme.Control.ICON_PRESSED,UiTheme.Text.NORMAL),
-                UiActionButton.Density.COMPACT,new UiActionButton.Style(4,0,0,UiTheme.Metrics.DISABLED_ALPHA));
-        row.setGravity(Gravity.LEFT|Gravity.CENTER_VERTICAL);row.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);
-        row.setMinWidth(0);row.setMinHeight(0);row.setEnabled(enabled);row.setOnClickListener(v->action.run());return row;
+        return UiMenuItems.row(owner.getContext(),name,false,enabled,action);
     }
     public void modes(View anchor, com.mine.geometry_node.client.ui.editor.game.ViewportMode current,
                       Consumer<com.mine.geometry_node.client.ui.editor.game.ViewportMode> select) {

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.components.input.ColorSwatchView;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;

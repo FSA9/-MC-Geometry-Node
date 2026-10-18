@@ -92,7 +92,11 @@ public final class SchematicProjectionService {
         }
         NetworkHandler.sendToPlayers(targetsById.values(), packet);
         state.resources.put(resourceId, new ProjectionLease(Set.copyOf(viewers),
-                expiresAt(currentTick, packet.durationTicks()), geometry, estimatedBytes));
+                expiresAt(currentTick, packet.durationTicks()), geometry, estimatedBytes,
+                new QuerySnapshot(resourceId, packet.dimension(),
+                        new net.minecraft.world.phys.Vec3(packet.originX(), packet.originY(), packet.originZ()),
+                        new net.minecraft.world.phys.AABB(packet.originX(), packet.originY(), packet.originZ(),
+                                packet.originX() + packet.width(), packet.originY() + packet.height(), packet.originZ() + packet.length()))));
         return true;
     }
 
@@ -234,8 +238,18 @@ public final class SchematicProjectionService {
         }
     }
 
+    public record QuerySnapshot(GraphResourceId id, String dimension, net.minecraft.world.phys.Vec3 position,
+                                net.minecraft.world.phys.AABB bounds) {}
+    /** Existing leases only, with spatial metadata retained independently of heavy projection packets. */
+    public synchronized void visitWorldQuery(MinecraftServer server, java.util.function.Predicate<QuerySnapshot> visitor) {
+        var state = servers.get(server);
+        if (state == null) return;
+        long now = server.overworld().getGameTime();
+        for (var lease : state.resources.values())
+            if (lease.expiresAt() > now && !visitor.test(lease.snapshot())) return;
+    }
     private record ProjectionLease(Set<UUID> viewers, long expiresAt, long geometry,
-                                   long estimatedBytes) {
+                                   long estimatedBytes, QuerySnapshot snapshot) {
     }
 
     private static final class ServerState {

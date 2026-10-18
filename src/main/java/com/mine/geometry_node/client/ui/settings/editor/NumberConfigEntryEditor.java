@@ -2,17 +2,17 @@ package com.mine.geometry_node.client.ui.settings.editor;
 
 import com.mine.geometry_node.client.config.ConfigDraft;
 import com.mine.geometry_node.client.config.ConfigEntry;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 final class NumberConfigEntryEditor extends AbstractConfigEntryEditor<Number> {
-    private final EditText mInput;
+    private final UiTextInput mInput;
     private boolean mRefreshing;
 
     private NumberConfigEntryEditor(Context context, ConfigDraft draft, ConfigEntry<Number> entry,
@@ -21,11 +21,8 @@ final class NumberConfigEntryEditor extends AbstractConfigEntryEditor<Number> {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        mInput = new EditText(context);
+        mInput = new UiTextInput(context);
         mInput.setSingleLine(true);
-        mInput.setTextSize(0, UIUtils.dp2px(11.0f));
-        mInput.setTextColor(SettingsEditorStyle.TEXT);
-        mInput.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
         row.addView(mInput, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(150), UIUtils.dp2pxInt(28)));
         TextView range = text(context, rangeText(entry), 9.5f, SettingsEditorStyle.MUTED);
         LinearLayout.LayoutParams rangeParams = new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
@@ -74,9 +71,9 @@ final class NumberConfigEntryEditor extends AbstractConfigEntryEditor<Number> {
     }
 
     private void showValidity(boolean valid) {
-        mInput.setBackground(SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL, 3.0f,
-                valid ? SettingsEditorStyle.BORDER : SettingsEditorStyle.BORDER_ERROR));
-        setValidation(valid, valid ? "" : tr("geometry_node.settings.validation.number"));
+        String message = valid ? "" : tr("geometry_node.settings.validation.number");
+        mInput.setErrorMessage(message);
+        setValidation(valid, message);
     }
 
     private static String rangeText(ConfigEntry<?> entry) {

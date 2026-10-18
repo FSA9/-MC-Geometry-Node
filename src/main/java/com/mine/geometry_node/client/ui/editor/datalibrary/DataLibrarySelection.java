@@ -1,8 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashSet;
+import com.mine.geometry_node.client.ui.components.list.UiListSelection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -21,40 +20,46 @@ final class DataLibrarySelection {
     }
 
     void selectEntry(UUID id, boolean range) {
-        var ordered = new ArrayList<>(rendered);
-        int target = ordered.indexOf(id);
-        if (target < 0) return;
-        int start = range && anchor != null ? ordered.indexOf(anchor) : -1;
-        if (start < 0) start = target;
-        entries.clear();
-        for (int i = Math.min(start, target); i <= Math.max(start, target); i++) {
-            entries.add(new DataLibraryUiRepository.EntryKey(ordered.get(i)));
-        }
-        anchor = id;
+        selectEntry(id, range, false);
+    }
+
+    void selectEntry(UUID id, boolean range, boolean additive) {
+        if (!rendered.contains(id)) return;
+        if (!additive) folders.clear();
+        var key = new DataLibraryUiRepository.EntryKey(id);
+        var ordered = rendered.stream().map(DataLibraryUiRepository.EntryKey::new).toList();
+        var nextAnchor = UiListSelection.click(entries, ordered,
+                anchor == null ? null : new DataLibraryUiRepository.EntryKey(anchor), key, additive, range);
+        anchor = nextAnchor == null ? null : nextAnchor.id();
     }
 
     void selectFolderTree(DataLibrarySnapshot snapshot, UUID root, boolean checked) {
-        if (root == null) return;
-        snapshot.indexChildren();
-        Set<UUID> visited = new HashSet<>();
-        ArrayDeque<UUID> queue = new ArrayDeque<>();
-        queue.add(root);
-        while (!queue.isEmpty()) {
-            UUID id = queue.removeFirst();
-            if (!visited.add(id)) continue;
+        for (UUID id : folderTreeIds(snapshot, root)) {
             if (checked) folders.add(id); else folders.remove(id);
             for (var entry : snapshot.childEntries.getOrDefault(id, java.util.List.of())) {
                 var key = new DataLibraryUiRepository.EntryKey(entry.id());
                 if (checked) entries.add(key); else entries.remove(key);
             }
-            for (var folder : snapshot.childFolders.getOrDefault(id, java.util.List.of())) queue.add(folder.id());
         }
     }
 
+    static Set<UUID> folderTreeIds(DataLibrarySnapshot snapshot, UUID root) {
+        Set<UUID> visited = new LinkedHashSet<>();
+        if (root == null) return visited;
+        snapshot.indexChildren();
+        ArrayDeque<UUID> queue = new ArrayDeque<>();
+        queue.add(root);
+        while (!queue.isEmpty()) {
+            UUID id = queue.removeFirst();
+            if (!visited.add(id)) continue;
+            for (var folder : snapshot.childFolders.getOrDefault(id, java.util.List.of())) queue.add(folder.id());
+        }
+        return visited;
+    }
+
     void selectAll(DataLibrarySnapshot snapshot, boolean checked) {
+        clear();
         if (!checked) {
-            entries.clear();
-            folders.clear();
             return;
         }
         folders.addAll(snapshot.folders.keySet());

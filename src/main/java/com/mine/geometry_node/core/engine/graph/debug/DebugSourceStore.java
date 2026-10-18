@@ -25,7 +25,10 @@ final class DebugSourceStore {
             current.lastSeenTick = seenTick;
             return false;
         }
-        levelSources.sources.put(sourceId, new Source(List.copyOf(meshes), seenTick, signature, expiresAt));
+        levelSources.sources.put(sourceId, new Source(List.copyOf(meshes), seenTick, signature, expiresAt,
+                sourceId.channel() == DebugRenderChannel.GEOMETRY
+                        ? meshes.stream().map(mesh -> com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries.geometry(level, sourceId, mesh)).toList()
+                        : List.of()));
         levelSources.publish();
         return true;
     }
@@ -78,6 +81,19 @@ final class DebugSourceStore {
         return levelSources != null ? levelSources.snapshot : List.of();
     }
 
+    void visitWorldQuery(ServerLevel level,
+            java.util.function.Predicate<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> visitor) {
+        LevelSources sources = levels.get(level);
+        if (sources == null) return;
+        for (Source source : sources.sources.values()) {
+            if (source.isExpired(level.getGameTime(), idleExpiryTicks)) continue;
+            for (var entry : source.metadata) {
+                if (entry == null) throw new IllegalStateException("Geometry metadata is unavailable");
+                if (!visitor.test(entry)) return;
+            }
+        }
+    }
+
     boolean removeLevel(ServerLevel level) {
         return levels.remove(level) != null;
     }
@@ -105,8 +121,11 @@ final class DebugSourceStore {
         private long lastSeenTick;
         private final long signature;
         private final long expiresAt;
+        private final List<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> metadata;
 
-        private Source(List<GeometryDebugElement> meshes, long lastSeenTick, long signature, long expiresAt) {
+        private Source(List<GeometryDebugElement> meshes, long lastSeenTick, long signature, long expiresAt,
+                       List<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> metadata) {
+            this.metadata = metadata;
             this.meshes = meshes;
             this.lastSeenTick = lastSeenTick;
             this.signature = signature;

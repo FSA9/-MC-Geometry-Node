@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.components.common.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;

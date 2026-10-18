@@ -19,7 +19,7 @@ import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;
 import com.mine.geometry_node.client.ui.components.menu.RadialMenuLayout.Slot;
 import com.mine.geometry_node.client.ui.components.menu.HeldMenuKey;
 import java.util.List;
-import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
@@ -43,8 +43,8 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
-import com.mine.geometry_node.client.ui.components.common.UiSplitButton;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.button.UiSplitButton;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
@@ -297,6 +297,26 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     }
 
     public boolean isOrthographic() { return editCamera.isOrthographic(); }
+
+    /** UI-thread navigation entry point used by database results; never teleports the player. */
+    public boolean focusWorldObjects(String dimension, net.minecraft.world.phys.AABB bounds,
+                                     java.util.Set<java.util.UUID> objectIds) {
+        if (disposed || !shown || bounds == null) return false;
+        var service = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE;
+        var snapshot = service.snapshot();
+        if (!snapshot.dimension().equals(dimension)) return false;
+        closeViewMenu(); closeSceneMenus();
+        viewport.releaseInteraction();
+        setMode(ViewportMode.EDIT);
+        java.util.Set<java.util.UUID> available = new java.util.LinkedHashSet<>();
+        for (java.util.UUID id : objectIds) if (snapshot.object(id) != null) available.add(id);
+        if (!available.isEmpty()) service.select(available, available.iterator().next());
+        double aspect = (double) Math.max(1, viewport.getWidth()) / Math.max(1, viewport.getHeight());
+        if (Boolean.getBoolean("gn.standalone")) editCamera.focus(bounds, aspect, 1.2);
+        else EditViewportRuntime.focusWorldObjects(this, dimension, bounds);
+        markInteracted(); viewport.requestFocus(); viewport.invalidate();
+        return true;
+    }
 
     public void resetCamera() {
         if (!mode().usesEditorCamera()) return;

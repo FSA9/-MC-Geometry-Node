@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
-import com.mine.geometry_node.client.ui.components.common.TagFlowLayout;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.layout.TagFlowLayout;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
@@ -52,7 +52,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
             "geometry_node.graph_properties.title",
             100,
             Set.of(SidebarPanelScope.GRAPH_EDITOR, SidebarPanelScope.ASSET_BROWSER),
-            GraphPropertiesPanel::create, com.mine.geometry_node.client.ui.components.common.SvgIconView.Icon.PROPERTIES);
+            GraphPropertiesPanel::create, com.mine.geometry_node.client.ui.components.icon.SvgIconView.Icon.PROPERTIES);
 
     private static final int COLOR_BACKGROUND = 0xFF303030;
     private static final int COLOR_SECTION = 0xFF292929;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.components.input.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.input.UiSelectButton;
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.config.ConfigManager;

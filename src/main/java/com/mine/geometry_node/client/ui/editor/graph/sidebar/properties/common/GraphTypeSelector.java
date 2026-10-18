@@ -1,14 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.common;
 
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -29,13 +30,9 @@ public final class GraphTypeSelector extends FrameLayout {
     private static final int COLOR_INPUT = 0xFF242424;
     private static final int COLOR_INPUT_BORDER = 0xFF4A4A4A;
     private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF777777;
-    private static final int COLOR_BUTTON = 0xFF4A4A4A;
-    private static final int COLOR_BUTTON_HOVER = 0xFF5A5A5A;
-    private static final int COLOR_SELECTED = 0xFF424242;
 
     private final TextView mValue;
-    private FrameLayout mDropdown;
+    private UiPopover mDropdown;
     private Consumer<String> mOnSelected;
     private String mSelectedId = "";
 
@@ -75,7 +72,7 @@ public final class GraphTypeSelector extends FrameLayout {
 
     public void dismissMenu() {
         if (mDropdown == null) return;
-        if (mDropdown.getParent() instanceof ViewGroup parent) parent.removeView(mDropdown);
+        mDropdown.dismiss();
         mDropdown = null;
     }
 
@@ -86,7 +83,7 @@ public final class GraphTypeSelector extends FrameLayout {
     }
 
     private void toggleMenu() {
-        if (mDropdown != null) {
+        if (mDropdown != null && mDropdown.isOpen()) {
             dismissMenu();
         } else {
             showMenu();
@@ -97,65 +94,25 @@ public final class GraphTypeSelector extends FrameLayout {
         FrameLayout host = findMenuHost();
         if (host == null || getWidth() <= 0) return;
 
-        FrameLayout overlay = new FrameLayout(getContext());
-        overlay.setClickable(true);
-        overlay.setBackground(rect(0x00000000, 0.0f, 0, 0));
-        overlay.setOnHoverListener((v, event) -> true);
-        overlay.setOnGenericMotionListener((v, event) -> true);
-        overlay.setOnClickListener(v -> dismissMenu());
-        host.addView(overlay, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-
+        dismissMenu();
         LinearLayout menu = new LinearLayout(getContext());
         menu.setOrientation(LinearLayout.VERTICAL);
-        menu.setPadding(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2),
-                UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(2));
-        menu.setBackground(rect(COLOR_INPUT, 3.0f, 1, COLOR_INPUT_BORDER));
-        menu.setClickable(true);
-        menu.setOnClickListener(v -> {
-        });
         for (GraphType type : GraphTypeRegistry.INSTANCE.authorable()) {
             menu.addView(createOption(type), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     UIUtils.dp2pxInt(28)));
         }
 
-        int[] rootLocation = new int[2];
-        int[] anchorLocation = new int[2];
-        host.getLocationOnScreen(rootLocation);
-        getLocationOnScreen(anchorLocation);
-        FrameLayout.LayoutParams menuParams = new FrameLayout.LayoutParams(
-                getWidth(),
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        menuParams.gravity = Gravity.TOP | Gravity.LEFT;
-        menuParams.setMargins(
-                anchorLocation[0] - rootLocation[0],
-                anchorLocation[1] - rootLocation[1] + getHeight(),
-                0,
-                0);
-        overlay.addView(menu, menuParams);
-        mDropdown = overlay;
+        // Width is already in project-scaled pixels; the popover adds its symmetric inset.
+        mDropdown = UiPopover.forContentWidth(getContext(), menu, getWidth(), 0);
+        mDropdown.showBelow(this, host);
     }
 
     private TextView createOption(GraphType type) {
-        TextView option = label(getContext(), graphTypeLabel(type.id()), 11.0f, COLOR_TEXT);
-        option.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
-        option.setBackground(rect(
-                type.id().equals(mSelectedId) ? COLOR_SELECTED : COLOR_INPUT,
-                2.0f, 0, 0));
-        option.setClickable(true);
-        option.setOnHoverListener((v, event) -> {
-            boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
-                    || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
-            option.setBackground(rect(
-                    hovered ? COLOR_BUTTON_HOVER
-                            : type.id().equals(mSelectedId) ? COLOR_SELECTED : COLOR_INPUT,
-                    2.0f, 0, 0));
-            return true;
-        });
-        option.setOnClickListener(v -> select(type.id()));
-        return option;
+        return UiMenuItems.row(getContext(), graphTypeLabel(type.id()),
+                type.id().equals(mSelectedId), true, () -> {
+                    if (mDropdown != null && mDropdown.isOpen()) select(type.id());
+                });
     }
 
     private void select(String graphTypeId) {

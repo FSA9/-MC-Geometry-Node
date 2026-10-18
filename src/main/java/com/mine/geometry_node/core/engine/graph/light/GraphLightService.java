@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.engine.system.visual.image.ImagePathReference
 import com.mine.geometry_node.core.engine.system.visual.image.ServerImageAssetService;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.node.value.light.LightConfig;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -156,6 +157,36 @@ public final class GraphLightService implements ServerEngine {
     private static void broadcastRemoval(ServerLevel level, GraphResourceId id) {
         NetworkHandler.sendToPlayers(level.players(), new PacketGraphLight(level.dimension().identifier(),
                 GraphResourceIdCodec.encode(id), PacketGraphLight.REMOVE, -1, null));
+    }
+
+    public record QuerySnapshot(GraphResourceId id, LightDefinition definition, Vec3 position) {}
+    /** Server-thread immutable metadata; no asset bytes or client state. */
+    public void visitWorldQuery(ServerLevel level, java.util.function.Predicate<QuerySnapshot> visitor) {
+        var resources = levels.get(level);
+        if (resources == null) return;
+        for (Resource resource : resources.values()) {
+            var definition = resource.definition;
+            var anchorId = definition.config().transform().entityId();
+            var anchor = anchorId == null ? null : level.getEntity(anchorId);
+            if (anchorId != null && (anchor == null || anchor.isRemoved())) continue;
+            int duration = definition.config().lifecycle().durationTicks();
+            if (duration > 0 && level.getGameTime() - resource.created >= duration) continue;
+            var transform = definition.config().transform();
+            var baseRotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-definition.rotation().y),
+                    (float)Math.toRadians(definition.rotation().x), (float)Math.toRadians(definition.rotation().z));
+            var local = baseRotation.transform(new org.joml.Vector3f((float)transform.position().x,
+                    (float)transform.position().y, (float)transform.position().z));
+            Vec3 position = definition.position().add(local.x, local.y, local.z);
+            if (anchor != null) {
+                float yaw = !transform.followView() && anchor instanceof net.minecraft.world.entity.LivingEntity living
+                        ? living.yBodyRot : anchor.getYRot();
+                var anchorRotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-yaw),
+                        transform.followView() ? (float)Math.toRadians(anchor.getXRot()) : 0, 0);
+                var offset = anchorRotation.transform(new org.joml.Vector3f((float)position.x, (float)position.y, (float)position.z));
+                position = (transform.eyeAnchor() ? anchor.getEyePosition() : anchor.position()).add(offset.x, offset.y, offset.z);
+            }
+            if (!visitor.test(new QuerySnapshot(resource.id, definition, position))) return;
+        }
     }
 
     private void synchronize(ServerPlayer player) {

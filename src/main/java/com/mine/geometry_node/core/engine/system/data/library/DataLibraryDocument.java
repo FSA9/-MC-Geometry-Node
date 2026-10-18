@@ -150,7 +150,10 @@ public final class DataLibraryDocument {
 
     public DataLibraryDocument copy() {
         DataLibraryDocument copy = new DataLibraryDocument();
-        folders.values().forEach(copy::putFolder);
+        // Moves preserve insertion order, so a child may precede its new parent.
+        // The source hierarchy is already valid; copy its immutable folders and index together.
+        copy.folders.putAll(folders);
+        copy.folderIdsByLocation.putAll(folderIdsByLocation);
         entries.values().forEach(entry -> copy.put(new DataLibraryEntry(
                 entry.id(), entry.parentId(), entry.type(), entry.key(), GraphValueSnapshot.snapshot(entry.value()),
                 entry.tags())));

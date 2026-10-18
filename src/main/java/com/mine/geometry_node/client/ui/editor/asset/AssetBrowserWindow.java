@@ -17,7 +17,7 @@ import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropert
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
-import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;

@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.UiIconColors;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -66,11 +67,7 @@ final class AreaIconButton extends UiIconButton {
     }
 
     private void setIconColor(int color) {
-        if (mIconView instanceof SvgIconView svgIconView) {
-            svgIconView.setIconColor(color);
-        } else if (mIconView instanceof VectorIconView vectorIconView) {
-            vectorIconView.setIconColor(color);
-        }
+        UiIconColors.apply(mIconView, color);
     }
 
 }

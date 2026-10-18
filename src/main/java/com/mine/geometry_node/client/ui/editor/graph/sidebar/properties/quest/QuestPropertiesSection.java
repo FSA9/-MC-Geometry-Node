@@ -3,12 +3,12 @@ package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
 import java.util.function.Supplier;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import icyllis.modernui.view.View;
 
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
@@ -24,7 +24,6 @@ import icyllis.modernui.widget.TextView;
 
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
-import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.styleButton;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
 
 /**
@@ -251,10 +250,9 @@ public final class QuestPropertiesSection extends LinearLayout {
     }
 
     private TextView actionButton(String text, String tooltip) {
-        TextView button = label(getContext(), text, 11.0f, COLOR_TEXT);
-        button.setGravity(Gravity.CENTER);
-        button.setTooltipText(tooltip);
-        styleButton(button, COLOR_BUTTON, COLOR_BUTTON_HOVER);
+        TextView button = GraphPropertiesUi.button(getContext(), text, tooltip,
+                COLOR_TEXT, COLOR_BUTTON, COLOR_BUTTON_HOVER);
+        UIUtils.setLockedTextSize(button, 11.0f);
         return button;
     }
 

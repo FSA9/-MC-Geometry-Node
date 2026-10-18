@@ -1,10 +1,16 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.layout.UiPropertyRow;
+
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.scene.SceneEditCapabilities;
-import com.mine.geometry_node.client.ui.components.common.*;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.sidebar.api.*;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
@@ -229,22 +235,11 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
                 fields.put(field.key(), control.textInput());
                 watch(control.textInput());
             }
-            LinearLayout row = new LinearLayout(getContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
             TextView label = UIUtils.createLockedTextView(getContext(), field.label().getString(), 11, UiTheme.Text.SECONDARY);
             label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             label.setSingleLine(true);
             label.setEllipsize(TextUtils.TruncateAt.END);
             label.setTooltipText(field.label().getString());
-            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(80), UIUtils.dp2pxInt(28));
-            labelParams.rightMargin = UIUtils.dp2pxInt(8);
-            row.addView(label, labelParams);
-            boolean checkbox = control.view() instanceof UiCheckBox;
-            row.addView(control.view(), checkbox
-                    ? new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20), UIUtils.dp2pxInt(20))
-                    : new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1));
-            if (checkbox) row.addView(new View(getContext()), new LinearLayout.LayoutParams(0, 0, 1));
             UiIconButton copy = new UiIconButton(getContext(),
                     new SvgIconView(getContext(), SvgIconView.Icon.COPY, UiTheme.Text.SECONDARY),
                     new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER, 0))
@@ -256,9 +251,11 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
                 minecraft.execute(() -> minecraft.keyboardHandler.setClipboard(value));
             });
             copyButtons.put(field.key(), copy);
-            LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24));
-            copyParams.leftMargin = UIUtils.dp2pxInt(6);
-            row.addView(copy, copyParams);
+            boolean checkbox = control.view() instanceof UiCheckBox;
+            UiPropertyRow row = new UiPropertyRow(getContext(), label, control.view(), copy,
+                    new UiPropertyRow.Layout(80, 28, 8, 24, 6), checkbox
+                    ? new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20), UIUtils.dp2pxInt(20))
+                    : new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = UIUtils.dp2pxInt(5);
             form.addView(row, lp);

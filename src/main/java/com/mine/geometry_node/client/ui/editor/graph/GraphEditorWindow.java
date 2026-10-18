@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.graph;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.components.common.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;

@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.sidebar;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.components.layout.UiFixedSplitLayout;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 
@@ -19,6 +20,14 @@ public final class SidebarLayoutController {
     private final StateListener mStateListener;
     private float mExpandedWeight;
     private boolean mOwnerVisible = true;
+    private UiFixedSplitLayout mFixedSplit;
+
+    /** Fixed-width variant; the middle content absorbs resize and collapse changes. */
+    public SidebarLayoutController(UiFixedSplitLayout split, EditorSidebar sidebar) {
+        this(split, split.flexiblePane(), split.divider(), sidebar, 0, null);
+        if (split.fixedPane() != sidebar) throw new IllegalArgumentException("Sidebar must be the fixed pane");
+        mFixedSplit = split;
+    }
 
     public SidebarLayoutController(
             LinearLayout parent,
@@ -61,7 +70,9 @@ public final class SidebarLayoutController {
             return;
         }
 
-        if (visible) {
+        if (mFixedSplit != null) {
+            mFixedSplit.setCollapsed(!visible, mSidebar.getCollapsedWidth());
+        } else if (visible) {
             transferWeight(-mExpandedWeight);
             setSidebarLayout(0, mExpandedWeight);
         } else {

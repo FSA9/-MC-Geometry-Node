@@ -21,6 +21,15 @@ public final class SceneSavedData extends SavedData {
         Identifier.parse(dimension);
         return dimensions.computeIfAbsent(dimension, ignored -> new SceneDocument());
     }
+    /** Server-thread metadata access across persisted dimensions, including dimensions without a live level. */
+    public synchronized List<String> worldQueryDimensions() {
+        return dimensions.keySet().stream().limit(257).toList();
+    }
+    public synchronized void visitWorldQuery(java.util.function.BiPredicate<String, SceneObject> visitor) {
+        for (var dimension : dimensions.entrySet())
+            for (SceneObject object : dimension.getValue().objects())
+                if (!visitor.test(dimension.getKey(), object)) return;
+    }
     public synchronized boolean apply(String dimension, List<SceneChange> changes) {
         boolean changed = document(dimension).apply(changes);
         if (changed) setDirty();

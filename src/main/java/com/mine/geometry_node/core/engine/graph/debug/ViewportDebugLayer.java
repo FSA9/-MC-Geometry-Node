@@ -4,7 +4,7 @@ package com.mine.geometry_node.core.engine.graph.debug;
 public enum ViewportDebugLayer {
     GEOMETRY(0, DebugRenderChannel.GEOMETRY), SCHEMATIC(1, DebugRenderChannel.SCHEMATIC),
     AREA(2, DebugRenderChannel.AREA), COLLISION(3, null), MODEL_COLLISION(4, null),
-    INTERACTION(5, DebugRenderChannel.INTERACTION), PATHFINDING(6, DebugRenderChannel.PATHFINDING);
+    INTERACTION(5, DebugRenderChannel.INTERACTION), PATHFINDING(6, DebugRenderChannel.PATHFINDING), FORCE_FIELD(7, DebugRenderChannel.FORCE_FIELD);
     public final int id;
     public final DebugRenderChannel channel;
     ViewportDebugLayer(int id, DebugRenderChannel channel) { this.id=id; this.channel=channel; }

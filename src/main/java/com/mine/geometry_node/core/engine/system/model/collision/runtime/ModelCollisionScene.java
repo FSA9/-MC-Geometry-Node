@@ -70,6 +70,13 @@ public final class ModelCollisionScene {
         return state == null ? List.of() : state.snapshot;
     }
 
+    /** Bounded metadata visitor; exposes no mutable collision geometry to query clients. */
+    public static synchronized void visitWorldQuery(Level level,
+            java.util.function.Predicate<Entry> visitor) {
+        State state = LEVELS.get(level);
+        if (state != null) for (Entry entry : state.entries.values()) if (!visitor.test(entry)) return;
+    }
+
     public static synchronized Entry lookup(Level level, Object instanceId) {
         State state = LEVELS.get(level);
         return state == null ? null : state.entries.get(instanceId);
@@ -132,6 +139,8 @@ public final class ModelCollisionScene {
             estimatedIndexBytes = indexBytes + estimateTree(root);
         }
 
+        /** Cached root bounds: O(1), no collider/triangle walk during metadata queries. */
+        public AABB bounds() { return root == null ? null : root.bounds; }
         public ModelCollisionMesh mesh() { return mesh; }
         public long estimatedGeometryBytes() { return estimatedGeometryBytes; }
         public long estimatedIndexBytes() { return estimatedIndexBytes; }

@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
-import com.mine.geometry_node.client.ui.components.common.UiIconButton;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import net.minecraft.network.chat.Component;
-import com.mine.geometry_node.client.ui.components.common.VectorIconView;
+import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;

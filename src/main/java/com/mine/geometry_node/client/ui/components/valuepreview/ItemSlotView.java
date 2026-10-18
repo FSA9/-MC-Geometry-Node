@@ -128,6 +128,7 @@ public class ItemSlotView extends ViewportNativePreviewView {
     }
 
     public void openTemplateEditor() {
+        if (!isEnabled()) return;
         if (mDisplayClickAction != null) {
             mDisplayClickAction.run();
         } else {
@@ -204,6 +205,8 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        // Wheel input belongs to the containing menu/list's scroll view.
+        if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) return super.dispatchGenericMotionEvent(event);
         super.dispatchGenericMotionEvent(event);
         handleHover(event);
         return true;
@@ -244,13 +247,13 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        if (!mEditable) return false;
+        if (!isEnabled() || !mEditable) return false;
         return onTouchEvent(event);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!mEditable) return false;
+        if (!isEnabled() || !mEditable) return false;
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             mPressed = true;
@@ -280,7 +283,7 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (mEditable && isFocused()) {
+        if (isEnabled() && mEditable && isFocused()) {
             KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
             if (copy != null && UiInputBindings.matches(copy, event)) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) copyItem();
@@ -293,6 +296,16 @@ public class ItemSlotView extends ViewportNativePreviewView {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        if (!isEnabled()) {
+            mPressed = false;
+            if (isPressed()) setPressed(false);
+        }
+        invalidate();
     }
 
     private void copyItem() {

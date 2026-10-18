@@ -6,9 +6,9 @@ import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
-import com.mine.geometry_node.client.ui.components.common.UiTextInput;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOverlay;

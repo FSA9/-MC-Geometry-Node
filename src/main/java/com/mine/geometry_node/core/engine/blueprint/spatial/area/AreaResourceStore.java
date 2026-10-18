@@ -99,6 +99,12 @@ public final class AreaResourceStore {
         return true;
     }
 
+    /** Graph-owned entries only; caller stops the visitor before resolving live inputs. */
+    public synchronized void visitWorldQuery(MinecraftServer server, java.util.function.Predicate<AreaResource> visitor) {
+        ServerState state = servers.get(server);
+        if (state != null) for (var resource : state.entries.values()) if (!visitor.test(resource)) return;
+    }
+
     public synchronized List<AreaResource> snapshot(ServerLevel level) {
         ServerState state = servers.get(level.getServer());
         if (state == null || (state.entries.isEmpty() && state.authored.isEmpty())) return List.of();

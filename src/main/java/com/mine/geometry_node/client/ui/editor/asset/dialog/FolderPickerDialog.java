@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.components.common.UiActionButton;
+import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;

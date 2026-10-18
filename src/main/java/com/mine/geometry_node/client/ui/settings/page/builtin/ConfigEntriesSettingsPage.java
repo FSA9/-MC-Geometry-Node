@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.config.ConfigCategory;
 import com.mine.geometry_node.client.config.ConfigEntry;
-import com.mine.geometry_node.client.ui.components.common.SvgIconView;
+import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
