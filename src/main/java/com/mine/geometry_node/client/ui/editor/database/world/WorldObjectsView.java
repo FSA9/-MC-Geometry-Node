@@ -152,7 +152,6 @@ public final class WorldObjectsView extends FrameLayout {
         resultBar.setPadding(px(14),0,px(10),0);
         resultTitle=label(context,tr("all_objects"),UiTheme.Text.NORMAL);
         resultTitle.setSingleLine(true);resultTitle.setEllipsize(TextUtils.TruncateAt.END);
-        resultTitle.setOnClickListener(this::chooseCategory);
         resultBar.addView(resultTitle,new LinearLayout.LayoutParams(0,-1,1));
         focusButton=button(context,tr("focus"),this::focusSelected); focusButton.setEnabled(false);
         resultBar.addView(focusButton,new LinearLayout.LayoutParams(-2,px(28)));
@@ -229,7 +228,7 @@ public final class WorldObjectsView extends FrameLayout {
         String id=category!=null?category.id():extraProvider.isEmpty()?"":"provider:"+extraProvider;
         categoryButtons.forEach((key,button)->button.setPalette(rowPalette(key.equals(id),UiTheme.Surface.ROOT)));
         resultTitle.setText((category==null?tr("all_objects"):Component.translatable(category.labelKey()).getString())
-                +"  ·  "+sortedEntries().size()+"  ▾");
+                +"  ·  "+sortedEntries().size());
     }
     @Override protected void onMeasure(int widthSpec,int heightSpec) {
         navigation.setVisibility(MeasureSpec.getSize(widthSpec)<px(450)?GONE:VISIBLE);
@@ -335,19 +334,6 @@ public final class WorldObjectsView extends FrameLayout {
         String key = "geometry_node.database.provider." + id;
         String text = Component.translatable(key).getString();
         return text.equals(key) ? id : text;
-    }
-    private void chooseCategory(View anchor) {
-        LinkedHashMap<String,String> options=new LinkedHashMap<>();
-        options.put("",tr("all_objects"));
-        for(var value:WorldObjectCategories.all())options.put("category:"+value.id(),Component.translatable(value.labelKey()).getString());
-        typeCatalog.stream().map(WorldObjectType::provider).distinct().forEach(id->options.put("provider:"+id,providerLabel(id)));
-        choose(anchor,"object_types",options,value->{
-            category=null;extraProvider=provider=type="";
-            if(value.startsWith("category:"))category=WorldObjectCategories.all().stream()
-                    .filter(c->value.equals("category:"+c.id())).findFirst().orElse(null);
-            else if(value.startsWith("provider:"))extraProvider=provider=value.substring("provider:".length());
-            queryNow();
-        });
     }
     private void chooseScope() {
         LinkedHashMap<String, String> options = new LinkedHashMap<>();
