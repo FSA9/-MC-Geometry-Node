@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.value;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
-import com.mine.geometry_node.GeometryNode;
+import com.mojang.logging.LogUtils;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.node.value.SlotRef;
@@ -44,6 +44,7 @@ import java.util.Set;
  * capabilities are populated by the same registrations.
  */
 public final class GraphValueCodecRegistry {
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
 
     private static volatile RegistrySnapshot SNAPSHOT = RegistrySnapshot.empty();
 
@@ -486,7 +487,7 @@ public final class GraphValueCodecRegistry {
 
         String valueClass = value.getClass().getName();
         if (RateLimitedLog.acquire("graph_value_codec:unsupported:" + valueClass)) {
-            GeometryNode.LOGGER.warn("Unsupported graph value type for persistence: {}", valueClass);
+            LOGGER.warn("Unsupported graph value type for persistence: {}", valueClass);
         }
         return null;
     }
@@ -588,7 +589,7 @@ public final class GraphValueCodecRegistry {
                 return serializer.deserialize(compound.get(DATA_KEY), provider);
             } else {
                 if (RateLimitedLog.acquire("graph_value_codec:missing:" + typeId)) {
-                    GeometryNode.LOGGER.warn("Missing graph value serializer for type: {}", typeId);
+                    LOGGER.warn("Missing graph value serializer for type: {}", typeId);
                 }
             }
         }

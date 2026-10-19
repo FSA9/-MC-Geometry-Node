@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.engine.graph.light;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -54,6 +58,11 @@ public final class GraphLightService implements ServerEngine {
         if (!resources.containsKey(id) && resources.size() >= MAX_LIGHTS_PER_LEVEL)
             throw new IllegalArgumentException("Light resource budget exceeded (256 per dimension)");
         Resource old = resources.get(id);
+        if (old != null && !isLive(level, old)) {
+            remove(level, id);
+            resources = levels.computeIfAbsent(level, ignored -> new LinkedHashMap<>());
+            old = null;
+        }
         boolean unchanged = old != null && old.definition.equals(definition);
         ImagePathReference remote = !unchanged && "spot".equals(definition.type()) && path.toLowerCase(Locale.ROOT).startsWith("remote:")
                 ? ImagePathReference.parse(path) : null;
@@ -82,6 +91,7 @@ public final class GraphLightService implements ServerEngine {
             return true;
         }
         Resource value = new Resource(id, definition, level.getGameTime());
+        if (old != null && isLive(level, old)) value.metadata = old.metadata;
         resources.put(id, value);
         if (remote != null) {
             if (old != null) NetworkHandler.sendToPlayers(level.players(), new PacketGraphLight(level.dimension().identifier(),
@@ -157,6 +167,35 @@ public final class GraphLightService implements ServerEngine {
     private static void broadcastRemoval(ServerLevel level, GraphResourceId id) {
         NetworkHandler.sendToPlayers(level.players(), new PacketGraphLight(level.dimension().identifier(),
                 GraphResourceIdCodec.encode(id), PacketGraphLight.REMOVE, -1, null));
+    }
+
+    public MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
+        RuntimeMetadataTargets.requireThread(level.getServer());
+        var resources = levels.get(level);
+        Resource resource = resources == null ? null : resources.get(id);
+        if (resource == null || !isLive(level, resource)) throw new IllegalStateException("Light no longer exists");
+        RuntimeMetadata metadata = resource.metadata;
+        return metadata.access(GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
+            RuntimeMetadataTargets.requireThread(level.getServer());
+            var currentResources = levels.get(level);
+            Resource current = currentResources == null ? null : currentResources.get(id);
+            if (current == null || current.metadata != metadata || !isLive(level, current))
+                throw new IllegalStateException("Light metadata handle is stale");
+        });
+    }
+
+    public long metadataRevision(ServerLevel level, GraphResourceId id) {
+        metadata(level, id);
+        return levels.get(level).get(id).metadata.revision();
+    }
+
+    private static boolean isLive(ServerLevel level, Resource resource) {
+        var config = resource.definition.config();
+        UUID anchor = config.transform().entityId();
+        var entity = anchor == null ? null : level.getEntity(anchor);
+        int duration = config.lifecycle().durationTicks();
+        return (anchor == null || entity != null && !entity.isRemoved())
+                && (duration <= 0 || level.getGameTime() - resource.created < duration);
     }
 
     public record QuerySnapshot(GraphResourceId id, LightDefinition definition, Vec3 position) {}
@@ -268,6 +307,7 @@ public final class GraphLightService implements ServerEngine {
     }
     private static final class Resource {
         final GraphResourceId id;
+        RuntimeMetadata metadata = new RuntimeMetadata();
         LightDefinition definition;
         long created;
         LightDefinition wire;

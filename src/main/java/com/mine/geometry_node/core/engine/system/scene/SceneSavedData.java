@@ -16,6 +16,7 @@ public final class SceneSavedData extends SavedData {
             Identifier.fromNamespaceAndPath("geometry_node", "editor_scene"), SceneSavedData::new,
             CompoundTag.CODEC.xmap(SceneSavedData::load, SceneSavedData::save));
     private final Map<String, SceneDocument> dimensions = new LinkedHashMap<>();
+    private boolean metadataUpdating;
     public static SceneSavedData get(MinecraftServer server) { return server.getDataStorage().computeIfAbsent(TYPE); }
     public synchronized SceneDocument document(String dimension) {
         Identifier.parse(dimension);
@@ -31,7 +32,18 @@ public final class SceneSavedData extends SavedData {
                 if (!visitor.test(dimension.getKey(), object)) return;
     }
     public synchronized boolean apply(String dimension, List<SceneChange> changes) {
+        if (metadataUpdating) throw new IllegalStateException("Reentrant scene mutation during metadata update");
         boolean changed = document(dimension).apply(changes);
+        if (changed) setDirty();
+        return changed;
+    }
+    public synchronized boolean updateMetadata(String dimension, UUID id, UUID incarnation,
+            java.util.function.UnaryOperator<com.mine.geometry_node.core.engine.metadata.OwnerMetadata> transformation) {
+        if (metadataUpdating) throw new IllegalStateException("Reentrant scene metadata update");
+        boolean changed;
+        metadataUpdating = true;
+        try { changed = document(dimension).updateMetadata(id, incarnation, transformation); }
+        finally { metadataUpdating = false; }
         if (changed) setDirty();
         return changed;
     }
@@ -76,6 +88,7 @@ public final class SceneSavedData extends SavedData {
         tag.putDouble("RX",object.rotation().x);tag.putDouble("RY",object.rotation().y);tag.putDouble("RZ",object.rotation().z);
         tag.putDouble("SX",object.scale().x);tag.putDouble("SY",object.scale().y);tag.putDouble("SZ",object.scale().z);
         tag.putBoolean("Enabled", object.enabled()); tag.putLong("Revision", object.revision());
+        if (!object.metadata().isEmpty()) tag.put("Metadata", object.metadata().save());
         return tag;
     }
     private static SceneObject readObject(CompoundTag tag) {
@@ -87,7 +100,8 @@ public final class SceneSavedData extends SavedData {
                 new Vec3(required(tag.getDouble("R"), "R"), required(tag.getDouble("G"), "G"), required(tag.getDouble("B"), "B")),
                 required(tag.getBoolean("Enabled"), "Enabled"), required(tag.getLong("Revision"), "Revision"), parameters,
                 new Vec3(required(tag.getDouble("RX"), "RX"),required(tag.getDouble("RY"), "RY"),required(tag.getDouble("RZ"), "RZ")),
-                new Vec3(required(tag.getDouble("SX"), "SX"),required(tag.getDouble("SY"), "SY"),required(tag.getDouble("SZ"), "SZ")));
+                new Vec3(required(tag.getDouble("SX"), "SX"),required(tag.getDouble("SY"), "SY"),required(tag.getDouble("SZ"), "SZ")),
+                com.mine.geometry_node.core.engine.metadata.OwnerMetadata.load(tag.getCompoundOrEmpty("Metadata")));
     }
     private static <T> T required(Optional<T> value, String field) {
         return value.orElseThrow(() -> new IllegalArgumentException("Missing or invalid scene field: " + field));

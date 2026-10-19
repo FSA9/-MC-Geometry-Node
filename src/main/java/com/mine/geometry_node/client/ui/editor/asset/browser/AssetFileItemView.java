@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.ui.editor.asset.browser;
 
 import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.display.UiTagChip;
+import com.mine.geometry_node.client.ui.components.display.UiTagStrip;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
@@ -44,8 +46,6 @@ final class AssetFileItemView extends LinearLayout {
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
     private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
     private static final int COLOR_SUBTEXT = UiTheme.Text.MUTED;
-    private static final int COLOR_TAG_BG = 0xFF344458;
-    private static final int COLOR_TAG_TEXT = 0xFFE6F0FF;
     private static final int COLOR_STAR_ON = 0xFFFFD166;
     private static final int COLOR_STAR_OFF = 0xFF69727D;
 
@@ -143,17 +143,16 @@ final class AssetFileItemView extends LinearLayout {
             nameRow.setGravity(Gravity.CENTER_VERTICAL);
             nameRow.addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
             if (!mTags.isEmpty()) {
-                LinearLayout tagRow = new LinearLayout(getContext());
-                tagRow.setOrientation(LinearLayout.HORIZONTAL);
-                tagRow.setGravity(Gravity.CENTER_VERTICAL);
+                UiTagStrip tagRow = new UiTagStrip(getContext());
+                tagRow.setPrefix("#");
                 tagRow.setPadding(dp2pxInt(8), 0, 0, 0);
-                for (String tag : mTags) {
-                    tagRow.addView(createTagChip(tag), tagLayoutParams());
-                }
+                tagRow.setTags(mTags);
                 nameRow.addView(tagRow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
             }
 
-            textColumn.addView(nameRow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+            textColumn.addView(nameRow, parentLabel.isEmpty()
+                    ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f)
+                    : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(UiTagChip.HEIGHT_DP)));
             textColumn.addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
             addView(textColumn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
             if (canFavorite()) {
@@ -217,21 +216,6 @@ final class AssetFileItemView extends LinearLayout {
     private View iconView() {
         if (mPreviewView != null) return mPreviewView;
         return mGraphIconView != null ? mGraphIconView : mIconView;
-    }
-
-    private TextView createTagChip(String tag) {
-        TextView chip = UIUtils.createLockedTextView(getContext(), "#" + tag, 10.0f, COLOR_TAG_TEXT);
-        chip.setSingleLine(true);
-        chip.setGravity(Gravity.CENTER);
-        chip.setPadding(dp2pxInt(7), 0, dp2pxInt(7), 0);
-        chip.setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_TAG_BG, 4));
-        return chip;
-    }
-
-    private LinearLayout.LayoutParams tagLayoutParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp2pxInt(20));
-        lp.rightMargin = dp2pxInt(5);
-        return lp;
     }
 
 }

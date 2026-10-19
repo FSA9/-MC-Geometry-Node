@@ -17,6 +17,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     private boolean initialLoadInFlight;
     private long connectionGeneration;
     private final java.util.Map<UUID, Integer> pendingUpdates = new java.util.HashMap<>();
+    private final java.util.Map<UUID, String> tagUpdateMessages = new java.util.HashMap<>();
 
     private ClientDataLibraryRepository() { this(NetworkRemoteDataLibraryGateway.INSTANCE); }
 
@@ -72,6 +73,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
             pendingInitialLoad.clear();
             initialLoadInFlight = false;
             pendingUpdates.clear();
+            tagUpdateMessages.clear();
         }
     }
 
@@ -90,10 +92,17 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     @Override
     public void update(Entry expected, Entry replacement) {
         UUID id = replacement.id();
+        boolean tagOnly = expected != null && expected.id().equals(id)
+                && java.util.Objects.equals(expected.parentId(), replacement.parentId())
+                && expected.type() == replacement.type()
+                && java.util.Objects.equals(expected.key(), replacement.key())
+                && java.util.Objects.equals(expected.value(), replacement.value())
+                && !expected.tags().equals(replacement.tags());
         long generation;
         synchronized (pendingInitialLoad) {
             generation = connectionGeneration;
             pendingUpdates.merge(id, 1, Integer::sum);
+            if (tagOnly) tagUpdateMessages.remove(id);
         }
         java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
         Runnable completion = () -> {
@@ -101,10 +110,22 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
             synchronized (pendingInitialLoad) {
                 if (generation != connectionGeneration) return;
                 pendingUpdates.computeIfPresent(id, (ignored, count) -> count > 1 ? count - 1 : null);
+                if (tagOnly) {
+                    Entry current = remote.findEntry(id);
+                    if (!remote.hasLoadedSnapshot() || current == null || !current.tags().equals(replacement.tags())) {
+                        tagUpdateMessages.put(id, "database.tag_update_failed");
+                    } else {
+                        tagUpdateMessages.remove(id);
+                    }
+                }
             }
             notifyChanged();
         };
         try {
+            notifyChanged();
+            synchronized (pendingInitialLoad) {
+                if (generation != connectionGeneration) return;
+            }
             remote.update(expected, replacement, completion);
         } catch (RuntimeException failure) {
             completion.run();
@@ -114,6 +135,10 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
 
     @Override public boolean isUpdatePending(UUID entryId) {
         synchronized (pendingInitialLoad) { return pendingUpdates.containsKey(entryId); }
+    }
+
+    @Override public String tagUpdateMessage(UUID entryId) {
+        synchronized (pendingInitialLoad) { return tagUpdateMessages.getOrDefault(entryId, ""); }
     }
 
     @Override
@@ -173,6 +198,11 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     }
 
     private void notifyChanged() {
+        synchronized (pendingInitialLoad) {
+            if (!tagUpdateMessages.isEmpty() && remote.hasLoadedSnapshot()) {
+                tagUpdateMessages.keySet().removeIf(id -> remote.findEntry(id) == null);
+            }
+        }
         listeners.forEach(ClientDataLibraryRepository::runCallback);
     }
 

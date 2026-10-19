@@ -319,7 +319,7 @@ public final class WorldObjectsView extends FrameLayout {
     private void refresh() {
         if (disposed || !shown || awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current())) return;
         snapshot = session.snapshot();
-        if (snapshot.equals(renderedSnapshot)) { updateInteractionState(); return; }
+        if (snapshot.equals(renderedSnapshot)) { updateSelection(); return; }
         renderedSnapshot=snapshot;
         if (!snapshot.loading()) {
             typeCatalog = snapshot.types();
@@ -607,7 +607,9 @@ public final class WorldObjectsView extends FrameLayout {
         var source=new ArrayList<DatabaseSelection.Field>();
         source.add(new DatabaseSelection.Field(tr("source"),entry.source().isEmpty()?"—":entry.source()));
         source.add(new DatabaseSelection.Field(tr("provider"),providerLabel(entry.provider())));
-        entry.references().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(ref->
+        entry.references().entrySet().stream()
+                .filter(ref -> !ref.getKey().equals(WorldObjectTagEdits.TARGET_REFERENCE))
+                .sorted(Map.Entry.comparingByKey()).forEach(ref->
                 source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
         return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
                 "",UiTheme.Text.MUTED,List.of(),
@@ -615,8 +617,24 @@ public final class WorldObjectsView extends FrameLayout {
                 new DatabaseSelection.Section(tr("spatial_position"),entry.dimension(),DatabaseSelection.Kind.POSITION,position),
                 new DatabaseSelection.Section(tr("object_information"),"",DatabaseSelection.Kind.METADATA,metadata),
                 new DatabaseSelection.Section(tr("tags"),"",DatabaseSelection.Kind.TAGS,
-                        entry.tags().stream().map(tag->new DatabaseSelection.Field("",tag)).toList()),
+                        entry.tags().stream().map(tag->new DatabaseSelection.Field("",tag)).toList(),
+                        session.canEditTags(entry) ? new DatabaseSelection.TagEditor(
+                                entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
+                                !session.isTagUpdatePending(), session.tagUpdateMessage().isEmpty() ? ""
+                                        : Component.translatable("geometry_node." + session.tagUpdateMessage()).getString(),
+                                tag -> submitTagEdit(entry, tag, true),
+                                tag -> submitTagEdit(entry, tag, false)) : null),
                 new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)));
+    }
+    private void submitTagEdit(WorldObjectEntry expected, String tag, boolean add) {
+        // Equal inspector text may hide bounds/sub-pixel motion changes. Resolve the latest DTO while
+        // retaining the original owner lease and tag precondition, rather than rejecting harmless motion.
+        WorldObjectEntry live = session.snapshot().entries().stream().filter(entry -> entry.key().equals(expected.key())
+                && Objects.equals(entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
+                        expected.references().get(WorldObjectTagEdits.TARGET_REFERENCE))
+                && entry.tags().equals(expected.tags())).findFirst().orElseThrow(() -> new IllegalStateException("Stale tag target"));
+        if (!(add ? session.addTag(live, tag) : session.removeTag(live, tag)))
+            throw new IllegalStateException("Tag edit rejected");
     }
     private static String number(double value) {return String.format(Locale.ROOT,"%.2f",value);}
     private static String position(WorldObjectEntry entry) {

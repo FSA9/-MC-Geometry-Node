@@ -20,9 +20,9 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /** Persistent storage for named shared, scoreboard group, and dimension scoped state. */
 public final class ServerScopedStateSavedData extends SavedData {
@@ -37,11 +37,10 @@ public final class ServerScopedStateSavedData extends SavedData {
             ServerScopedStateSavedData::new, CODEC);
 
     private final Map<ScopeKey, PersistentScopedStateBucket> buckets = new LinkedHashMap<>();
-    private boolean entriesValidated;
+    private boolean updating;
 
     public static ServerScopedStateSavedData get(ServerLevel level) {
         ServerScopedStateSavedData storage = level.getServer().getDataStorage().computeIfAbsent(TYPE);
-        storage.validateEntries(level.registryAccess());
         return storage;
     }
 
@@ -65,6 +64,7 @@ public final class ServerScopedStateSavedData extends SavedData {
 
     public boolean removeScope(ScopedStateNamespace namespace,
                                ScopedStateScope scope, String stableIdentity) {
+        requireNotUpdating();
         String identity = scope == ScopedStateScope.SHARED
                 ? "server" : normalizeIdentity(stableIdentity);
         boolean removed = buckets.remove(new ScopeKey(namespace, scope, identity)) != null;
@@ -76,6 +76,7 @@ public final class ServerScopedStateSavedData extends SavedData {
     public static boolean removeGroup(MinecraftServer server, String teamName) {
         String identity = "scoreboard:" + normalizeIdentity(teamName);
         ServerScopedStateSavedData storage = get(server.overworld());
+        storage.requireNotUpdating();
         boolean removed = storage.buckets.keySet().removeIf(key ->
                 key.scope() == ScopedStateScope.GROUP && key.identity().equals(identity));
         if (removed) storage.setDirty();
@@ -88,6 +89,7 @@ public final class ServerScopedStateSavedData extends SavedData {
                 .map(name -> "scoreboard:" + name)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         ServerScopedStateSavedData storage = get(server.overworld());
+        storage.requireNotUpdating();
         int before = storage.buckets.size();
         storage.buckets.keySet().removeIf(key -> key.scope() == ScopedStateScope.GROUP
                 && !activeIdentities.contains(key.identity()));
@@ -144,6 +146,7 @@ public final class ServerScopedStateSavedData extends SavedData {
         root.putInt("Version", VERSION);
         ListTag bucketTags = new ListTag();
         for (Map.Entry<ScopeKey, PersistentScopedStateBucket> bucketEntry : buckets.entrySet()) {
+            if (bucketEntry.getValue().isEmpty()) continue;
             CompoundTag tag = new CompoundTag();
             tag.putString("Namespace", bucketEntry.getKey().namespace().serializedName());
             tag.putString("Scope", bucketEntry.getKey().scope().name());
@@ -153,6 +156,10 @@ public final class ServerScopedStateSavedData extends SavedData {
         }
         root.put("Buckets", bucketTags);
         return root;
+    }
+
+    private void requireNotUpdating() {
+        if (updating) throw new IllegalStateException("Reentrant scoped metadata mutation");
     }
 
     private static String normalizeReference(String value) {
@@ -187,33 +194,69 @@ public final class ServerScopedStateSavedData extends SavedData {
 
         @Override public ScopedStateScope scope() { return scope; }
         @Override public String identity() { return storageKey.identity(); }
+        @Override public boolean available() { return !level.getServer().isStopped(); }
+        @Override public com.mine.geometry_node.core.metadata.DataValuePolicy valuePolicy() {
+            return com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.scoped(registries);
+        }
 
         @Override
         public @Nullable ScopedStateEntry get(String name) {
+            requireThread();
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
-            return bucket != null ? bucket.get(name, registries, location(name),
-                    () -> removeCorruptEntry(storageKey, bucket)) : null;
+            return bucket != null ? bucket.get(name, registries, location(name)) : null;
         }
 
         @Override
         public void put(String name, Object value) {
-            PersistentScopedStateBucket bucket = bucketForMutation(storageKey);
-            boolean changed;
+            update(current -> {
+                Map<String, Object> next = new LinkedHashMap<>(current);
+                next.put(name, value);
+                return next;
+            });
+        }
+
+        @Override public Map<String, Object> read() {
+            requireThread();
+            PersistentScopedStateBucket bucket = buckets.get(storageKey);
+            return bucket == null ? Map.of() : bucket.readValues(registries, locationPrefix());
+        }
+
+        @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
+            requireThread();
+            requireNotUpdating();
+            updating = true;
             try {
-                changed = bucket.put(name, value, maxEntries, registries, locationPrefix(),
-                        this::notifyLimit, ServerScopedStateSavedData.this::setDirty);
-            } catch (RuntimeException exception) {
-                if (bucket.isEmpty()) buckets.remove(storageKey);
-                throw exception;
-            }
-            if (changed) setDirty();
+                PersistentScopedStateBucket bucket = buckets.get(storageKey);
+                if (bucket == null) bucket = new PersistentScopedStateBucket();
+                int oldSize = bucket.size();
+                boolean changed = bucket.update(current -> {
+                    Map<String, Object> candidate = transformation.apply(current);
+                    if (oldSize == 0 && candidate != null && !candidate.isEmpty()
+                            && buckets.values().stream().filter(value -> !value.isEmpty()).count() >= MAX_BUCKETS)
+                        throw new ScopedStateAccessException("Persistent blackboard scope limit exceeded: " + MAX_BUCKETS);
+                    return candidate;
+                }, maxEntries, registries, locationPrefix(), () -> {});
+                if (changed) {
+                    buckets.put(storageKey, bucket);
+                    setDirty();
+                    if (oldSize < maxEntries && bucket.size() == maxEntries)
+                        PersistentScopedStateBucket.notifyCommitted(this::notifyLimit);
+                }
+                return changed;
+            } finally { updating = false; }
+        }
+
+        private void requireThread() {
+            if (!level.getServer().isSameThread() || level.getServer().isStopped())
+                throw new ScopedStateAccessException("Scoped state must be accessed on the server owner thread");
         }
 
         @Override
         public boolean remove(String name) {
+            requireThread();
+            requireNotUpdating();
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
             if (bucket == null || !bucket.remove(name)) return false;
-            if (bucket.isEmpty()) buckets.remove(storageKey);
             setDirty();
             return true;
         }
@@ -223,20 +266,22 @@ public final class ServerScopedStateSavedData extends SavedData {
         }
 
         @Override public long revision() {
+            requireThread();
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
             return bucket != null ? bucket.revision() : 0L;
         }
 
         @Override public int size() {
+            requireThread();
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
             return bucket != null ? bucket.size() : 0;
         }
 
         @Override public Map<String, ScopedStateEntry> entries(int limit) {
+            requireThread();
             PersistentScopedStateBucket bucket = buckets.get(storageKey);
             return bucket != null
-                    ? bucket.entries(registries, locationPrefix(), limit,
-                            () -> removeCorruptEntry(storageKey, bucket)) : Map.of();
+                    ? bucket.entries(registries, locationPrefix(), limit) : Map.of();
         }
 
         private void notifyLimit() {
@@ -251,37 +296,6 @@ public final class ServerScopedStateSavedData extends SavedData {
         private String locationPrefix() {
             return ServerScopedStateSavedData.locationPrefix(storageKey);
         }
-    }
-
-    private PersistentScopedStateBucket bucketForMutation(ScopeKey key) {
-        PersistentScopedStateBucket existing = buckets.get(key);
-        if (existing != null) return existing;
-        if (buckets.size() >= MAX_BUCKETS) {
-            throw new ScopedStateAccessException(
-                    "Persistent blackboard scope limit exceeded: " + MAX_BUCKETS);
-        }
-        PersistentScopedStateBucket created = new PersistentScopedStateBucket();
-        buckets.put(key, created);
-        return created;
-    }
-
-    private void validateEntries(HolderLookup.Provider registries) {
-        if (entriesValidated) return;
-        entriesValidated = true;
-        Iterator<Map.Entry<ScopeKey, PersistentScopedStateBucket>> iterator =
-                buckets.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<ScopeKey, PersistentScopedStateBucket> item = iterator.next();
-            PersistentScopedStateBucket bucket = item.getValue();
-            bucket.removeCorruptEntries(
-                    registries, locationPrefix(item.getKey()), this::setDirty);
-            if (bucket.isEmpty()) iterator.remove();
-        }
-    }
-
-    private void removeCorruptEntry(ScopeKey key, PersistentScopedStateBucket bucket) {
-        if (bucket.isEmpty()) buckets.remove(key, bucket);
-        setDirty();
     }
 
     private static String locationPrefix(ScopeKey key) {

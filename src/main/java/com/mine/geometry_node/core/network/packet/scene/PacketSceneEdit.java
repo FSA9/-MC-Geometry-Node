@@ -10,10 +10,11 @@ import java.util.*;
 
 /** Empty changes request a fresh dimension snapshot. IDs make mutations safely retryable. */
 public record PacketSceneEdit(UUID requestId, String dimension, List<SceneChange> changes) implements CustomPacketPayload {
-    public static final Type<PacketSceneEdit> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_edit_v4"));
+    public static final Type<PacketSceneEdit> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "scene_edit_v5"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketSceneEdit> STREAM_CODEC = StreamCodec.of(PacketSceneEdit::write, PacketSceneEdit::read);
     public PacketSceneEdit {
         Objects.requireNonNull(requestId); Identifier.parse(dimension); changes = List.copyOf(changes);
+        SceneDocument.requireMetadataBudget(changes.stream().map(SceneChange::replacement).filter(Objects::nonNull).toList());
         if (changes.size() > SceneDocument.MAX_OBJECTS) throw new IllegalArgumentException("Scene batch too large");
     }
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -27,7 +28,13 @@ public record PacketSceneEdit(UUID requestId, String dimension, List<SceneChange
     private static PacketSceneEdit read(RegistryFriendlyByteBuf buf) {
         UUID id = buf.readUUID(); String dimension = buf.readUtf(256);
         int count = SceneWire.count(buf, SceneDocument.MAX_OBJECTS); List<SceneChange> changes = new ArrayList<>();
-        for (int i = 0; i < count; i++) changes.add(new SceneChange(buf.readUUID(), buf.readLong(), buf.readBoolean() ? SceneWire.read(buf) : null));
+        int metadataBytes = 0;
+        for (int i = 0; i < count; i++) {
+            var change = new SceneChange(buf.readUUID(), buf.readLong(), buf.readBoolean() ? SceneWire.read(buf) : null);
+            if (change.replacement() != null) metadataBytes += change.replacement().metadata().encodedSize();
+            if (metadataBytes > SceneDocument.MAX_METADATA_BYTES) throw new IllegalArgumentException("Scene metadata exceeds budget");
+            changes.add(change);
+        }
         return new PacketSceneEdit(id, dimension, changes);
     }
 }

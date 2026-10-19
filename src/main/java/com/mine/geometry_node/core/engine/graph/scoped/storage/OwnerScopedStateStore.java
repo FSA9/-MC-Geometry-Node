@@ -11,9 +11,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 /** Typed OWNER scoped state serialized independently from blueprint attributes. */
 public final class OwnerScopedStateStore {
+    private boolean updating;
     private static final int HARD_MAX_RECORDS = ScopedStateServerConfig.HARD_MAX_ENTRIES;
     private static final int HARD_MAX_TOTAL_RECORDS =
             HARD_MAX_RECORDS * ScopedStateNamespace.values().length;
@@ -27,8 +29,7 @@ public final class OwnerScopedStateStore {
     public @Nullable ScopedStateEntry get(ScopedStateNamespace namespace, String name,
                                           HolderLookup.Provider registries) {
         PersistentScopedStateBucket bucket = buckets.get(namespace);
-        return bucket != null ? bucket.get(name, registries, location(namespace, name),
-                () -> removeEmptyBucket(namespace, bucket)) : null;
+        return bucket != null ? bucket.get(name, registries, location(namespace, name)) : null;
     }
 
     public void put(String name, Object value, int maxEntries,
@@ -39,17 +40,34 @@ public final class OwnerScopedStateStore {
     public void put(ScopedStateNamespace namespace, String name, Object value,
                     int maxEntries, HolderLookup.Provider registries,
                     Runnable limitNotifier) {
-        int limit = Math.min(maxEntries, HARD_MAX_RECORDS);
-        PersistentScopedStateBucket bucket = buckets.computeIfAbsent(
-                namespace, ignored -> new PersistentScopedStateBucket());
+        update(namespace, current -> {
+            Map<String, Object> next = new java.util.LinkedHashMap<>(current);
+            next.put(name, value);
+            return next;
+        }, maxEntries, registries, limitNotifier);
+    }
+
+    public Map<String, Object> readValues(ScopedStateNamespace namespace, HolderLookup.Provider registries) {
+        PersistentScopedStateBucket bucket = buckets.get(namespace);
+        return bucket == null ? Map.of() : bucket.readValues(registries, locationPrefix(namespace));
+    }
+
+    public boolean update(ScopedStateNamespace namespace, UnaryOperator<Map<String, Object>> transformation,
+                          int maxEntries, HolderLookup.Provider registries, Runnable limitNotifier) {
+        if (updating) throw new IllegalStateException("Reentrant scoped metadata mutation");
+        updating = true;
         try {
-            bucket.put(
-                    name, value, limit, registries, locationPrefix(namespace),
-                    limitNotifier, () -> {});
-        } catch (RuntimeException exception) {
-            if (bucket.isEmpty()) buckets.remove(namespace);
-            throw exception;
-        }
+            PersistentScopedStateBucket bucket = buckets.get(namespace);
+            if (bucket == null) bucket = new PersistentScopedStateBucket();
+            int oldSize = bucket.size();
+            boolean changed = bucket.update(transformation, Math.min(maxEntries, HARD_MAX_RECORDS), registries, locationPrefix(namespace), () -> {});
+            if (changed) {
+                buckets.put(namespace, bucket);
+                if (oldSize < Math.min(maxEntries, HARD_MAX_RECORDS) && bucket.size() == Math.min(maxEntries, HARD_MAX_RECORDS))
+                    PersistentScopedStateBucket.notifyCommitted(limitNotifier);
+            }
+            return changed;
+        } finally { updating = false; }
     }
 
     public boolean remove(String name) {
@@ -57,9 +75,9 @@ public final class OwnerScopedStateStore {
     }
 
     public boolean remove(ScopedStateNamespace namespace, String name) {
+        if (updating) throw new IllegalStateException("Reentrant scoped metadata mutation");
         PersistentScopedStateBucket bucket = buckets.get(namespace);
         if (bucket == null || !bucket.remove(name)) return false;
-        if (bucket.isEmpty()) buckets.remove(namespace);
         return true;
     }
 
@@ -83,7 +101,7 @@ public final class OwnerScopedStateStore {
         return bucket != null ? bucket.size() : 0;
     }
 
-    public boolean isEmpty() { return buckets.isEmpty(); }
+    public boolean isEmpty() { return buckets.values().stream().allMatch(PersistentScopedStateBucket::isEmpty); }
 
     public Map<String, ScopedStateEntry> entries(HolderLookup.Provider registries) {
         return entries(ScopedStateNamespace.PUBLIC, registries, Integer.MAX_VALUE);
@@ -98,8 +116,7 @@ public final class OwnerScopedStateStore {
                                                  HolderLookup.Provider registries, int limit) {
         PersistentScopedStateBucket bucket = buckets.get(namespace);
         return bucket != null
-                ? bucket.entries(registries, locationPrefix(namespace), limit,
-                        () -> removeEmptyBucket(namespace, bucket)) : Map.of();
+                ? bucket.entries(registries, locationPrefix(namespace), limit) : Map.of();
     }
 
     public CompoundTag save(CompoundTag root, HolderLookup.Provider registries) {
@@ -117,6 +134,7 @@ public final class OwnerScopedStateStore {
     }
 
     public void load(CompoundTag root, HolderLookup.Provider registries) {
+        if (updating) throw new IllegalStateException("Reentrant scoped metadata mutation");
         buckets.clear();
         Map<ScopedStateNamespace, Map<String, CompoundTag>> serializedByNamespace =
                 new EnumMap<>(ScopedStateNamespace.class);
@@ -144,14 +162,9 @@ public final class OwnerScopedStateStore {
         serializedByNamespace.forEach((namespace, entries) -> {
             PersistentScopedStateBucket bucket = new PersistentScopedStateBucket();
             bucket.loadEntries(entries.values(), HARD_MAX_RECORDS, locationPrefix(namespace));
-            bucket.removeCorruptEntries(registries, locationPrefix(namespace), () -> {});
+            // Decode lazily: addon codecs may register after attachment loading.
             if (!bucket.isEmpty()) buckets.put(namespace, bucket);
         });
-    }
-
-    private void removeEmptyBucket(ScopedStateNamespace namespace,
-                                   PersistentScopedStateBucket bucket) {
-        if (bucket.isEmpty()) buckets.remove(namespace, bucket);
     }
 
     private static String location(ScopedStateNamespace namespace, String name) {

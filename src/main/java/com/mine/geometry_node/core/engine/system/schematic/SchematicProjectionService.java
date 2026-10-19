@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.engine.system.schematic;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
@@ -91,7 +95,7 @@ public final class SchematicProjectionService {
             if (!removedViewers.isEmpty()) sendRemoval(server, resourceId, removedViewers);
         }
         NetworkHandler.sendToPlayers(targetsById.values(), packet);
-        state.resources.put(resourceId, new ProjectionLease(Set.copyOf(viewers),
+        state.resources.put(resourceId, new ProjectionLease(previous == null ? new RuntimeMetadata() : previous.metadata(), Set.copyOf(viewers),
                 expiresAt(currentTick, packet.durationTicks()), geometry, estimatedBytes,
                 new QuerySnapshot(resourceId, packet.dimension(),
                         new net.minecraft.world.phys.Vec3(packet.originX(), packet.originY(), packet.originZ()),
@@ -238,6 +242,27 @@ public final class SchematicProjectionService {
         }
     }
 
+    public synchronized MetadataCapabilities.Access metadata(MinecraftServer server, GraphResourceId id) {
+        RuntimeMetadataTargets.requireThread(server);
+        ServerState state = servers.get(server);
+        ProjectionLease lease = state == null ? null : state.resources.get(id);
+        if (lease == null || lease.expiresAt() <= server.overworld().getGameTime())
+            throw new IllegalStateException("Projection no longer exists");
+        RuntimeMetadata metadata = lease.metadata();
+        return metadata.access(GraphMetadataValuePolicy.of(server.registryAccess()), () -> {
+            RuntimeMetadataTargets.requireThread(server);
+            ServerState currentState = servers.get(server);
+            ProjectionLease current = currentState == null ? null : currentState.resources.get(id);
+            if (current == null || current.metadata() != metadata || current.expiresAt() <= server.overworld().getGameTime())
+                throw new IllegalStateException("Projection metadata handle is stale");
+        });
+    }
+
+    public synchronized long metadataRevision(MinecraftServer server, GraphResourceId id) {
+        metadata(server, id);
+        return servers.get(server).resources.get(id).metadata().revision();
+    }
+
     public record QuerySnapshot(GraphResourceId id, String dimension, net.minecraft.world.phys.Vec3 position,
                                 net.minecraft.world.phys.AABB bounds) {}
     /** Existing leases only, with spatial metadata retained independently of heavy projection packets. */
@@ -248,7 +273,7 @@ public final class SchematicProjectionService {
         for (var lease : state.resources.values())
             if (lease.expiresAt() > now && !visitor.test(lease.snapshot())) return;
     }
-    private record ProjectionLease(Set<UUID> viewers, long expiresAt, long geometry,
+    private record ProjectionLease(RuntimeMetadata metadata, Set<UUID> viewers, long expiresAt, long geometry,
                                    long estimatedBytes, QuerySnapshot snapshot) {
     }
 

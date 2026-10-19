@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.editor.database.sidebar;
 
 import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.layout.TagFlowLayout;
+import com.mine.geometry_node.client.ui.components.display.UiTagChip;
+import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.input.UiSearchSubmit;
 import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.layout.UiPropertyRow;
@@ -22,6 +25,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
 
@@ -142,16 +146,61 @@ final class DatabaseInspectorViews {
         return grid;
     }
 
-    static View tags(Context context, List<DatabaseSelection.Field> fields) {
+    static View tags(Context context, List<DatabaseSelection.Field> fields, DatabaseSelection.TagEditor editor,
+                     Supplier<DatabaseSelection.TagEditor> latestEditor) {
+        LinearLayout content = vertical(context);
+        TextView feedback = text(context, editor == null ? "" : editor.message(), 11, MUTED);
+        feedback.setVisibility(feedback.getText().length() == 0 ? View.GONE : View.VISIBLE);
         TagFlowLayout tags = new TagFlowLayout(context, 4, 4);
         for (DatabaseSelection.Field field : fields) {
             if (field.value() == null || field.value().isBlank()) continue;
-            TextView tag = ellipsized(context, field.value(), TEXT);
-            tag.setPadding(px(7), 0, px(7), 0);
-            tag.setBackground(surface(UiTheme.Surface.HEADER, UiTheme.Control.INPUT_BORDER));
-            tags.addView(tag, new TagFlowLayout.LayoutParams(-2, px(23)));
+            var tag = new UiTagChip(context, field.value());
+            if (editor != null) {
+                tag.setOnRemove(tr("remove_tag"), () -> {
+                    var latest = latestEditor.get();
+                    if (latest == null || !latest.enabled()) return;
+                    try { latest.remove().accept(field.value()); }
+                    catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
+                });
+                tag.setEnabled(editor.enabled());
+            }
+            tags.addView(tag, new TagFlowLayout.LayoutParams(-2, px(UiTagChip.HEIGHT_DP)));
         }
-        return tags;
+        content.addView(tags, new LinearLayout.LayoutParams(-1, -2));
+        if (editor != null) {
+            LinearLayout row = new LinearLayout(context);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            UiTextInput input = new UiTextInput(context);
+            input.setSingleLine(true);
+            input.setHint(tr("tag_input"));
+            input.setEnabled(editor.enabled());
+            row.addView(input, new LinearLayout.LayoutParams(0, px(28), 1));
+            UiActionButton add = action(context, tr("add_tag"), () -> {}, false);
+            add.setEnabled(editor.enabled());
+            LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(-2, px(28));
+            buttonParams.leftMargin = px(6);
+            row.addView(add, buttonParams);
+            UiSearchSubmit.bind(add, () -> {
+                var latest = latestEditor.get();
+                if (latest == null || !latest.enabled() || input.getText().toString().isBlank()) return;
+                try {
+                    latest.add().accept(input.getText().toString());
+                    input.setText("");
+                } catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
+            }, input);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+            rowParams.topMargin = px(6);
+            content.addView(row, rowParams);
+        }
+        LinearLayout.LayoutParams feedbackParams = new LinearLayout.LayoutParams(-1, -2);
+        feedbackParams.topMargin = px(6);
+        content.addView(feedback, feedbackParams);
+        return content;
+    }
+
+    private static void showTagError(TextView feedback) {
+        feedback.setText(tr("tag_update_invalid"));
+        feedback.setVisibility(View.VISIBLE);
     }
 
     static View block(Context context, DatabaseSelection.Field field, boolean reference) {

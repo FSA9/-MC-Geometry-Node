@@ -28,7 +28,8 @@
 | 细线外观分割线 | [ThinResizableDivider](layout/ThinResizableDivider.java) | 继承同一输入逻辑；细线常态、宽命中区、悬停蓝条。 |
 | 自动换行布局 | [TagFlowLayout](layout/TagFlowLayout.java) | 只排列已有子控件，不负责标签数据或点击。 |
 | 表格里的只读文字 | [UiDisplayText](display/UiDisplayText.java) | 保留完整值提示并向外层行透传点击，防止文字提示独占选择手势。 |
-| 固定行高的标签展示 | [UiTagStrip](display/UiTagStrip.java) | 单行只读标签及溢出提示；多行排列使用 `TagFlowLayout`。 |
+| 单个 Tag 显示块 | [UiTagChip](display/UiTagChip.java) | 统一主题、24dp 高度和省略文字；默认只读透传行点击。`setPrefix()` 仅设置视觉前缀，`setOnRemove(description, action)` 可配置删除，普通点击可用 `setOnClickListener()`；不修改标签数据。 |
+| 固定行高的标签展示 | [UiTagStrip](display/UiTagStrip.java) | 组合 `UiTagChip` 显示单行只读标签及溢出提示；`setPrefix()` 统一前缀。多行排列使用 `TagFlowLayout`＋`UiTagChip`。 |
 | 纵／横滚动 | [UiScrollView](scroll/UiScrollView.java)、[UiHorizontalScrollView](scroll/UiHorizontalScrollView.java) | 共用内部 `UiScrollBehavior`，统一滚动条交互边界；轨道与滑块使用边界内填充绘制，避免缩放后描边越界与淡出残影。 |
 | 编辑器右侧栏 | [EditorSidebar](sidebar/EditorSidebar.java)、[SidebarLayoutController](sidebar/SidebarLayoutController.java) | 面板标签、展开／收起与布局联动；窗口失焦取消标签拖动，延迟滚动只定位当前仍在目录中的标签；可扩展面板通过 [sidebar/api](sidebar/api) 注册。 |
 
@@ -48,6 +49,8 @@
 `UiSearchBar` 是工具栏搜索，`UiSearchMenuLayout` 是菜单内容布局，`UiSearchableMenu` 是完整选择菜单，三者职责不同。类别导航、业务权限和选项回调不进入弹层底座。
 
 ## 表格
+
+Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资产列表通过 `UiTagStrip` 组合，Graph 属性与数据库详情通过 `TagFlowLayout` 组合。禁止在业务界面另写标签背景、描边、删除图标和 hover 样式。Graph 的 `#` 是显示前缀，不进入底层标签值；删除回调仍由上层提交并维护历史。只读标签不会吞掉行选择手势，删除按钮则独立消费点击。
 
 [UiTableColumns](table/UiTableColumns.java) 保存列定义和逻辑宽度；[UiTableRow](table/UiTableRow.java) 让表头、数据行使用同一列模型并处理列边界拖动；[UiTableViewport](table/UiTableViewport.java) 提供横向溢出与测量更新；[UiTableStyle](table/UiTableStyle.java) 提供共享行、单元格、配色和固定序号列。
 

@@ -1,6 +1,9 @@
 package com.mine.geometry_node.core.engine.system.schematic;
 
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
+import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import net.minecraft.core.HolderLookup;
+import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -287,9 +290,20 @@ public final class SchematicPlacementManager {
             TransformInfo transform,
             List<ChangedBlock> changedBlocks,
             List<PlacedEntity> spawnedEntities,
-            long createdGameTime
+            long createdGameTime,
+            UUID incarnation,
+            long metadataRevision,
+            OwnerMetadata metadata
     ) {
+        public SchematicPlacementRecord(String key, String graphId, ResourceKey<Level> dimension,
+                BlockPos origin, BlockPos boundsMin, BlockPos boundsMax, int width, int height, int length,
+                TransformInfo transform, List<ChangedBlock> changedBlocks, List<PlacedEntity> spawnedEntities, long createdGameTime) {
+            this(key, graphId, dimension, origin, boundsMin, boundsMax, width, height, length, transform,
+                    changedBlocks, spawnedEntities, createdGameTime, UUID.randomUUID(), 0, OwnerMetadata.EMPTY);
+        }
         public SchematicPlacementRecord {
+            Objects.requireNonNull(incarnation); Objects.requireNonNull(metadata);
+            if (metadataRevision < 0) throw new IllegalArgumentException("Invalid placement metadata revision");
             key = key == null ? "" : key.trim();
             graphId = graphId == null ? "" : graphId;
             origin = origin == null ? BlockPos.ZERO : origin.immutable();
@@ -300,6 +314,17 @@ public final class SchematicPlacementManager {
             spawnedEntities = spawnedEntities == null ? List.of() : List.copyOf(spawnedEntities);
         }
 
+        public List<String> tags() { return metadata.tags(); }
+        public Map<String,Object> data() { return data(null); }
+        public Map<String,Object> data(HolderLookup.Provider registries) { return metadata.data(registries); }
+        public SchematicPlacementRecord withIncarnation(UUID value) {
+            return new SchematicPlacementRecord(key, graphId, dimension, origin, boundsMin, boundsMax, width, height, length,
+                    transform, changedBlocks, spawnedEntities, createdGameTime, value, metadataRevision, metadata);
+        }
+        public SchematicPlacementRecord withMetadata(OwnerMetadata value, long revision) {
+            return new SchematicPlacementRecord(key, graphId, dimension, origin, boundsMin, boundsMax, width, height, length,
+                    transform, changedBlocks, spawnedEntities, createdGameTime, incarnation, revision, value);
+        }
         public Vec3 boundsCenter() {
             return new Vec3(
                     (boundsMin.getX() + boundsMax.getX() + 1.0D) * 0.5D,
@@ -316,7 +341,7 @@ public final class SchematicPlacementManager {
             );
         }
 
-        private SchematicPlacementRecord withSpawnedEntities(List<PlacedEntity> entities) {
+        public SchematicPlacementRecord withSpawnedEntities(List<PlacedEntity> entities) {
             return new SchematicPlacementRecord(
                     key,
                     graphId,
@@ -330,7 +355,7 @@ public final class SchematicPlacementManager {
                     transform,
                     changedBlocks,
                     entities,
-                    createdGameTime
+                    createdGameTime, incarnation, metadataRevision, metadata
             );
         }
     }

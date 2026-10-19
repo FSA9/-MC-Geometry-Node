@@ -4,9 +4,10 @@ import com.mine.geometry_node.client.ui.UICommand.ICommand;
 import com.mine.geometry_node.client.ui.editor.graph.GraphController;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -57,14 +58,6 @@ public final class CmdSetGraphMetadata implements ICommand {
     }
 
     private static List<String> normalizeTags(List<String> tags) {
-        LinkedHashSet<String> normalized = new LinkedHashSet<>();
-        if (tags != null) {
-            for (String tag : tags) {
-                if (tag == null) continue;
-                String value = tag.trim();
-                if (!value.isEmpty()) normalized.add(value);
-            }
-        }
-        return new ArrayList<>(normalized);
+        return new ArrayList<>(TagSet.normalize(tags, TagPolicy.GRAPH_EDIT_LEGACY));
     }
 }

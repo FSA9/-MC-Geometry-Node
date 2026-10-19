@@ -2,13 +2,15 @@ package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties;
 
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 
+import com.mine.geometry_node.client.ui.components.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.layout.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.input.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
 import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
@@ -24,7 +26,6 @@ import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
@@ -62,9 +63,6 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     private static final int COLOR_TEXT = 0xFFE3E3E3;
     private static final int COLOR_MUTED = 0xFF777777;
     private static final int COLOR_ERROR = 0xFFE18A8A;
-    private static final int COLOR_TAG = 0xFF424242;
-    private static final int COLOR_TAG_HOVER = 0xFF505050;
-    private static final int COLOR_TAG_BORDER = 0xFF5C5C5C;
 
     private final ScrollView mScroll;
     private final LinearLayout mContent;
@@ -387,8 +385,8 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
 
         Set<String> seen = new LinkedHashSet<>(mTags);
         boolean changed = false;
-        for (String part : raw.split("[,，;；\\s]+")) {
-            String normalized = GraphTagIO.normalizeTag(part);
+        for (String normalized : TagSet.normalize(java.util.Arrays.asList(raw.split("[,，;；\\s]+")),
+                TagPolicy.GRAPH_LEGACY)) {
             if (!normalized.isEmpty() && seen.add(normalized)) {
                 mTags.add(normalized);
                 changed = true;
@@ -420,33 +418,14 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         for (String tag : new ArrayList<>(mTags)) {
             mTagList.addView(createTagChip(tag), new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    UIUtils.dp2pxInt(30)));
+                    UIUtils.dp2pxInt(UiTagChip.HEIGHT_DP)));
         }
     }
 
     private View createTagChip(String tag) {
-        LinearLayout chip = new LinearLayout(getContext());
-        chip.setOrientation(LinearLayout.HORIZONTAL);
-        chip.setGravity(Gravity.CENTER_VERTICAL);
-        chip.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(3), 0);
-        chip.setBackground(rect(COLOR_TAG, 3.0f, 1, COLOR_TAG_BORDER));
-        chip.setOnHoverListener((v, event) -> {
-            chip.setBackground(rect(
-                    event.getAction() == MotionEvent.ACTION_HOVER_ENTER ? COLOR_TAG_HOVER : COLOR_TAG,
-                    3.0f, 1, COLOR_TAG_BORDER));
-            return false;
-        });
-
-        TextView text = label(getContext(), "#" + tag, 10.5f, COLOR_TEXT);
-        text.setPadding(0, 0, UIUtils.dp2pxInt(5), 0);
-        chip.addView(text, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-
-        UiIconButton remove = GraphPropertiesUi.actionIcon(getContext(), SvgIconView.Icon.CLOSE,
-                "geometry_node.common.delete");
-        remove.setOnClickListener(v -> removeTag(tag));
-        chip.addView(remove, GraphPropertiesUi.actionParams());
+        UiTagChip chip = new UiTagChip(getContext(), tag);
+        chip.setPrefix("#");
+        chip.setOnRemove(tr("geometry_node.common.delete"), () -> removeTag(tag));
         return chip;
     }
 

@@ -7,9 +7,13 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
+import java.util.Objects;
 
 /**
  * Single read/write gateway for graph documents.
@@ -19,6 +23,8 @@ public final class GraphDocumentStore {
 
     private static final int FILE_LOCK_COUNT = 64;
     private final ReentrantLock[] mFileLocks = new ReentrantLock[FILE_LOCK_COUNT];
+    // Reads share the striped locks, so lock hold counts cannot distinguish a nested write from a read.
+    private final ThreadLocal<Set<Path>> mMutatingPaths = new ThreadLocal<>();
 
     private GraphDocumentStore() {
         for (int i = 0; i < mFileLocks.length; i++) {
@@ -50,7 +56,7 @@ public final class GraphDocumentStore {
     }
 
     public boolean claimDocument(GraphFileReference reference, long expectedRevision) throws IOException {
-        return withReference(reference, path -> reference.claimDocument(expectedRevision));
+        return withMutation(reference, path -> reference.claimDocument(expectedRevision));
     }
 
     public void writeStringAtomic(GraphFileReference reference, String content) throws IOException {
@@ -58,7 +64,7 @@ public final class GraphDocumentStore {
     }
 
     public void writeStringAtomic(GraphFileReference reference, String content, Charset charset) throws IOException {
-        withReference(reference, path -> {
+        withMutation(reference, path -> {
             reference.requireDocumentClaimed();
             writeStringAtomicLocked(path, content, charset);
             reference.contentChanged();
@@ -68,13 +74,54 @@ public final class GraphDocumentStore {
 
     public void updateStringAtomic(GraphFileReference reference, Charset charset, StringUpdater updater)
             throws IOException {
-        withReference(reference, path -> {
+        updateStringAtomicIfChanged(reference, charset, updater);
+    }
+
+    /** Reads an explicitly file-owned target; an open document must be accessed through its session. */
+    public String readUnclaimedString(GraphFileReference reference) throws IOException {
+        return withReference(reference, path -> {
             reference.requireDocumentUnclaimed();
-            String current = Files.exists(path) ? Files.readString(path, charset) : "";
-            writeStringAtomicLocked(path, updater.update(current), charset);
-            reference.contentChanged();
-            return null;
+            requireExistingFile(path);
+            return Files.readString(path, StandardCharsets.UTF_8);
         });
+    }
+
+    /** No-op transformations do not write, advance the revision, or invalidate an opening snapshot. */
+    public boolean updateStringAtomicIfChanged(GraphFileReference reference, Charset charset, StringUpdater updater)
+            throws IOException {
+        Objects.requireNonNull(updater, "updater");
+        return withMutation(reference, path -> {
+            reference.requireDocumentUnclaimed();
+            requireExistingFile(path);
+            String current = Files.readString(path, charset);
+            String updated = Objects.requireNonNull(updater.update(current), "updated content");
+            if (current.equals(updated)) return false;
+            writeStringAtomicLocked(path, updated, charset);
+            reference.contentChanged();
+            return true;
+        });
+    }
+
+    private <T> T withMutation(GraphFileReference reference, PathCallable<T> action) throws IOException {
+        return withReference(reference, path -> {
+            Set<Path> active = mMutatingPaths.get();
+            if (active == null) {
+                active = new HashSet<>();
+                mMutatingPaths.set(active);
+            }
+            if (!active.add(path)) throw new IllegalStateException("Graph file mutation is already in progress: " + path);
+            try { return action.call(path); }
+            finally {
+                active.remove(path);
+                if (active.isEmpty()) mMutatingPaths.remove();
+            }
+        });
+    }
+
+    private static void requireExistingFile(Path path) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("Graph metadata requires an existing regular file: " + path);
+        }
     }
 
     public <T> T withStructureMutation(IOCallable<T> action) throws IOException {

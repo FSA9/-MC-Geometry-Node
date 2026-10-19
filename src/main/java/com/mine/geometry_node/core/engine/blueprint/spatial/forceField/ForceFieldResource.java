@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.forceField;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
@@ -11,6 +12,7 @@ import java.util.UUID;
 
 /** A live force field whose center and finite support are supplied by an Area. */
 public final class ForceFieldResource {
+    final RuntimeMetadata metadata = new RuntimeMetadata();
     private final ForceFieldAddress address;
     private final GraphResourceId owner;
     private final long generation;

@@ -23,7 +23,7 @@ record SceneClipboard(List<SceneObject> objects, UUID active) {
         for (SceneObject object : objects) {
             UUID id = UUID.randomUUID();
             copies.add(new SceneObject(id, object.typeId(), object.name(), object.position(), object.color(),
-                    object.enabled(), 0, object.parameters(), object.rotation(), object.scale()));
+                    object.enabled(), 0, object.parameters(), object.rotation(), object.scale(), object.metadata()));
             if (object.id().equals(active)) copiedActive = id;
         }
         return new SceneClipboard(copies, copiedActive);

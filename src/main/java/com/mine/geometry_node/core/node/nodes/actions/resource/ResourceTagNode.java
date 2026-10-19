@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.node.nodes.actions.resource;
 
+import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
+import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTags;
+import com.mine.geometry_node.core.utils.RateLimitedLog;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
@@ -11,7 +15,7 @@ import com.mine.geometry_node.core.node.definition.port.UIHint;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import net.minecraft.network.chat.Component;
 
-/** Reserved editor actions; no tag mutation is performed until the tag service is implemented. */
+/** Mutates custom tags through the target owner's registered capability. */
 public final class ResourceTagNode extends BaseNode {
     private final boolean add;
 
@@ -24,7 +28,7 @@ public final class ResourceTagNode extends BaseNode {
                 .comment(NodeComment.builder(id).text("summary")
                         .input(StandardPorts.RESOURCE_ID, "geometry_node.resource.help.existing")
                         .input(StandardPorts.TAG, "geometry_node.resource.help.tag")
-                        .output(StandardPorts.FLOW_OUT, "geometry_node.resource.help.placeholder_flow").build())
+                        .output(StandardPorts.FLOW_OUT, "geometry_node.resource.help.tag_flow").build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.RESOURCE_ID.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT)
@@ -33,6 +37,19 @@ public final class ResourceTagNode extends BaseNode {
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
+        if (context.getLevel() != null) {
+            try {
+                String encoded = getInput(context, StandardPorts.RESOURCE_ID.getId(), String.class);
+                String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
+                if (tag == null) throw new IllegalArgumentException("Missing resource tag");
+                var resource = GraphResourceReferences.parse(encoded);
+                if (add) GraphResourceTags.INSTANCE.add(context.getLevel().getServer(), resource, tag);
+                else GraphResourceTags.INSTANCE.remove(context.getLevel().getServer(), resource, tag);
+            } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException failure) {
+                if (RateLimitedLog.acquire(context, "resource_tag:" + failure.getMessage()))
+                    GeometryNode.LOGGER.warn("Cannot {} resource tag: {}", add ? "add" : "remove", failure.getMessage());
+            }
+        }
         return next(StandardPorts.FLOW_OUT.getId());
     }
 }

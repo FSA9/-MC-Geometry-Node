@@ -47,6 +47,8 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         if (!this.disposed) restoreTabScope();
     };
     private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
+    private final Runnable libraryDetailsTask = this::refreshLibraryDetails;
+    private final Runnable libraryChanged = () -> { removeCallbacks(libraryDetailsTask); post(libraryDetailsTask); };
     private DatabaseSelection selection;
     private boolean worldSelected = true;
     private boolean shown, disposed;
@@ -90,6 +92,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         sidebarLayout.initialize(savedSidebar.visible()); sidebarLayout.onOwnerHidden();
         addView(workspace, new LayoutParams(-1, 0, 1));
         library.setSelectionListener(entries -> { if (!worldSelected) setSelection(librarySelection(entries)); });
+        this.repository.addChangeListener(libraryChanged);
         restoreTabScope();
         UiStateScopes.addChangeListener(scopeChanged);
         updateTabs();
@@ -109,6 +112,9 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         showWorld(uiState.read(DatabaseViewState.TAB, next).world());
     }
     public DatabaseSelection selection() { return selection; }
+    private void refreshLibraryDetails() {
+        if (!disposed && shown && !worldSelected) setSelection(librarySelection(library.selectedEntries()));
+    }
     private void setSelection(DatabaseSelection selection) {
         this.selection = selection;
         if (details != null) details.refresh();
@@ -165,7 +171,13 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                         List.of(new DatabaseSelection.Field("", DataLibraryWindow.valueDetails(entry)))),
                 new DatabaseSelection.Section(tr("entry_information"), "", DatabaseSelection.Kind.METADATA, metadata),
                 new DatabaseSelection.Section(tr("tags"), "", DatabaseSelection.Kind.TAGS,
-                        entry.tags().stream().map(tag -> new DatabaseSelection.Field("", tag)).toList()),
+                        entry.tags().stream().map(tag -> new DatabaseSelection.Field("", tag)).toList(),
+                        repository.canEditTags(entry) ? new DatabaseSelection.TagEditor(entry.id().toString(),
+                                !repository.isUpdatePending(entry.id()),
+                                repository.isUpdatePending(entry.id()) ? tr("tag_update_pending")
+                                        : repository.tagUpdateMessage(entry.id()).isEmpty() ? ""
+                                        : Component.translatable("geometry_node." + repository.tagUpdateMessage(entry.id())).getString(),
+                                tag -> repository.addTag(entry, tag), tag -> repository.removeTag(entry, tag)) : null),
                 new DatabaseSelection.Section(tr("node_reference"), tr("reference_hint"), DatabaseSelection.Kind.REFERENCE,
                         List.of(new DatabaseSelection.Field(tr("id"), entry.id().toString()))));
         return new DatabaseSelection(entry.key(), type + " · " + tr("shared_entry"),
@@ -179,6 +191,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         restoreTabScope();
         shown = true; sidebarLayout.onOwnerShown();
         if (worldSelected) world.onShow(); else library.onShow();
+        if (!worldSelected) setSelection(librarySelection(library.selectedEntries()));
     }
     @Override public void onHide() {
         saveTab(); saveSidebar();
@@ -188,6 +201,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         if (disposed) return;
         onHide(); disposed = true;
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
+        repository.removeChangeListener(libraryChanged); removeCallbacks(libraryDetailsTask);
         world.onDispose(); library.onDispose();
     }
 }

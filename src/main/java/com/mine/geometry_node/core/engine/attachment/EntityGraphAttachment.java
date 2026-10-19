@@ -15,6 +15,9 @@ import net.minecraft.nbt.StringTag;
 import net.minecraft.world.entity.Entity;
 
 import java.util.*;
+import java.util.function.UnaryOperator;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
 
 /**
  * [实体附加层 - 组合版]
@@ -25,6 +28,9 @@ public class EntityGraphAttachment {
     private final GraphBindingSet boundGraphs = new GraphBindingSet();
     private final OwnerScopedStateStore ownerScopedState =
             new OwnerScopedStateStore();
+    private List<String> customTags = List.of();
+    private long customTagRevision;
+    private boolean updatingCustomTags;
     // Behavior-tree-only state: blueprints do not select one active asset per owner.
     private String selectedBehaviorTree;
     private final BlueprintEntityProcessHost blueprints = new BlueprintEntityProcessHost();
@@ -108,6 +114,21 @@ public class EntityGraphAttachment {
     public BlueprintProcess getProcess(String graphId) { return blueprints.getProcess(graphId); }
     public OwnerScopedStateStore ownerScopedState() { return ownerScopedState; }
 
+    public List<String> customTags() { return customTags; }
+    public long customTagRevision() { return customTagRevision; }
+    public boolean updateCustomTags(UnaryOperator<List<String>> transformation) {
+        if (updatingCustomTags) throw new IllegalStateException("Reentrant entity custom tag mutation");
+        updatingCustomTags = true;
+        try {
+            List<String> candidate = TagSet.normalize(
+                    Objects.requireNonNull(transformation.apply(customTags), "custom tags"), TagPolicy.EXACT);
+            if (new LinkedHashSet<>(customTags).equals(new LinkedHashSet<>(candidate))) return false;
+            customTags = candidate;
+            customTagRevision++;
+            return true;
+        } finally { updatingCustomTags = false; }
+    }
+
     public void checkpointBlueprintExternalWaits(String reason) {
         blueprints.checkpointExternalWaits(reason);
     }
@@ -115,6 +136,11 @@ public class EntityGraphAttachment {
     // --- 序列化层 ---
 
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
+        if (!customTags.isEmpty()) {
+            ListTag tags = new ListTag();
+            customTags.forEach(value -> tags.add(StringTag.valueOf(value)));
+            tag.put("CustomTags", tags);
+        }
         if (!getBoundGraphs().isEmpty()) {
             ListTag boundList = new ListTag();
             for (String graphId : getBoundGraphs()) boundList.add(StringTag.valueOf(graphId));
@@ -139,6 +165,11 @@ public class EntityGraphAttachment {
     }
 
     public void load(CompoundTag tag, HolderLookup.Provider provider) {
+        List<String> loadedTags = new ArrayList<>();
+        for (var raw : tag.getListOrEmpty("CustomTags")) {
+            raw.asString().ifPresent(loadedTags::add);
+        }
+        updateCustomTags(ignored -> loadedTags);
         this.boundGraphs.clear();
         ListTag list = tag.getListOrEmpty("BoundGraphs");
         for (int i = 0; i < list.size(); i++) {

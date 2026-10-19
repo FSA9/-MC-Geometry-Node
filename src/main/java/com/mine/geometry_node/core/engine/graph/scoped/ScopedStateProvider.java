@@ -3,9 +3,14 @@ package com.mine.geometry_node.core.engine.graph.scoped;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import com.mine.geometry_node.core.metadata.MetadataStore;
+import com.mine.geometry_node.core.metadata.DataAccess;
+import com.mine.geometry_node.core.metadata.DataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.ScopedMetadataTargets;
 
 /** Storage provider for one resolved scoped-state identity. */
-public interface ScopedStateProvider {
+public interface ScopedStateProvider extends MetadataStore<Map<String, Object>> {
     ScopedStateScope scope();
     default String identity() { return scope().name(); }
     default boolean available() { return true; }
@@ -18,4 +23,6 @@ public interface ScopedStateProvider {
     Map<String, ScopedStateEntry> entries(int limit);
     long revision();
     int size();
+    default DataAccess data() { return ScopedMetadataTargets.data(this); }
+    default DataValuePolicy valuePolicy() { return GraphMetadataValuePolicy.runtime(); }
 }

@@ -12,6 +12,7 @@ import java.util.*;
 public final class SceneVolumeRuntime {
     private final SceneCollisionRuntime collisions = new SceneCollisionRuntime();
     private final Map<UUID, SceneObject> areas = new LinkedHashMap<>();
+    private final Map<UUID, UUID> areaIncarnations = new HashMap<>();
     public void prepareChanges(List<SceneChange> changes) {
         for (SceneChange change : changes) if (change.replacement() != null) SceneObjectTypes.validate(change.replacement());
         collisions.prepareChanges(changes);
@@ -19,20 +20,32 @@ public final class SceneVolumeRuntime {
     public static AreaAddress address(ServerLevel level, UUID id) { return new AreaAddress(level.dimension(), "scene/" + id); }
     public void synchronize(ServerLevel level, List<SceneObject> objects) {
         collisions.synchronize(level, objects);
+        SceneDocument document = SceneSavedData.get(level.getServer()).document(level.dimension().identifier().toString());
         Set<UUID> removed = new HashSet<>(areas.keySet());
         for (SceneObject object : objects) {
             if (!object.enabled() || !object.typeId().startsWith("area/")) continue;
             removed.remove(object.id());
             SceneObject previous = areas.get(object.id());
-            if (object.equals(previous)) continue;
-            if (previous != null && resolved(previous).equals(resolved(object))) {
+            UUID incarnation = Objects.requireNonNull(document.incarnation(object.id()), "Authored area no longer exists");
+            boolean sameIncarnation = incarnation.equals(areaIncarnations.get(object.id()));
+            if (sameIncarnation && object.equals(previous)) continue;
+            if (sameIncarnation && previous != null && resolved(previous).equals(resolved(object))) {
                 areas.put(object.id(), object);continue; // Names/colors must not restart area enter/exit state.
             }
-            AreaResourceStore.INSTANCE.putAuthored(level.getServer(), AreaResource.authored(address(level, object.id()),
-                    object.id(), object.revision(), level.getGameTime(), resolved(object)));
+            AreaResourceStore.INSTANCE.putAuthored(level.getServer(), authoredResource(address(level, object.id()),
+                    document, object, level.getGameTime()));
             areas.put(object.id(), object);
+            areaIncarnations.put(object.id(), incarnation);
         }
-        for (UUID id : removed) { AreaResourceStore.INSTANCE.removeAuthored(level.getServer(), address(level, id)); areas.remove(id); }
+        for (UUID id : removed) {
+            AreaResourceStore.INSTANCE.removeAuthored(level.getServer(), address(level, id));
+            areas.remove(id); areaIncarnations.remove(id);
+        }
+    }
+    /** Scene object identity selects metadata; the document token selects the live area lifetime. */
+    public static AreaResource authoredResource(AreaAddress address, SceneDocument document, SceneObject object, long gameTime) {
+        UUID incarnation = Objects.requireNonNull(document.incarnation(object.id()), "Authored area no longer exists");
+        return AreaResource.authored(address, object.id(), incarnation, object.revision(), gameTime, resolved(object));
     }
     public static AreaResource.Resolved resolved(SceneObject object) {
         AreaShape shape = switch (object.typeId()) {
@@ -51,5 +64,6 @@ public final class SceneVolumeRuntime {
         collisions.clear(level);
         for (UUID id : areas.keySet()) AreaResourceStore.INSTANCE.removeAuthored(level.getServer(), address(level, id));
         areas.clear();
+        areaIncarnations.clear();
     }
 }

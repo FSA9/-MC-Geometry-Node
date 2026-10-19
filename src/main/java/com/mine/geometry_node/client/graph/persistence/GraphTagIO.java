@@ -10,16 +10,18 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.document.NodeGraph;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
 import com.mine.geometry_node.client.graph.persistence.file.GraphDocumentStore;
 import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
+import java.io.IOException;
 
 public final class GraphTagIO {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -54,6 +56,12 @@ public final class GraphTagIO {
         return readTags(readGraphRoot(file));
     }
 
+    public static List<String> readUnclaimedTags(GraphFileReference reference) throws IOException {
+        JsonObject root = parseGraphRoot(GraphDocumentStore.INSTANCE.readUnclaimedString(reference).trim());
+        GraphDocumentType.requireId(root);
+        return readTags(root);
+    }
+
     public static GraphMetadata readMetadata(File file) throws Exception {
         return readMetadata(readGraphRoot(file));
     }
@@ -77,20 +85,30 @@ public final class GraphTagIO {
     public static List<String> readTags(JsonObject root) {
         List<String> tags = new ArrayList<>();
         if (!root.has("tags") || !root.get("tags").isJsonArray()) {
-            return tags;
+            return List.of();
         }
 
-        Set<String> seen = new LinkedHashSet<>();
         for (JsonElement element : root.getAsJsonArray("tags")) {
             if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString()) continue;
-
-            String tag = element.getAsString();
-            String normalized = normalizeTag(tag);
-            if (!normalized.isEmpty() && seen.add(normalized)) {
-                tags.add(normalized);
-            }
+            tags.add(element.getAsString());
         }
-        return tags;
+        return TagSet.normalize(tags, TagPolicy.GRAPH_LEGACY);
+    }
+
+    /** Changes only tags, under the unclaimed file's existing transaction and revision lock. */
+    public static boolean updateTags(GraphFileReference reference, UnaryOperator<List<String>> transformation)
+            throws IOException {
+        Objects.requireNonNull(transformation, "transformation");
+        return GraphDocumentStore.INSTANCE.updateStringAtomicIfChanged(reference, StandardCharsets.UTF_8, current -> {
+            JsonObject root = parseGraphRoot(current.trim());
+            GraphDocumentType.requireId(root);
+            List<String> before = readTags(root);
+            List<String> after = TagSet.normalize(Objects.requireNonNull(transformation.apply(before), "tags"),
+                    TagPolicy.GRAPH_LEGACY);
+            if (before.equals(after)) return current;
+            root.add("tags", GSON.toJsonTree(after));
+            return GSON.toJson(root);
+        });
     }
 
     public static void writeMetadata(GraphFileReference reference, String graphTypeId, String comment, List<String> tags,
@@ -125,12 +143,6 @@ public final class GraphTagIO {
     }
 
     public static String normalizeTag(String raw) {
-        if (raw == null) return "";
-        String normalized = raw.trim();
-        while (normalized.startsWith("#")) {
-            normalized = normalized.substring(1).trim();
-        }
-        normalized = normalized.replaceAll("\\p{Cntrl}", "").trim();
-        return normalized.toLowerCase(Locale.ROOT);
+        return TagPolicy.GRAPH_LEGACY.normalize(raw);
     }
 }

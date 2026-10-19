@@ -5,6 +5,10 @@ package com.mine.geometry_node.api;
  * 无论是内置节点还是第三方 Addon，都通过此接口向系统注册节点。
  */
 public interface GeometryNodePlugin {
+    /** Registers owner adapters; tag strings and dictionary keys need no registration. */
+    default void registerMetadata(MetadataRegistrationContext registry) {
+    }
+
     /**
      * 插件 ID，用于日志、诊断和后续图兼容信息。
      * 第三方 Addon 建议返回自己的 mod id。

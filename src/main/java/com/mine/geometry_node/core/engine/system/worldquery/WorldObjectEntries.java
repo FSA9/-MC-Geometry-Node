@@ -23,6 +23,12 @@ public final class WorldObjectEntries {
                 position, bounds, List.of(), id.binding().graphId(), id.type().lifetime().name().toLowerCase(Locale.ROOT),
                 null, null, refs);
     }
+    public static WorldObjectEntry withTags(WorldObjectEntry entry, List<String> tags) {
+        return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
+                entry.position(), entry.bounds(), tags, entry.source(), entry.lifetime(), entry.sceneObjectId(),
+                entry.entityId(), entry.references());
+    }
+
     /** AABB enclosing a rotated local box, with the same Y-X-Z convention used by areas. */
     public static AABB rotatedBounds(Vec3 center, Vec3 size, Vec3 rotation) {
         var q = new Quaternionf().rotationYXZ((float)Math.toRadians(rotation.y),

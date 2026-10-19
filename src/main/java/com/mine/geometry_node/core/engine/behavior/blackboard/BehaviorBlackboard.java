@@ -13,6 +13,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collections;
+import java.util.function.UnaryOperator;
+import com.mine.geometry_node.core.metadata.DataDictionary;
+import com.mine.geometry_node.core.metadata.DataValuePolicy;
+import com.mine.geometry_node.core.metadata.DataAccess;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 
 /** Dynamic scoped blackboard facade. Keys are created by Set and removed by Clear. */
 public final class BehaviorBlackboard {
@@ -22,7 +28,7 @@ public final class BehaviorBlackboard {
     public BehaviorBlackboard(int maxEntries) {
         if (maxEntries <= 0) throw new IllegalArgumentException("maxEntries must be positive");
         this.maxEntries = maxEntries;
-        installProvider(new MemoryProvider(ScopedStateScope.INSTANCE));
+        installProvider(new MemoryProvider(ScopedStateScope.INSTANCE, maxEntries));
     }
 
     public void installProvider(ScopedStateProvider provider) {
@@ -43,6 +49,8 @@ public final class BehaviorBlackboard {
         return requireProvider(scope).hasRecord(requireName(name));
     }
 
+    public DataAccess data(ScopedStateScope scope) { return requireProvider(scope).data(); }
+
     public void set(ScopedStateScope scope, String name, @Nullable Object value) {
         Objects.requireNonNull(scope, "scope");
         String key = requireName(name);
@@ -54,7 +62,7 @@ public final class BehaviorBlackboard {
                 && !provider.hasRecord(key) && provider.size() >= maxEntries) {
             throw new ScopedStateAccessException("Blackboard entry limit exceeded: " + maxEntries);
         }
-        provider.put(key, value);
+        provider.data().put(key, value);
     }
 
     /** Removes the complete key/value record. Missing keys are an idempotent no-op. */
@@ -76,7 +84,7 @@ public final class BehaviorBlackboard {
         ScopedStateProvider provider = requireProvider(scope);
         ScopedStateEntry entry = provider.get(key);
         return new ObservationToken(provider.identity(), entry != null,
-                entry != null ? entry.value() : null);
+                entry != null ? entry.value() : null, provider.valuePolicy());
     }
 
     public Snapshot snapshot(int limit) {
@@ -122,9 +130,14 @@ public final class BehaviorBlackboard {
     }
 
     /** Stable change detector state; removed-key history is deliberately excluded. */
-    public record ObservationToken(String providerIdentity, boolean present, @Nullable Object value) {
+    public record ObservationToken(String providerIdentity, boolean present, @Nullable Object value,
+                                   DataValuePolicy valuePolicy) {
+        public ObservationToken(String providerIdentity, boolean present, @Nullable Object value) {
+            this(providerIdentity, present, value, GraphMetadataValuePolicy.runtime());
+        }
         public ObservationToken {
             providerIdentity = providerIdentity != null ? providerIdentity : "";
+            Objects.requireNonNull(valuePolicy, "valuePolicy");
             // ScopedStateProvider#get already returns a detached read value.
             value = present ? value : null;
         }
@@ -134,7 +147,8 @@ public final class BehaviorBlackboard {
             return other instanceof ObservationToken token
                     && present == token.present
                     && providerIdentity.equals(token.providerIdentity)
-                    && GraphValueSnapshot.equivalent(value, token.value);
+                    && valuePolicy.equivalent(value, token.value)
+                    && token.valuePolicy.equivalent(token.value, value);
         }
 
         @Override
@@ -155,41 +169,53 @@ public final class BehaviorBlackboard {
 
     private static final class MemoryProvider implements ScopedStateProvider {
         private final ScopedStateScope scope;
-        private final Map<String, ScopedStateEntry> values = new LinkedHashMap<>();
+        private Map<String, Object> values = Map.of();
+        private final int maxEntries;
+        private final DataValuePolicy policy = GraphMetadataValuePolicy.runtime();
+        private boolean updating;
         private long revision;
 
-        private MemoryProvider(ScopedStateScope scope) {
+        private MemoryProvider(ScopedStateScope scope, int maxEntries) {
             this.scope = scope;
+            this.maxEntries = maxEntries;
         }
 
         @Override public ScopedStateScope scope() { return scope; }
         @Override public String identity() { return "instance"; }
         @Override public ScopedStateEntry get(String name) {
-            ScopedStateEntry entry = values.get(name);
-            return entry != null ? new ScopedStateEntry(freeze(entry.value()), entry.type()) : null;
+            Object value = values.get(name);
+            return value != null ? new ScopedStateEntry(policy.snapshot(value), PortType.getTypeOf(value)) : null;
         }
         @Override public void put(String name, Object value) {
-            Object frozen = freeze(value);
-            ScopedStateEntry entry = new ScopedStateEntry(frozen, PortType.getTypeOf(value));
-            ScopedStateEntry previous = values.get(name);
-            if (previous != null && GraphValueSnapshot.equivalent(previous.value(), frozen)) return;
-            revision++;
-            values.put(name, entry);
+            data().put(name, value);
         }
         @Override public boolean remove(String name) {
-            if (values.remove(name) == null) return false;
-            revision++;
-            return true;
+            return data().remove(name);
         }
         @Override public boolean hasRecord(String name) { return values.containsKey(name); }
         @Override public Map<String, ScopedStateEntry> entries(int limit) {
             if (limit <= 0 || values.isEmpty()) return Map.of();
             Map<String, ScopedStateEntry> result = new LinkedHashMap<>();
-            for (Map.Entry<String, ScopedStateEntry> entry : values.entrySet()) {
-                result.put(entry.getKey(), entry.getValue());
+            for (String name : values.keySet()) {
+                result.put(name, get(name));
                 if (result.size() >= limit) break;
             }
-            return Map.copyOf(result);
+            return Collections.unmodifiableMap(result);
+        }
+        @Override public Map<String, Object> read() { return DataDictionary.snapshot(values, policy); }
+        @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
+            if (updating) throw new IllegalStateException("Reentrant blackboard metadata mutation");
+            updating = true;
+            try {
+                Map<String, Object> candidate = DataDictionary.snapshot(
+                        Objects.requireNonNull(transformation.apply(read()), "transformation result"), policy);
+                if (candidate.size() > maxEntries)
+                    throw new ScopedStateAccessException("Blackboard entry limit exceeded: " + maxEntries);
+                if (DataDictionary.equivalent(values, candidate, policy)) return false;
+                values = candidate;
+                revision++;
+                return true;
+            } finally { updating = false; }
         }
         @Override public long revision() { return revision; }
         @Override public int size() { return values.size(); }

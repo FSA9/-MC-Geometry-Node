@@ -72,6 +72,8 @@ public final class ClientboundPayloadRegistry {
         add(PacketRemoteDataLibraryResponse.TYPE, PacketRemoteDataLibraryResponse.STREAM_CODEC);
         add(com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.TYPE,
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.STREAM_CODEC);
+        add(com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectTagResult.TYPE,
+                com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectTagResult.STREAM_CODEC);
     }
 
     private ClientboundPayloadRegistry() {

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.metadata.TagAccess;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
@@ -79,7 +81,13 @@ public final class AreaResourceStore {
     @Nullable
     public synchronized AreaResource get(MinecraftServer server, AreaRef reference) {
         AreaResource resource = get(server, reference.address());
-        return resource != null && resource.reference().equals(reference) ? resource : null;
+        if (resource == null || !resource.reference().equals(reference)) return null;
+        if (resource.isAuthored() && server != null) {
+            var document = com.mine.geometry_node.core.engine.system.scene.SceneSavedData.get(server)
+                    .document(reference.address().dimension().identifier().toString());
+            if (!reference.incarnation().equals(document.incarnation(resource.authoredObjectId()))) return null;
+        }
+        return resource;
     }
 
     public synchronized boolean remove(MinecraftServer server, AreaAddress address) {
@@ -97,6 +105,33 @@ public final class AreaResourceStore {
         state.entries.remove(reference.address());
         state.snapshotsByDimension.remove(reference.address().dimension());
         return true;
+    }
+
+    /** Custom tags only; data remains in AreaResource.scopedState(). */
+    public TagAccess metadataTags(MinecraftServer server, AreaRef reference) {
+        return metadataTags(server, reference, () -> RuntimeMetadataTargets.requireThread(server));
+    }
+
+    synchronized TagAccess metadataTags(MinecraftServer server, AreaRef reference, Runnable requireThread) {
+        requireThread.run();
+        AreaResource resource = get(server, reference);
+        if (resource == null) throw new IllegalStateException("Area no longer exists");
+        if (resource.isAuthored())
+            return com.mine.geometry_node.core.engine.metadata.SceneMetadataTargets.access(server,
+                    reference.address().dimension().identifier().toString(), resource.authoredObjectId()).requireTags();
+        return resource.metadataTags.tags(() -> {
+            requireThread.run();
+            if (get(server, reference) != resource) throw new IllegalStateException("Area metadata handle is stale");
+        });
+    }
+
+    public synchronized long metadataTagsRevision(MinecraftServer server, AreaRef reference) {
+        metadataTags(server, reference).values();
+        AreaResource resource = get(server, reference);
+        if (resource.isAuthored())
+            return com.mine.geometry_node.core.engine.system.scene.SceneSavedData.get(server)
+                    .document(reference.address().dimension().identifier().toString()).object(resource.authoredObjectId()).revision();
+        return resource.metadataTags.revision();
     }
 
     /** Graph-owned entries only; caller stops the visitor before resolving live inputs. */

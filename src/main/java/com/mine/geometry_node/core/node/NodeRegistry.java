@@ -69,6 +69,7 @@ public class NodeRegistry {
                         addonId, plugin.getClass().getName());
 
                 registerPluginMarkers(plugin, addonId);
+                registerPluginMetadata(plugin, addonId);
                 registerPluginNodes(plugin, addonId);
             }
 
@@ -85,6 +86,24 @@ public class NodeRegistry {
             plugin.registerMarkerTypes(new PluginMarkerRegistrationContext(addonId));
         } catch (Exception | LinkageError error) {
             GeometryNode.LOGGER.error("Marker registration failed: addon={}, provider={}",
+                    addonId, plugin.getClass().getName(), error);
+        }
+    }
+
+    private void registerPluginMetadata(GeometryNodePlugin plugin, String addonId) {
+        try {
+            plugin.registerMetadata(new com.mine.geometry_node.api.MetadataRegistrationContext() {
+                @Override public String addonId() { return addonId; }
+                @Override public <T> void register(String id, Class<T> targetType,
+                        Set<com.mine.geometry_node.core.metadata.MetadataCapabilities.Capability> capabilities,
+                        java.util.function.Function<T, com.mine.geometry_node.core.metadata.MetadataCapabilities.Access> resolver) {
+                    if (id == null || !id.startsWith(addonId + ":"))
+                        throw new IllegalArgumentException("Metadata target must use addon namespace: " + addonId);
+                    com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL.register(id, targetType, capabilities, resolver);
+                }
+            });
+        } catch (Exception | LinkageError error) {
+            GeometryNode.LOGGER.error("Metadata registration failed: addon={}, provider={}",
                     addonId, plugin.getClass().getName(), error);
         }
     }

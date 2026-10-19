@@ -1,5 +1,10 @@
 package com.mine.geometry_node.core.engine.system.model.collision.runtime;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
+import net.minecraft.server.level.ServerLevel;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionBuilder;
 import com.mine.geometry_node.core.engine.system.model.diagnostic.ModelProblem;
@@ -37,7 +42,9 @@ public final class ModelCollisionScene {
     public static synchronized void publish(Level level, Object instanceId, Prepared geometry, double x, double y, double z,
                                             UUID excludedEntity) {
         State state = LEVELS.computeIfAbsent(level, ignored -> new State());
-        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z, excludedEntity));
+        Entry previous = state.entries.get(instanceId);
+        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z, excludedEntity,
+                previous == null ? new RuntimeMetadata() : previous.metadata()));
         state.snapshotDirty = true;
         state.revision++;
     }
@@ -101,7 +108,37 @@ public final class ModelCollisionScene {
         }
     }
 
-    public record Entry(Object instanceId, Prepared geometry, double x, double y, double z, UUID excludedEntity) {}
+    /** A resolved handle is tied to one live entry lifetime, across position/geometry refreshes. */
+    public static MetadataCapabilities.Access metadata(ServerLevel level, Object instanceId) {
+        RuntimeMetadataTargets.requireThread(level.getServer());
+        return metadata(level, instanceId, GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
+            RuntimeMetadataTargets.requireThread(level.getServer());
+            Entry current = lookup(level, instanceId);
+            if (current != null && current.excludedEntity() != null && level.getEntity(current.excludedEntity()) == null)
+                throw new IllegalStateException("Collision anchor no longer exists");
+        });
+    }
+
+    static synchronized MetadataCapabilities.Access metadata(Level level, Object instanceId,
+            com.mine.geometry_node.core.metadata.DataValuePolicy policy, Runnable requireThread) {
+        requireThread.run();
+        Entry entry = lookup(level, instanceId);
+        if (entry == null) throw new IllegalStateException("Collision no longer exists");
+        RuntimeMetadata metadata = entry.metadata();
+        return metadata.access(policy, () -> {
+            requireThread.run();
+            Entry current = lookup(level, instanceId);
+            if (current == null || current.metadata() != metadata)
+                throw new IllegalStateException("Collision metadata handle is stale");
+        });
+    }
+
+    public record Entry(Object instanceId, Prepared geometry, double x, double y, double z,
+                        UUID excludedEntity, RuntimeMetadata metadata) {
+        public Entry(Object instanceId, Prepared geometry, double x, double y, double z, UUID excludedEntity) {
+            this(instanceId, geometry, x, y, z, excludedEntity, new RuntimeMetadata());
+        }
+    }
 
     public record Candidate(ModelConvexCollider collider, double x, double y, double z) {
         public ModelConvexCollider.Hit sweep(AABB bounds, Vec3 movement) {

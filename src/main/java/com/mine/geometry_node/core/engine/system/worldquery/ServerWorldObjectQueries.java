@@ -21,6 +21,7 @@ public final class ServerWorldObjectQueries {
     public static final int MAX_SCANNED = 8192, MAX_LEVELS = 64,
             MAX_PENDING_PER_PLAYER = WorldObjectQueryScheduler.MAX_PENDING_PER_CONNECTION;
     private static final Map<MinecraftServer, WorldObjectQueryScheduler<ServerGamePacketListenerImpl>> QUEUES = new IdentityHashMap<>();
+    private static final Map<ServerGamePacketListenerImpl, WorldObjectTagEdits> TAG_EDITS = new IdentityHashMap<>();
     private static boolean initialized;
     private ServerWorldObjectQueries() {}
     public static void init() {
@@ -28,11 +29,13 @@ public final class ServerWorldObjectQueries {
         initialized = true; BuiltinWorldObjectProviders.init();
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
+                TAG_EDITS.remove(player.connection);
                 var queue = QUEUES.get(player.level().getServer());
                 if (queue != null) queue.remove(player.connection);
             }
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            TAG_EDITS.keySet().removeIf(connection -> connection.getPlayer().level().getServer() == event.getServer());
             var queue = QUEUES.remove(event.getServer());
             if (queue != null) queue.close();
         });
@@ -55,6 +58,24 @@ public final class ServerWorldObjectQueries {
         if (!queue.offer(player.connection, request)) {
             send(player, WorldObjectPage.empty(request.requestId(), "rate_limited")); return;
         }
+    }
+    public static void receive(ServerPlayer player, PacketWorldObjectTagEdit request) {
+        MinecraftServer server = player.level().getServer();
+        if (!server.isSameThread()) throw new IllegalStateException("Tag edits require the server thread");
+        ServerPlayer current = currentPlayer(server, player.connection);
+        if (current == null || !server.isRunning()) return;
+        String message;
+        try {
+            boolean permitted = RemoteAssetPermissions.canManageAssets(current);
+            var edits = TAG_EDITS.get(current.connection);
+            message = !permitted ? WorldObjectTagEdits.PREFIX + "forbidden"
+                    : edits == null ? WorldObjectTagEdits.PREFIX + "unavailable"
+                    : edits.edit(true, request.target(), request.key(), request.expectedTags(), request.tag(), request.add());
+        } catch (RuntimeException failure) {
+            System.getLogger(ServerWorldObjectQueries.class.getName()).log(System.Logger.Level.WARNING, "World tag edit failed", failure);
+            message = WorldObjectTagEdits.PREFIX + "failed";
+        }
+        NetworkHandler.sendToPlayer(current, new PacketWorldObjectTagResult(request.requestId(), message));
     }
     private static ServerPlayer currentPlayer(MinecraftServer server, ServerGamePacketListenerImpl connection) {
         ServerPlayer player = server.getPlayerList().getPlayer(connection.getPlayer().getUUID());
@@ -117,6 +138,7 @@ public final class ServerWorldObjectQueries {
             int scanned, bytes;
             boolean truncated, stopped;
             String provider;
+            WorldObjectProvider ownerProvider;
             // A time cap supplements the cardinality budget; results explicitly report incompleteness.
             long deadline;
             public boolean scan() {
@@ -140,6 +162,14 @@ public final class ServerWorldObjectQueries {
                 if (entries.size() >= query.limit() || entry.estimatedBytes() > WorldObjectPage.MAX_ENTRY_BYTES - bytes) {
                     truncated = stopped = true; return false;
                 }
+                // A capability lease holds the adapter's live owner guard, not a mutable query mirror.
+                try {
+                    var access = ownerProvider.resolveMetadata(context, entry);
+                    var advertised = TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
+                    if (advertised.estimatedBytes() <= WorldObjectPage.MAX_ENTRY_BYTES - bytes) entry = advertised;
+                } catch (RuntimeException unavailable) {
+                    // Metadata capability failure does not hide the object or fail the read-only query.
+                }
                 entries.add(entry); bytes += entry.estimatedBytes();
                 return true;
             }
@@ -153,7 +183,7 @@ public final class ServerWorldObjectQueries {
         for (WorldObjectProvider provider : providers) {
             if (!query.providers().isEmpty() && !query.providers().contains(provider.id())) continue;
             if (collector.stopped) { coverage.add(provider.id() + ":not_scanned"); continue; }
-            collector.provider = provider.id();
+            collector.provider = provider.id(); collector.ownerProvider = provider;
             try {
                 provider.collect(context, collector);
                 coverage.add(provider.id() + ":" + provider.coverage() + (collector.stopped ? ":partial" : ":complete"));

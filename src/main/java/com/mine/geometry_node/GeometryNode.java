@@ -168,6 +168,8 @@ public class GeometryNode {
         modContainer.registerConfig(ModConfig.Type.SERVER, GeometryNodeServerConfig.SPEC,
                 "geometry_node-server.toml");
 
+        com.mine.geometry_node.core.engine.metadata.BuiltinMetadataCapabilities.init();
+
         // 初始化网络包
         NetworkHandler.init();
 

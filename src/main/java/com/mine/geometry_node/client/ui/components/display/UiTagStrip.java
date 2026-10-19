@@ -1,24 +1,26 @@
 package com.mine.geometry_node.client.ui.components.display;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.TextView;
 import java.util.List;
 
 /** Read-only tags for fixed-height table rows; excess tags clip and remain available in the tooltip. */
 public final class UiTagStrip extends LinearLayout {
     private List<String> tags = List.of();
+    private String prefix = "";
 
     public UiTagStrip(Context context) {
         super(context);
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(px(6), 0, px(4), 0);
+    }
+
+    public void setPrefix(String value) {
+        prefix = java.util.Objects.requireNonNullElse(value, "");
+        for (int i = 0; i < getChildCount(); i++) ((UiTagChip) getChildAt(i)).setPrefix(prefix);
     }
 
     public void setTags(List<String> values) {
@@ -27,22 +29,23 @@ public final class UiTagStrip extends LinearLayout {
         removeAllViews();
         setTooltipText(String.join(", ", tags));
         for (String tag : tags) {
-            TextView chip = UIUtils.createLockedTextView(getContext(), tag, 10, UiTheme.Text.SECONDARY);
-            chip.setGravity(Gravity.CENTER_VERTICAL);
-            chip.setSingleLine(true);
-            chip.setEllipsize(TextUtils.TruncateAt.END);
-            chip.setPadding(px(5), 0, px(5), 0);
-            ShapeDrawable fill = new ShapeDrawable();
-            fill.setColor(UiTheme.Surface.HEADER);
-            fill.setStroke(Math.max(1, px(1)), UiTheme.Control.INPUT_BORDER);
-            chip.setBackground(fill);
-            LayoutParams params = new LayoutParams(-2, px(21));
+            UiTagChip chip = new UiTagChip(getContext(), tag);
+            // The strip owns overflow disclosure, including tags clipped out of view.
+            chip.setTooltipText(null);
+            chip.setPrefix(prefix);
+            chip.setEnabled(isEnabled());
+            LayoutParams params = new LayoutParams(-2, px(UiTagChip.HEIGHT_DP));
             params.rightMargin = px(4);
             addView(chip, params);
         }
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) { return false; }
+
+    @Override public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        for (int i = 0; i < getChildCount(); i++) getChildAt(i).setEnabled(enabled);
+    }
 
     private static int px(float value) { return UIUtils.dp2pxInt(value); }
 }

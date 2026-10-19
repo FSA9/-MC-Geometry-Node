@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /** Server-authoritative persistence and immutable runtime access for the Data Library. */
 public final class RemoteDataLibraryService {
@@ -86,6 +88,32 @@ public final class RemoteDataLibraryService {
         } catch (RuntimeException exception) {
             return null;
         }
+    }
+
+    /** Authoritative adapter read, with lifetime and caller authority checked on every access. */
+    synchronized List<String> readTags(MinecraftServer server, UUID entryId, Runnable requireAccess)
+            throws IOException {
+        requireTagOwner(server, requireAccess);
+        DataLibraryEntry entry = ensureLoaded(server).document().find(entryId).orElseThrow(() -> stale(entryId));
+        return entry.tags();
+    }
+
+    /** Commits tags under the service/file locks; no-op and failed changes do not publish a new cache. */
+    synchronized DataLibraryFileStore.UpdateResult updateTags(MinecraftServer server, UUID entryId,
+                                                              String expectedFingerprint, Runnable requireAccess,
+                                                              UnaryOperator<List<String>> transformation)
+            throws IOException {
+        requireTagOwner(server, requireAccess);
+        DataLibraryFileStore.UpdateResult result = DataLibraryFileStore.updateTagsAtomic(
+                ServerDataLibraryPaths.file(server), server.overworld().registryAccess(), entryId,
+                expectedFingerprint, () -> requireTagOwner(server, requireAccess), transformation);
+        if (result.changed() && !isStopped(server)) caches.put(server, freeze(result.loaded()));
+        return result;
+    }
+
+    private void requireTagOwner(MinecraftServer server, Runnable requireAccess) {
+        if (server == null || isStopped(server)) throw new IllegalStateException("Server is stopping");
+        Objects.requireNonNull(requireAccess, "requireAccess").run();
     }
 
     /** Creates all objects in a partial document. Existing ancestor folders may be included unchanged. */
@@ -214,12 +242,13 @@ public final class RemoteDataLibraryService {
 
     private synchronized DataLibraryLoadResult update(MinecraftServer server, DocumentMutation mutation) throws IOException {
         if (server == null || isStopped(server)) throw new IOException("Server is stopping");
-        DataLibraryLoadResult result = DataLibraryFileStore.updateAtomic(
+        DataLibraryFileStore.UpdateResult update = DataLibraryFileStore.updateAtomicResult(
                 ServerDataLibraryPaths.file(server), server.overworld().registryAccess(), document -> {
                     mutation.apply(document);
                     return document;
                 });
-        CachedLibrary published = freeze(result);
+        if (!update.changed()) return update.loaded();
+        CachedLibrary published = freeze(update.loaded());
         if (!isStopped(server)) caches.put(server, published);
         return published.asResult();
     }

@@ -1,6 +1,10 @@
 package com.mine.geometry_node.core.network.packet.scene;
 
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
+import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
 
@@ -12,11 +16,23 @@ final class SceneWire {
         buf.writeBoolean(object.enabled()); buf.writeLong(object.revision());
         buf.writeVarInt(object.parameters().size());
         object.parameters().forEach((key,value)->{buf.writeUtf(key,64);buf.writeUtf(value,256);});
+        if (authored(object.typeId())) buf.writeNbt(object.metadata().save());
+        else if (!object.metadata().isEmpty()) throw new IllegalArgumentException("Native metadata belongs to the entity owner");
     }
     static SceneObject read(RegistryFriendlyByteBuf buf) {
         var id=buf.readUUID();var type=buf.readUtf(64);var name=buf.readUtf(96);
         var position=vector(buf);var color=vector(buf);var rotation=vector(buf);var scale=vector(buf);
-        return new SceneObject(id,type,name,position,color,buf.readBoolean(),buf.readLong(),parameters(buf),rotation,scale);
+        return new SceneObject(id,type,name,position,color,buf.readBoolean(),buf.readLong(),parameters(buf),rotation,scale,
+                authored(type) ? metadata(buf) : OwnerMetadata.EMPTY);
+    }
+    private static boolean authored(String type) {
+        return SceneObjectTypes.require(type).storage() == SceneObjectTypes.Storage.AUTHORED;
+    }
+    private static OwnerMetadata metadata(RegistryFriendlyByteBuf buf) {
+        var encoded = buf.readNbt(new NbtAccounter(OwnerMetadata.MAX_ENCODED_BYTES, OwnerMetadata.MAX_ENCODED_DEPTH + 1));
+        if (!(encoded instanceof CompoundTag compound)) throw new IllegalArgumentException("Invalid scene metadata");
+        var value = OwnerMetadata.load(compound);
+        return OwnerMetadata.of(value.tags(), value.data(buf.registryAccess()), buf.registryAccess());
     }
     private static java.util.Map<String,String> parameters(RegistryFriendlyByteBuf buf){
         int count=count(buf,SceneObject.MAX_PARAMETERS);var result=new java.util.LinkedHashMap<String,String>();

@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.forceField;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResource;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceStore;
@@ -59,6 +63,31 @@ public final class ForceFieldResourceStore {
         return state != null ? state.entries.get(address) : null;
     }
 
+    public MetadataCapabilities.Access metadata(MinecraftServer server, ForceFieldAddress address) {
+        RuntimeMetadataTargets.requireThread(server);
+        return metadata(server, address, GraphMetadataValuePolicy.of(server.registryAccess()),
+                () -> RuntimeMetadataTargets.requireThread(server));
+    }
+
+    synchronized MetadataCapabilities.Access metadata(MinecraftServer server, ForceFieldAddress address,
+            com.mine.geometry_node.core.metadata.DataValuePolicy policy, Runnable requireThread) {
+        requireThread.run();
+        ForceFieldResource resource = get(server, address);
+        if (resource == null) throw new IllegalStateException("Force field no longer exists");
+        RuntimeMetadata metadata = resource.metadata;
+        return metadata.access(policy, () -> {
+            requireThread.run();
+            ForceFieldResource current = get(server, address);
+            if (current != resource)
+                throw new IllegalStateException("Force field metadata handle is stale");
+        });
+    }
+
+    public synchronized long metadataRevision(MinecraftServer server, ForceFieldAddress address) {
+        metadata(server, address);
+        return get(server, address).metadata.revision();
+    }
+
     public synchronized boolean remove(MinecraftServer server, ForceFieldAddress address) {
         ServerState state = servers.get(server);
         if (state == null || state.entries.remove(address) == null) return false;
@@ -96,8 +125,8 @@ public final class ForceFieldResourceStore {
         if (state.entries.entrySet().removeIf(entry -> {
             ForceFieldResource resource = entry.getValue();
             if (release instanceof GraphResourceRelease.Entity entityRelease) {
-                return resource.address().dimension().equals(entityRelease.dimension())
-                        && entityRelease.entityId().equals(resource.anchorEntityId());
+                return release.matches(resource.owner()) || (resource.address().dimension().equals(entityRelease.dimension())
+                        && entityRelease.entityId().equals(resource.anchorEntityId()));
             }
             return release.matches(resource.owner());
         })) {

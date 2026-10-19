@@ -17,7 +17,7 @@ public final class ServerScopedStateStore implements ScopedStateStore {
             throw new ScopedStateAccessException(
                     "Scoped state value cannot be Java null: " + key);
         }
-        resolve(context, namespace, target).put(key, value);
+        resolve(context, namespace, target).data().put(key, value);
     }
 
     @Override

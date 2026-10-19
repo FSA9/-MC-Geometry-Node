@@ -47,6 +47,8 @@ import net.neoforged.neoforge.common.NeoForge;
 public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
+        com.mine.geometry_node.client.graph.metadata.GraphTagMetadata.register(
+                com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL);
         com.mine.geometry_node.client.model.ModelClientLifecycle.register(modBus);
         ClientNetworkReceiverRegistry.init();
         // 注册按键

@@ -1,6 +1,9 @@
 package com.mine.geometry_node.core.engine.system.schematic;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.BlockSnapshot;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.ChangedBlock;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.PlacedEntity;
@@ -58,12 +61,21 @@ public final class SchematicPlacementStorage extends SavedData {
             CODEC
     );
 
+    private final Thread ownerThread = Thread.currentThread();
+    private boolean metadataUpdating;
+
+    private void requireOwnerThread() {
+        if (Thread.currentThread() != ownerThread) throw new IllegalStateException("Placement mutations require the owner thread");
+        if (metadataUpdating) throw new IllegalStateException("Reentrant placement mutation during metadata update");
+    }
+
     private final Map<RecordKey, SchematicPlacementRecord> records = new HashMap<>();
     private final Map<RecordKey, LongOpenHashSet> positionsByRecord = new HashMap<>();
     private final Map<RecordKey, LongOpenHashSet> chunksByRecord = new HashMap<>();
     private final Map<DimensionChunkKey, Set<RecordKey>> recordsByChunk = new HashMap<>();
 
     public static SchematicPlacementStorage get(ServerLevel level) {
+        if (!level.getServer().isSameThread()) throw new IllegalStateException("Placement storage requires the server thread");
         return level.getServer().getDataStorage().computeIfAbsent(TYPE);
     }
 
@@ -79,11 +91,17 @@ public final class SchematicPlacementStorage extends SavedData {
     }
 
     public SchematicPlacementRecord put(SchematicPlacementRecord record) {
+        requireOwnerThread();
         if (record == null || record.dimension() == null || record.key().isBlank()) {
             return record;
         }
         RecordKey key = new RecordKey(record.dimension(), record.key());
-        SchematicPlacementRecord previous = records.put(key, record);
+        SchematicPlacementRecord previous = records.get(key);
+        if (record.equals(previous)) return record;
+        if (previous == null || !previous.incarnation().equals(record.incarnation())) record = record.withIncarnation(UUID.randomUUID());
+        else record = record.withMetadata(previous.metadata(), previous.metadataRevision());
+        if (record.equals(previous)) return record;
+        records.put(key, record);
         if (previous != null) {
             removeIndexes(key);
         }
@@ -93,6 +111,7 @@ public final class SchematicPlacementStorage extends SavedData {
     }
 
     public Optional<SchematicPlacementRecord> remove(ResourceKey<Level> dimension, String key) {
+        requireOwnerThread();
         if (dimension == null || key == null || key.isBlank()) {
             return Optional.empty();
         }
@@ -106,6 +125,7 @@ public final class SchematicPlacementStorage extends SavedData {
     }
 
     public int clearDimension(ResourceKey<Level> dimension) {
+        requireOwnerThread();
         if (dimension == null || records.isEmpty()) {
             return 0;
         }
@@ -124,6 +144,23 @@ public final class SchematicPlacementStorage extends SavedData {
             setDirty();
         }
         return removed;
+    }
+
+    /** Atomic metadata commit; key reuse cannot make an old handle address a new placement. */
+    public boolean updateMetadata(ResourceKey<Level> dimension, String key, UUID incarnation, UnaryOperator<OwnerMetadata> transformation) {
+        requireOwnerThread();
+        SchematicPlacementRecord before = get(dimension, key).orElseThrow(() -> new IllegalStateException("Placement no longer exists"));
+        if (!before.incarnation().equals(incarnation)) throw new IllegalStateException("Stale placement metadata target");
+        OwnerMetadata next;
+        metadataUpdating = true;
+        try { next = Objects.requireNonNull(transformation.apply(before.metadata())); }
+        finally { metadataUpdating = false; }
+        if (get(dimension, key).orElse(null) != before) throw new IllegalStateException("Placement changed during metadata update");
+        if (before.metadata().equals(next)) return false;
+        // Metadata does not affect block/chunk indexes; retain them verbatim.
+        records.put(new RecordKey(dimension, key), before.withMetadata(next, Math.incrementExact(before.metadataRevision())));
+        setDirty();
+        return true;
     }
 
     public Optional<SchematicPlacementRecord> findContaining(ResourceKey<Level> dimension, BlockPos pos) {
@@ -179,7 +216,7 @@ public final class SchematicPlacementStorage extends SavedData {
         return baseKey + "_" + UUID.randomUUID();
     }
 
-    private static SchematicPlacementStorage load(CompoundTag tag) {
+    public static SchematicPlacementStorage load(CompoundTag tag) {
         SchematicPlacementStorage storage = new SchematicPlacementStorage();
         ListTag list = tag.getListOrEmpty(TAG_RECORDS);
         for (int i = 0; i < list.size(); i++) {
@@ -200,7 +237,7 @@ public final class SchematicPlacementStorage extends SavedData {
         indexRecord(key, record);
     }
 
-    private CompoundTag saveToTag(CompoundTag tag) {
+    public CompoundTag saveToTag(CompoundTag tag) {
         tag.putInt(TAG_VERSION, VERSION);
         ListTag list = new ListTag();
         for (SchematicPlacementRecord record : records.values()) {
@@ -225,6 +262,9 @@ public final class SchematicPlacementStorage extends SavedData {
         writeChangedBlocks(tag, record.changedBlocks());
         tag.put("SpawnedEntities", writeSpawnedEntities(record.spawnedEntities()));
         tag.putLong("CreatedGameTime", record.createdGameTime());
+        tag.putString("Incarnation", record.incarnation().toString());
+        tag.putLong("MetadataRevision", record.metadataRevision());
+        if (!record.metadata().isEmpty()) tag.put("Metadata", record.metadata().save());
         return tag;
     }
 
@@ -251,7 +291,10 @@ public final class SchematicPlacementStorage extends SavedData {
                 readTransform(tag.getCompoundOrEmpty("Transform")),
                 changedBlocks,
                 spawnedEntities,
-                tag.getLongOr("CreatedGameTime", 0L)
+                tag.getLongOr("CreatedGameTime", 0L),
+                tag.getString("Incarnation").map(UUID::fromString).orElseGet(UUID::randomUUID),
+                tag.getLongOr("MetadataRevision", 0L),
+                OwnerMetadata.load(tag.getCompoundOrEmpty("Metadata"))
         ));
     }
 

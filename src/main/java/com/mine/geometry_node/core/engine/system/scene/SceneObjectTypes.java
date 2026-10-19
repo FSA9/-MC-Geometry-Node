@@ -61,6 +61,7 @@ public final class SceneObjectTypes {
     }
     public static void validate(SceneObject object){
         Type type=require(object.typeId());
+        if(type.storage()==Storage.NATIVE&&!object.metadata().isEmpty())throw new IllegalArgumentException("Native metadata belongs to the entity owner");
         if(object.parameters().size()!=type.properties().size())throw new IllegalArgumentException("Invalid parameter schema");
         for(var p:type.properties()){String value=object.parameters().get(p.key());if(value==null)throw new IllegalArgumentException("Missing "+p.key());p.validate().accept(value);}
         type.validate().accept(object);

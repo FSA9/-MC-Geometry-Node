@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.metadata.MetadataStore;
+import com.mine.geometry_node.core.metadata.TagAccess;
+import com.mine.geometry_node.core.metadata.TagPolicy;
 
 import java.util.List;
 import java.util.Set;
@@ -55,6 +58,47 @@ public interface DataLibraryUiRepository {
 
     void update(Entry expected, Entry replacement);
 
+    /** Capability and snapshot availability only; use isUpdatePending separately for busy state. */
+    default boolean canEditTags(Entry entry) {
+        return entry != null && hasLoadedSnapshot() && findEntry(entry.id()) != null;
+    }
+
+    /** Stale, unavailable or pending targets throw IllegalStateException; invalid tags throw IllegalArgumentException. */
+    default void addTag(Entry expected, String tag) {
+        requireTagEdit(expected);
+        tagAccess(expected).add(TagPolicy.DATA_LIBRARY_LEGACY.normalize(tag));
+    }
+
+    /** Uses the same CAS and pending lifecycle as update; duplicate/absent tags do not submit writes. */
+    default void removeTag(Entry expected, String tag) {
+        requireTagEdit(expected);
+        tagAccess(expected).remove(TagPolicy.DATA_LIBRARY_LEGACY.normalize(tag));
+    }
+
+    private void requireTagEdit(Entry expected) {
+        if (!canEditTags(expected) || isUpdatePending(expected.id()) || !expected.equals(findEntry(expected.id()))) {
+            throw new IllegalStateException("Data Library entry changed, is unavailable, or is still saving");
+        }
+    }
+
+    /** Unlocalized message key (without geometry_node. prefix), or empty when there is no message. */
+    default String tagUpdateMessage(UUID entryId) { return ""; }
+
+    private TagAccess tagAccess(Entry expected) {
+        return new TagAccess(new MetadataStore<List<String>>() {
+            @Override public List<String> read() { return expected.tags(); }
+
+            @Override public boolean update(java.util.function.UnaryOperator<List<String>> transformation) {
+                requireTagEdit(expected);
+                List<String> tags = transformation.apply(expected.tags());
+                if (expected.tags().equals(tags)) return false;
+                DataLibraryUiRepository.this.update(expected, new Entry(expected.id(), expected.parentId(),
+                        expected.type(), expected.key(), expected.value(), tags));
+                return true;
+            }
+        }, TagPolicy.DATA_LIBRARY_LEGACY);
+    }
+
     /** True until this entry's queued writes and their refreshes have finished. */
     default boolean isUpdatePending(UUID entryId) { return false; }
 
@@ -75,6 +119,7 @@ public interface DataLibraryUiRepository {
     }
 
     DataLibraryUiRepository EMPTY = new DataLibraryUiRepository() {
+        @Override public boolean canEditTags(Entry entry) { return false; }
         @Override public List<Folder> folders() { return List.of(); }
         @Override public List<Entry> entries() { return List.of(); }
         @Override public void create(UUID parentId, PortType type) {}

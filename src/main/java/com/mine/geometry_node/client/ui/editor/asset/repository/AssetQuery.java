@@ -1,12 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.asset.repository;
 
-import com.mine.geometry_node.client.graph.persistence.GraphTagIO;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 public record AssetQuery(String name, String tag, boolean includeTags) {
     public AssetQuery {
@@ -24,12 +23,6 @@ public record AssetQuery(String name, String tag, boolean includeTags) {
 
     public List<String> tagTerms() {
         if (tag.isBlank()) return List.of();
-        List<String> terms = new ArrayList<>();
-        Set<String> seen = new LinkedHashSet<>();
-        for (String part : tag.split("[,，;；\\s]+")) {
-            String normalized = GraphTagIO.normalizeTag(part);
-            if (!normalized.isEmpty() && seen.add(normalized)) terms.add(normalized);
-        }
-        return terms;
+        return TagSet.normalize(Arrays.asList(tag.split("[,，;；\\s]+")), TagPolicy.GRAPH_LEGACY);
     }
 }

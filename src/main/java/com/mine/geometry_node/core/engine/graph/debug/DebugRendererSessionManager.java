@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.engine.graph.debug;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
@@ -549,6 +553,19 @@ public final class DebugRendererSessionManager {
             markDirty(state);
             discardStateIfEmpty(level.getServer(), state);
         }
+    }
+
+    public static long metadataRevision(ServerLevel level, GraphResourceId id) {
+        metadata(level, id);
+        return SERVERS.get(level.getServer()).sources.metadataRevision(level,
+                DebugSourceId.graph(DebugRenderChannel.GEOMETRY, id));
+    }
+
+    public static MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
+        RuntimeMetadataTargets.requireThread(level.getServer());
+        DebugServerState state = SERVERS.get(level.getServer());
+        if (state == null) throw new IllegalStateException("Geometry no longer exists");
+        return state.sources.metadata(level, DebugSourceId.graph(DebugRenderChannel.GEOMETRY, id));
     }
 
     private static void removeGraphResources(MinecraftServer server, GraphResourceRelease release) {

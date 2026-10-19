@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
+import com.mine.geometry_node.core.engine.metadata.RuntimeTags;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
@@ -15,11 +16,13 @@ import java.util.UUID;
 
 /** A graph-owned live area or an immutable scene-owned area under a public dimension + id address. */
 public final class AreaResource {
+    final RuntimeTags metadataTags = new RuntimeTags();
     private final Resolved authored;
     private final AreaAddress address;
     private final GraphResourceId owner;
     private final long generation;
     private final UUID incarnation;
+    @Nullable private final UUID authoredObjectId;
     private final TransientScopedStateStore scopedState = new TransientScopedStateStore();
     private final AreaShape shape;
     private final long creationGameTime;
@@ -45,6 +48,7 @@ public final class AreaResource {
         this.owner = Objects.requireNonNull(owner, "owner");
         this.generation = generation;
         this.incarnation = UUID.randomUUID();
+        this.authoredObjectId = null;
         this.shape = Objects.requireNonNull(shape, "shape");
         this.creationGameTime = creationGameTime;
         this.center = Objects.requireNonNull(center, "center").newState();
@@ -57,13 +61,18 @@ public final class AreaResource {
 
     /** Persistent scene ownership is deliberately separate from graph binding ownership. */
     public static AreaResource authored(AreaAddress address, UUID id, long revision, long gameTime, Resolved resolved) {
-        return new AreaResource(address, id, revision, gameTime, resolved);
+        return authored(address, id, UUID.randomUUID(), revision, gameTime, resolved);
     }
-    private AreaResource(AreaAddress address, UUID id, long revision, long gameTime, Resolved resolved) {
+    public static AreaResource authored(AreaAddress address, UUID id, UUID incarnation,
+                                        long revision, long gameTime, Resolved resolved) {
+        return new AreaResource(address, id, incarnation, revision, gameTime, resolved);
+    }
+    private AreaResource(AreaAddress address, UUID id, UUID incarnation, long revision, long gameTime, Resolved resolved) {
         this.address = Objects.requireNonNull(address);
         this.owner = null;
         this.generation = revision;
-        this.incarnation = Objects.requireNonNull(id);
+        this.incarnation = Objects.requireNonNull(incarnation);
+        this.authoredObjectId = Objects.requireNonNull(id);
         this.authored = Objects.requireNonNull(resolved);
         this.shape = resolved.shape();
         this.creationGameTime = gameTime;
@@ -72,6 +81,7 @@ public final class AreaResource {
         this.anchorEntityId = null;
     }
     public boolean isAuthored() { return authored != null; }
+    @Nullable public UUID authoredObjectId() { return authoredObjectId; }
     public AreaAddress address() { return address; }
     @Nullable public GraphResourceId owner() { return owner; }
     public long generation() { return generation; }

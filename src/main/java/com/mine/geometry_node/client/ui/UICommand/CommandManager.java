@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Commands mutate once; the shared session owns detached snapshots for all replay. */
 public class CommandManager implements HistoryTarget, AutoCloseable {
@@ -47,6 +48,19 @@ public class CommandManager implements HistoryTarget, AutoCloseable {
     public boolean canRedo() { return historyState().canRedo(); }
     public boolean canSave() {
         return !executing && !notifying && historyState().phase() == HistoryState.Phase.IDLE;
+    }
+
+    /**
+     * Prepares a detached edit without opening history or emitting notifications. The shared owner
+     * rejects nested commands, saves, replay, and other preparations while user transformation runs.
+     */
+    public <T> T prepareEdit(Supplier<T> preparation) {
+        Objects.requireNonNull(preparation, "preparation");
+        requireIdle();
+        if (!canSave()) throw new IllegalStateException("Graph owner is not available for edit preparation");
+        executing = true;
+        try { return preparation.get(); }
+        finally { executing = false; }
     }
 
     /** Synchronous domain API for UI commands and MCP commits. Domain failures propagate. */

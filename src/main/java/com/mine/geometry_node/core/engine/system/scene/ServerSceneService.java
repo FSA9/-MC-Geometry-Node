@@ -53,6 +53,12 @@ public final class ServerSceneService {
             }
         });
     }
+    /** Publishes an already committed owner metadata edit to scene subscribers. */
+    public static void metadataChanged(net.minecraft.server.MinecraftServer server, String dimension) {
+        if (!server.isSameThread()) throw new IllegalStateException("Scene mutations require the server thread");
+        for (ServerPlayer player : server.getPlayerList().getPlayers())
+            if (player.level().dimension().identifier().toString().equals(dimension)) synchronize(player);
+    }
     public static void synchronize(ServerPlayer player) {
         NetworkHandler.sendToPlayer(player, snapshot(player, PacketSceneSnapshot.BROADCAST, true, ""));
     }

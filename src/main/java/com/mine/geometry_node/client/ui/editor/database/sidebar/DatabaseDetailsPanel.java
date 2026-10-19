@@ -77,12 +77,19 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
             for (DatabaseSelection.Field field : selection.fields()) addMetadata(section, field);
             addSection(section);
         }
-        for (DatabaseSelection.Section model : selection.sections()) {
+        for (int index = 0; index < selection.sections().size(); index++) {
+            DatabaseSelection.Section model = selection.sections().get(index);
+            int sectionIndex = index;
             LinearLayout section = DatabaseInspectorViews.section(getContext(), model.title(), model.subtitle());
             switch (model.kind()) {
                 case POSITION -> section.addView(DatabaseInspectorViews.position(getContext(), model.fields()),
                         new LinearLayout.LayoutParams(-1, -2));
-                case TAGS -> section.addView(DatabaseInspectorViews.tags(getContext(), model.fields()),
+                case TAGS -> section.addView(DatabaseInspectorViews.tags(getContext(), model.fields(), model.tagEditor(), () -> {
+                    if (current == null || sectionIndex >= current.sections().size()) return null;
+                    var latest = current.sections().get(sectionIndex).tagEditor();
+                    return latest != null && model.tagEditor() != null
+                            && latest.target().equals(model.tagEditor().target()) ? latest : null;
+                }),
                         new LinearLayout.LayoutParams(-1, -2));
                 case SOURCE -> section.addView(DatabaseInspectorViews.source(getContext(), model.fields()),
                         new LinearLayout.LayoutParams(-1, -2));
