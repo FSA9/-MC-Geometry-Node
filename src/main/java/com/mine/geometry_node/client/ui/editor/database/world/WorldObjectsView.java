@@ -489,7 +489,7 @@ public final class WorldObjectsView extends FrameLayout {
             } else {
                 cell(line, "");
             }
-            cell(line,dimensionLabel(entry.dimension()));
+            cell(line,entry.dimension());
             cell(line,position(entry));
             cell(line,lifetimeLabel(entry.lifetime()));
             UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
@@ -612,17 +612,13 @@ public final class WorldObjectsView extends FrameLayout {
         return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
                 "",UiTheme.Text.MUTED,List.of(),
                 List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of(
-                new DatabaseSelection.Section(tr("spatial_position"),dimensionLabel(entry.dimension()),DatabaseSelection.Kind.POSITION,position),
+                new DatabaseSelection.Section(tr("spatial_position"),entry.dimension(),DatabaseSelection.Kind.POSITION,position),
                 new DatabaseSelection.Section(tr("object_information"),"",DatabaseSelection.Kind.METADATA,metadata),
                 new DatabaseSelection.Section(tr("tags"),"",DatabaseSelection.Kind.TAGS,
                         entry.tags().stream().map(tag->new DatabaseSelection.Field("",tag)).toList()),
                 new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)));
     }
     private static String number(double value) {return String.format(Locale.ROOT,"%.2f",value);}
-    private static String dimensionLabel(String id) {
-        return switch(id){case "minecraft:overworld"->tr("dimension.overworld");case "minecraft:the_nether"->tr("dimension.nether");
-            case "minecraft:the_end"->tr("dimension.end");default->id;};
-    }
     private static String position(WorldObjectEntry entry) {
         return String.format(Locale.ROOT, "%.1f, %.1f, %.1f", entry.position().x, entry.position().y, entry.position().z);
     }
