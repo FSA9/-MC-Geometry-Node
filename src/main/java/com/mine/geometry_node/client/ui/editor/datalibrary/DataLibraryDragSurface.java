@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;

@@ -1,14 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
-import com.mine.geometry_node.client.ui.components.layout.ThinResizableDivider;
-import com.mine.geometry_node.client.ui.components.layout.UiFixedSplitLayout;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
-import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.database.sidebar.DatabaseDetailsPanel;
 import com.mine.geometry_node.client.ui.editor.database.world.WorldObjectsView;
 import com.mine.geometry_node.client.ui.editor.datalibrary.*;

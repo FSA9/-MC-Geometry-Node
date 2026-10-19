@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.asset.menu;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.menu.UiPopupOverlay;
-import com.mine.geometry_node.client.ui.components.menu.UiMenuPanelLayout;
-import com.mine.geometry_node.client.ui.components.menu.UiMenuItems;
-import com.mine.geometry_node.client.ui.components.menu.UiSearchMenuLayout;
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuPanelLayout;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchMenuLayout;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import icyllis.modernui.graphics.Matrix;
 
 import icyllis.modernui.core.Context;

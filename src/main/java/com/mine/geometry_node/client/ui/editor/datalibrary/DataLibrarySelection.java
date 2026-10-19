@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import java.util.ArrayDeque;
-import com.mine.geometry_node.client.ui.components.list.UiListSelection;
+import com.mine.geometry_node.client.ui.components.base.list.UiListSelection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;

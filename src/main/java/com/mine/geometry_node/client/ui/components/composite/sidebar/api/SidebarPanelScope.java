@@ -1,0 +1,11 @@
+package com.mine.geometry_node.client.ui.components.composite.sidebar.api;
+
+/**
+ * Editor workspaces that can host registered registration panels.
+ */
+public enum SidebarPanelScope {
+    GRAPH_EDITOR,
+    ASSET_BROWSER,
+    GAME_VIEWPORT,
+    DATA_LIBRARY
+}

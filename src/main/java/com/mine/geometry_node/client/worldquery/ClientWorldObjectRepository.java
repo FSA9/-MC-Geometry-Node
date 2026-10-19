@@ -30,7 +30,7 @@ public final class ClientWorldObjectRepository {
     private final Consumer<PacketWorldObjectTagEdit> tagTransport;
     private final Consumer<Runnable> clientQueue;
     private final BooleanSupplier connected;
-    private long nextRequest, generation;
+    private long nextRequest, nextSession, generation;
     private boolean initialized;
     private ClientWorldObjectRepository() {
         this(NetworkHandler::sendToServer, NetworkHandler::sendToServer, task -> Minecraft.getInstance().execute(task),
@@ -49,7 +49,7 @@ public final class ClientWorldObjectRepository {
     }
     public synchronized Session newSession() {
         if (sessions.size() >= 64) throw new IllegalStateException("Too many world query sessions");
-        Session session = new Session(); sessions.add(session); return session;
+        Session session = new Session(++nextSession); sessions.add(session); return session;
     }
     public synchronized void init() {
         if (initialized) return;
@@ -100,7 +100,7 @@ public final class ClientWorldObjectRepository {
                 // A tag can grow a page that was already at its byte limit. Keep rows and let the bounded query rebuild it.
                 try {
                     target.published = new Snapshot(snapshot.query(), new WorldObjectPage(page.requestId(), entries, page.truncated(),
-                            page.dimensionIds(), page.types(), page.coverage(), page.message()), false, snapshot.sequence() + 1);
+                            page.dimensionIds(), page.types(), page.coverage(), page.message(), page.counts()), false, snapshot.sequence() + 1);
                 } catch (IllegalArgumentException pageLimit) { /* Refresh below still runs. */ }
                 target.query(snapshot.query(), true);
             }
@@ -156,7 +156,8 @@ public final class ClientWorldObjectRepository {
         private String editedTag;
         private boolean tagAdded, retainingRows;
         private volatile boolean closed;
-        private Session() {}
+        private final long sessionId;
+        private Session(long sessionId) { this.sessionId = sessionId; }
         public Snapshot snapshot() { return published; }
         public void addChangeListener(Runnable listener) {
             Objects.requireNonNull(listener);
@@ -211,11 +212,15 @@ public final class ClientWorldObjectRepository {
                 notifyListeners();
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || tagRequestId != packet.requestId()) return;
-                    try {
-                        if (!connected.getAsBoolean()) throw new IllegalStateException("Disconnected");
-                        tagTransport.accept(packet);
-                    } catch (RuntimeException failure) {
-                        pendingTags.remove(tagRequestId); tagRequestId = 0;
+                }
+                try {
+                    if (!connected.getAsBoolean()) throw new IllegalStateException("Disconnected");
+                    tagTransport.accept(packet);
+                } catch (RuntimeException failure) {
+                    synchronized (ClientWorldObjectRepository.this) {
+                        if (closed || generation != expectedGeneration || tagRequestId != packet.requestId()
+                                || pendingTags.get(packet.requestId()) != this) return;
+                        pendingTags.remove(packet.requestId()); tagRequestId = 0;
                         if (scopeRevision == tagScopeRevision) tagMessage = WorldObjectTagEdits.PREFIX + "failed";
                     }
                 }
@@ -236,19 +241,29 @@ public final class ClientWorldObjectRepository {
                 published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, ""), !retainRows, published.sequence() + 1);
             }
             clientQueue.accept(() -> {
+                final PacketWorldObjectQuery packet;
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || requestId != id) return;
-                    if (!connected.getAsBoolean()) {
+                    packet = new PacketWorldObjectQuery(sessionId, id, query);
+                }
+                // Transport may block. A newer query/close/disconnect must still acquire the repository lock.
+                String failureMessage = null;
+                try {
+                    if (!connected.getAsBoolean()) failureMessage = "disconnected";
+                    else transport.accept(packet);
+                } catch (RuntimeException failure) {
+                    failureMessage = "send_failed";
+                }
+                synchronized (ClientWorldObjectRepository.this) {
+                    if (closed || generation != expectedGeneration || requestId != id) return;
+                    if (failureMessage != null) {
+                        // A synchronous reply may already have completed this request before transport threw.
+                        if (pending.get(id) != this) return;
                         pending.remove(id);
-                        published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, "disconnected"), false, published.sequence() + 1);
-                        if (retainRows) tagMessage = WorldObjectTagEdits.PREFIX + "unavailable";
-                    } else {
-                        try { transport.accept(new PacketWorldObjectQuery(id, query)); }
-                        catch (RuntimeException failure) {
-                            pending.remove(id);
-                            published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, "send_failed"), false, published.sequence() + 1);
-                            if (retainRows) tagMessage = WorldObjectTagEdits.PREFIX + "failed";
-                        }
+                        published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, failureMessage),
+                                false, published.sequence() + 1);
+                        if (retainRows) tagMessage = WorldObjectTagEdits.PREFIX
+                                + (failureMessage.equals("disconnected") ? "unavailable" : "failed");
                     }
                 }
                 notifyListeners();

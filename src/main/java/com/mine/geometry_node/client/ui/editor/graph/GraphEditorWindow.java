@@ -3,11 +3,11 @@ package com.mine.geometry_node.client.ui.editor.graph;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
-import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
-import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.graph.properties.session.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.config.AppConfig;

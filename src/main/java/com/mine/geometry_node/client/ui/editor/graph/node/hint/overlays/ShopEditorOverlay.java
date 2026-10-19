@@ -1,17 +1,17 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.components.overlay.InventoryItemPickerOverlay;
+import com.mine.geometry_node.client.ui.components.integration.overlay.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;

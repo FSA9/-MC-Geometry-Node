@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.common;
 
-import com.mine.geometry_node.client.ui.components.icon.VectorIconView;
-import com.mine.geometry_node.client.ui.components.menu.UiPopover;
-import com.mine.geometry_node.client.ui.components.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;

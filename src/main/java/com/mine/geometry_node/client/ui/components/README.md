@@ -1,50 +1,121 @@
-# UI 组件选用索引
+# UI 组件层级规则与推荐入口
 
-新增界面先在此查找组件。尺寸与文字使用 `UIUtils` 的项目缩放，颜色使用 `UiTheme`；业务查询、数据写入、历史命令和服务器交互由调用方负责。
+新增界面先按职责选择组件，再查看下方使用契约。尺寸与文字使用 `UIUtils` 的项目缩放，颜色使用 `UiTheme`；业务查询、数据写入、历史命令和服务器交互由调用方负责。
+
+## 层级与选择规则
+
+| 层级 | 职责 | 选用边界 |
+| --- | --- | --- |
+| `base` | 单一职责的绘制、输入行为、布局、选择计算，以及弹层输入和生命周期机制。 | 需要一个基础能力时直接使用；不导入 `composite` 或 `integration`，不创建完整业务编辑器。 |
+| `composite` | 组合基础能力，提供完整的搜索栏、标签、分栏、菜单、表格、颜色编辑、文本编辑和 sidebar。 | 已有完整交互优先复用，不在调用方重新拼装同一套行为；业务数据与提交仍由调用方提供。 |
+| `integration` | ModernUI 与 Minecraft 原生渲染、游戏内容和项目运行时之间的适配。 | 展示物品、实体、标记类型或选择背包物品时使用；原生渲染实现不下沉到 `base`。 |
+
+- 分层看实际职责和依赖，不按继承自 `View`、类大小或是否只包含工具方法判断。`ColorSwatchView` 会打开完整颜色编辑器，因此属于 `composite`；`UiSelectButton` 只显示当前值和箭头，因此属于 `base`。
+- 搜索输入用 [UiSearchInput](base/input/UiSearchInput.java)，工具栏搜索用 [UiSearchBar](composite/input/UiSearchBar.java)，菜单搜索区用 [UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java)，完整选择菜单用 [UiSearchableMenu](composite/menu/UiSearchableMenu.java)。
+- 弹层输入、焦点、外部点击、Esc、Area 生命周期和安全移除机制属于 `base`；菜单内容、颜色编辑、文本编辑属于 `composite`；背包选择和物品提示属于 `integration`。
+- helper 跟随所属职责和使用者归层；纯算法、无状态或不引用 Minecraft 并不自动构成下沉 base 的理由。只有具备独立的基础职责和实际复用需求时才考虑提取，不把每个纯算法强拆到 base。原生预览的 `PreviewZoomController`、`ValuePreviewStyle` 留在 `integration/valuepreview`。
+- `base` 可以使用项目的主题、缩放及 Area 生命周期接口；这里的基础层不等同于脱离项目的独立 UI 库，但禁止直接依赖 Minecraft、core 数据模型及具体编辑器。完整模态弹层通过 `OverlayMount` 接入 shell，并保留独立宿主路径。
+- 组件内允许的依赖方向为 `integration → composite → base`，也允许 `integration → base`；禁止反向依赖。`composite` 可以接收纯数据类型，但不直接调用 Minecraft 渲染、世界状态或具体编辑器／运行时实现；本地化 `Component` 是允许的适配。编辑器专用拼装留在对应编辑器。
+- 迁移必须更新 package、调用方与测试引用；不保留旧包名转发类或平行实现。本页组件链接统一使用分层后的路径。
+- `ComponentLayeringTest` 检查生产源码的层级边界、目录归属和包声明，阻止后续改动重新混入旧目录或产生反向依赖。
+
+## 各层清单
+
+以下列出全部 69 个生产组件源文件：23 个 base、34 个 composite、12 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
+
+### base：基础能力
+
+| 分类 | 类 | 职责 |
+| --- | --- | --- |
+| `button` | [UiActionButton](base/button/UiActionButton.java)、[UiIconButton](base/button/UiIconButton.java) | 动作与图标按钮的状态、命中和视觉。 |
+| `display` | [UiDisplayText](base/display/UiDisplayText.java) | 只读文字、完整值提示和行点击透传。 |
+| `icon` | [SvgIconView](base/icon/SvgIconView.java)、[UiIconColors](base/icon/UiIconColors.java)、[VectorIconView](base/icon/VectorIconView.java) | 图标绘制与统一着色。 |
+| `input` | [UiCheckBox](base/input/UiCheckBox.java)、[UiNumericInput](base/input/UiNumericInput.java)、[UiSearchInput](base/input/UiSearchInput.java)、[UiSearchSubmit](base/input/UiSearchSubmit.java)、[UiSelectButton](base/input/UiSelectButton.java)、[UiTextInput](base/input/UiTextInput.java) | 文本、搜索输入、搜索提交协议、复选框、数值输入与下拉触发外观。 |
+| `layout` | [ResizableDivider](base/layout/ResizableDivider.java)、[TagFlowLayout](base/layout/TagFlowLayout.java)、[ThinResizableDivider](base/layout/ThinResizableDivider.java) | 分割线拖动与已有子控件的换行排列。 |
+| `list` | [UiListSelection](base/list/UiListSelection.java) | 按稳定键计算单选和多选。 |
+| `menu` | [UiMenuFocus](base/menu/UiMenuFocus.java)、[UiMenuItems](base/menu/UiMenuItems.java)、[UiMenuPanelLayout](base/menu/UiMenuPanelLayout.java)、[UiPopupOverlay](base/menu/UiPopupOverlay.java) | 弹层输入与生命周期底座、焦点归还、条目视觉和限高面板测量。 |
+| `scroll` | [UiHorizontalScrollView](base/scroll/UiHorizontalScrollView.java)、[UiScrollBehavior](base/scroll/UiScrollBehavior.java)、[UiScrollView](base/scroll/UiScrollView.java) | 纵横滚动及内部共享行为。 |
+
+### composite：完整组合组件
+
+| 分类 | 类 | 职责 |
+| --- | --- | --- |
+| `button` | [UiSplitButton](composite/button/UiSplitButton.java) | 组合两个独立动作的分段按钮。 |
+| `display` | [UiTagChip](composite/display/UiTagChip.java)、[UiTagStrip](composite/display/UiTagStrip.java) | Tag 展示、删除入口、单行标签组及溢出提示。 |
+| `input` | [ColorSwatchView](composite/input/ColorSwatchView.java)、[UiGradientStopEditor](composite/input/UiGradientStopEditor.java)、[UiSearchBar](composite/input/UiSearchBar.java) | 完整搜索栏、带选择器的颜色块、渐变色标编辑。 |
+| `layout` | [UiFixedSplitLayout](composite/layout/UiFixedSplitLayout.java)、[UiPropertyRow](composite/layout/UiPropertyRow.java) | 属性行和固定尺寸分栏。 |
+| `list` | [UiNavigationRow](composite/list/UiNavigationRow.java) | 名称、数量与操作组成的导航行。 |
+| `menu` | [HeldMenuKey](composite/menu/HeldMenuKey.java)、[RadialMenuLayout](composite/menu/RadialMenuLayout.java)、[UiGridMenu](composite/menu/UiGridMenu.java)、[UiPopover](composite/menu/UiPopover.java)、[UiRadialMenu](composite/menu/UiRadialMenu.java)、[UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java)、[UiSearchableMenu](composite/menu/UiSearchableMenu.java) | 可搜索菜单、网格菜单、任意内容 popover、扇形菜单及配套布局和按键协议。 |
+| `overlay` | [ColorPickerDialog](composite/overlay/ColorPickerDialog.java)、[ExpandedTextInputOverlay](composite/overlay/ExpandedTextInputOverlay.java) | 完整颜色编辑、长文本与富文本编辑；文本编辑含 PortType、RichTextValue 适配，不属于通用输入底座。 |
+| `sidebar` | [EditorSidebar](composite/sidebar/EditorSidebar.java)、[SidebarLayoutController](composite/sidebar/SidebarLayoutController.java) | 标签栏、内容切换、拖动排序、展开收起和编辑器布局联动。 |
+| `sidebar/api` | [SidebarPanel](composite/sidebar/api/SidebarPanel.java)、[SidebarPanelContext](composite/sidebar/api/SidebarPanelContext.java)、[SidebarPanelDefinition](composite/sidebar/api/SidebarPanelDefinition.java)、[SidebarPanelFactory](composite/sidebar/api/SidebarPanelFactory.java)、[SidebarPanelRegistry](composite/sidebar/api/SidebarPanelRegistry.java)、[SidebarPanelScope](composite/sidebar/api/SidebarPanelScope.java) | 面板、上下文、作用域、工厂、定义和注册表；属于编辑器扩展协议，不作为 base API。 |
+| `table` | [UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java)、[UiTableBatchWork](composite/table/UiTableBatchWork.java)、[UiTableColumns](composite/table/UiTableColumns.java)、[UiTableFilterHeader](composite/table/UiTableFilterHeader.java)、[UiTableRow](composite/table/UiTableRow.java)、[UiTableRowFrame](composite/table/UiTableRowFrame.java)、[UiTableStyle](composite/table/UiTableStyle.java)、[UiTableViewport](composite/table/UiTableViewport.java) | 列模型、行与单元格、横向视口、表头筛选、样式和分帧建行。 |
+
+### integration：Minecraft 与运行时适配
+
+| 分类 | 类 | 职责 |
+| --- | --- | --- |
+| `nativepreview` | [NativePreviewHost](integration/nativepreview/NativePreviewHost.java)、[ViewportNativePreview](integration/nativepreview/ViewportNativePreview.java)、[ViewportNativePreviewLayer](integration/nativepreview/ViewportNativePreviewLayer.java)、[ViewportNativePreviewView](integration/nativepreview/ViewportNativePreviewView.java) | 共享原生渲染 surface、注册协议、坐标变换、裁剪、attach/detach 和独立 surface 回退。 |
+| `overlay` | [InventoryItemPickerOverlay](integration/overlay/InventoryItemPickerOverlay.java)、[ItemStackTooltipOverlay](integration/overlay/ItemStackTooltipOverlay.java) | 读取客户端背包的选择器与从 ItemStack 获取内容的提示层。 |
+| `valuepreview` | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)、[EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java)、[ItemSlotView](integration/valuepreview/ItemSlotView.java)、[MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java)、[PreviewZoomController](integration/valuepreview/PreviewZoomController.java)、[ValuePreviewStyle](integration/valuepreview/ValuePreviewStyle.java) | 物品、实体和表格实体单元格；标记预览适配项目运行时注册表，缩放与样式辅助类跟随预览。 |
+
+`InventoryItemPickerOverlay.ItemStackView` 当前是公开嵌套展示组件，背包选择器、`ShopMenuFragment` 和 `ShopEditorOverlay` 都在使用。它随外层文件归入 `integration/overlay`；复用时应识别它是物品展示能力，不能因嵌套在选择器中就下沉到 base。原生桥接只认识 `NativePreviewHost` 协议，由 Graph 的 `Viewport` 实现宿主，不依赖具体编辑器类。
+
+`ItemSlotView` 依赖 `ViewportNativePreviewView` 和 `ItemStackTooltipOverlay`；`EntityPreviewCell` 组合 `EntityTemplatePreviewView` 与 base 的 `UiDisplayText`。这些依赖保留在 integration 内或指向 base。`ColorSwatchView` 直接打开 `ColorPickerDialog`，两者一起归入 composite，避免基础颜色块反向依赖完整弹层。
+
+`EditorSidebar` 组合基础控件并安装 `SidebarPanelRegistry` 中的面板；`SidebarLayoutController` 组合固定分栏或权重布局。具体面板由编辑器实现并在 shell 注册。`SidebarPanelContext.requireOwner()` 的具体 owner 类型由面板工厂检查，不进入基础组件。
+
+## 契约导航
+
+原有使用契约继续保留在本页；组件源文件链接均指向新层级：
+
+- [按用途选择](#按用途选择)、[菜单与弹层](#菜单与弹层)、[表格](#表格)。
+- [原生游戏内容与专用覆盖层](#原生游戏内容与专用覆盖层)、[预览缩放（默认关闭交互）](#预览缩放默认关闭交互)。
+- [公共输入与生命周期契约](#公共输入与生命周期契约)、[新组件与调用约定](#新组件与调用约定)、[界面状态接入](#界面状态接入)。
 
 ## 按用途选择
 
 | 用途 | 推荐入口 | 职责与使用方式 |
 | --- | --- | --- |
-| 文字动作按钮 | [UiActionButton](button/UiActionButton.java) | `Role` 选择语义配色，`Density` 选择文字密度；统一悬停、按下、禁用、焦点反馈。切换开关使用 `Palette.toggle(selected)`，只调用 `setSelected()` 不会替换调色板。 |
-| 图标动作按钮 | [UiIconButton](button/UiIconButton.java) | 包装图标并统一命中尺寸、背景和状态；不要直接把 SVG 当按钮。 |
-| 左右分段按钮 | [UiSplitButton](button/UiSplitButton.java) | 一个外框、两个独立动作；如吸附开关＋配置下拉。组合 `UiActionButton`；外层 `setEnabled()` 同步控制两侧按钮。 |
-| SVG／简单矢量图标 | [SvgIconView](icon/SvgIconView.java)、[VectorIconView](icon/VectorIconView.java) | 仅绘制；统一着色使用 [UiIconColors](icon/UiIconColors.java)。 |
-| 文本输入、错误提示 | [UiTextInput](input/UiTextInput.java) | 输入框视觉与 `setErrorMessage()`；输入草稿、解析、提交和撤销仍由调用方决定。 |
-| 搜索输入 | [UiSearchInput](input/UiSearchInput.java) | 继承文本输入视觉，增加单行约束与 `setOnQueryChanged()`；程序设置文本也会通知。 |
-| 输入＋方形查找按钮 | [UiSearchBar](input/UiSearchBar.java) | 组合搜索输入和 32×32 逻辑像素按钮；点击或 Enter 提交，键入不自动查询；外层禁用同步控制输入和按钮，保留草稿。 |
-| 多输入共享搜索提交 | [UiSearchSubmit](input/UiSearchSubmit.java) | `bind(button, action, inputs...)` 统一普通／小键盘 Enter、过滤重复按键；不改草稿、不执行筛选。资产浏览器双输入使用此入口。 |
-| 复选框 | [UiCheckBox](input/UiCheckBox.java) | `setChecked()`／`setIndeterminate()` 静默同步勾选／半选状态；用户点击半选时全选并通知监听器。数据集合由调用方维护。 |
-| 数值拖动、步进、内联编辑 | [UiNumericInput](input/UiNumericInput.java) | 通过 `Binding`、`Spec` 接入数据与数值规则；普通设置数值文本也可直接组合 `UiTextInput` 和校验。 |
-| 下拉触发按钮 | [UiSelectButton](input/UiSelectButton.java) | 仅显示当前值和箭头；菜单内容与选中数据由调用方提供。 |
-| 颜色块预览与选择 | [ColorSwatchView](input/ColorSwatchView.java) | 透明棋盘背景、颜色选择器；通过 supplier 读取颜色、回调提交，组件不绑定节点或历史。 |
-| 渐变显示与色标拖动 | [UiGradientStopEditor](input/UiGradientStopEditor.java) | `Style` 控制尺寸，`Binding` 分离临时预览与最终提交；取消／禁用／移除／窗口失焦时回到已提交值，调用方校验提交快照并维护撤销。 |
-| 颜色选择 | [ColorPickerDialog](overlay/ColorPickerDialog.java) | 完整颜色编辑弹层，使用自身展示入口管理生命周期。 |
-| 名称＋数量导航行 | [UiNavigationRow](list/UiNavigationRow.java) | 组合一个按钮及被动文字层；通过 `button()` 绑定操作，`setPalette()` 更新状态。 |
-| 单选、Ctrl／Shift 多选 | [UiListSelection](list/UiListSelection.java) | 基于稳定键与当前显示顺序计算选择；复选框独立增减集合，不当作普通行单选。 |
-| 标签＋值＋末端操作 | [UiPropertyRow](layout/UiPropertyRow.java) | 只负责对齐和窄布局；调用方传入值控件、复制按钮和 `Layout` 尺寸。不会自动读写对象。 |
-| 固定尺寸边栏／上下分栏 | [UiFixedSplitLayout](layout/UiFixedSplitLayout.java) | 保存独立逻辑尺寸，剩余区域伸缩；适合数据库目录和属性栏，避免多分割线比例联动。 |
-| 分割线输入与比例分栏 | [ResizableDivider](layout/ResizableDivider.java) | 通用拖动处理；`weighted()` 用于按比例分配的兄弟面板。`Orientation` 表示拖动轴。 |
-| 细线外观分割线 | [ThinResizableDivider](layout/ThinResizableDivider.java) | 继承同一输入逻辑；细线常态、宽命中区、悬停蓝条。 |
-| 自动换行布局 | [TagFlowLayout](layout/TagFlowLayout.java) | 只排列已有子控件，不负责标签数据或点击。 |
-| 表格里的只读文字 | [UiDisplayText](display/UiDisplayText.java) | 保留完整值提示并向外层行透传点击，防止文字提示独占选择手势。 |
-| 单个 Tag 显示块 | [UiTagChip](display/UiTagChip.java) | 统一主题、24dp 高度和省略文字；默认只读透传行点击。`setPrefix()` 仅设置视觉前缀，`setOnRemove(description, action)` 可配置删除，普通点击可用 `setOnClickListener()`；不修改标签数据。 |
-| 固定行高的标签展示 | [UiTagStrip](display/UiTagStrip.java) | 组合 `UiTagChip` 显示单行只读标签及溢出提示；`setPrefix()` 统一前缀。多行排列使用 `TagFlowLayout`＋`UiTagChip`。 |
-| 纵／横滚动 | [UiScrollView](scroll/UiScrollView.java)、[UiHorizontalScrollView](scroll/UiHorizontalScrollView.java) | 共用内部 `UiScrollBehavior`，统一滚动条交互边界；轨道与滑块使用边界内填充绘制，避免缩放后描边越界与淡出残影。 |
-| 编辑器右侧栏 | [EditorSidebar](sidebar/EditorSidebar.java)、[SidebarLayoutController](sidebar/SidebarLayoutController.java) | 面板标签、展开／收起与布局联动；窗口失焦取消标签拖动，延迟滚动只定位当前仍在目录中的标签；可扩展面板通过 [sidebar/api](sidebar/api) 注册。 |
+| 文字动作按钮 | [UiActionButton](base/button/UiActionButton.java) | `Role` 选择语义配色，`Density` 选择文字密度；统一悬停、按下、禁用、焦点反馈。切换开关使用 `Palette.toggle(selected)`，只调用 `setSelected()` 不会替换调色板。 |
+| 图标动作按钮 | [UiIconButton](base/button/UiIconButton.java) | 包装图标并统一命中尺寸、背景和状态；不要直接把 SVG 当按钮。 |
+| 左右分段按钮 | [UiSplitButton](composite/button/UiSplitButton.java) | 一个外框、两个独立动作；如吸附开关＋配置下拉。组合 `UiActionButton`；外层 `setEnabled()` 同步控制两侧按钮。 |
+| SVG／简单矢量图标 | [SvgIconView](base/icon/SvgIconView.java)、[VectorIconView](base/icon/VectorIconView.java) | 仅绘制；统一着色使用 [UiIconColors](base/icon/UiIconColors.java)。 |
+| 文本输入、错误提示 | [UiTextInput](base/input/UiTextInput.java) | 输入框视觉与 `setErrorMessage()`；输入草稿、解析、提交和撤销仍由调用方决定。 |
+| 搜索输入 | [UiSearchInput](base/input/UiSearchInput.java) | 继承文本输入视觉，增加单行约束与 `setOnQueryChanged()`；程序设置文本也会通知。 |
+| 输入＋方形查找按钮 | [UiSearchBar](composite/input/UiSearchBar.java) | 组合搜索输入和 32×32 逻辑像素按钮；点击或 Enter 提交，键入不自动查询；外层禁用同步控制输入和按钮，保留草稿。 |
+| 多输入共享搜索提交 | [UiSearchSubmit](base/input/UiSearchSubmit.java) | `bind(button, action, inputs...)` 统一普通／小键盘 Enter、过滤重复按键；不改草稿、不执行筛选。资产浏览器双输入使用此入口。 |
+| 复选框 | [UiCheckBox](base/input/UiCheckBox.java) | `setChecked()`／`setIndeterminate()` 静默同步勾选／半选状态；用户点击半选时全选并通知监听器。数据集合由调用方维护。 |
+| 数值拖动、步进、内联编辑 | [UiNumericInput](base/input/UiNumericInput.java) | 通过 `Binding`、`Spec` 接入数据与数值规则；普通设置数值文本也可直接组合 `UiTextInput` 和校验。 |
+| 下拉触发按钮 | [UiSelectButton](base/input/UiSelectButton.java) | 仅显示当前值和箭头；菜单内容与选中数据由调用方提供。 |
+| 颜色块预览与选择 | [ColorSwatchView](composite/input/ColorSwatchView.java) | 透明棋盘背景、颜色选择器；通过 supplier 读取颜色、回调提交，组件不绑定节点或历史。 |
+| 渐变显示与色标拖动 | [UiGradientStopEditor](composite/input/UiGradientStopEditor.java) | `Style` 控制尺寸，`Binding` 分离临时预览与最终提交；取消／禁用／移除／窗口失焦时回到已提交值，调用方校验提交快照并维护撤销。 |
+| 颜色选择 | [ColorPickerDialog](composite/overlay/ColorPickerDialog.java) | 完整颜色编辑弹层，使用自身展示入口管理生命周期。 |
+| 名称＋数量导航行 | [UiNavigationRow](composite/list/UiNavigationRow.java) | 组合一个按钮及被动文字层；通过 `button()` 绑定操作，`setPalette()` 更新状态。 |
+| 单选、Ctrl／Shift 多选 | [UiListSelection](base/list/UiListSelection.java) | 基于稳定键与当前显示顺序计算选择；复选框独立增减集合，不当作普通行单选。 |
+| 标签＋值＋末端操作 | [UiPropertyRow](composite/layout/UiPropertyRow.java) | 只负责对齐和窄布局；调用方传入值控件、复制按钮和 `Layout` 尺寸。不会自动读写对象。 |
+| 固定尺寸边栏／上下分栏 | [UiFixedSplitLayout](composite/layout/UiFixedSplitLayout.java) | 保存独立逻辑尺寸，剩余区域伸缩；适合数据库目录和属性栏，避免多分割线比例联动。 |
+| 分割线输入与比例分栏 | [ResizableDivider](base/layout/ResizableDivider.java) | 通用拖动处理；`weighted()` 用于按比例分配的兄弟面板。`Orientation` 表示拖动轴。 |
+| 细线外观分割线 | [ThinResizableDivider](base/layout/ThinResizableDivider.java) | 继承同一输入逻辑；细线常态、宽命中区、悬停蓝条。 |
+| 自动换行布局 | [TagFlowLayout](base/layout/TagFlowLayout.java) | 只排列已有子控件，不负责标签数据或点击。 |
+| 表格里的只读文字 | [UiDisplayText](base/display/UiDisplayText.java) | 保留完整值提示并向外层行透传点击，防止文字提示独占选择手势。 |
+| 单个 Tag 显示块 | [UiTagChip](composite/display/UiTagChip.java) | 统一主题、24dp 高度和省略文字；默认只读透传行点击。`setPrefix()` 仅设置视觉前缀，`setOnRemove(description, action)` 可配置删除，普通点击可用 `setOnClickListener()`；不修改标签数据。 |
+| 固定行高的标签展示 | [UiTagStrip](composite/display/UiTagStrip.java) | 组合 `UiTagChip` 显示单行只读标签及溢出提示；`setPrefix()` 统一前缀。多行排列使用 `TagFlowLayout`＋`UiTagChip`。 |
+| 纵／横滚动 | [UiScrollView](base/scroll/UiScrollView.java)、[UiHorizontalScrollView](base/scroll/UiHorizontalScrollView.java) | 共用内部 `UiScrollBehavior`，统一滚动条交互边界；轨道与滑块使用边界内填充绘制，避免缩放后描边越界与淡出残影。 |
+| 编辑器右侧栏 | [EditorSidebar](composite/sidebar/EditorSidebar.java)、[SidebarLayoutController](composite/sidebar/SidebarLayoutController.java) | 面板标签、展开／收起与布局联动；窗口失焦取消标签拖动，延迟滚动只定位当前仍在目录中的标签；可扩展面板通过 [sidebar/api](composite/sidebar/api) 注册。 |
 
 ## 菜单与弹层
 
 | 需求 | 推荐入口 | 组合关系 |
 | --- | --- | --- |
-| 可搜索文字选项 | [UiSearchableMenu](menu/UiSearchableMenu.java) | `showAt(anchor, host)`；固定搜索区、限高滚动列表、锚点随节点变换跟随。 |
-| 图片／预览卡片选择 | [UiGridMenu](menu/UiGridMenu.java) | 正方形预览＋可选底部文字；`Style` 控制卡片宽度、列数和间距，窄空间自动折行。 |
-| 勾选、输入、多状态选择等任意组合 | [UiPopover](menu/UiPopover.java) | 传入内容 View，调用 `showBelow()` 或 `showAtRoot()`；组合公共弹层底座和滚动面板。 |
-| 扇形选择 | [UiRadialMenu](menu/UiRadialMenu.java) | 开关由调用方决定；[HeldMenuKey](menu/HeldMenuKey.java) 提供按住／松开触发协议。保留键盘焦点以接收松开，不套普通弹层的抢焦点方式；禁用会关闭并清除按压／悬停，重新启用后须显式打开。 |
-| 搜索菜单的标题与搜索区 | [UiSearchMenuLayout](menu/UiSearchMenuLayout.java) | `addHeader()` 统一标题、搜索和间距，可关闭搜索；不执行查询、不创建弹层。 |
-| 菜单条目与卡片状态 | [UiMenuItems](menu/UiMenuItems.java) | `row()`、`card()`、`decorate()` 共用选中／悬停／禁用视觉，保持背景对象稳定。 |
-| 滚动菜单面板及边界测量 | [UiMenuPanelLayout](menu/UiMenuPanelLayout.java) | 统一对称内边距、限高测量和位置约束；锚点跟随、上下翻转和级联策略由具体菜单持有。 |
-| 特殊普通弹层实现 | [UiPopupOverlay](menu/UiPopupOverlay.java) | 底层负责缩放输入、外部点击、Esc、焦点、Area 生命周期和安全移除。仅需要自定义摆放／多面板级联时扩展；通常直接组合 `UiPopover`。 |
+| 可搜索文字选项 | [UiSearchableMenu](composite/menu/UiSearchableMenu.java) | `showAt(anchor, host)`；固定搜索区、限高滚动列表、锚点随节点变换跟随。 |
+| 图片／预览卡片选择 | [UiGridMenu](composite/menu/UiGridMenu.java) | 正方形预览＋可选底部文字；`Style` 控制卡片宽度、列数和间距，窄空间自动折行。 |
+| 勾选、输入、多状态选择等任意组合 | [UiPopover](composite/menu/UiPopover.java) | 传入内容 View，调用 `showBelow()` 或 `showAtRoot()`；组合公共弹层底座和滚动面板。 |
+| 扇形选择 | [UiRadialMenu](composite/menu/UiRadialMenu.java) | 开关由调用方决定；[HeldMenuKey](composite/menu/HeldMenuKey.java) 提供按住／松开触发协议。保留键盘焦点以接收松开，不套普通弹层的抢焦点方式；禁用会关闭并清除按压／悬停，重新启用后须显式打开。 |
+| 搜索菜单的标题与搜索区 | [UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java) | `addHeader()` 统一标题、搜索和间距，可关闭搜索；不执行查询、不创建弹层。 |
+| 菜单条目与卡片状态 | [UiMenuItems](base/menu/UiMenuItems.java) | `row()`、`card()`、`decorate()` 共用选中／悬停／禁用视觉，保持背景对象稳定。 |
+| 滚动菜单面板及边界测量 | [UiMenuPanelLayout](base/menu/UiMenuPanelLayout.java) | 统一对称内边距、限高测量和位置约束；锚点跟随、上下翻转和级联策略由具体菜单持有。 |
+| 特殊普通弹层实现 | [UiPopupOverlay](base/menu/UiPopupOverlay.java) | 底层负责缩放输入、外部点击、Esc、焦点、Area 生命周期和安全移除。仅需要自定义摆放／多面板级联时扩展；通常直接组合 `UiPopover`。 |
 
 `UiSearchBar` 是工具栏搜索，`UiSearchMenuLayout` 是菜单内容布局，`UiSearchableMenu` 是完整选择菜单，三者职责不同。类别导航、业务权限和选项回调不进入弹层底座。
 
@@ -52,9 +123,15 @@
 
 Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资产列表通过 `UiTagStrip` 组合，Graph 属性与数据库详情通过 `TagFlowLayout` 组合。禁止在业务界面另写标签背景、描边、删除图标和 hover 样式。Graph 的 `#` 是显示前缀，不进入底层标签值；删除回调仍由上层提交并维护历史。只读标签不会吞掉行选择手势，删除按钮则独立消费点击。
 
-[UiTableColumns](table/UiTableColumns.java) 保存列定义和逻辑宽度；[UiTableRow](table/UiTableRow.java) 让表头、数据行使用同一列模型并处理列边界拖动；[UiTableViewport](table/UiTableViewport.java) 提供横向溢出与测量更新；[UiTableStyle](table/UiTableStyle.java) 提供共享行、单元格、配色和固定序号列。
+[UiTableColumns](composite/table/UiTableColumns.java) 保存列定义和逻辑宽度；[UiTableRow](composite/table/UiTableRow.java) 让表头、数据行使用同一列模型并处理列边界拖动；[UiTableViewport](composite/table/UiTableViewport.java) 提供横向溢出与测量更新；[UiTableStyle](composite/table/UiTableStyle.java) 提供共享行、单元格、配色和固定序号列。
 
-自适应数据行使用 `WRAP_CONTENT` 并设置最小行高。`UiTableRow` 先按内容测量，再让 `MATCH_PARENT` 单元格填满最终高度。有背景按钮、选中条或边线等覆盖层时，使用 [UiTableRowFrame](table/UiTableRowFrame.java) 让它们跟随内容高度，避免覆盖层撑满剩余空间。
+表头需要列筛选时使用 [UiTableFilterHeader](composite/table/UiTableFilterHeader.java)：标题点击保留排序，右侧独立按钮打开筛选，`setFilterActive()` 标记已启用的条件。序号、勾选等特殊列不设置筛选。按钮右侧留出列宽拖动判定区。
+
+[UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java) 组合公共输入框、复选框和 `UiPopover`，提供关键词、多选（全选／反选）、数字区间、XYZ 区间、标签包含／排除编辑器；每次只打开一份草稿，应用／清除才回调，点击外部／Esc 不提交。它不保存状态、不发查询；调用方使用 `ColumnFilters` 表达条件，在各自数据入口做 AND 匹配，并通过 scoped MEMORY 状态保存。数字边界包含端点，空边界不限制；非数值只在启用数字条件时排除。标签按“包含标签块 → 输入框 → 排除标签块 → 输入框”排列，复用 `UiTagChip` 和 `TagFlowLayout`。Enter 将输入加入本地草稿，标签块可移除；应用时也包含尚未按 Enter 的输入，关闭弹层丢弃草稿。逗号属于标签内容，不作为分隔符。维度等多选菜单可以附加独立 scope 开关。
+
+批量创建行使用 [UiTableBatchWork](composite/table/UiTableBatchWork.java)：`start(steps, complete)` 在 UI 线程执行首批，单帧最多 32 步／约 3ms，后续分帧继续；每一步应只创建／挂载一行，不在提交前创建整张表的 View。再次 `start` 或 `cancel` 立即使旧计划及其已入队回调失效。新查询、切换作用域、隐藏及释放时由调用方取消；快照、选择、结果计数和完成后的缓存清理仍由业务层维护。该组件不启动线程、不做网络等待、不把 MUI View 操作移到工作线程。
+
+自适应数据行使用 `WRAP_CONTENT` 并设置最小行高。`UiTableRow` 先按内容测量，再让 `MATCH_PARENT` 单元格填满最终高度。有背景按钮、选中条或边线等覆盖层时，使用 [UiTableRowFrame](composite/table/UiTableRowFrame.java) 让它们跟随内容高度，避免覆盖层撑满剩余空间。
 
 两种数据库表格共用 `UiTableStyle` 的 30dp 表头、44dp 普通行、12dp 正文字号、38dp 结果栏和 28dp 状态栏；选择列统一通过 `selectionColumn()` / `selectionCell()` 创建，使用 32dp 列宽和 16dp 复选框。
 
@@ -66,19 +143,19 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 
 | 用途 | 入口 |
 | --- | --- |
-| 物品展示 | [ItemSlotView](valuepreview/ItemSlotView.java) |
-| 实体模板／实体引用展示与转动预览 | [EntityTemplatePreviewView](valuepreview/EntityTemplatePreviewView.java) |
-| 表格中的只读实体值 | [EntityPreviewCell](valuepreview/EntityPreviewCell.java)；64dp 正方形框，纵向留白12dp，窄列自动等比缩小 |
-| 实体／物品内容缩放 | [PreviewZoomController](valuepreview/PreviewZoomController.java)，通过两个预览组件的 `zoom()` 获取 |
-| 标记类型预览 | [MarkerTypePreview](valuepreview/MarkerTypePreview.java) |
-| 游戏背包物品选择 | [InventoryItemPickerOverlay](overlay/InventoryItemPickerOverlay.java) |
-| 物品提示覆盖层 | [ItemStackTooltipOverlay](overlay/ItemStackTooltipOverlay.java) |
-| 长文本／富文本展开编辑 | [ExpandedTextInputOverlay](overlay/ExpandedTextInputOverlay.java) |
-| 自定义原生渲染预览 | [ViewportNativePreviewView](nativepreview/ViewportNativePreviewView.java)；通过 [NativePreviewHost](nativepreview/NativePreviewHost.java) 注册，由共享 Layer 管理渲染 |
+| 物品展示 | [ItemSlotView](integration/valuepreview/ItemSlotView.java) |
+| 实体模板／实体引用展示与转动预览 | [EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java) |
+| 表格中的只读实体值 | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)；64dp 正方形框，纵向留白12dp，窄列自动等比缩小 |
+| 实体／物品内容缩放 | [PreviewZoomController](integration/valuepreview/PreviewZoomController.java)，通过两个预览组件的 `zoom()` 获取 |
+| 标记类型预览 | [MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java) |
+| 游戏背包物品选择 | [InventoryItemPickerOverlay](integration/overlay/InventoryItemPickerOverlay.java) |
+| 物品提示覆盖层 | [ItemStackTooltipOverlay](integration/overlay/ItemStackTooltipOverlay.java) |
+| 长文本／富文本展开编辑 | [ExpandedTextInputOverlay](composite/overlay/ExpandedTextInputOverlay.java) |
+| 自定义原生渲染预览 | [ViewportNativePreviewView](integration/nativepreview/ViewportNativePreviewView.java)；通过 [NativePreviewHost](integration/nativepreview/NativePreviewHost.java) 注册，由共享 Layer 管理渲染 |
 
 节点中的 `UIItemSlot`、`UIEntityTemplatePreview` 仅负责端口取值、提交与编辑器入口；底层展示已复用上述公共组件，不要在节点包内复制绘制实现。
 
-`nativepreview` 是 ModernUI 与 Minecraft 渲染的桥接层，`valuepreview` 是具体内容控件；已有物品／实体控件优先复用。模态编辑覆盖层通过项目的 `OverlayMount` 管理，与局部菜单生命周期不同。
+`integration/nativepreview` 是 ModernUI 与 Minecraft 渲染的桥接层，`integration/valuepreview` 是具体内容控件；已有物品／实体控件优先复用。长文本／富文本编辑位于 `composite/overlay`，不属于 Minecraft 原生绘制桥接。模态编辑覆盖层通过项目的 `OverlayMount` 管理，与局部菜单生命周期不同。
 
 实体展示通过 `setDisplayTemplate()` 绑定保存的模板，或通过 `setDisplayReference(UUID, dimension)` 绑定当前世界实体（空维度表示当前维度）。模板实体在原生渲染线程创建；实体引用按 UUID 和维度校验，不持有或销毁真实实体。状态通知在 UI 线程交付，并忽略旧数据源／移除前的过期渲染结果。
 

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.marker;
 
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import net.minecraft.client.Minecraft;

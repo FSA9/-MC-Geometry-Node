@@ -1,14 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.View;
-import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import icyllis.modernui.text.TextUtils;
 import net.minecraft.network.chat.Component;
@@ -31,21 +29,6 @@ public final class DatabaseWidgets {
         TextView view = UIUtils.createLockedTextView(context, text, 12, color);
         view.setGravity(Gravity.CENTER_VERTICAL);
         return view;
-    }
-    public static void filterField(LinearLayout parent, String title, View value) {
-        TextView heading = label(parent.getContext(), title, UiTheme.Text.MUTED);
-        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(-1, px(24));
-        headingParams.topMargin = px(5);
-        parent.addView(heading, headingParams);
-        parent.addView(value, new LinearLayout.LayoutParams(-1, px(28)));
-    }
-    public static void filterReset(LinearLayout parent, Runnable action) {
-        LinearLayout actions = new LinearLayout(parent.getContext());
-        actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        actions.addView(button(parent.getContext(), tr("reset"), action), new LinearLayout.LayoutParams(px(84), px(28)));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, px(28));
-        params.topMargin = px(12);
-        parent.addView(actions, params);
     }
     public static UiActionButton button(Context context, String text, Runnable action) {
         return button(context, text, action, UiActionButton.Role.SECONDARY);

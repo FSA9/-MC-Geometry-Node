@@ -1,18 +1,18 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
-import com.mine.geometry_node.client.ui.components.layout.UiPropertyRow;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.scene.SceneEditCapabilities;
-import com.mine.geometry_node.client.ui.components.menu.UiPopover;
-import com.mine.geometry_node.client.ui.components.sidebar.api.*;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.*;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.properties.ScenePropertyControl;

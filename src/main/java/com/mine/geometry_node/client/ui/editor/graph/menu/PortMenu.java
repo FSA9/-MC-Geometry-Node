@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.graph.menu;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

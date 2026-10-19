@@ -1,13 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.database.sidebar;
 
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.layout.TagFlowLayout;
-import com.mine.geometry_node.client.ui.components.display.UiTagChip;
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
-import com.mine.geometry_node.client.ui.components.input.UiSearchSubmit;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.layout.UiPropertyRow;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.layout.TagFlowLayout;
+import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.input.binding.KeyScope;
 import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiRadialMenu;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Matrix;

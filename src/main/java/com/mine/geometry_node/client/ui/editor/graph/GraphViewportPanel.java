@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryDragPayload;

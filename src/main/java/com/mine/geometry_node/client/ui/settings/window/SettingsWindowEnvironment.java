@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;

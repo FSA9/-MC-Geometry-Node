@@ -1,31 +1,34 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.list.UiNavigationRow;
-import com.mine.geometry_node.client.ui.components.display.UiDisplayText;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
-import com.mine.geometry_node.client.ui.components.table.UiTableColumns;
-import com.mine.geometry_node.client.ui.components.table.UiTableRow;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.components.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
+import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.layout.ThinResizableDivider;
-import com.mine.geometry_node.client.ui.components.layout.UiFixedSplitLayout;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
-import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.components.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
+import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
+import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -79,6 +82,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
+    private final UiTableBatchWork mountWork;
+    private long mountEpoch;
+    private boolean mountIncomplete;
+    private DataLibraryScrollAnchor mountLeftAnchor;
+    private DataLibraryScrollAnchor mountRightAnchor;
+    private java.util.Iterator<Runnable> mountSteps;
     private final DataLibraryUiRepository repository;
     private final UiStateContext uiState;
     private String stateScope;
@@ -110,11 +119,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final TextView statusView;
     private final TextView resultsView;
     private final UiSearchInput searchInput;
-    private final UiActionButton typeButton;
     private final UiActionButton scopeButton;
-    private final UiActionButton filterButton;
     private final DataLibraryToolbar toolbar;
-    private UiPopover filterPopover;
+    private UiColumnFilterPopover filterPopover;
+    private final Map<String, UiTableFilterHeader> filterHeaders = new HashMap<>();
     private UiSearchableMenu activeMenu;
     private FileContextMenu renameMenu;
     private final UiActionButton groupButton;
@@ -168,7 +176,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean dropTargetRegistered;
     private String search = "";
     private PortType typeFilter;
-    private String tagFilter;
+    private ColumnFilters columnFilters = ColumnFilters.empty();
     private boolean includeSubfolders;
     private boolean groupByType;
     private boolean rootExpanded = true;
@@ -190,6 +198,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     public DataLibraryWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
         super(context);
+        mountWork = new UiTableBatchWork(this);
         uiState = Objects.requireNonNull(state);
         columns.restoreCustomWidths(uiState.read(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL).columns());
         columns.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL,
@@ -220,13 +229,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     clearSelection();
                     this.repository.delete(entries, folders);
                 },
-                anchor -> showTypeMenu(anchor, this::setTypeFilter, true),
-                this::showTagMenu,
-                this::toggleSubfolderScope, this::applySearch, this::resetQuery, this::showFilters);
+                this::toggleSubfolderScope, this::applySearch);
         searchInput = toolbar.searchInput;
-        typeButton = toolbar.typeButton;
         scopeButton = toolbar.scopeButton;
-        filterButton = toolbar.filterButton;
         addFolderButton = toolbar.addFolderButton;
         deleteButton = toolbar.deleteButton;
 
@@ -286,7 +291,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         breadcrumbScroll.addView(breadcrumbTrail, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         breadcrumbScroll.setPadding(0, px(8), 0, px(8));
-        rightPanel.addView(breadcrumbScroll, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(40)));
+        LinearLayout pathRow = new LinearLayout(context);
+        pathRow.setGravity(Gravity.CENTER_VERTICAL);
+        pathRow.addView(breadcrumbScroll, new LayoutParams(0, px(40), 1));
+        pathRow.addView(scopeButton, new LayoutParams(-2, px(28)));
+        rightPanel.addView(pathRow, new LayoutParams(-1, px(40)));
         rightPanel.addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         statusView = label(context, "", 11, MUTED);
         statusView.setSingleLine(true);
@@ -410,7 +419,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private void setTypeFilter(PortType type) {
         typeFilter = type;
-        typeButton.setText(type == null ? tr("geometry_node.data_library.all_types") : displayTypeName(type));
         updateFilterIndicator();
         rebuild();
     }
@@ -425,15 +433,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         scopeButton.setPalette(UiActionButton.Palette.toggle(includeSubfolders));
         scopeButton.setSelected(includeSubfolders);
         updateFilterIndicator();
-    }
-
-    private void resetQuery() {
-        typeFilter = null;
-        typeButton.setText(tr("geometry_node.data_library.all_types"));
-        includeSubfolders = false;
-        updateScopeButton();
-        setTagFilter(null);
-        clearSearch();
     }
 
     private void applySearch() {
@@ -452,8 +451,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void prepareCreation() {
         // New folders and entries must remain visible even when a filter was active.
         typeFilter = null;
-        setTagFilter(null);
-        typeButton.setText(tr("geometry_node.data_library.all_types"));
+        setColumnFilters(ColumnFilters.empty());
         rootExpanded = true;
         Map<UUID, DataLibraryUiRepository.Folder> folders = new HashMap<>();
         for (DataLibraryUiRepository.Folder folder : repository.folders()) {
@@ -487,7 +485,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
         DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
         observeAuthority();
-        if (!structurePending && next.sameStructure(snapshot)
+        if (!mountIncomplete && !structurePending && next.sameStructure(snapshot) && !numericMembershipChanged(next)
                 && !(folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder))) {
             snapshot = next;
             refreshCardValues(next);
@@ -497,8 +495,18 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rebuild(next);
     }
 
+    private boolean numericMembershipChanged(DataLibrarySnapshot next) {
+        if (!columnFilters.value().active() || snapshot == null) return false;
+        for (var entry : next.entries.values()) {
+            var previous = snapshot.entries.get(entry.id());
+            if (previous == null || matches(previous) != matches(entry)) return true;
+        }
+        return false;
+    }
+
     private void rebuild() {
         if (disposed || restoringState) return;
+        cancelMount();
         saveState();
         // Explicit navigation keeps its original focus-loss submission semantics.
         View focused = findFocus();
@@ -512,6 +520,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void rebuild(DataLibrarySnapshot next) {
+        cancelMount();
         if (internalDragActive || reconciling) {
             rebuildPending = true;
             return;
@@ -534,8 +543,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
         reconciling = true;
         structurePending = false;
-        DataLibraryScrollAnchor leftAnchor = DataLibraryScrollAnchor.capture(scrollHost, folderRowsById());
-        DataLibraryScrollAnchor rightAnchor = DataLibraryScrollAnchor.capture(rightScroll, cardViewsById());
+        DataLibraryScrollAnchor leftAnchor = mountIncomplete && mountLeftAnchor != null ? mountLeftAnchor
+                : pendingLeftAnchor != null ? pendingLeftAnchor : DataLibraryScrollAnchor.capture(scrollHost, folderRowsById());
+        DataLibraryScrollAnchor rightAnchor = mountIncomplete && mountRightAnchor != null ? mountRightAnchor
+                : pendingRightAnchor != null ? pendingRightAnchor : DataLibraryScrollAnchor.capture(rightScroll, cardViewsById());
+        mountLeftAnchor = leftAnchor;
+        mountRightAnchor = rightAnchor;
+        pendingLeftAnchor = null;
+        pendingRightAnchor = null;
         try {
             WorkspaceDragService.INSTANCE.cancelIfSource(this);
             snapshot = next;
@@ -553,8 +568,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             folderDropRows.clear();
             renderedEntries.clear();
             selectionViews.clear();
-            rootDropTarget = createRootRow();
-            groupsHost.addView(rootDropTarget, rowParams(null));
+            List<Runnable> actions = new ArrayList<>();
+            actions.add(() -> {
+                rootDropTarget = createRootRow();
+                groupsHost.addView(rootDropTarget, rowParams(null));
+            });
             Set<UUID> matchedEntries = new HashSet<>();
             Set<UUID> visibleFolders = new HashSet<>();
             for (var entry : next.entries.values()) {
@@ -572,23 +590,40 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 }
             }
             if (rootExpanded) {
-                addTreeLevel(null, 1, next.childFolders, next.childEntries,
+                addTreeLevel(actions, null, 1, next.childFolders, next.childEntries,
                         matchedEntries, visibleFolders, new HashSet<>());
             }
-            addEntries(activeFolder, 0, next.childEntries, matchedEntries);
-            updateTypeNavigation();
-            updateNavigationLabels();
-            if (rightHost.getChildCount() == 0) {
-                TextView empty = label(getContext(), tr(!isFiltering()
-                        ? "geometry_node.data_library.empty" : "geometry_node.data_library.no_results"), 12, MUTED);
-                empty.setGravity(Gravity.CENTER);
-                rightHost.addView(empty, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(90)));
-            }
-            // Keep only mounted cards; hidden native previews must release their registrations.
-            cards.keySet().retainAll(renderedEntries);
-            updateSelectionViews();
-            pendingLeftAnchor = leftAnchor;
-            pendingRightAnchor = rightAnchor;
+            addEntries(actions, activeFolder, 0, next.childEntries, matchedEntries);
+            actions.add(this::updateTypeNavigation);
+            actions.add(this::updateNavigationLabels);
+            long epoch = ++mountEpoch;
+            String scope = stateScope;
+            mountIncomplete = true;
+            // Every closure is independently guarded, including work already dequeued on cancellation.
+            mountSteps = actions.stream().<Runnable>map(action -> () -> {
+                if (mountCurrent(epoch, scope, next)) action.run();
+            }).iterator();
+            updateActions(); // Accurate full query count, independent of the mounted prefix.
+            mountWork.start(mountSteps, () -> {
+                if (!mountCurrent(epoch, scope, next)) return;
+                mountIncomplete = false;
+                mountSteps = null;
+                mountLeftAnchor = null;
+                mountRightAnchor = null;
+                if (rightHost.getChildCount() == 0) {
+                    TextView empty = label(getContext(), tr(!isFiltering()
+                            ? "geometry_node.data_library.empty" : "geometry_node.data_library.no_results"), 12, MUTED);
+                    empty.setGravity(Gravity.CENTER);
+                    rightHost.addView(empty, new LayoutParams(-1, px(90)));
+                }
+                // Only the completed epoch may prune cache or restore the captured scroll position.
+                cards.keySet().retainAll(renderedEntries);
+                updateSelectionViews();
+                if (!mountCurrent(epoch, scope, next)) return;
+                pendingLeftAnchor = leftAnchor;
+                pendingRightAnchor = rightAnchor;
+                requestLayout();
+            });
         } finally {
             reconciling = false;
         }
@@ -596,6 +631,18 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             rebuildPending = false;
             scheduleRefresh();
         }
+    }
+
+    private boolean mountCurrent(long epoch, String scope, DataLibrarySnapshot expected) {
+        return epoch == mountEpoch && !disposed && !suspended && snapshot == expected
+                && Objects.equals(scope, UiStateScopes.current()) && !authoritativeQueued.get();
+    }
+
+    private void cancelMount() {
+        mountEpoch++;
+        mountWork.cancel();
+        mountSteps = null;
+        if (mountIncomplete) structurePending = true;
     }
 
     private boolean hasActiveDraft() {
@@ -800,15 +847,19 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         });
         header.addView(UiTableStyle.selectionCell(getContext(), selectAll), new ViewGroup.LayoutParams(-1, -1));
         header.addView(new View(getContext()), new ViewGroup.LayoutParams(-1, -1));
-        addColumnLabel(header, "geometry_node.data_library.column_name");
-        addColumnLabel(header, "geometry_node.database.type");
-        addColumnLabel(header, "geometry_node.data_library.column_value");
-        addColumnLabel(header, "geometry_node.data_library.column_tags");
+        addColumnLabel(header, "name", "geometry_node.data_library.column_name");
+        addColumnLabel(header, "type", "geometry_node.database.type");
+        addColumnLabel(header, "value", "geometry_node.data_library.column_value");
+        addColumnLabel(header, "tags", "geometry_node.data_library.column_tags");
         return header;
     }
 
-    private void addColumnLabel(UiTableRow header, String key) {
-        header.addView(UiTableStyle.headerCell(getContext(), tr(key), null),
+    private void addColumnLabel(UiTableRow header, String column, String key) {
+        UiTableFilterHeader cell = new UiTableFilterHeader(getContext(), tr(key), null,
+                () -> showColumnFilter(column, filterHeaders.get(column).filterButton()));
+        filterHeaders.put(column, cell);
+        updateFilterIndicator();
+        header.addView(cell,
                 new ViewGroup.LayoutParams(-1, -1));
     }
 
@@ -822,7 +873,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private void addTreeLevel(UUID parentId, int depth,
+    private void addTreeLevel(List<Runnable> actions, UUID parentId, int depth,
                               Map<UUID, List<DataLibraryUiRepository.Folder>> childFolders,
                               Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
                               Set<UUID> matchedEntries, Set<UUID> visibleFolders, Set<UUID> visited) {
@@ -830,15 +881,15 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (!visited.add(folder.id())) continue;
             if (isFiltering() && !visibleFolders.contains(folder.id())) continue;
             boolean expanded = isFiltering() || expandedFolders.contains(folder.id());
-            groupsHost.addView(createFolderRow(folder, depth, expanded), rowParams(null));
+            actions.add(() -> groupsHost.addView(createFolderRow(folder, depth, expanded), rowParams(null)));
             if (expanded) {
-                addTreeLevel(folder.id(), depth + 1, childFolders, childEntries,
+                addTreeLevel(actions, folder.id(), depth + 1, childFolders, childEntries,
                         matchedEntries, visibleFolders, visited);
             }
         }
     }
 
-    private void addEntries(UUID parentId, int depth,
+    private void addEntries(List<Runnable> actions, UUID parentId, int depth,
                             Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
                             Set<UUID> matchedEntries) {
         List<DataLibraryUiRepository.Entry> candidates = includeSubfolders
@@ -851,7 +902,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                         .thenComparing(DataLibraryUiRepository.Entry::id)).toList();
         int rowIndex = 0;
         if (!groupByType) {
-            for (var entry : entries) addEntryRow(rightHost, entry, rowIndex++);
+            for (var entry : entries) {
+                int index = rowIndex++;
+                actions.add(() -> addEntryRow(rightHost, entry, index));
+            }
             return;
         }
         Map<PortType, List<DataLibraryUiRepository.Entry>> byType = new java.util.LinkedHashMap<>();
@@ -862,51 +916,57 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             PortType type = group.getKey();
             String groupKey = (parentId == null ? "root" : parentId.toString()) + ":" + type.name();
             boolean expanded = !expandedTypeGroups.contains("!" + groupKey);
-            DataLibraryDragSurface header = dragSurface(() -> {
-                DataLibraryUiRepository.Entry first = group.getValue().getFirst();
-                Set<UUID> ids = new LinkedHashSet<>();
-                for (DataLibraryUiRepository.Entry entry : group.getValue()) ids.add(entry.id());
-                return DataLibraryDragPayload.entries(first.id(), first.type(), first.key(), ids);
+            AtomicReference<LinearLayout> rowsHost = new AtomicReference<>();
+            actions.add(() -> {
+                DataLibraryDragSurface header = dragSurface(() -> {
+                    DataLibraryUiRepository.Entry first = group.getValue().getFirst();
+                    Set<UUID> ids = new LinkedHashSet<>();
+                    for (DataLibraryUiRepository.Entry entry : group.getValue()) ids.add(entry.id());
+                    return DataLibraryDragPayload.entries(first.id(), first.type(), first.key(), ids);
+                });
+                header.setGravity(Gravity.CENTER_VERTICAL);
+                header.setPadding(px(depth * 14), 0, 0, 0);
+                header.setBackground(solid(UiTheme.Surface.PANEL, 0));
+                UiIconButton disclosure = disclosureButton(expanded, MUTED);
+                disclosure.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
+                TextView title = label(getContext(), displayTypeName(type) + "  (" + group.getValue().size() + ")",
+                        11, MUTED);
+                title.setGravity(Gravity.CENTER_VERTICAL);
+                UiCheckBox check = new UiCheckBox(getContext());
+                check.setContentDescription(tr("geometry_node.data_library.all"));
+                Runnable syncCheck = () -> syncSelectionCheck(check, group.getValue().stream()
+                        .filter(entry -> selected.contains(key(entry))).count(), group.getValue().size());
+                syncCheck.run();
+                check.setOnCheckedChangeListener((button, checked) -> {
+                    for (DataLibraryUiRepository.Entry entry : group.getValue()) {
+                        if (checked) selected.add(key(entry)); else selected.remove(key(entry));
+                    }
+                    updateSelectionViews();
+                });
+                selectionViews.add(syncCheck);
+                LayoutParams checkParams = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
+                checkParams.leftMargin = px(4);
+                checkParams.rightMargin = px(4);
+                header.addView(check, checkParams);
+                header.addView(disclosure, fixed(DataLibraryEntryCard.DISCLOSURE_WIDTH, 26));
+                title.setPadding(px(9), 0, 0, 0);
+                header.addView(title, new LayoutParams(0, px(26), 1));
+                header.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
+                LayoutParams hp = new LayoutParams(-1, px(26));
+                hp.leftMargin = px(depth * 14);
+                rightHost.addView(header, hp);
+                if (!expanded) return;
+                LinearLayout rows = new LinearLayout(getContext());
+                rows.setOrientation(VERTICAL);
+                LayoutParams gp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                gp.leftMargin = px(depth * 14);
+                rightHost.addView(rows, gp);
+                rowsHost.set(rows);
             });
-            header.setGravity(Gravity.CENTER_VERTICAL);
-            header.setPadding(px(depth * 14), 0, 0, 0);
-            header.setBackground(solid(UiTheme.Surface.PANEL, 0));
-            UiIconButton disclosure = disclosureButton(expanded, MUTED);
-            disclosure.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
-            TextView title = label(getContext(), displayTypeName(type) + "  (" + group.getValue().size() + ")",
-                    11, MUTED);
-            title.setGravity(Gravity.CENTER_VERTICAL);
-            UiCheckBox check = new UiCheckBox(getContext());
-            check.setContentDescription(tr("geometry_node.data_library.all"));
-            Runnable syncCheck = () -> syncSelectionCheck(check, group.getValue().stream()
-                    .filter(entry -> selected.contains(key(entry))).count(), group.getValue().size());
-            syncCheck.run();
-            check.setOnCheckedChangeListener((button, checked) -> {
-                for (DataLibraryUiRepository.Entry entry : group.getValue()) {
-                    if (checked) selected.add(key(entry)); else selected.remove(key(entry));
-                }
-                updateSelectionViews();
-            });
-            selectionViews.add(syncCheck);
-            LayoutParams checkParams = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
-            checkParams.leftMargin = px(4);
-            checkParams.rightMargin = px(4);
-            header.addView(check, checkParams);
-            header.addView(disclosure, fixed(DataLibraryEntryCard.DISCLOSURE_WIDTH, 26));
-            title.setPadding(px(9), 0, 0, 0);
-            header.addView(title, new LayoutParams(0, px(26), 1));
-            header.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
-            LayoutParams hp = new LayoutParams(-1, px(26));
-            hp.leftMargin = px(depth * 14);
-            rightHost.addView(header, hp);
             if (!expanded) continue;
-            LinearLayout rows = new LinearLayout(getContext());
-            rows.setOrientation(VERTICAL);
-            LayoutParams gp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            gp.leftMargin = px(depth * 14);
-            rightHost.addView(rows, gp);
             for (DataLibraryUiRepository.Entry entry : group.getValue()) {
-                addEntryRow(rows, entry, rowIndex++);
+                int index = rowIndex++;
+                actions.add(() -> addEntryRow(rowsHost.get(), entry, index));
             }
         }
     }
@@ -1044,7 +1104,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private boolean matches(DataLibraryUiRepository.Entry entry) {
         if (typeFilter != null && entry.type() != typeFilter) return false;
-        if (tagFilter != null && !entry.tags().contains(tagFilter)) return false;
+        if (!matchesColumns(entry, columnFilters)) return false;
         return search.isEmpty() || entry.key().toLowerCase(Locale.ROOT).contains(search)
                 || entry.tags().stream().anyMatch(tag -> tag.toLowerCase(Locale.ROOT).contains(search))
                 || entry.type().name().toLowerCase(Locale.ROOT).contains(search)
@@ -1052,51 +1112,53 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private boolean isFiltering() {
-        return typeFilter != null || tagFilter != null || !search.isEmpty();
+        return typeFilter != null || columnFilters.active() || !search.isEmpty();
     }
 
-    private void showTagMenu(View anchor) {
-        if (disposed || suspended) return;
-        dismissMenus();
-        List<String> options = new ArrayList<>();
-        options.add("*");
-        Map<String, String> labels = new HashMap<>();
-        labels.put("*", tr("geometry_node.data_library.all_tags"));
-        snapshot.entries.values().stream().filter(entry -> inFolderScope(entry.parentId()))
-                .flatMap(entry -> entry.tags().stream())
-                .distinct().sorted(String.CASE_INSENSITIVE_ORDER).forEach(tag -> {
-                    String id = "tag:" + tag;
-                    options.add(id);
-                    labels.put(id, tag);
-                });
-        UiSearchableMenu menu = new UiSearchableMenu(getContext(),
-                tr("geometry_node.data_library.choose_tag"), options, labels, value -> {
-                    if (disposed || suspended) return;
-                    setTagFilter("*".equals(value) ? null : value.substring(4));
-                    rebuild();
-                });
-        activeMenu = menu;
-        menu.showAt(anchor, overlayHost());
+    static boolean matchesColumns(DataLibraryUiRepository.Entry entry, ColumnFilters filters) {
+        Double numeric = entry.value() instanceof Number number ? number.doubleValue() : null;
+        return filters.matches(entry.key(), entry.type().name(), numeric, null, null, null, null, null, entry.tags());
     }
 
-    private void setTagFilter(String tag) {
-        tagFilter = tag;
-        toolbar.tagButton.setText(tag == null ? tr("geometry_node.data_library.all_tags") : tag);
+    private void setColumnFilters(ColumnFilters filters) {
+        if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        // Filtering preserves selection in other folders, including entries hidden by this query.
+        columnFilters = filters;
         updateFilterIndicator();
+        rebuild();
     }
 
     private void updateFilterIndicator() {
-        boolean active = includeSubfolders || typeFilter != null || tagFilter != null;
-        filterButton.setSelected(active);
-        filterButton.setPalette(UiActionButton.Palette.toggle(active));
+        filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
+            case "name" -> !columnFilters.name().isEmpty();
+            case "type" -> columnFilters.types().active();
+            case "value" -> columnFilters.value().active();
+            case "tags" -> !columnFilters.includedTags().isEmpty() || !columnFilters.excludedTags().isEmpty();
+            default -> false;
+        }));
     }
 
-    private void showFilters(View anchor) {
-        if (disposed || suspended) return;
-        if (filterPopover != null && filterPopover.isOpen()) { filterPopover.dismiss(); return; }
-        if (!(overlayHost() instanceof FrameLayout host)) return;
-        if (filterPopover == null) filterPopover = new UiPopover(getContext(), toolbar.filterContent, 280);
-        filterPopover.showBelow(anchor, host);
+    private void showColumnFilter(String key, View anchor) {
+        if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        dismissMenus();
+        if (filterPopover == null) filterPopover = new UiColumnFilterPopover(getContext(), overlayHost());
+        switch (key) {
+            case "name" -> filterPopover.showText(anchor, tr("geometry_node.data_library.column_name"),
+                    columnFilters.name(), value -> setColumnFilters(columnFilters.withName(value)));
+            case "type" -> {
+                Map<String, String> options = new java.util.LinkedHashMap<>();
+                for (PortType type : PortType.values()) {
+                    if (DataLibraryTypes.supports(type)) options.put(type.name(), displayTypeName(type));
+                }
+                filterPopover.showChoices(anchor, tr("geometry_node.database.type"), options,
+                        columnFilters.types(), value -> setColumnFilters(columnFilters.withTypes(value)));
+            }
+            case "value" -> filterPopover.showNumber(anchor, tr("geometry_node.data_library.column_value"),
+                    columnFilters.value(), value -> setColumnFilters(columnFilters.withValue(value)));
+            case "tags" -> filterPopover.showTags(anchor, columnFilters.includedTags(), columnFilters.excludedTags(),
+                    (included, excluded) -> setColumnFilters(columnFilters.withTags(included, excluded)));
+            default -> { }
+        }
     }
 
     private void dismissFilters() { if (filterPopover != null) filterPopover.dismiss(); }
@@ -1490,11 +1552,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void saveState() {
         if (restoringState || stateScope == null) return;
         uiState.write(DatabaseViewState.LIBRARY, stateScope, new DatabaseViewState.Library(
-                search, typeFilter == null ? "" : typeFilter.name(), tagFilter, includeSubfolders,
+                search, typeFilter == null ? "" : typeFilter.name(), "", includeSubfolders,
                 groupByType, activeFolder == null ? "" : activeFolder.toString()));
+        uiState.write(DatabaseViewState.LIBRARY_COLUMN_FILTERS, stateScope, columnFilters);
     }
 
     private void switchScope() {
+        cancelMount();
         removeCallbacks(refreshTask); refreshScheduled.set(false);
         dismissFilters(); dismissMenus();
         saveState();
@@ -1506,6 +1570,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         folderDropRows.clear(); snapshot = null;
         clearSelection(); updateSelectionViews();
         expandedFolders.clear(); expandedEntries.clear(); expandedTypeGroups.clear();
+        mountLeftAnchor = null; mountRightAnchor = null;
+        pendingLeftAnchor = null; pendingRightAnchor = null;
         restoreState();
         structurePending = true;
     }
@@ -1518,12 +1584,15 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             search = value.search(); searchInput.setText(search);
             try { typeFilter = PortType.valueOf(value.type()); }
             catch (IllegalArgumentException ignored) { typeFilter = null; }
-            tagFilter = value.tag().isEmpty() ? null : value.tag();
+            columnFilters = uiState.read(DatabaseViewState.LIBRARY_COLUMN_FILTERS, stateScope);
+            if (!value.tag().isEmpty()) {
+                Set<String> included = new LinkedHashSet<>(columnFilters.includedTags());
+                included.add(value.tag());
+                columnFilters = columnFilters.withTags(included, columnFilters.excludedTags());
+            }
             includeSubfolders = value.recursive(); groupByType = value.grouped();
             try { activeFolder = UUID.fromString(value.activeFolder()); }
             catch (IllegalArgumentException ignored) { activeFolder = null; }
-            typeButton.setText(typeFilter == null ? tr("geometry_node.data_library.all_types") : displayTypeName(typeFilter));
-            toolbar.tagButton.setText(tagFilter == null ? tr("geometry_node.data_library.all_tags") : tagFilter);
             updateGroupButton(); updateScopeButton(); updateFilterIndicator();
         } finally { restoringState = false; }
     }
@@ -1547,6 +1616,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (disposed) return;
         saveState();
         disposed = true;
+        cancelMount();
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         dismissFilters();
         dismissMenus();
@@ -1566,6 +1636,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     @Override public void onHide() {
         saveState();
         suspended = true;
+        cancelMount();
         dismissFilters();
         dismissMenus();
         removeCallbacks(refreshTask);

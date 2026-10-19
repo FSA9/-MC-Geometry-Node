@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButto
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
-import com.mine.geometry_node.client.ui.components.overlay.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;

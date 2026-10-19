@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;

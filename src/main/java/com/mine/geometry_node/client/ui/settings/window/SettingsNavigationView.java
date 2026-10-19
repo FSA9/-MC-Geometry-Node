@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageDefinition;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

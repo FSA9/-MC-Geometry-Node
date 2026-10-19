@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

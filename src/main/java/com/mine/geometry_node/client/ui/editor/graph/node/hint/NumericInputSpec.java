@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.client.ui.components.input.UiNumericInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiNumericInput;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 

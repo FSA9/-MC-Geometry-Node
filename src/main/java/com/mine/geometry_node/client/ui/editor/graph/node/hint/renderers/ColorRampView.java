@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.components.input.ColorSwatchView;
-import com.mine.geometry_node.client.ui.components.input.UiGradientStopEditor;
+import com.mine.geometry_node.client.ui.components.composite.input.ColorSwatchView;
+import com.mine.geometry_node.client.ui.components.composite.input.UiGradientStopEditor;
 import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.components.input.UiSelectButton;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
+import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;

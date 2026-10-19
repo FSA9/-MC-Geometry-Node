@@ -1,24 +1,26 @@
 package com.mine.geometry_node.client.ui.editor.database.world;
 
 import com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.list.UiNavigationRow;
-import com.mine.geometry_node.client.ui.components.layout.ThinResizableDivider;
-import com.mine.geometry_node.client.ui.components.layout.UiFixedSplitLayout;
-import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.list.UiListSelection;
-import com.mine.geometry_node.client.ui.components.display.UiTagStrip;
-import com.mine.geometry_node.client.ui.components.valuepreview.EntityPreviewCell;
-import com.mine.geometry_node.client.ui.components.menu.UiPopover;
-import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.input.UiSearchBar;
-import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.components.table.UiTableColumns;
-import com.mine.geometry_node.client.ui.components.table.UiTableRow;
-import com.mine.geometry_node.client.ui.components.table.UiTableRowFrame;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.components.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.base.list.UiListSelection;
+import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
+import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
+import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableRowFrame;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
@@ -35,6 +37,8 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import java.util.*;
 import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*;
@@ -45,11 +49,33 @@ public final class WorldObjectsView extends FrameLayout {
     private boolean awaitingScopeResponse;
     private final Consumer<DatabaseSelection> selectionChanged;
     private final LinearLayout rows;
+    private final UiTableBatchWork rowBatch;
+    private final NativeTypeLabels nativeTypeLabels;
+
+    /** Client registry seam: tests supply labels without booting Minecraft or an FML loader. */
+    interface NativeTypeLabels {
+        Iterable<String> ids();
+        String label(String id);
+    }
+    private static final class RegistryNativeTypeLabels implements NativeTypeLabels {
+        @Override public Iterable<String> ids() {
+            List<String> ids = new ArrayList<>();
+            for (var type : BuiltInRegistries.ENTITY_TYPE)
+                ids.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
+            return ids;
+        }
+        @Override public String label(String id) {
+            Identifier identifier = Identifier.tryParse(id);
+            var type = identifier == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(identifier).orElse(null);
+            return type == null ? id : Component.translatable(type.getDescriptionId()).getString();
+        }
+    }
     private final TextView status;
-    private final UiActionButton dimensionButton, typeButton, providerButton, lifetimeButton, focusButton;
-    private final UiSearchInput search, tags, source;
+    private final UiActionButton focusButton;
+    private ColumnFilters columnFilters = ColumnFilters.empty();
+    private final Map<String, UiTableFilterHeader> filterHeaders = new LinkedHashMap<>();
+    private final UiSearchInput search;
     private final UiSearchBar searchBar;
-    private final UiActionButton filterButton;
     private final UiStateContext uiState;
     private String stateScope;
     private boolean restoringState;
@@ -76,15 +102,17 @@ public final class WorldObjectsView extends FrameLayout {
     private List<WorldObjectType> mountedTypes;
     private DatabaseSelection publishedSelection;
     private List<WorldObjectType> typeCatalog = List.of();
+    private List<WorldObjectType> indexedTypeCatalog;
+    private final Map<String, WorldObjectType> typeLookup = new HashMap<>();
     private List<String> dimensionCatalog = List.of();
+    private WorldObjectPage.Counts navigationCounts = WorldObjectPage.Counts.empty();
     private WorldObjectQuery.Range range = WorldObjectQuery.Range.GLOBAL;
-    private String dimension = "", type = "", typeProvider = "", provider = "", lifetime = "";
+    private String provider = "";
     private volatile boolean shown, disposed;
     private boolean sortAscending = true;
     private String sort = "name", anchorKey;
-    private UiSearchableMenu menu;
-    private UiPopover filterPopover;
-    private final LinearLayout navigation, categoryRows, advancedFilters;
+    private UiColumnFilterPopover filterPopover;
+    private final LinearLayout navigation, categoryRows;
     private final ThinResizableDivider navigationDivider;
     private final UiTableRow tableHeader;
     private final TextView resultTitle;
@@ -100,17 +128,28 @@ public final class WorldObjectsView extends FrameLayout {
         if (shown) { if (!Boolean.getBoolean("gn.standalone")) queryNow(); else refresh(); }
     };
     private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
-    private final Runnable queryTask = this::query;
     private final Runnable renderTask = this::refresh;
+    private final Runnable fallbackQueryTask = () -> {
+        if (!shown || disposed || snapshot.loading() || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        if (!needsFallbackQuery()) return;
+        try { submitQuery(buildQuery(columnFilters, range)); }
+        catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); }
+    };
     private final Runnable changed = () -> {
-        if (!disposed && shown) { removeCallbacks(renderTask); post(renderTask); }
+        if (!disposed && shown) { removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); post(renderTask); }
     };
 
     public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged) {
         this(context, selectionChanged, UiStateContext.ephemeral());
     }
     public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state) {
+        this(context, selectionChanged, state, new RegistryNativeTypeLabels());
+    }
+    WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state,
+                     NativeTypeLabels nativeTypeLabels) {
         super(context);
+        this.nativeTypeLabels = Objects.requireNonNull(nativeTypeLabels);
+        rowBatch = new UiTableBatchWork(this);
         uiState = Objects.requireNonNull(state);
         columns.restoreCustomWidths(uiState.read(DatabaseViewState.WORLD_WIDTHS, DatabaseViewState.GLOBAL).columns());
         columns.addUserStateListener(() -> uiState.write(DatabaseViewState.WORLD_WIDTHS, DatabaseViewState.GLOBAL,
@@ -151,25 +190,9 @@ public final class WorldObjectsView extends FrameLayout {
         queryRow.setBaselineAligned(false);
         queryRow.setGravity(Gravity.CENTER_VERTICAL);
         queryRow.addView(searchBar, new LinearLayout.LayoutParams(0, px(32), 1));
-        lifetimeButton=button(context,"",this::chooseLifetime);
-        filterButton=button(context,tr("filter"),this::showFilters);
-        LinearLayout.LayoutParams filterParams = new LinearLayout.LayoutParams(px(60), px(32));
-        filterParams.leftMargin = px(8);
-        queryRow.addView(filterButton, filterParams);
         queryPanel.addView(queryRow, new LinearLayout.LayoutParams(-1, px(32)));
         column.addView(queryPanel,new LinearLayout.LayoutParams(-1,-2));
-        advancedFilters=new LinearLayout(context); advancedFilters.setOrientation(LinearLayout.VERTICAL);
-        dimensionButton=button(context,"",this::chooseDimension);
-        providerButton=button(context,"",this::chooseProvider);
-        typeButton=button(context,"",this::chooseType);
-        tags=input(tr("tags_hint")); source=input(tr("source_hint"));
-        filterField(advancedFilters,tr("dimension"),dimensionButton);
-        filterField(advancedFilters,tr("lifetime"),lifetimeButton);
-        filterField(advancedFilters,tr("provider"),providerButton);
-        filterField(advancedFilters,tr("type"),typeButton);
-        filterField(advancedFilters,tr("tags"),tags);
-        filterField(advancedFilters,tr("source"),source);
-        filterReset(advancedFilters,this::resetFilters);
+        filterPopover = new UiColumnFilterPopover(context, this);
         LinearLayout resultBar=new LinearLayout(context); resultBar.setGravity(Gravity.CENTER_VERTICAL);
         resultBar.setPadding(px(14),0,px(10),0);
         resultTitle=label(context,tr("all_objects"),UiTheme.Text.NORMAL);
@@ -200,44 +223,36 @@ public final class WorldObjectsView extends FrameLayout {
         UIUtils.setLockedTextSize(status,11); status.setPadding(px(14),0,px(14),0); status.setSingleLine(true);
         status.setBackground(background(UiTheme.Surface.PANEL));
         column.addView(status,new LinearLayout.LayoutParams(-1,px(UiTableStyle.STATUS_BAR_HEIGHT)));
-        for(UiSearchInput input:List.of(tags,source))input.setOnQueryChanged(value->scheduleQuery());
         selectAll.setEnabled(false);
         restoreState();
         rebuildNavigation(); updateFilters();
         UiStateScopes.addChangeListener(scopeChanged);
     }
-    private void showFilters() {
-        if (!shown || disposed) return;
-        dismissMenu();
-        if(filterPopover!=null&&filterPopover.isOpen()){filterPopover.dismiss();return;}
-        if(filterPopover==null)filterPopover=new UiPopover(getContext(),advancedFilters,280);
-        filterPopover.showBelow(filterButton,this);
-    }
     private void submitSearch() {
-        submittedSearch=search.getText().toString().trim();
+        if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        String nextSearch = search.getText().toString().trim();
+        final WorldObjectQuery nextQuery;
+        try { nextQuery = buildQuery(columnFilters, range, nextSearch); }
+        catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
+        cancelMount();
+        submittedSearch = nextSearch;
         search.clearFocus();
-        queryNow();
-    }
-    private void resetFilters() {
-        range=WorldObjectQuery.Range.GLOBAL;
-        dimension=type=typeProvider=provider=lifetime=extraProvider="";category=null;
-        submittedSearch="";
-        search.setText("");tags.setText("");source.setText("");
-        updateFilters();rebuildNavigation();queryNow();
+        saveState();
+        if (shown && !disposed) submitQuery(nextQuery);
     }
     private void rebuildNavigation() {
         categoryRows.removeAllViews();categoryButtons.clear();
         addCategory("",tr("all_objects"),
-                snapshot.entries().size(),()->{category=null;extraProvider=provider=type=typeProvider="";queryNow();});
+                navigationCounts.total(),()->{category=null;extraProvider=provider="";queryNow();});
         for(var value:WorldObjectCategories.all()) addCategory(value.id(),Component.translatable(value.labelKey()).getString(),
-                snapshot.entries().stream().filter(value::matches).count(),()->{
-                    category=value;extraProvider=provider=type=typeProvider="";queryNow();
+                navigationCounts.categories().getOrDefault(value.id(), 0L),()->{
+                    category=value;extraProvider=provider="";queryNow();
                 });
         Set<String> known=new HashSet<>();WorldObjectCategories.all().forEach(c->known.addAll(c.providers()));
-        java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider),
-                snapshot.entries().stream().map(WorldObjectEntry::provider)).filter(p->!known.contains(p)&&!p.equals("scene"))
-                .distinct().forEach(id->addCategory("provider:"+id,providerLabel(id),snapshot.entries().stream().filter(e->e.provider().equals(id)).count(),()->{
-                            category=null;extraProvider=provider=id;type=typeProvider="";queryNow();
+        java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider).filter(p -> !known.contains(p)),
+                navigationCounts.otherProviders().keySet().stream())
+                .distinct().forEach(id->addCategory("provider:"+id,providerLabel(id),navigationCounts.otherProviders().getOrDefault(id, 0L),()->{
+                            category=null;extraProvider=provider=id;queryNow();
                         }));
         updateNavigationSelection();
     }
@@ -260,51 +275,125 @@ public final class WorldObjectsView extends FrameLayout {
     }
     @Override protected void onSizeChanged(int w,int h,int oldW,int oldH) {
         super.onSizeChanged(w,h,oldW,oldH);
-        dismissMenu();if(filterPopover!=null)filterPopover.dismiss();
+        dismissMenu();
     }
 
-    private UiSearchInput input(String hint) {
-        UiSearchInput input = new UiSearchInput(getContext());
-        UIUtils.setLockedTextSize(input, 12); input.setHint(hint); return input;
-    }
     private void addHeader(String key) {
         String title = key.equals("value") ? Component.translatable("geometry_node.data_library.column_value").getString() : tr(key);
-        UiActionButton button = UiTableStyle.headerCell(getContext(), title, key.equals("value") ? null : () -> {
+        UiTableFilterHeader header = new UiTableFilterHeader(getContext(), title, key.equals("value") ? null : () -> {
             if (!shown || disposed) return;
             sortAscending = !sort.equals(key) || !sortAscending; sort = key; saveState(); resetDoubleClick();
             if (!snapshot.loading()) rebuildRows();
-        });
-        if (key.equals("value")) {
-            button.setClickable(false);
-            button.setFocusable(false);
+        }, () -> openColumnFilter(key));
+        filterHeaders.put(key, header);
+        tableHeader.addView(header, new ViewGroup.LayoutParams(-1, -1));
+    }
+
+    private void applyColumns(ColumnFilters next) { applyColumns(next, range); }
+    private void applyColumns(ColumnFilters next, WorldObjectQuery.Range nextRange) {
+        if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        // Let the popover report validation errors while keeping every committed field intact.
+        WorldObjectQuery nextQuery = buildQuery(next, nextRange);
+        cancelMount();
+        columnFilters = next;
+        range = nextRange;
+        selected.clear(); anchorKey = null; resetDoubleClick();
+        saveState(); updateFilters(); updateSelection(); submitQuery(nextQuery);
+    }
+    private void applyDimensions(ColumnFilters.Choice choice, boolean loaded) {
+        ColumnFilters nextColumns = columnFilters.withDimensions(choice);
+        WorldObjectQuery.Range nextRange = loaded ? WorldObjectQuery.Range.LOADED : WorldObjectQuery.Range.GLOBAL;
+        applyColumns(nextColumns, nextRange);
+    }
+    private LinkedHashMap<String, String> typeOptions() {
+        LinkedHashMap<String, String> options = new LinkedHashMap<>();
+        for (var c : WorldObjectCategories.all())
+            options.put("category:" + c.id(), Component.translatable(c.labelKey()).getString());
+        for (var t : typeCatalog) if (WorldObjectCategories.all().stream().noneMatch(c -> c.accepts().test(t.provider(), t.id())))
+            options.put(WorldObjectEntry.key(t.provider(), "", t.id()), typeOption(t.provider(), t.id()) + " · " + providerLabel(t.provider()));
+        for (var e : snapshot.entries()) if (WorldObjectCategories.forEntry(e) == null)
+            options.putIfAbsent(WorldObjectQuery.filterType(e), typeOption(e.provider(), e.type()) + " · " + providerLabel(e.provider()));
+        return options;
+    }
+    private static String migratedType(String provider, String type) {
+        return WorldObjectCategories.all().stream().filter(c -> c.accepts().test(provider, type))
+                .map(c -> "category:" + c.id()).findFirst().orElseGet(() -> WorldObjectEntry.key(provider, "", type));
+    }
+    private void openColumnFilter(String key) {
+        if (!shown || disposed) return;
+        View anchor = filterHeaders.get(key).filterButton();
+        switch (key) {
+            case "name" -> filterPopover.showText(anchor, tr("name"), columnFilters.name(), v -> applyColumns(columnFilters.withName(v)));
+            case "type" -> {
+                filterPopover.showChoices(anchor, tr("type"), typeOptions(), columnFilters.types(), v -> applyColumns(columnFilters.withTypes(v)));
+            }
+            case "value" -> filterPopover.showNumber(anchor, Component.translatable("geometry_node.data_library.column_value").getString(), columnFilters.value(), v -> applyColumns(columnFilters.withValue(v)));
+            case "dimension" -> {
+                LinkedHashMap<String, String> options = new LinkedHashMap<>();
+                dimensionCatalog.forEach(id -> options.put(id, id));
+                filterPopover.showChoices(anchor, tr("dimension"), options, columnFilters.dimensions(),
+                        tr("range.loaded"), range == WorldObjectQuery.Range.LOADED,
+                        this::applyDimensions);
+            }
+            case "position" -> filterPopover.showPosition(anchor, columnFilters.x(), columnFilters.y(), columnFilters.z(), v -> applyColumns(columnFilters.withX(v.get(0)).withY(v.get(1)).withZ(v.get(2))));
+            case "lifetime" -> {
+                LinkedHashMap<String, String> options = new LinkedHashMap<>();
+                for (String id : List.of("persistent", "binding", "process", "runtime", "loaded")) options.put(id, lifetimeLabel(id));
+                snapshot.entries().forEach(e -> options.putIfAbsent(e.lifetime(), lifetimeLabel(e.lifetime())));
+                filterPopover.showChoices(anchor, tr("lifetime"), options, columnFilters.lifetimes(), v -> applyColumns(columnFilters.withLifetimes(v)));
+            }
+            case "tags" -> filterPopover.showTags(anchor, columnFilters.includedTags(), columnFilters.excludedTags(), (include, exclude) -> applyColumns(columnFilters.withTags(include, exclude)));
         }
-        tableHeader.addView(button, new ViewGroup.LayoutParams(-1, -1));
     }
-    private void scheduleQuery() {
-        if (restoringState) return;
-        saveState();
-        removeCallbacks(queryTask);
-        if (shown && !disposed) postDelayed(queryTask, 300);
-    }
-    private void queryNow() { if (restoringState) return; saveState(); removeCallbacks(queryTask); query(); }
+    private void queryNow() { if (restoringState) return; saveState(); query(); }
     private void query() {
         if (!shown || disposed) return;
+        cancelMount();
         if (!Objects.equals(stateScope, UiStateScopes.current())) switchScope();
-        final WorldObjectQuery query;
-        try {
-            Set<String> providers = one(typeProvider.isEmpty() ? provider : typeProvider), types = one(type);
-            if (category != null && providers.isEmpty()) providers = category.providers();
-            if (category != null && type.isEmpty()) {
-                Set<String> matching = new LinkedHashSet<>();
-                typeCatalog.stream().filter(t -> category.accepts().test(t.provider(),t.id())).forEach(t -> matching.add(t.id()));
-                // Entity registries can exceed the wire budget; retain provider filtering plus a page predicate.
-                if (!matching.isEmpty() && matching.size() <= WorldObjectQuery.MAX_FILTERS && !category.id().equals("entity")) types = matching;
-                if(category.id().equals("interaction"))types=Set.of("minecraft:interaction");
-            }
-            query = new WorldObjectQuery(range, dimension, providers, types, submittedSearch,
-                    tagFilters(tags.getText().toString()), one(source.getText().toString().trim()), one(lifetime),
-                    128, WorldObjectQuery.MAX_RESULTS);
-        } catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
+        try { submitQuery(buildQuery(columnFilters, range)); }
+        catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); }
+    }
+    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange) {
+        return buildQuery(filters, nextRange, submittedSearch);
+    }
+    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String searchText) {
+        Set<String> providers = one(provider), types = Set.of();
+        if (category != null && providers.isEmpty()) providers = category.providers();
+        if (category != null) {
+            Set<String> matching = new LinkedHashSet<>();
+            typeCatalog.stream().filter(t -> category.accepts().test(t.provider(),t.id())).forEach(t -> matching.add(t.id()));
+            // Entity registries can exceed the wire budget; retain provider filtering plus a page predicate.
+            if (!matching.isEmpty() && matching.size() <= WorldObjectQuery.MAX_FILTERS && !category.id().equals("entity")) types = matching;
+            if(category.id().equals("interaction"))types=Set.of("minecraft:interaction");
+        }
+        return new WorldObjectQuery(nextRange, "", providers, types, searchText,
+                Set.of(), Set.of(), Set.of(),
+                128, WorldObjectQuery.MAX_RESULTS, filters, compileNameFallbacks(searchText), compileNameFallbacks(filters.name()));
+    }
+    private Set<String> compileNameFallbacks(String keyword) {
+        if (keyword.isEmpty()) return Set.of();
+        String needle = keyword.toLowerCase(Locale.ROOT);
+        Set<String> matches = new LinkedHashSet<>();
+        for (var type : typeCatalog)
+            if (typeLabel(type.provider(), type.id()).toLowerCase(Locale.ROOT).contains(needle))
+                matches.add(WorldObjectEntry.key(type.provider(), "", type.id()));
+        for (var entry : snapshot.entries())
+            if (typeLabel(entry.provider(), entry.type()).toLowerCase(Locale.ROOT).contains(needle))
+                matches.add(WorldObjectQuery.rawType(entry));
+        // Native registry coverage is complete even before the first server catalog arrives.
+        for (String id : nativeTypeLabels.ids()) {
+            if (typeLabel("native", id).toLowerCase(Locale.ROOT).contains(needle))
+                matches.add(WorldObjectEntry.key("native", "", id));
+        }
+        return Set.copyOf(matches);
+    }
+    private boolean needsFallbackQuery() {
+        return !compileNameFallbacks(submittedSearch).equals(snapshot.query().searchFallbackTypes())
+                || !compileNameFallbacks(columnFilters.name()).equals(snapshot.query().columnNameFallbackTypes());
+    }
+    private void submitQuery(WorldObjectQuery query) {
+        cancelMount();
+        removeCallbacks(fallbackQueryTask);
         dismissMenu(); resetDoubleClick();
         awaitingScopeResponse = false;
         session.query(query);
@@ -319,11 +408,19 @@ public final class WorldObjectsView extends FrameLayout {
     private void refresh() {
         if (disposed || !shown || awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current())) return;
         snapshot = session.snapshot();
-        if (snapshot.equals(renderedSnapshot)) { updateSelection(); return; }
+        if (snapshot.equals(renderedSnapshot)) {
+            if (!snapshot.loading() && mountedEntries == null && !rowBatch.isRunning()) rebuildRows();
+            else updateSelection();
+            return;
+        }
+        cancelMount();
         renderedSnapshot=snapshot;
         if (!snapshot.loading()) {
             typeCatalog = snapshot.types();
             dimensionCatalog = snapshot.dimensionIds();
+            if (snapshot.page().counts() != null) navigationCounts = snapshot.page().counts();
+            else if (snapshot.message().equals("disconnected") || snapshot.message().equals("permission_denied"))
+                navigationCounts = WorldObjectPage.Counts.empty();
         }
         updateFilters();
         rebuildNavigation();
@@ -338,76 +435,43 @@ public final class WorldObjectsView extends FrameLayout {
             updateSelection();
         }
         refreshStatus();
+        removeCallbacks(fallbackQueryTask);
+        if (!snapshot.loading() && needsFallbackQuery()) post(fallbackQueryTask);
     }
     private void refreshStatus() {
-        String text=snapshot.loading()?tr("loading"):tr("result_count",sortedEntries().size(),selected.size());
+        String text=(snapshot.loading() || rowBatch.isRunning())?tr("loading"):tr("result_count",sortedEntries().size(),selected.size());
         if(!snapshot.message().isEmpty())text+=" · "+tr("message."+snapshot.message());
         setStatus(text);
     }
     private void setStatus(String text) { status.setText(text); }
     private String typeLabel(String providerId, String id) {
-        for (WorldObjectType value : typeCatalog) if (value.provider().equals(providerId) && value.id().equals(id))
-            return value.labelKey().isEmpty() ? id : Component.translatable(value.labelKey()).getString();
+        if (indexedTypeCatalog != typeCatalog) {
+            typeLookup.clear();
+            for (var value : typeCatalog)
+                typeLookup.putIfAbsent(WorldObjectEntry.key(value.provider(), "", value.id()), value);
+            indexedTypeCatalog = typeCatalog;
+        }
+        WorldObjectType value = typeLookup.get(WorldObjectEntry.key(providerId, "", id));
+        if (value != null) return value.labelKey().isEmpty() ? id : Component.translatable(value.labelKey()).getString();
+        if (providerId.equals("native")) return nativeTypeLabels.label(id);
         return id;
     }
     private void updateFilters() {
-        dimensionButton.setText(dimension.isEmpty() ? tr("range." + range.name().toLowerCase(Locale.ROOT)) : dimension);
-        providerButton.setText(provider.isEmpty() ? tr("all") : providerLabel(provider));
-        typeButton.setText(type.isEmpty() ? tr("all") : typeLabel(typeProvider, type));
-        lifetimeButton.setText(lifetime.isEmpty() ? tr("all") : lifetimeLabel(lifetime));
-        for (UiActionButton button : List.of(dimensionButton, providerButton, typeButton, lifetimeButton)) {
-            button.setEllipsize(TextUtils.TruncateAt.END);
-        }
+        filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
+            case "name" -> !columnFilters.name().isEmpty();
+            case "type" -> columnFilters.types().active();
+            case "value" -> columnFilters.value().active();
+            case "dimension" -> columnFilters.dimensions().active() || range == WorldObjectQuery.Range.LOADED;
+            case "position" -> columnFilters.x().active() || columnFilters.y().active() || columnFilters.z().active();
+            case "lifetime" -> columnFilters.lifetimes().active();
+            case "tags" -> !columnFilters.includedTags().isEmpty() || !columnFilters.excludedTags().isEmpty();
+            default -> false;
+        }));
     }
     private String providerLabel(String id) {
         String key = "geometry_node.database.provider." + id;
         String text = Component.translatable(key).getString();
         return text.equals(key) ? id : text;
-    }
-    private void chooseDimension() {
-        LinkedHashMap<String, String> options = new LinkedHashMap<>();
-        options.put(WorldObjectQuery.Range.GLOBAL.name(), tr("range.global"));
-        options.put(WorldObjectQuery.Range.LOADED.name(), tr("range.loaded"));
-        for (String id : dimensionCatalog) options.put(id, id);
-        choose(dimensionButton, "dimension", options, this::selectDimension);
-    }
-    private void selectDimension(String value) {
-        range = value.equals(WorldObjectQuery.Range.LOADED.name()) ? WorldObjectQuery.Range.LOADED : WorldObjectQuery.Range.GLOBAL;
-        dimension = value.equals(WorldObjectQuery.Range.GLOBAL.name()) || value.equals(WorldObjectQuery.Range.LOADED.name()) ? "" : value;
-        updateFilters(); queryNow();
-    }
-    private void chooseProvider() {
-        LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
-        java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider),
-                snapshot.entries().stream().map(WorldObjectEntry::provider))
-                .distinct().forEach(id -> options.put(id, providerLabel(id)));
-        choose(providerButton, "provider", options, value -> { provider = value; extraProvider=value; category=null; type = typeProvider = ""; updateFilters(); queryNow(); });
-    }
-    private void chooseType() {
-        record TypeIdentity(String provider, String id) {}
-        LinkedHashMap<String, TypeIdentity> identities = new LinkedHashMap<>();
-        for (var value : typeCatalog) {
-            if ((provider.isEmpty() || provider.equals(value.provider()))
-                    && (category == null || category.accepts().test(value.provider(), value.id()))) {
-                identities.put(WorldObjectEntry.key(value.provider(), "", value.id()),
-                        new TypeIdentity(value.provider(), value.id()));
-            }
-        }
-        for (var entry : snapshot.entries()) {
-            if ((provider.isEmpty() || provider.equals(entry.provider())) && (category == null || category.matches(entry))) {
-                identities.putIfAbsent(WorldObjectEntry.key(entry.provider(), "", entry.type()),
-                        new TypeIdentity(entry.provider(), entry.type()));
-            }
-        }
-        LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
-        identities.forEach((key, value) -> options.put(key,
-                typeOption(value.provider(), value.id()) + " · " + providerLabel(value.provider())));
-        choose(typeButton, "type", options, value -> {
-            TypeIdentity identity = identities.get(value);
-            type = identity == null ? "" : identity.id();
-            typeProvider = identity == null ? "" : identity.provider();
-            updateFilters(); queryNow();
-        });
     }
     private String typeOption(String providerId, String id) {
         String label = typeLabel(providerId, id);
@@ -418,25 +482,10 @@ public final class WorldObjectsView extends FrameLayout {
         String text = Component.translatable(key).getString();
         return text.equals(key) ? id : text;
     }
-    private void chooseLifetime() {
-        LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
-        for (String id : List.of("persistent", "binding", "process", "runtime", "loaded")) options.put(id, tr("lifetime." + id));
-        choose(lifetimeButton, "lifetime", options, value -> { lifetime = value; updateFilters(); queryNow(); });
-    }
-    private void choose(View anchor, String title, LinkedHashMap<String, String> labels, Consumer<String> callback) {
-        dismissMenu();
-        if (!shown || disposed) return;
-        menu = new UiSearchableMenu(getContext(), tr(title), List.copyOf(labels.keySet()), labels,
-                new UiSearchableMenu.Style(240, 8), value -> {
-                    dismissMenu();
-                    if (shown && !disposed) callback.accept(value);
-                });
-        menu.showAt(anchor, this);
-    }
-    private void dismissMenu() { if (menu != null) { menu.dismiss(); menu = null; } }
+    private void dismissMenu() { if (filterPopover != null) filterPopover.dismiss(); }
     private List<WorldObjectEntry> sortedEntries() {
         Comparator<WorldObjectEntry> comparator = switch (sort) {
-            case "type" -> Comparator.comparing(entry -> typeLabel(entry.provider(), entry.type()), String.CASE_INSENSITIVE_ORDER);
+            case "type" -> Comparator.comparing(this::displayType, String.CASE_INSENSITIVE_ORDER);
             case "dimension" -> Comparator.comparing(WorldObjectEntry::dimension);
             case "lifetime" -> Comparator.comparing(WorldObjectEntry::lifetime);
             case "tags" -> Comparator.comparing(entry -> String.join(",",entry.tags()));
@@ -447,7 +496,14 @@ public final class WorldObjectsView extends FrameLayout {
             default -> Comparator.comparing(this::displayName, String.CASE_INSENSITIVE_ORDER);
         };
         if (!sortAscending) comparator = comparator.reversed();
-        return snapshot.entries().stream().filter(e -> category == null || category.matches(e)).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
+        return snapshot.entries().stream().filter(e -> category == null || category.matches(e))
+                .filter(e -> provider.isEmpty() || provider.equals(e.provider()))
+                .filter(e -> columnFilters.matches(displayName(e), WorldObjectQuery.filterType(e), WorldObjectQuery.numericValue(e),
+                        e.dimension(), e.position().x, e.position().y, e.position().z, e.lifetime(), e.tags())).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
+    }
+    private String displayType(WorldObjectEntry entry) {
+        var presentation = WorldObjectCategories.forEntry(entry);
+        return presentation == null ? typeLabel(entry.provider(), entry.type()) : Component.translatable(presentation.labelKey()).getString();
     }
     private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.provider(), entry.type()) : entry.name(); }
     private void rebuildRows() {
@@ -456,80 +512,99 @@ public final class WorldObjectsView extends FrameLayout {
             updateSelection();
             return;
         }
-        mountedEntries = entries;
-        mountedTypes = typeCatalog;
+        cancelMount();
+        mountedEntries = null; mountedTypes = null;
+        List<WorldObjectType> mountingTypes = List.copyOf(typeCatalog);
         rows.removeAllViews(); rowViews.clear(); rowBindings.clear();
         if (entries.isEmpty()) {
             TextView empty = label(getContext(), tr("empty"), UiTheme.Text.MUTED);
             empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, px(96)));
         }
-        int index=0;
-        for (WorldObjectEntry entry : entries) {
-            UiActionButton row = UiTableStyle.rowButton(getContext());
-            row.setPadding(0, 0, 0, 0);
-            int baseColor=UiTableStyle.rowColor(index++%2!=0);
-            UiTableRow line = new UiTableRow(getContext(), columns);
-            line.setMinimumHeight(px(UiTableStyle.ROW_HEIGHT));
-            line.addView(UiTableStyle.rowNumberCell(getContext(), index),new ViewGroup.LayoutParams(-1,-1));
-            UiCheckBox checkbox=new UiCheckBox(getContext());
-            checkbox.setContentDescription(displayName(entry));
-            checkbox.setOnCheckedChangeListener((view,checked)->toggleCheckbox(entry,checked));
-            line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
-            var presentation=WorldObjectCategories.forEntry(entry);
-            cell(line,displayName(entry));
-            cell(line,presentation==null?typeLabel(entry.provider(), entry.type()):Component.translatable(presentation.labelKey()).getString());
-            if (entry.provider().equals("native") && !entry.type().equals("minecraft:interaction")) {
-                EntityPreviewCell preview = new EntityPreviewCell(getContext());
-                preview.setVisibilityRow(line);
-                UUID entityId = null;
-                try { entityId = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
-                catch (IllegalArgumentException ignored) { }
-                preview.setReference(entityId, entry.dimension());
-                line.addView(preview, new ViewGroup.LayoutParams(-1, -1));
-            } else {
-                cell(line, "");
+        Iterator<WorldObjectEntry> iterator = entries.iterator();
+        rowBatch.start(new Iterator<Runnable>() {
+            private int index;
+            @Override public boolean hasNext() { return iterator.hasNext(); }
+            @Override public Runnable next() {
+                WorldObjectEntry entry = iterator.next();
+                int rowIndex = index++;
+                return () -> mountRow(entry, rowIndex);
             }
-            cell(line,entry.dimension());
-            cell(line,position(entry));
-            cell(line,lifetimeLabel(entry.lifetime()));
-            UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
-            line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
-
-            // Cells determine height; background and selection overlays follow without stretching the row.
-            FrameLayout host = new UiTableRowFrame(getContext(), line, row);
-            View stripe=new View(getContext());stripe.setBackground(background(UiTheme.Control.FOCUS));
-            host.addView(stripe,new LayoutParams(Math.max(1,px(2)),-1));
-            View border=new View(getContext());border.setBackground(background(UiTableStyle.DIVIDER_COLOR));
-            host.addView(border,new LayoutParams(-1,Math.max(1,px(1)),Gravity.BOTTOM));
-            boolean[] modifiers = new boolean[2];
-            row.setOnTouchListener((view, event) -> {
-                if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
-                    modifiers[0] = event.isCtrlPressed(); modifiers[1] = event.isShiftPressed();
-                } else if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_CANCEL) {
-                    modifiers[0] = modifiers[1] = false;
-                    resetDoubleClick();
-                }
-                return false;
-            });
-            row.setOnClickListener(view -> {
-                boolean toggle=modifiers[0], extend=modifiers[1];
-                modifiers[0] = modifiers[1] = false;
-                if (!canSelect()) return;
-                select(entry, toggle, extend);
-                row.requestFocus();
-                rowClicked(entry.key(),toggle||extend,System.nanoTime());
-            });
-            rowViews.put(entry.key(), row);
-            rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor));
-            rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
-        }
+        }, () -> {
+            mountedEntries = entries;
+            mountedTypes = mountingTypes;
+            updateSelection();
+        });
         updateSelection();
+    }
+    private void cancelMount() {
+        if (rowBatch.isRunning()) { mountedEntries = null; mountedTypes = null; }
+        rowBatch.cancel();
+    }
+    private void mountRow(WorldObjectEntry entry, int index) {
+        UiActionButton row = UiTableStyle.rowButton(getContext());
+        row.setPadding(0, 0, 0, 0);
+        int baseColor=UiTableStyle.rowColor(index%2!=0);
+        UiTableRow line = new UiTableRow(getContext(), columns);
+        line.setMinimumHeight(px(UiTableStyle.ROW_HEIGHT));
+        line.addView(UiTableStyle.rowNumberCell(getContext(), index + 1),new ViewGroup.LayoutParams(-1,-1));
+        UiCheckBox checkbox=new UiCheckBox(getContext());
+        checkbox.setContentDescription(displayName(entry));
+        checkbox.setOnCheckedChangeListener((view,checked)->toggleCheckbox(entry,checked));
+        line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
+        cell(line,displayName(entry));
+        cell(line,displayType(entry));
+        if (entry.provider().equals("native") && !entry.type().equals("minecraft:interaction")) {
+            EntityPreviewCell preview = new EntityPreviewCell(getContext());
+            preview.setVisibilityRow(line);
+            UUID entityId = null;
+            try { entityId = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
+            catch (IllegalArgumentException ignored) { }
+            preview.setReference(entityId, entry.dimension());
+            line.addView(preview, new ViewGroup.LayoutParams(-1, -1));
+        } else {
+            cell(line, "");
+        }
+        cell(line,entry.dimension());
+        cell(line,position(entry));
+        cell(line,lifetimeLabel(entry.lifetime()));
+        UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
+        line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
+
+        // Cells determine height; background and selection overlays follow without stretching the row.
+        FrameLayout host = new UiTableRowFrame(getContext(), line, row);
+        View stripe=new View(getContext());stripe.setBackground(background(UiTheme.Control.FOCUS));
+        host.addView(stripe,new LayoutParams(Math.max(1,px(2)),-1));
+        View border=new View(getContext());border.setBackground(background(UiTableStyle.DIVIDER_COLOR));
+        host.addView(border,new LayoutParams(-1,Math.max(1,px(1)),Gravity.BOTTOM));
+        boolean[] modifiers = new boolean[2];
+        row.setOnTouchListener((view, event) -> {
+            if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
+                modifiers[0] = event.isCtrlPressed(); modifiers[1] = event.isShiftPressed();
+            } else if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_CANCEL) {
+                modifiers[0] = modifiers[1] = false;
+                resetDoubleClick();
+            }
+            return false;
+        });
+        row.setOnClickListener(view -> {
+            boolean toggle=modifiers[0], extend=modifiers[1];
+            modifiers[0] = modifiers[1] = false;
+            if (!canSelect()) return;
+            select(entry, toggle, extend);
+            row.requestFocus();
+            rowClicked(entry.key(),toggle||extend,System.nanoTime());
+        });
+        rowViews.put(entry.key(), row);
+        rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor));
+        row.setEnabled(false);
+        checkbox.setEnabled(false);
+        rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
     }
     private void cell(UiTableRow row, String text) {
         TextView cell = UiTableStyle.cell(getContext(), text, UiTheme.Text.NORMAL);
         row.addView(cell, new ViewGroup.LayoutParams(-1, -1));
     }
-    private boolean canSelect() { return shown && !disposed && !awaitingScopeResponse && Objects.equals(stateScope, UiStateScopes.current()) && !snapshot.loading(); }
+    private boolean canSelect() { return !rowBatch.isRunning() && shown && !disposed && !awaitingScopeResponse && Objects.equals(stateScope, UiStateScopes.current()) && !snapshot.loading(); }
     private void toggleCheckbox(WorldObjectEntry entry, boolean checked) {
         resetDoubleClick();
         if (!canSelect()) { updateSelection(); return; }
@@ -592,7 +667,7 @@ public final class WorldObjectsView extends FrameLayout {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
     }
     public DatabaseSelection selection() {
-        if(awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
+        if(rowBatch.isRunning() || awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
         List<WorldObjectEntry> entries = selectedEntries();
         if (entries.isEmpty()) return null;
         if(entries.size()>1)return new DatabaseSelection(tr("selected",entries.size()),tr("world"),"",0,
@@ -645,14 +720,16 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void saveState() {
         if (restoringState || stateScope == null) return;
+        uiState.write(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope, columnFilters);
         uiState.write(DatabaseViewState.WORLD, stateScope, new DatabaseViewState.World(
-                submittedSearch, tags.getText().toString(), source.getText().toString(), range.name(),
-                dimension, provider, type, typeProvider, lifetime, category == null ? "" : category.id(),
+                submittedSearch, "", "", range.name(),
+                "", provider, "", "", "", category == null ? "" : category.id(),
                 extraProvider, sort, sortAscending));
     }
     private void switchScope() {
-        removeCallbacks(queryTask); removeCallbacks(renderTask);
-        dismissMenu(); if (filterPopover != null) filterPopover.dismiss();
+        cancelMount();
+        removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask);
+        dismissMenu();
         saveState(); restoreState(); selected.clear(); anchorKey = null;
         session.removeChangeListener(changed); session.close();
         session = ClientWorldObjectRepository.INSTANCE.newSession(); session.addChangeListener(changed);
@@ -660,6 +737,8 @@ public final class WorldObjectsView extends FrameLayout {
         snapshot = new ClientWorldObjectRepository.Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), true, 0);
         renderedSnapshot = null; mountedEntries = null; mountedTypes = null;
         typeCatalog = List.of(); dimensionCatalog = List.of();
+        navigationCounts = WorldObjectPage.Counts.empty();
+        indexedTypeCatalog = null; typeLookup.clear();
         rows.removeAllViews(); rowViews.clear(); rowBindings.clear(); resetDoubleClick();
         updateFilters(); rebuildNavigation(); updateSelection();
     }
@@ -669,11 +748,17 @@ public final class WorldObjectsView extends FrameLayout {
         restoringState = true;
         try {
             submittedSearch = value.search(); search.setText(submittedSearch);
-            tags.setText(value.tags()); source.setText(value.source());
+            columnFilters = uiState.read(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope);
             try { range = WorldObjectQuery.Range.valueOf(value.range()); }
             catch (IllegalArgumentException ignored) { range = WorldObjectQuery.Range.GLOBAL; }
-            dimension = value.dimension(); provider = value.provider(); type = value.type();
-            typeProvider = value.typeProvider(); lifetime = value.lifetime(); extraProvider = value.extraProvider();
+            // Migrate former single-choice filters into the independent in-memory column state.
+            if (!columnFilters.active()) {
+                if (!value.dimension().isEmpty()) columnFilters = columnFilters.withDimensions(new ColumnFilters.Choice(true, Set.of(value.dimension())));
+                if (!value.type().isEmpty()) columnFilters = columnFilters.withTypes(new ColumnFilters.Choice(true, Set.of(migratedType(value.typeProvider().isEmpty() ? value.provider() : value.typeProvider(), value.type()))));
+                if (!value.lifetime().isEmpty()) columnFilters = columnFilters.withLifetimes(new ColumnFilters.Choice(true, Set.of(value.lifetime())));
+                columnFilters = columnFilters.withTags(tagFilters(value.tags()), Set.of());
+            }
+            provider = value.provider(); extraProvider = value.extraProvider();
             category = WorldObjectCategories.all().stream().filter(c -> c.id().equals(value.category())).findFirst().orElse(null);
             sort = value.sort(); sortAscending = value.ascending();
         } finally { restoringState = false; }
@@ -687,9 +772,9 @@ public final class WorldObjectsView extends FrameLayout {
         if (!Boolean.getBoolean("gn.standalone")) queryNow(); else refresh();
     }
     public void onHide() {
+        cancelMount();
         saveState();
-        shown = false; resetDoubleClick(); removeCallbacks(queryTask); removeCallbacks(renderTask); dismissMenu();
-        if(filterPopover!=null)filterPopover.dismiss();
+        shown = false; resetDoubleClick(); removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); dismissMenu();
         updateInteractionState();
     }
     public void onDispose() {

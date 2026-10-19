@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.runtime.quest.ui;
 
-import com.mine.geometry_node.client.ui.components.valuepreview.EntityTemplatePreviewView;
-import com.mine.geometry_node.client.ui.components.valuepreview.ItemSlotView;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;

@@ -1,16 +1,16 @@
 package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanel;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelDefinition;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferFileSnapshot;
@@ -43,7 +43,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             "geometry_node.asset_transfer.panel.title",
             200,
             Set.of(SidebarPanelScope.ASSET_BROWSER),
-            AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.icon.SvgIconView.Icon.TRANSFERS);
+            AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.base.icon.SvgIconView.Icon.TRANSFERS);
 
     private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
     private static final int COLOR_SECTION = UiTheme.Surface.PANEL;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
-import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
@@ -15,15 +15,15 @@ import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.menu.UiRadialMenu;
-import com.mine.geometry_node.client.ui.components.menu.RadialMenuLayout.Slot;
-import com.mine.geometry_node.client.ui.components.menu.HeldMenuKey;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiRadialMenu;
+import com.mine.geometry_node.client.ui.components.composite.menu.RadialMenuLayout.Slot;
+import com.mine.geometry_node.client.ui.components.composite.menu.HeldMenuKey;
 import java.util.List;
-import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
-import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
-import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -43,8 +43,8 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.button.UiSplitButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.composite.button.UiSplitButton;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */

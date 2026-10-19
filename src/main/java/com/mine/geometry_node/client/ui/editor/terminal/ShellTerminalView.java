@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;

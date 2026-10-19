@@ -2259,5 +2259,20 @@
     "geometry_node.data_library.recursive_scope": "当前目录 · 包含子目录",
     "geometry_node.data_library.types": "数据类型",
     "geometry_node.data_library.group_by_type": "按类型分组",
-    "geometry_node.port.boolean": "布尔"
+    "geometry_node.port.boolean": "布尔",
+  "geometry_node.database.column_filter.keyword": "关键字",
+  "geometry_node.database.column_filter.select_all": "全选",
+  "geometry_node.database.column_filter.invert": "反选",
+  "geometry_node.database.column_filter.position": "位置范围",
+  "geometry_node.database.column_filter.tags": "标签",
+  "geometry_node.database.column_filter.include_tags": "包含以下全部标签",
+  "geometry_node.database.column_filter.exclude_tags": "不包含以下任一标签",
+  "geometry_node.database.column_filter.minimum": "最小值（可留空）",
+  "geometry_node.database.column_filter.maximum": "最大值（可留空）",
+  "geometry_node.database.column_filter.invalid_range": "请输入有限数字，且最小值不大于最大值",
+  "geometry_node.database.column_filter.invalid_filter": "筛选条件无效，请检查输入",
+  "geometry_node.database.column_filter.clear_column": "清除",
+  "geometry_node.database.column_filter.apply": "应用",
+  "geometry_node.database.column_filter.add_tag": "输入标签，按 Enter 添加",
+  "geometry_node.database.column_filter.remove_tag": "移除标签"
 }

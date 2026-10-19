@@ -105,6 +105,7 @@ public final class ServerWorldObjectQueries {
         if (query.range() == WorldObjectQuery.Range.NEARBY && !query.dimension().isEmpty() && !query.dimension().equals(current))
             return WorldObjectPage.empty(request.requestId(), "nearby_requires_current_dimension");
         String selected = query.selectedDimension(current);
+        // Navigation statistics use scope only. Column/category predicates apply to result rows.
         java.util.function.Predicate<String> acceptsDimension = dim -> selected.isEmpty() || selected.equals(dim);
         Map<String, ServerLevel> allLevels = new LinkedHashMap<>();
         allLevels.put(current, player.level());
@@ -127,76 +128,51 @@ public final class ServerWorldObjectQueries {
         var context = new WorldObjectProvider.Context(server, levels, acceptsDimension);
         Vec3 camera = EditCameraChunkService.position(player);
         Vec3 origin = camera != null && player.isAlive() ? camera : player.position();
-        List<WorldObjectEntry> entries = new ArrayList<>(); Set<String> keys = new HashSet<>();
         List<String> coverage = new ArrayList<>();
         var providers = new ArrayList<>(WorldObjectProviders.all());
         providers.sort(Comparator.comparing(provider -> provider.id().equals("native")));
         var catalog = WorldObjectTypeCatalog.collect(providers, query);
         metadataTruncated |= catalog.partial();
         coverage.addAll(catalog.failures());
-        class Collector implements WorldObjectProvider.Sink {
-            int scanned, bytes;
-            boolean truncated, stopped;
-            String provider;
-            WorldObjectProvider ownerProvider;
-            // A time cap supplements the cardinality budget; results explicitly report incompleteness.
-            long deadline;
-            public boolean scan() {
-                if (stopped) return false;
-                if (deadline == 0) deadline = System.nanoTime() + 10_000_000L;
-                if (++scanned > MAX_SCANNED || System.nanoTime() > deadline) { truncated = stopped = true; return false; }
-                return true;
+        WorldObjectResultCollector collector = new WorldObjectResultCollector(query, entry -> {
+            if (!acceptsDimension.test(entry.dimension())) return false;
+            if (query.range() == WorldObjectQuery.Range.NEARBY && !query.withinRadius(entry, origin)) return false;
+            if (query.range() == WorldObjectQuery.Range.LOADED) {
+                ServerLevel level = allLevels.get(entry.dimension());
+                var p = entry.position();
+                if (level == null || Math.abs(p.x) > 30_000_000 || Math.abs(p.z) > 30_000_000
+                        || level.getChunkSource().getChunkNow((int)Math.floor(p.x / 16), (int)Math.floor(p.z / 16)) == null) return false;
             }
-            public boolean emit(WorldObjectEntry entry) {
-                if (stopped) return false;
-                if (!entry.provider().equals(provider)) throw new IllegalArgumentException("Provider identity mismatch");
-                if (!acceptsDimension.test(entry.dimension()) || !query.matchesMetadata(entry)) return true;
-                if (query.range() == WorldObjectQuery.Range.NEARBY && !query.withinRadius(entry, origin)) return true;
-                if (query.range() == WorldObjectQuery.Range.LOADED) {
-                    ServerLevel level = allLevels.get(entry.dimension());
-                    var p = entry.position();
-                    if (level == null || Math.abs(p.x) > 30_000_000 || Math.abs(p.z) > 30_000_000
-                            || level.getChunkSource().getChunkNow((int)Math.floor(p.x / 16), (int)Math.floor(p.z / 16)) == null) return true;
-                }
-                if (!keys.add(entry.key())) return true;
-                if (entries.size() >= query.limit() || entry.estimatedBytes() > WorldObjectPage.MAX_ENTRY_BYTES - bytes) {
-                    truncated = stopped = true; return false;
-                }
+            return true;
+        }) {
+            @Override protected WorldObjectEntry advertise(WorldObjectEntry entry, int remainingBytes) {
                 // A capability lease holds the adapter's live owner guard, not a mutable query mirror.
-                try {
-                    var access = ownerProvider.resolveMetadata(context, entry);
-                    var advertised = TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
-                    if (advertised.estimatedBytes() <= WorldObjectPage.MAX_ENTRY_BYTES - bytes) entry = advertised;
-                } catch (RuntimeException unavailable) {
-                    // Metadata capability failure does not hide the object or fail the read-only query.
-                }
-                entries.add(entry); bytes += entry.estimatedBytes();
-                return true;
+                var access = ownerProvider.resolveMetadata(context, entry);
+                return TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
             }
-        }
-        Collector collector = new Collector();
+        };
+        List<WorldObjectEntry> entries = collector.entries;
         if (levelLimitReached && (selected.isEmpty() || !allLevels.containsKey(selected))
-                && providers.stream().anyMatch(p -> (query.providers().isEmpty() || query.providers().contains(p.id()))
-                        && !Set.of("scene", "projection", "schematic").contains(p.id()))) {
-            collector.truncated = true; coverage.add("levels:partial");
+                && providers.stream().anyMatch(p -> !Set.of("scene", "projection", "schematic").contains(p.id()))) {
+            collector.countsPartial = collector.truncated = true; coverage.add("levels:partial");
         }
         for (WorldObjectProvider provider : providers) {
-            if (!query.providers().isEmpty() && !query.providers().contains(provider.id())) continue;
             if (collector.stopped) { coverage.add(provider.id() + ":not_scanned"); continue; }
             collector.provider = provider.id(); collector.ownerProvider = provider;
             try {
                 provider.collect(context, collector);
-                coverage.add(provider.id() + ":" + provider.coverage() + (collector.stopped ? ":partial" : ":complete"));
+                coverage.add(provider.id() + ":" + provider.coverage() + (collector.stopped || collector.resultsFull ? ":partial" : ":complete"));
             } catch (RuntimeException failure) {
-                collector.truncated = true; coverage.add(provider.id() + ":failed");
+                collector.countsPartial = collector.truncated = true; coverage.add(provider.id() + ":failed");
             }
         }
         if (metadataTruncated) coverage.add("metadata:partial");
+        if (collector.countsPartial) coverage.add("counts:partial");
         if (query.range() == WorldObjectQuery.Range.LOADED) coverage.add("range:pivot_in_loaded_chunk");
         coverage.add("models:server_collision_instances_only");
         entries.sort(Comparator.comparing(WorldObjectEntry::key));
         return new WorldObjectPage(request.requestId(), entries, collector.truncated,
                 dimensions.stream().sorted().toList(), catalog.types(), coverage,
-                WorldObjectPage.resultMessage(collector.truncated, metadataTruncated));
+                WorldObjectPage.resultMessage(collector.truncated, metadataTruncated), collector.counts());
     }
 }

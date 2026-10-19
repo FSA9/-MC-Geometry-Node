@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.core.Handler;

@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar.properties;
 
-import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.input.UiTextInput;
-import com.mine.geometry_node.client.ui.components.input.UiSelectButton;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.Field;

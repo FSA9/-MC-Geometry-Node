@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.input.UiSearchBar;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -18,22 +18,17 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-/** Search and query filters; commands remain owned by the window. */
+/** Search and creation commands. */
 final class DataLibraryToolbar extends LinearLayout {
     final UiIconButton addFolderButton;
     final UiIconButton deleteButton;
-    final UiActionButton typeButton;
     final UiActionButton scopeButton;
-    final UiActionButton filterButton;
-    final UiActionButton tagButton;
-    final LinearLayout filterContent;
     final UiSearchBar searchBar;
     final UiSearchInput searchInput;
     private final UiActionButton newEntryButton;
 
     DataLibraryToolbar(Context context, Runnable addFolder, Consumer<View> addEntry,
-                       Runnable delete, Consumer<View> chooseType, Consumer<View> chooseTag, Runnable toggleScope,
-                       Runnable search, Runnable reset, Consumer<View> showFilters) {
+                       Runnable delete, Runnable toggleScope, Runnable search) {
         super(context);
         setOrientation(VERTICAL);
         setPadding(px(10), 0, px(10), px(8));
@@ -49,25 +44,12 @@ final class DataLibraryToolbar extends LinearLayout {
                 tr("geometry_node.asset_library.toolbar.search"), search);
         searchInput = searchBar.input();
         queries.addView(searchBar, new LayoutParams(0, px(32), 1));
-        filterButton = action(context, tr("geometry_node.database.filter"));
-        filterButton.setOnClickListener(showFilters::accept);
-        queries.addView(filterButton, dimensions(60, 32, 8));
         newEntryButton = action(context, tr("geometry_node.data_library.add"));
         newEntryButton.setOnClickListener(addEntry::accept);
         queries.addView(newEntryButton, dimensions(104, 32, 8));
 
-        filterContent = new LinearLayout(context);
-        filterContent.setOrientation(VERTICAL);
         scopeButton = action(context, tr("geometry_node.data_library.include_subfolders"));
         scopeButton.setOnClickListener(view -> toggleScope.run());
-        typeButton = action(context, tr("geometry_node.data_library.all_types"));
-        typeButton.setOnClickListener(chooseType::accept);
-        tagButton = action(context, tr("geometry_node.data_library.all_tags"));
-        tagButton.setOnClickListener(chooseTag::accept);
-        DatabaseWidgets.filterField(filterContent, tr("geometry_node.database.folder"), scopeButton);
-        DatabaseWidgets.filterField(filterContent, tr("geometry_node.database.type"), typeButton);
-        DatabaseWidgets.filterField(filterContent, tr("geometry_node.database.tags"), tagButton);
-        DatabaseWidgets.filterReset(filterContent, reset);
 
         // Mounted by the window in the directory heading and results toolbar respectively.
         addFolderButton = icon(context, SvgIconView.Icon.PLUS, "geometry_node.data_library.add_folder");

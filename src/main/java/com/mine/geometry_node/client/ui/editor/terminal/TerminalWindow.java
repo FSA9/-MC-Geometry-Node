@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.ui.components.scroll.UiHorizontalScrollView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntimeFactory;
@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.terminal.TerminalSession;
 import com.mine.geometry_node.client.terminal.TerminalMode;
 import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;

@@ -1,15 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
-import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.display.UiTagStrip;
-import com.mine.geometry_node.client.ui.components.valuepreview.EntityPreviewCell;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.client.ui.components.table.UiTableColumns;
-import com.mine.geometry_node.client.ui.components.table.UiTableRow;
-import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;

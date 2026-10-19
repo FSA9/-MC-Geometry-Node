@@ -7,6 +7,13 @@ import java.util.Map;
 public final class DatabaseViewState {
     private DatabaseViewState() {}
     public static final String GLOBAL = "global";
+    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> WORLD_COLUMN_FILTERS = columnFilters("database:world.column_filters");
+    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> LIBRARY_COLUMN_FILTERS = columnFilters("database:library.column_filters");
+    private static UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> columnFilters(String id) {
+        return new UiStateKey<>(id, 1, UiStateLifetime.MEMORY,
+                com.mine.geometry_node.core.query.ColumnFilters.class,
+                com.mine.geometry_node.core.query.ColumnFilters::empty, value -> value);
+    }
     public record World(String search, String tags, String source, String range, String dimension,
                         String provider, String type, String typeProvider, String lifetime,
                         String category, String extraProvider, String sort, boolean ascending) {

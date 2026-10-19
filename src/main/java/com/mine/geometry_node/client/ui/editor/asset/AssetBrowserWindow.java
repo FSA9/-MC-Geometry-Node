@@ -17,11 +17,11 @@ import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropert
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
-import com.mine.geometry_node.client.ui.components.layout.ResizableDivider;
-import com.mine.geometry_node.client.ui.components.sidebar.EditorSidebar;
-import com.mine.geometry_node.client.ui.components.sidebar.SidebarLayoutController;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelContext;
-import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope;
+import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
+import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.config.AppConfig;
