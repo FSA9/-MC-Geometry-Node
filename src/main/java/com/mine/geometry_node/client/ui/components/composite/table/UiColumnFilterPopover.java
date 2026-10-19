@@ -38,7 +38,9 @@ public final class UiColumnFilterPopover {
 
     public void dismiss() {
         generation++;
-        if (popup != null) { popup.dismiss(); popup = null; }
+        UiPopover previous = popup;
+        popup = null;
+        if (previous != null) previous.dismiss();
     }
 
     public void showText(View anchor, String title, String value, Consumer<String> apply) {
@@ -241,12 +243,22 @@ public final class UiColumnFilterPopover {
         actions.addView(reset, weighted()); actions.addView(submit, weighted());
         content.addView(actions, params(-1, 30));
         long token = generation;
+        boolean[] committing = {false};
         Consumer<Runnable> commit = command -> {
-            if (token != generation || popup == null || !popup.isOpen()) return;
-            try { command.run(); dismiss(); }
+            if (committing[0] || token != generation || popup == null || !popup.isOpen()) return;
+            committing[0] = true;
+            try {
+                command.run();
+                // A callback may replace the editor. Only the submitting generation can close itself.
+                if (token == generation) dismiss();
+            }
             catch (IllegalArgumentException invalid) {
-                error.setVisibility(View.VISIBLE);
-                if (popup != null) popup.refreshSize();
+                if (token == generation) {
+                    error.setVisibility(View.VISIBLE);
+                    if (popup != null) popup.refreshSize();
+                }
+            } finally {
+                committing[0] = false;
             }
         };
         reset.setOnClickListener(view -> commit.accept(clear));

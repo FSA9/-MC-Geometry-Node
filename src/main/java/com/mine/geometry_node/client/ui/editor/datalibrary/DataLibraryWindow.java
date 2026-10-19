@@ -125,6 +125,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final Map<String, UiTableFilterHeader> filterHeaders = new HashMap<>();
     private UiSearchableMenu activeMenu;
     private FileContextMenu renameMenu;
+    private long renameGeneration;
     private final UiIconButton addFolderButton;
     private final View deleteButton;
     private final UiCheckBox selectAll;
@@ -206,7 +207,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         selectAll = new UiCheckBox(context);
         this.valueEditors = new DataLibraryValueEditors(context, this.repository,
                 this::overlayHost, this::refresh, this::scheduleRefresh,
-                () -> !disposed && Objects.equals(stateScope, UiStateScopes.current()) && folderSnapshotReady());
+                () -> !disposed && !suspended && Objects.equals(stateScope, UiStateScopes.current()) && folderSnapshotReady());
         this.repository.addChangeListener(repositoryChanged);
         setOrientation(VERTICAL);
         setBackground(solid(BG, 0));
@@ -455,13 +456,17 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void requestRebuild() {
+        requestRebuild(true);
+    }
+
+    private void requestRebuild(boolean refreshTypes) {
         if (disposed || suspended) return;
         if (internalDragActive || reconciling) {
             rebuildPending = true;
             return;
         }
         DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
-        refreshEntityTypes(next);
+        if (refreshTypes) refreshEntityTypes(next);
         observeAuthority();
         if (!mountIncomplete && !structurePending && next.sameStructure(snapshot) && !valueMembershipChanged(next)
                 && !(folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder))) {
@@ -506,9 +511,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void refreshEntityTypes(DataLibrarySnapshot next) {
         entityTypes.refresh(next.entries.values(), () -> {
             if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot == null) return;
-            if (!registryTypeFilter.isEmpty()) rebuild(snapshot);
-            else refreshCardValues(snapshot);
-            publishSelection();
+            // A draft can defer structural reconciliation while newer values are already displayed.
+            // Re-read authority rather than restoring the older mounted snapshot on metadata arrival.
+            if (!registryTypeFilter.isEmpty()) structurePending = true;
+            requestRebuild(false);
         });
     }
 
@@ -679,6 +685,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             CardBinding binding = item.getValue();
             var entry = next.entries.get(item.getKey());
             if (entry != null && entry.type() == binding.current.get().type()) return false;
+            // Retire before detaching, which can synchronously submit a focused editor's draft.
+            binding.current.set(null);
             if (binding.card.getParent() instanceof ViewGroup parent) parent.removeView(binding.card);
             selected.remove(new DataLibraryUiRepository.EntryKey(item.getKey()));
             return true;
@@ -1095,6 +1103,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void dismissFilters() { if (filterPopover != null) filterPopover.dismiss(); }
 
     private void dismissMenus() {
+        renameGeneration++;
         if (activeMenu != null) { activeMenu.dismiss(); activeMenu = null; }
         if (renameMenu != null) { renameMenu.dismiss(); renameMenu = null; }
     }
@@ -1158,8 +1167,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         });
         TextView name = presentation.nameView();
         card.contextMenu = event -> showRenameMenu(event, name, updatedName -> {
+            if (current.get() == null) return;
             DataLibraryUiRepository.Entry latest = repository.findEntry(entry.id());
-            if (latest != null && !Objects.equals(latest.key(), updatedName)) {
+            if (latest != null && latest.type() == entry.type() && !Objects.equals(latest.key(), updatedName)) {
                 repository.update(latest, new DataLibraryUiRepository.Entry(
                         latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags()));
             }
@@ -1213,15 +1223,20 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         int[] location = new int[2];
         host.getLocationOnScreen(location);
         FileContextMenu menu = new FileContextMenu(getContext());
+        long generation = renameGeneration;
         menu.addMenuItem(tr("geometry_node.asset_library.action.rename"),
-                () -> post(() -> beginRename(name, rename)));
+                () -> post(() -> {
+                    if (generation == renameGeneration) beginRename(name, rename);
+                }));
         renameMenu = menu;
         menu.showAt(event.getRawX() - location[0], event.getRawY() - location[1], host);
     }
 
     private void beginRename(TextView name, Consumer<String> rename) {
-        if (disposed || suspended || !isDescendant(name, this)) return;
+        if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current()) || !isDescendant(name, this)) return;
         if (!(name.getParent() instanceof ViewGroup parent)) return;
+        long generation = stateGeneration;
+        String scope = stateScope;
         EditText input = styledNameEditor(name.getText().toString());
         input.setBackground(solid(INPUT_BG, 2, BORDER));
         int index = parent.indexOfChild(name);
@@ -1232,10 +1247,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         AtomicBoolean finished = new AtomicBoolean();
         Consumer<Boolean> finish = commit -> {
             if (!finished.compareAndSet(false, true)) return;
+            boolean canCommit = !disposed && !suspended && generation == stateGeneration
+                    && Objects.equals(scope, UiStateScopes.current()) && isDescendant(input, this);
             String updatedName = input.getText().toString().trim();
             parent.removeView(input);
             parent.addView(name, Math.min(index, parent.getChildCount()), params);
-            if (commit && !updatedName.isEmpty() && !disposed) rename.accept(updatedName);
+            if (commit && canCommit && !updatedName.isEmpty()) rename.accept(updatedName);
             scheduleRefresh();
         };
         input.setOnKeyListener((view, keyCode, event) -> {

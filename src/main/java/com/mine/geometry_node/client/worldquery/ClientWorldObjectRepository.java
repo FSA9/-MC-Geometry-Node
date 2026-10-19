@@ -81,6 +81,7 @@ public final class ClientWorldObjectRepository {
     }
     public void accept(PacketWorldObjectTagResult packet, long expectedGeneration) {
         Session target;
+        PreparedQuery refresh = null;
         synchronized (this) {
             if (generation != expectedGeneration) return;
             target = pendingTags.remove(packet.requestId());
@@ -102,9 +103,12 @@ public final class ClientWorldObjectRepository {
                     target.published = new Snapshot(snapshot.query(), new WorldObjectPage(page.requestId(), entries, page.truncated(),
                             page.dimensionIds(), page.types(), page.coverage(), page.message(), page.counts()), false, snapshot.sequence() + 1);
                 } catch (IllegalArgumentException pageLimit) { /* Refresh below still runs. */ }
-                target.query(snapshot.query(), true);
+                refresh = target.prepareQuery(snapshot.query(), true);
             }
         }
+        // Minecraft.execute may run inline on the client thread. Never dispatch while holding
+        // the repository monitor, or a slow refresh prevents replacement queries and close().
+        if (refresh != null) clientQueue.accept(refresh.dispatch());
         target.notifyListeners();
     }
     void disconnect() {
@@ -146,6 +150,8 @@ public final class ClientWorldObjectRepository {
         }
         changed.forEach(Session::notifyListeners);
     }
+    private record PreparedQuery(long id, Runnable dispatch) {}
+
     public final class Session implements AutoCloseable {
         private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
         private volatile Snapshot published = new Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), false, 0);
@@ -183,28 +189,38 @@ public final class ClientWorldObjectRepository {
         public boolean addTag(WorldObjectEntry entry, String tag) { return editTag(entry, tag, true); }
         public boolean removeTag(WorldObjectEntry entry, String tag) { return editTag(entry, tag, false); }
         private boolean editTag(WorldObjectEntry entry, String tag, boolean add) {
-            final PacketWorldObjectTagEdit packet;
+            PacketWorldObjectTagEdit prepared = null;
+            boolean accepted = false, notify = false;
             final long expectedGeneration;
             synchronized (ClientWorldObjectRepository.this) {
                 if (tagRequestId != 0 || !canEditTags(entry)) return false;
                 try {
                     String normalized = com.mine.geometry_node.core.metadata.TagPolicy.EXACT.normalize(tag);
                     if (entry.tags().contains(normalized) == add) {
-                        if (!tagMessage.isEmpty()) {
-                            tagMessage = ""; clientQueue.accept(this::notifyListeners);
-                        }
-                        return true;
+                        notify = !tagMessage.isEmpty();
+                        tagMessage = "";
+                    } else {
+                        prepared = new PacketWorldObjectTagEdit(++nextRequest, entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
+                                entry.key(), entry.tags(), normalized, add);
                     }
-                    packet = new PacketWorldObjectTagEdit(++nextRequest, entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
-                            entry.key(), entry.tags(), normalized, add);
+                    accepted = true;
                 } catch (IllegalArgumentException invalid) {
                     tagMessage = WorldObjectTagEdits.PREFIX + "invalid";
-                    clientQueue.accept(this::notifyListeners); return false;
+                    notify = true;
                 }
-                expectedGeneration = generation; tagRequestId = packet.requestId(); tagSentAt = System.nanoTime();
-                tagScopeRevision = scopeRevision; tagEntry = entry; editedTag = packet.tag(); tagAdded = add;
-                tagMessage = WorldObjectTagEdits.PREFIX + "pending"; pendingTags.put(tagRequestId, this);
+                expectedGeneration = generation;
+                if (prepared != null) {
+                    tagRequestId = prepared.requestId(); tagSentAt = System.nanoTime();
+                    tagScopeRevision = scopeRevision; tagEntry = entry; editedTag = prepared.tag(); tagAdded = add;
+                    tagMessage = WorldObjectTagEdits.PREFIX + "pending"; pendingTags.put(tagRequestId, this);
+                }
             }
+            // Even local validation/no-op notifications can run inline on the client thread.
+            if (prepared == null) {
+                if (notify) clientQueue.accept(this::notifyListeners);
+                return accepted;
+            }
+            final PacketWorldObjectTagEdit packet = prepared;
             clientQueue.accept(() -> {
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || tagRequestId != packet.requestId()) return;
@@ -228,8 +244,12 @@ public final class ClientWorldObjectRepository {
             });
             return true;
         }
-        public long query(WorldObjectQuery query) { return query(query, false); }
-        private long query(WorldObjectQuery query, boolean retainRows) {
+        public long query(WorldObjectQuery query) {
+            PreparedQuery prepared = prepareQuery(query, false);
+            clientQueue.accept(prepared.dispatch());
+            return prepared.id();
+        }
+        private PreparedQuery prepareQuery(WorldObjectQuery query, boolean retainRows) {
             Objects.requireNonNull(query);
             final long id, expectedGeneration;
             synchronized (ClientWorldObjectRepository.this) {
@@ -240,7 +260,7 @@ public final class ClientWorldObjectRepository {
                 pending.put(id, this); sentAt = System.nanoTime();
                 published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, ""), !retainRows, published.sequence() + 1);
             }
-            clientQueue.accept(() -> {
+            return new PreparedQuery(id, () -> {
                 final PacketWorldObjectQuery packet;
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || requestId != id) return;
@@ -268,7 +288,6 @@ public final class ClientWorldObjectRepository {
                 }
                 notifyListeners();
             });
-            return id;
         }
         private void notifyListeners() {
             if (closed) return;

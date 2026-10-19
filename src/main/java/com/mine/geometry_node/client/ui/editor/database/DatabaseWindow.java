@@ -74,7 +74,9 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         addView(tabs, new LayoutParams(-1, px(36)));
 
         FrameLayout main = new FrameLayout(context);
-        world = new WorldObjectsView(context, this::setSelection, state);
+        world = new WorldObjectsView(context, value -> {
+            if (!disposed && worldSelected) setSelection(value);
+        }, state);
         library = new DataLibraryWindow(context, this.repository, state);
         library.onHide(); library.setVisibility(GONE);
         main.addView(world, new FrameLayout.LayoutParams(-1, -1));
@@ -92,7 +94,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
         sidebarLayout.initialize(savedSidebar.visible()); sidebarLayout.onOwnerHidden();
         addView(workspace, new LayoutParams(-1, 0, 1));
-        library.setSelectionListener(entries -> { if (!worldSelected) setSelection(librarySelection(entries)); });
+        library.setSelectionListener(entries -> { if (!disposed && !worldSelected) setSelection(librarySelection(entries)); });
         this.repository.addChangeListener(libraryChanged);
         restoreTabScope();
         UiStateScopes.addChangeListener(scopeChanged);
@@ -162,6 +164,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                 List.of(new DatabaseSelection.Field(tr("folder"), String.join("\n", entries.stream()
                         .map(entry -> repository.folderPath(entry.parentId())).distinct().toList()))), List.of(), List.of());
         var entry = entries.getFirst();
+        String selectionScope = stateScope;
         String type = Component.translatable("geometry_node.port." + entry.type().name().toLowerCase(Locale.ROOT)).getString();
         if(type.startsWith("geometry_node."))type=entry.type().name();
         boolean registryValue = switch (entry.type()) {
@@ -182,11 +185,22 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                                 repository.isUpdatePending(entry.id()) ? tr("tag_update_pending")
                                         : repository.tagUpdateMessage(entry.id()).isEmpty() ? ""
                                         : Component.translatable("geometry_node." + repository.tagUpdateMessage(entry.id())).getString(),
-                                tag -> repository.addTag(entry, tag), tag -> repository.removeTag(entry, tag)) : null),
+                                tag -> submitLibraryTagEdit(entry, selectionScope, tag, true),
+                                tag -> submitLibraryTagEdit(entry, selectionScope, tag, false)) : null),
                 new DatabaseSelection.Section(tr("node_reference"), tr("reference_hint"), DatabaseSelection.Kind.REFERENCE,
                         List.of(new DatabaseSelection.Field(tr("id"), entry.id().toString()))));
         return new DatabaseSelection(entry.key(), type + " · " + tr("shared_entry"),
                 "", entry.type().getColor(), List.of(), List.of(), sections, libraryPreview(entry));
+    }
+    private void submitLibraryTagEdit(DataLibraryUiRepository.Entry expected, String scope, String tag, boolean add) {
+        if (disposed || !shown || worldSelected || !sidebarLayout.isVisible()
+                || !java.util.Objects.equals(scope, stateScope)
+                || !java.util.Objects.equals(scope, UiStateScopes.current()))
+            throw new IllegalStateException("Inactive library tag editor");
+        var selected = library.selectedEntries();
+        if (selected.size() != 1 || !selected.getFirst().id().equals(expected.id()))
+            throw new IllegalStateException("Stale library tag selection");
+        if (add) repository.addTag(expected, tag); else repository.removeTag(expected, tag);
     }
     private static DatabaseSelection.Preview libraryPreview(DataLibraryUiRepository.Entry entry) {
         return switch (entry.type()) {

@@ -127,7 +127,7 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 
 表头需要列筛选时使用 [UiTableFilterHeader](composite/table/UiTableFilterHeader.java)：标题点击保留排序，右侧独立的 18dp 正方形按钮打开筛选，始终显示一个下拉箭头，`setFilterActive()` 通过背景色标记已启用的条件。序号、勾选等特殊列不设置筛选。按钮右侧留出列宽拖动判定区。
 
-[UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java) 组合公共输入框、复选框和 `UiPopover`，提供关键词、多选（全选／反选）、数字区间、XYZ 区间、标签包含／排除编辑器；每次只打开一份草稿，应用／清除才回调，点击外部／Esc 不提交。它不保存状态、不发查询；调用方使用 `ColumnFilters` 表达条件，在各自数据入口做 AND 匹配，并通过 scoped MEMORY 状态保存。数字边界包含端点，空边界不限制；非数值只在启用数字条件时排除。标签按“包含标签块 → 输入框 → 排除标签块 → 输入框”排列，复用 `UiTagChip` 和 `TagFlowLayout`。Enter 将输入加入本地草稿，标签块可移除；应用时也包含尚未按 Enter 的输入，关闭弹层丢弃草稿。逗号属于标签内容，不作为分隔符。维度等多选菜单可以附加独立 scope 开关。
+[UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java) 组合公共输入框、复选框和 `UiPopover`，提供关键词、多选（全选／反选）、数字区间、XYZ 区间、标签包含／排除编辑器；每次只打开一份草稿，应用／清除才回调，点击外部／Esc 不提交。它不保存状态、不发查询；调用方使用 `ColumnFilters` 表达条件，在各自数据入口做 AND 匹配，并通过 scoped MEMORY 状态保存。数字边界包含端点，空边界不限制；非数值只在启用数字条件时排除。标签按“包含标签块 → 输入框 → 排除标签块 → 输入框”排列，复用 `UiTagChip` 和 `TagFlowLayout`。Enter 将输入加入本地草稿，标签块可移除；应用时也包含尚未按 Enter 的输入，关闭弹层丢弃草稿。提交具备代次与重入保护：回调中新开的弹层不会被旧提交关闭，递归点击不会重复执行同一提交。逗号属于标签内容，不作为分隔符。维度等多选菜单可以附加独立 scope 开关。
 
 批量创建行使用 [UiTableBatchWork](composite/table/UiTableBatchWork.java)：`start(steps, complete)` 在 UI 线程执行首批，单帧最多 32 步／约 3ms，后续分帧继续；每一步应只创建／挂载一行，不在提交前创建整张表的 View。再次 `start` 或 `cancel` 立即使旧计划及其已入队回调失效。新查询、切换作用域、隐藏及释放时由调用方取消；快照、选择、结果计数和完成后的缓存清理仍由业务层维护。该组件不启动线程、不做网络等待、不把 MUI View 操作移到工作线程。
 
@@ -167,6 +167,8 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 `ItemPreviewCell` 通过 `setStack()` 更新只读物品外观，使用已有 `ItemSlotView` 原生绘制，不开启编辑或滚轮缩放。内容以 `ItemStack.matches` 比较，仅变更时保存副本并刷新原生控件，重复摘要刷新不会重新复制或重置 surface。64dp 预览框上下各留白 12dp，使普通宽度的数据行高为 88dp；窄列与实体单元格一样等比缩小。空 stack 留空并保留布局高度，点击与普通／Ctrl 滚轮交给行和滚动容器。必须以 `setVisibilityRow(row)` 绑定所属数据行，复用基类的整行裁剪与 surface 同步，不能在调用方另写滚动位置判断。数据仓库的业务 helper 将 BLOCK_STATE 转为对应物品外观；没有物品形态的方块留空，方块属性不作为独立方块渲染。注册类型由业务值或调用方异步元数据快照提供，不从预览可见性或绘制结果推导。
 
 原生实体绘制不继承 MUI 父级滚动容器裁剪。表格使用基类 `setFullVisibilityAnchor(row)`：UI 线程在滚动及每次绘制前检查祖先裁剪，只有数据行纵向完整可见、预览框横纵向均完整可见时才提交原生绘制。横向表格允许行宽超过视口。独立 surface 在 MUI `updateSurface()` 读取 alpha 时把裁剪结果编码为零／原透明度，由 MUI 与位置、尺寸一起同步；渲染回调只消费该帧的 alpha、当前绘制 pose 和 `onSurfaceChanged` 尺寸，不比较最新 UI 坐标，也不在渲染线程读取 View 几何，避免连续滚动时错误跳帧造成闪烁。普通节点预览默认不启用整行策略。共享 `NativePreviewHost` 路径仍通过不可变快照校验外部提供的变换，移除组件时注销监听；独立 surface 直接复用 MUI 自身的滚动／绘制监听，不额外注册每个预览的位置监听。
+
+原生预览卸载时会注销宿主、清除旧视口变换并移除备用 surface；重新挂载必须获得新宿主变换或新 surface，旧渲染回调不能复用。业务侧刷新其他属性时，应保留来源未变化的预览控件及其挂载关系，避免反复创建原生资源。
 
 ### 预览缩放（默认关闭交互）
 

@@ -108,15 +108,20 @@ public final class UiStateContext {
             var scopes = slots(key);
             if (!scopes.containsKey(scope) && scopes.size() >= MAX_SCOPES)
                 throw new IllegalStateException("Too many state scopes");
-            var entries = scopes.computeIfAbsent(scope, ignored -> new LinkedHashMap<>());
-            if (!entries.containsKey(key.id()) && entries.size() >= MAX_KEYS_PER_SCOPE)
+            var entries = scopes.get(scope);
+            if (entries != null && !entries.containsKey(key.id()) && entries.size() >= MAX_KEYS_PER_SCOPE)
                 throw new IllegalStateException("Too many state keys");
-            var old = entries.get(key.id());
+            var old = entries == null ? null : entries.get(key.id());
             if (old != null && old.version > key.version()) return;
             JsonElement snapshot = GSON.toJsonTree(normalize(key, value), key.type());
             if (snapshot.toString().length() > MAX_PAYLOAD_CHARS)
                 throw new IllegalArgumentException("State payload too large");
             if (old != null && old.version == key.version() && Objects.equals(old.value, snapshot)) return;
+            // Failed normalization/serialization must not reserve an empty scope or consume its quota.
+            if (entries == null) {
+                entries = new LinkedHashMap<>();
+                scopes.put(scope, entries);
+            }
             entries.put(key.id(), new EditorSessionState.StateSlot(key.version(), snapshot));
             notify = key.lifetime() == UiStateLifetime.PERSISTENT;
         }

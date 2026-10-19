@@ -38,7 +38,7 @@ public record DatabaseSelection(String title, String subtitle, String iconPath, 
         public Section(String title, String subtitle, Kind kind, List<Field> fields) {
             this(title, subtitle, kind, fields, null);
         }
-        boolean hasSamePresentation(Section other) {
+        public boolean hasSamePresentation(Section other) {
             return Objects.equals(title, other.title) && Objects.equals(subtitle, other.subtitle)
                     && kind == other.kind && fields.equals(other.fields)
                     && (tagEditor == null ? other.tagEditor == null : tagEditor.hasSamePresentation(other.tagEditor));

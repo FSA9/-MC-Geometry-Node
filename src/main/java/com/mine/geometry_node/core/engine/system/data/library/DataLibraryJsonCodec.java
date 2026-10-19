@@ -96,6 +96,7 @@ public final class DataLibraryJsonCodec {
             String path = FOLDERS + "." + raw.getKey();
             try {
                 UUID id = UUID.fromString(raw.getKey());
+                if (remaining.containsKey(id)) throw new IllegalArgumentException("Duplicate folder UUID: " + id);
                 JsonObject value = requireObject(raw.getValue(), "Folder must be an object");
                 remaining.put(id, new RawFolder(id, readParent(value), requireString(value, "name")));
             } catch (RuntimeException exception) {
@@ -130,6 +131,7 @@ public final class DataLibraryJsonCodec {
             try {
                 UUID id = UUID.fromString(raw.getKey());
                 if (document.folders().containsKey(id)) throw new IllegalArgumentException("UUID is already used by a folder");
+                if (document.entries().containsKey(id)) throw new IllegalArgumentException("Duplicate entry UUID: " + id);
                 JsonObject value = requireObject(raw.getValue(), "Entry must be an object");
                 UUID parentId = readParent(value);
                 PortType type = parseType(requireString(value, "type"));
@@ -163,6 +165,7 @@ public final class DataLibraryJsonCodec {
         for (Map.Entry<String, JsonElement> raw : value.getAsJsonObject().entrySet()) {
             try {
                 UUID id = UUID.fromString(raw.getKey());
+                if (result.containsKey(id)) throw new IllegalArgumentException("Duplicate expected fingerprint UUID: " + id);
                 if (!raw.getValue().isJsonPrimitive() || !raw.getValue().getAsJsonPrimitive().isString()) {
                     throw new IllegalArgumentException("Fingerprint must be a string");
                 }

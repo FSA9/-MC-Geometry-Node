@@ -371,7 +371,10 @@ public final class WorldObjectsView extends FrameLayout {
         return Set.copyOf(matches);
     }
     private boolean needsFallbackQuery() {
-        return !compileNameFallbacks(columnFilters.name()).equals(snapshot.query().columnNameFallbackTypes());
+        // Only successful results can discover additional labels. Errors must not silently retry;
+        // partial catalogs may omit previously known labels and must not cause alternating queries.
+        if (snapshot.loading() || !Set.of("", "partial_results", "partial_metadata").contains(snapshot.message())) return false;
+        return !snapshot.query().columnNameFallbackTypes().containsAll(compileNameFallbacks(columnFilters.name()));
     }
     private void submitQuery(WorldObjectQuery query) {
         cancelMount();
@@ -696,6 +699,8 @@ public final class WorldObjectsView extends FrameLayout {
         } catch (IllegalArgumentException invalid) { return null; }
     }
     private void submitTagEdit(WorldObjectEntry expected, String tag, boolean add) {
+        if (!canSelect() || selected.size() != 1 || !selected.contains(expected.key()))
+            throw new IllegalStateException("Stale tag selection");
         // Equal inspector text may hide bounds/sub-pixel motion changes. Resolve the latest DTO while
         // retaining the original owner lease and tag precondition, rather than rejecting harmless motion.
         WorldObjectEntry live = session.snapshot().entries().stream().filter(entry -> entry.key().equals(expected.key())

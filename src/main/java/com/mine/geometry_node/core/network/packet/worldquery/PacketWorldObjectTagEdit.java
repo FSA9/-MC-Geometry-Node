@@ -11,7 +11,9 @@ import java.util.*;
 /** One bounded add/remove with an opaque connection-owned capability lease and expected custom tags. */
 public record PacketWorldObjectTagEdit(long requestId, String target, String key, List<String> expectedTags,
                                        String tag, boolean add) implements CustomPacketPayload {
-    public static final int MAX_EXPECTED_BYTES = 128 * 1024;
+    // Serverbound custom payloads are limited to 32767 bytes, including payload framing.
+    public static final int MAX_REQUEST_BYTES = 30 * 1024;
+    public static final int MAX_EXPECTED_BYTES = MAX_REQUEST_BYTES;
     public static final Type<PacketWorldObjectTagEdit> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "world_object_tag_edit"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketWorldObjectTagEdit> STREAM_CODEC = StreamCodec.of(
             (b, p) -> {
@@ -25,12 +27,16 @@ public record PacketWorldObjectTagEdit(long requestId, String target, String key
         expectedTags = List.copyOf(expectedTags);
         if (target.length() > 36 || key.length() > WorldObjectEntry.MAX_TEXT || tag.length() > TagSet.MAX_TAG_LENGTH
                 || expectedTags.size() > TagSet.MAX_TAGS) throw new IllegalArgumentException("Tag edit limits exceeded");
-        int bytes = 0;
+        // Include identity and the edit itself, not just the optimistic-concurrency snapshot.
+        int bytes = 32 + textBytes(target) + textBytes(key) + textBytes(tag);
         for (String value : expectedTags) {
             if (value.length() > TagSet.MAX_TAG_LENGTH) throw new IllegalArgumentException("Expected tag too long");
-            bytes += 5 + value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            bytes += textBytes(value);
         }
-        if (bytes > MAX_EXPECTED_BYTES) throw new IllegalArgumentException("Expected tags too large");
+        if (bytes > MAX_REQUEST_BYTES) throw new IllegalArgumentException("Tag edit request too large");
+    }
+    private static int textBytes(String value) {
+        return 5 + value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
     }
     private static List<String> expected(RegistryFriendlyByteBuf b) {
         int count = WorldObjectPacketCodecs.count(b, TagSet.MAX_TAGS), bytes = 0;

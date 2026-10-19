@@ -303,9 +303,15 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
     @Override
     protected void onDetachedFromWindow() {
         mAggregatedVisible = false;
+        // A new host must provide a fresh transform; the previous viewport's coordinates
+        // must not become renderable again merely because this view is reattached.
+        mHasViewportTransform = false;
         stopVisibilityTracking();
         releaseNativePreviewRegistration();
         super.onDetachedFromWindow();
+        // Retire the renderer identity as well as the surface attachment. A queued callback
+        // from this attachment must remain invalid after the same preview is shown again.
+        removeFallbackSurface();
     }
 
     private NativePreviewHost findNativePreviewHost() {

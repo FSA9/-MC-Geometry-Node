@@ -14,6 +14,8 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
+import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Set;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -34,6 +36,7 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     private boolean initialized;
     private boolean active;
     private View previewView;
+    private List<View> sectionViews = List.of();
 
     private DatabaseDetailsPanel(Context context, DatabaseWindow owner) {
         super(context);
@@ -59,27 +62,35 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     public void refresh() {
         DatabaseSelection selection = owner.selection();
         boolean unchanged = initialized && (current == null ? selection == null : current.hasSamePresentation(selection));
+        DatabaseSelection previous = current;
         current = selection;
         if (unchanged) return;
         initialized = true;
-        previewView = null;
-        content.removeAllViews();
         if (selection == null) {
+            previewView = null;
+            sectionViews = List.of();
+            content.removeAllViews();
             showEmpty();
             return;
         }
+        List<View> children = new ArrayList<>();
+        List<View> nextSections = new ArrayList<>();
         View icon = selection.iconPath() == null || selection.iconPath().isBlank()
                 ? null
                 : new SvgIconView(getContext(), selection.iconPath(), selection.accent());
-        content.addView(DatabaseInspectorViews.identity(getContext(), selection.title(),
-                selection.subtitle(), icon, selection.accent()), new LinearLayout.LayoutParams(-1, -2));
+        View identity = DatabaseInspectorViews.identity(getContext(), selection.title(),
+                selection.subtitle(), icon, selection.accent());
+        identity.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
+        children.add(identity);
         if (selection.preview() != null) {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
             params.topMargin = px(12);
-            previewView = DatabaseInspectorViews.preview(getContext(), selection.preview());
+            if (previewView == null || previous == null || !Objects.equals(previous.preview(), selection.preview()))
+                previewView = DatabaseInspectorViews.preview(getContext(), selection.preview());
             previewView.setVisibility(active ? VISIBLE : INVISIBLE);
-            content.addView(previewView, params);
-        }
+            previewView.setLayoutParams(params);
+            children.add(previewView);
+        } else previewView = null;
         if (!selection.actions().isEmpty()) {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
             params.topMargin = px(17);
@@ -88,22 +99,38 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
                     .mapToObj(index -> new DatabaseSelection.Action(selection.actions().get(index).label(), () -> {
                         if (current != null && index < current.actions().size()) current.actions().get(index).run().run();
                     })).toList();
-            content.addView(DatabaseInspectorViews.actions(getContext(), actions), params);
+            View buttons = DatabaseInspectorViews.actions(getContext(), actions);
+            buttons.setLayoutParams(params);
+            children.add(buttons);
         }
         if (!selection.fields().isEmpty()) {
             LinearLayout section = DatabaseInspectorViews.section(getContext(), tr("details"), "");
             for (DatabaseSelection.Field field : selection.fields()) addMetadata(section, field);
-            addSection(section);
+            addSection(children, section);
         }
         for (int index = 0; index < selection.sections().size(); index++) {
             DatabaseSelection.Section model = selection.sections().get(index);
+            if (previous != null && index < previous.sections().size() && index < sectionViews.size()
+                    && (model.hasSamePresentation(previous.sections().get(index))
+                    || sameTagTarget(model, previous.sections().get(index)))) {
+                View retained = sectionViews.get(index);
+                if (!model.hasSamePresentation(previous.sections().get(index))) {
+                    LinearLayout section = (LinearLayout) retained;
+                    DatabaseInspectorViews.updateTags(section.getChildAt(section.getChildCount() - 1),
+                            model.fields(), model.tagEditor());
+                }
+                children.add(retained);
+                nextSections.add(retained);
+                continue;
+            }
             int sectionIndex = index;
             LinearLayout section = DatabaseInspectorViews.section(getContext(), model.title(), model.subtitle());
             switch (model.kind()) {
                 case POSITION -> section.addView(DatabaseInspectorViews.position(getContext(), model.fields()),
                         new LinearLayout.LayoutParams(-1, -2));
                 case TAGS -> section.addView(DatabaseInspectorViews.tags(getContext(), model.fields(), model.tagEditor(), () -> {
-                    if (current == null || sectionIndex >= current.sections().size()) return null;
+                    if (!active || current == null || sectionIndex >= current.sections().size()
+                            || sectionIndex >= sectionViews.size() || sectionViews.get(sectionIndex) != section) return null;
                     var latest = current.sections().get(sectionIndex).tagEditor();
                     return latest != null && model.tagEditor() != null
                             && latest.target().equals(model.tagEditor().target()) ? latest : null;
@@ -123,7 +150,20 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
                     for (DatabaseSelection.Field field : model.fields()) addMetadata(section, field);
                 }
             }
-            addSection(section);
+            addSection(children, section);
+            nextSections.add(section);
+        }
+        sectionViews = List.copyOf(nextSections);
+        // Keep unchanged previews/editors attached: native resources, focus and drafts survive snapshot updates.
+        for (int i = content.getChildCount() - 1; i >= 0; i--) {
+            if (!children.contains(content.getChildAt(i))) content.removeViewAt(i);
+        }
+        for (int i = 0; i < children.size(); i++) {
+            View child = children.get(i);
+            if (content.getChildAt(i) != child) {
+                if (child.getParent() == content) content.removeView(child);
+                content.addView(child, i);
+            }
         }
     }
 
@@ -132,10 +172,18 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
                 new LinearLayout.LayoutParams(-1, px(29)));
     }
 
-    private void addSection(LinearLayout section) {
+    private static boolean sameTagTarget(DatabaseSelection.Section first, DatabaseSelection.Section second) {
+        return first.kind() == DatabaseSelection.Kind.TAGS && second.kind() == DatabaseSelection.Kind.TAGS
+                && Objects.equals(first.title(), second.title()) && Objects.equals(first.subtitle(), second.subtitle())
+                && first.tagEditor() != null && second.tagEditor() != null
+                && first.tagEditor().target().equals(second.tagEditor().target());
+    }
+
+    private void addSection(List<View> children, LinearLayout section) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = px(17);
-        content.addView(section, params);
+        section.setLayoutParams(params);
+        children.add(section);
     }
 
     private void showEmpty() {

@@ -171,54 +171,85 @@ final class DatabaseInspectorViews {
 
     static View tags(Context context, List<DatabaseSelection.Field> fields, DatabaseSelection.TagEditor editor,
                      Supplier<DatabaseSelection.TagEditor> latestEditor) {
-        LinearLayout content = vertical(context);
-        TextView feedback = text(context, editor == null ? "" : editor.message(), 11, MUTED);
-        feedback.setVisibility(feedback.getText().length() == 0 ? View.GONE : View.VISIBLE);
-        TagFlowLayout tags = new TagFlowLayout(context, 4, 4);
-        for (DatabaseSelection.Field field : fields) {
-            if (field.value() == null || field.value().isBlank()) continue;
-            var tag = new UiTagChip(context, field.value());
+        return new TagsView(context, fields, editor, latestEditor);
+    }
+
+    /** Updates server state without replacing the same target's input, focus or unfinished draft. */
+    static void updateTags(View view, List<DatabaseSelection.Field> fields, DatabaseSelection.TagEditor editor) {
+        ((TagsView) view).update(fields, editor);
+    }
+
+    private static final class TagsView extends LinearLayout {
+        private final TagFlowLayout chips;
+        private final TextView feedback;
+        private final UiTextInput input;
+        private final UiActionButton add;
+        private final Supplier<DatabaseSelection.TagEditor> latestEditor;
+
+        TagsView(Context context, List<DatabaseSelection.Field> fields, DatabaseSelection.TagEditor editor,
+                 Supplier<DatabaseSelection.TagEditor> latestEditor) {
+            super(context);
+            setOrientation(VERTICAL);
+            this.latestEditor = latestEditor;
+            feedback = text(context, "", 11, MUTED);
+            chips = new TagFlowLayout(context, 4, 4);
+            addView(chips, new LinearLayout.LayoutParams(-1, -2));
             if (editor != null) {
-                tag.setOnRemove(tr("remove_tag"), () -> {
+                LinearLayout row = new LinearLayout(context);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                input = new UiTextInput(context);
+                input.setSingleLine(true);
+                input.setHint(tr("tag_input"));
+                row.addView(input, new LinearLayout.LayoutParams(0, px(28), 1));
+                add = action(context, tr("add_tag"), () -> {}, false);
+                LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(-2, px(28));
+                buttonParams.leftMargin = px(6);
+                row.addView(add, buttonParams);
+                UiSearchSubmit.bind(add, () -> {
                     var latest = latestEditor.get();
-                    if (latest == null || !latest.enabled()) return;
-                    try { latest.remove().accept(field.value()); }
-                    catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
-                });
-                tag.setEnabled(editor.enabled());
+                    if (latest == null || !latest.enabled() || input.getText().toString().isBlank()) return;
+                    try {
+                        feedback.setVisibility(View.GONE);
+                        latest.add().accept(input.getText().toString());
+                        input.setText("");
+                    } catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
+                }, input);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+                rowParams.topMargin = px(6);
+                addView(row, rowParams);
+            } else {
+                input = null;
+                add = null;
             }
-            tags.addView(tag, new TagFlowLayout.LayoutParams(-2, px(UiTagChip.HEIGHT_DP)));
+            LinearLayout.LayoutParams feedbackParams = new LinearLayout.LayoutParams(-1, -2);
+            feedbackParams.topMargin = px(6);
+            addView(feedback, feedbackParams);
+            update(fields, editor);
         }
-        content.addView(tags, new LinearLayout.LayoutParams(-1, -2));
-        if (editor != null) {
-            LinearLayout row = new LinearLayout(context);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            UiTextInput input = new UiTextInput(context);
-            input.setSingleLine(true);
-            input.setHint(tr("tag_input"));
-            input.setEnabled(editor.enabled());
-            row.addView(input, new LinearLayout.LayoutParams(0, px(28), 1));
-            UiActionButton add = action(context, tr("add_tag"), () -> {}, false);
-            add.setEnabled(editor.enabled());
-            LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(-2, px(28));
-            buttonParams.leftMargin = px(6);
-            row.addView(add, buttonParams);
-            UiSearchSubmit.bind(add, () -> {
-                var latest = latestEditor.get();
-                if (latest == null || !latest.enabled() || input.getText().toString().isBlank()) return;
-                try {
-                    latest.add().accept(input.getText().toString());
-                    input.setText("");
-                } catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
-            }, input);
-            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
-            rowParams.topMargin = px(6);
-            content.addView(row, rowParams);
+
+        void update(List<DatabaseSelection.Field> fields, DatabaseSelection.TagEditor editor) {
+            feedback.setText(editor == null ? "" : editor.message());
+            feedback.setVisibility(feedback.getText().length() == 0 ? View.GONE : View.VISIBLE);
+            if (input != null) {
+                input.setEnabled(editor != null && editor.enabled());
+                add.setEnabled(editor != null && editor.enabled());
+            }
+            chips.removeAllViews();
+            for (DatabaseSelection.Field field : fields) {
+                if (field.value() == null || field.value().isBlank()) continue;
+                var tag = new UiTagChip(getContext(), field.value());
+                if (editor != null) {
+                    tag.setOnRemove(tr("remove_tag"), () -> {
+                        var latest = latestEditor.get();
+                        if (latest == null || !latest.enabled()) return;
+                        try { latest.remove().accept(field.value()); }
+                        catch (IllegalArgumentException | IllegalStateException failure) { showTagError(feedback); }
+                    });
+                    tag.setEnabled(editor.enabled());
+                }
+                chips.addView(tag, new TagFlowLayout.LayoutParams(-2, px(UiTagChip.HEIGHT_DP)));
+            }
         }
-        LinearLayout.LayoutParams feedbackParams = new LinearLayout.LayoutParams(-1, -2);
-        feedbackParams.topMargin = px(6);
-        content.addView(feedback, feedbackParams);
-        return content;
     }
 
     private static void showTagError(TextView feedback) {

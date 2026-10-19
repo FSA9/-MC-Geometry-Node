@@ -427,6 +427,7 @@ final class DataLibraryValueEditors {
 
     private void commitXyzComponent(AtomicReference<DataLibraryUiRepository.Entry> current,
                                     int component, String text) {
+        if (!canUpdate(current)) return;
         try {
             double value = Double.parseDouble(text.trim());
             if (!Double.isFinite(value)) return;
