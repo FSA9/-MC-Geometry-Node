@@ -9,7 +9,6 @@ import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
@@ -104,6 +103,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final ScrollView typeScroll;
     private final ScrollView rightScroll;
     private final DataLibraryValueEditors valueEditors;
+    private final DataLibraryEntityTypes entityTypes;
     /** Shared by the header and every cached card; width changes only remeasure views. */
     private final UiTableColumns columns = new UiTableColumns(List.of(
             UiTableStyle.rowNumberColumn(),
@@ -112,20 +112,19 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     DataLibraryEntryCard.DISCLOSURE_WIDTH, false),
             UiTableStyle.column("name", 240),
             UiTableStyle.column("type", 144),
+            UiTableStyle.column("registry_type", 180),
             UiTableStyle.column("value", 256),
             UiTableStyle.column("tags", 128)));
     private final LinearLayout breadcrumbTrail;
     private final LinearLayout typeNavigation;
     private final TextView statusView;
     private final TextView resultsView;
-    private final UiSearchInput searchInput;
     private final UiActionButton scopeButton;
     private final DataLibraryToolbar toolbar;
     private UiColumnFilterPopover filterPopover;
     private final Map<String, UiTableFilterHeader> filterHeaders = new HashMap<>();
     private UiSearchableMenu activeMenu;
     private FileContextMenu renameMenu;
-    private final UiActionButton groupButton;
     private final UiIconButton addFolderButton;
     private final View deleteButton;
     private final UiCheckBox selectAll;
@@ -134,8 +133,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final Set<UUID> selectedFolders = selection.folders;
     private final Set<UUID> expandedFolders = new HashSet<>();
     private final Set<UUID> expandedEntries = new HashSet<>();
-    /** Expanded state for the type blocks shown inside each folder. */
-    private final Set<String> expandedTypeGroups = new HashSet<>();
     private final Set<UUID> renderedEntries = selection.rendered;
     private UUID activeFolder;
     private final Map<View, UUID> folderDropRows = new java.util.LinkedHashMap<>();
@@ -146,6 +143,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (!this.suspended) { rebuild(); refresh(); }
     };
     private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
+    private final Runnable entityTypeRefresh = this::refreshEntityTypeSnapshot;
     private final AtomicBoolean authoritativeQueued = new AtomicBoolean();
     private final Runnable repositoryChanged = () -> {
         authoritativeQueued.set(true);
@@ -174,17 +172,17 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private DataLibraryScrollAnchor pendingRightAnchor;
     private View rootDropTarget;
     private boolean dropTargetRegistered;
-    private String search = "";
+    private String registryTypeFilter = "";
     private PortType typeFilter;
     private ColumnFilters columnFilters = ColumnFilters.empty();
     private boolean includeSubfolders;
-    private boolean groupByType;
     private boolean rootExpanded = true;
     private boolean internalDragActive;
     private boolean rebuildPending;
     private Consumer<List<DataLibraryUiRepository.Entry>> selectionListener;
     private List<DataLibraryUiRepository.Entry> publishedSelection;
     private List<String> publishedPaths;
+    private List<String> publishedRegistryTypes;
     private boolean publishingSelection;
     private static DataLibraryUiRepository.Entry clipboardEntry;
 
@@ -199,6 +197,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     public DataLibraryWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
         super(context);
         mountWork = new UiTableBatchWork(this);
+        entityTypes = new DataLibraryEntityTypes(this);
         uiState = Objects.requireNonNull(state);
         columns.restoreCustomWidths(uiState.read(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL).columns());
         columns.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL,
@@ -217,8 +216,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 anchor -> showTypeMenu(anchor, type -> {
                     if (disposed || suspended) return;
                     prepareCreation();
-                    String groupKey = (activeFolder == null ? "root" : activeFolder.toString()) + ":" + type.name();
-                    expandedTypeGroups.remove("!" + groupKey);
                     this.repository.create(activeFolder, type);
                 }, false),
                 () -> {
@@ -229,8 +226,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     clearSelection();
                     this.repository.delete(entries, folders);
                 },
-                this::toggleSubfolderScope, this::applySearch);
-        searchInput = toolbar.searchInput;
+                this::toggleSubfolderScope);
         scopeButton = toolbar.scopeButton;
         addFolderButton = toolbar.addFolderButton;
         deleteButton = toolbar.deleteButton;
@@ -296,7 +292,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         pathRow.addView(breadcrumbScroll, new LayoutParams(0, px(40), 1));
         pathRow.addView(scopeButton, new LayoutParams(-2, px(28)));
         rightPanel.addView(pathRow, new LayoutParams(-1, px(40)));
-        rightPanel.addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         statusView = label(context, "", 11, MUTED);
         statusView.setSingleLine(true);
         statusView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
@@ -312,13 +307,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         resultsView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
         LayoutParams resultsParams = new LayoutParams(0, -1, 1);
         results.addView(resultsView, resultsParams);
-        groupButton = DatabaseWidgets.button(context, tr("geometry_node.data_library.group_by_type"),
-                () -> setGroupByType(!groupByType));
-        groupButton.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
-        updateGroupButton();
-        LayoutParams groupParams = fixed(104, 28);
-        groupParams.rightMargin = px(6);
-        results.addView(groupButton, groupParams);
+        LayoutParams createParams = fixed(26, 26);
+        createParams.rightMargin = px(6);
+        results.addView(toolbar.newEntryButton, createParams);
         results.addView(deleteButton, fixed(26, 26));
         rightPanel.addView(results, new LayoutParams(-1, px(UiTableStyle.RESULT_BAR_HEIGHT)));
         LinearLayout table = new LinearLayout(context);
@@ -353,6 +344,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (publishingSelection) return;
         publishedSelection = null;
         publishedPaths = null;
+        publishedRegistryTypes = null;
         publishSelection();
     }
 
@@ -368,33 +360,29 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return repository.folderPath(activeFolder);
     }
 
+    /** Cached registry identity; live entity lookup belongs to the game-thread metadata resolver. */
+    public String registryType(DataLibraryUiRepository.Entry entry) {
+        if (disposed || !Objects.equals(stateScope, UiStateScopes.current())) return "";
+        return entityTypes.registryType(entry);
+    }
+
     /** Complete stored value for the inspector and its copy action. Rows keep their compact summary. */
     public static String valueDetails(DataLibraryUiRepository.Entry entry) {
         if (entry.value() instanceof String text) return text;
         return DataLibraryValueChanges.serialize(entry);
     }
 
-    /** Presentation preference; grouping keeps the original type-group drag and collapse controls. */
-    public void setGroupByType(boolean value) {
-        if (disposed || groupByType == value) return;
-        groupByType = value;
-        updateGroupButton();
-        rebuild();
-    }
-
-    private void updateGroupButton() {
-        groupButton.setSelected(groupByType);
-        groupButton.setPalette(UiActionButton.Palette.toggle(groupByType));
-    }
-
     private void publishSelection() {
         if (disposed || selectionListener == null || publishingSelection) return;
         List<DataLibraryUiRepository.Entry> entries = selectedEntries();
         List<String> paths = entries.stream().map(entry -> repository.folderPath(entry.parentId())).toList();
-        if (sameSelection(entries, publishedSelection) && paths.equals(publishedPaths)) return;
+        List<String> registryTypes = entries.stream().map(this::registryType).toList();
+        if (sameSelection(entries, publishedSelection) && paths.equals(publishedPaths)
+                && registryTypes.equals(publishedRegistryTypes)) return;
         // Store before notifying: an Inspector refresh may synchronously read or re-register the listener.
         publishedSelection = entries;
         publishedPaths = paths;
+        publishedRegistryTypes = registryTypes;
         publishingSelection = true;
         try {
             selectionListener.accept(entries);
@@ -430,35 +418,24 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void updateScopeButton() {
-        scopeButton.setPalette(UiActionButton.Palette.toggle(includeSubfolders));
+        scopeButton.setPalette(UiTableStyle.rowPalette(includeSubfolders, 0));
         scopeButton.setSelected(includeSubfolders);
         updateFilterIndicator();
-    }
-
-    private void applySearch() {
-        search = searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
-        searchInput.clearFocus();
-        rootExpanded = true;
-        rebuild();
-    }
-
-    private void clearSearch() {
-        searchInput.setText("");
-        search = "";
-        rebuild();
     }
 
     private void prepareCreation() {
         // New folders and entries must remain visible even when a filter was active.
         typeFilter = null;
-        setColumnFilters(ColumnFilters.empty());
+        registryTypeFilter = "";
+        columnFilters = ColumnFilters.empty();
+        updateFilterIndicator();
         rootExpanded = true;
         Map<UUID, DataLibraryUiRepository.Folder> folders = new HashMap<>();
         for (DataLibraryUiRepository.Folder folder : repository.folders()) {
             if (folder != null && folder.id() != null) folders.put(folder.id(), folder);
         }
         collectAncestors(activeFolder, folders, expandedFolders);
-        clearSearch();
+        rebuild();
     }
 
     private void refresh() {
@@ -484,8 +461,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             return;
         }
         DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
+        refreshEntityTypes(next);
         observeAuthority();
-        if (!mountIncomplete && !structurePending && next.sameStructure(snapshot) && !numericMembershipChanged(next)
+        if (!mountIncomplete && !structurePending && next.sameStructure(snapshot) && !valueMembershipChanged(next)
                 && !(folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder))) {
             snapshot = next;
             refreshCardValues(next);
@@ -495,8 +473,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rebuild(next);
     }
 
-    private boolean numericMembershipChanged(DataLibrarySnapshot next) {
-        if (!columnFilters.value().active() || snapshot == null) return false;
+    private boolean valueMembershipChanged(DataLibrarySnapshot next) {
+        if ((!columnFilters.value().active() && registryTypeFilter.isEmpty()) || snapshot == null) return false;
         for (var entry : next.entries.values()) {
             var previous = snapshot.entries.get(entry.id());
             if (previous == null || matches(previous) != matches(entry)) return true;
@@ -510,9 +488,28 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         saveState();
         // Explicit navigation keeps its original focus-loss submission semantics.
         View focused = findFocus();
-        if (focused instanceof EditText && focused != searchInput) focused.clearFocus();
+        if (focused instanceof EditText) focused.clearFocus();
         observeAuthority();
-        rebuild(new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY));
+        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
+        refreshEntityTypes(next);
+        rebuild(next);
+    }
+
+    private void refreshEntityTypeSnapshot() {
+        if (disposed || suspended) return;
+        if (Objects.equals(stateScope, UiStateScopes.current()) && snapshot != null) refreshEntityTypes(snapshot);
+        // Local metadata only; no server query, view rebuild, or render refresh when IDs are unchanged.
+        removeCallbacks(entityTypeRefresh);
+        postDelayed(entityTypeRefresh, 1000);
+    }
+
+    private void refreshEntityTypes(DataLibrarySnapshot next) {
+        entityTypes.refresh(next.entries.values(), () -> {
+            if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot == null) return;
+            if (!registryTypeFilter.isEmpty()) rebuild(snapshot);
+            else refreshCardValues(snapshot);
+            publishSelection();
+        });
     }
 
     private void observeAuthority() {
@@ -581,19 +578,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                     collectAncestors(entry.parentId(), next.folders, visibleFolders);
                 }
             }
-            if (!search.isEmpty()) {
-                for (var folder : next.folders.values()) {
-                    if (folder.name().toLowerCase(Locale.ROOT).contains(search)) {
-                        visibleFolders.add(folder.id());
-                        collectAncestors(folder.parentId(), next.folders, visibleFolders);
-                    }
-                }
-            }
             if (rootExpanded) {
-                addTreeLevel(actions, null, 1, next.childFolders, next.childEntries,
-                        matchedEntries, visibleFolders, new HashSet<>());
+                addTreeLevel(actions, null, 1, next.childFolders, visibleFolders, new HashSet<>());
             }
-            addEntries(actions, activeFolder, 0, next.childEntries, matchedEntries);
+            addEntries(actions, activeFolder, next.childEntries, matchedEntries);
             actions.add(this::updateTypeNavigation);
             actions.add(this::updateNavigationLabels);
             long epoch = ++mountEpoch;
@@ -849,6 +837,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         header.addView(new View(getContext()), new ViewGroup.LayoutParams(-1, -1));
         addColumnLabel(header, "name", "geometry_node.data_library.column_name");
         addColumnLabel(header, "type", "geometry_node.database.type");
+        addColumnLabel(header, "registry_type", "geometry_node.database.registry_type");
         addColumnLabel(header, "value", "geometry_node.data_library.column_value");
         addColumnLabel(header, "tags", "geometry_node.data_library.column_tags");
         return header;
@@ -875,21 +864,19 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private void addTreeLevel(List<Runnable> actions, UUID parentId, int depth,
                               Map<UUID, List<DataLibraryUiRepository.Folder>> childFolders,
-                              Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
-                              Set<UUID> matchedEntries, Set<UUID> visibleFolders, Set<UUID> visited) {
+                              Set<UUID> visibleFolders, Set<UUID> visited) {
         for (DataLibraryUiRepository.Folder folder : childFolders.getOrDefault(parentId, List.of())) {
             if (!visited.add(folder.id())) continue;
             if (isFiltering() && !visibleFolders.contains(folder.id())) continue;
             boolean expanded = isFiltering() || expandedFolders.contains(folder.id());
             actions.add(() -> groupsHost.addView(createFolderRow(folder, depth, expanded), rowParams(null)));
             if (expanded) {
-                addTreeLevel(actions, folder.id(), depth + 1, childFolders, childEntries,
-                        matchedEntries, visibleFolders, visited);
+                addTreeLevel(actions, folder.id(), depth + 1, childFolders, visibleFolders, visited);
             }
         }
     }
 
-    private void addEntries(List<Runnable> actions, UUID parentId, int depth,
+    private void addEntries(List<Runnable> actions, UUID parentId,
                             Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
                             Set<UUID> matchedEntries) {
         List<DataLibraryUiRepository.Entry> candidates = includeSubfolders
@@ -901,73 +888,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 .sorted(Comparator.comparing(DataLibraryUiRepository.Entry::key, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(DataLibraryUiRepository.Entry::id)).toList();
         int rowIndex = 0;
-        if (!groupByType) {
-            for (var entry : entries) {
-                int index = rowIndex++;
-                actions.add(() -> addEntryRow(rightHost, entry, index));
-            }
-            return;
-        }
-        Map<PortType, List<DataLibraryUiRepository.Entry>> byType = new java.util.LinkedHashMap<>();
-        for (DataLibraryUiRepository.Entry entry : entries) {
-            byType.computeIfAbsent(entry.type(), ignored -> new ArrayList<>()).add(entry);
-        }
-        for (Map.Entry<PortType, List<DataLibraryUiRepository.Entry>> group : byType.entrySet()) {
-            PortType type = group.getKey();
-            String groupKey = (parentId == null ? "root" : parentId.toString()) + ":" + type.name();
-            boolean expanded = !expandedTypeGroups.contains("!" + groupKey);
-            AtomicReference<LinearLayout> rowsHost = new AtomicReference<>();
-            actions.add(() -> {
-                DataLibraryDragSurface header = dragSurface(() -> {
-                    DataLibraryUiRepository.Entry first = group.getValue().getFirst();
-                    Set<UUID> ids = new LinkedHashSet<>();
-                    for (DataLibraryUiRepository.Entry entry : group.getValue()) ids.add(entry.id());
-                    return DataLibraryDragPayload.entries(first.id(), first.type(), first.key(), ids);
-                });
-                header.setGravity(Gravity.CENTER_VERTICAL);
-                header.setPadding(px(depth * 14), 0, 0, 0);
-                header.setBackground(solid(UiTheme.Surface.PANEL, 0));
-                UiIconButton disclosure = disclosureButton(expanded, MUTED);
-                disclosure.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
-                TextView title = label(getContext(), displayTypeName(type) + "  (" + group.getValue().size() + ")",
-                        11, MUTED);
-                title.setGravity(Gravity.CENTER_VERTICAL);
-                UiCheckBox check = new UiCheckBox(getContext());
-                check.setContentDescription(tr("geometry_node.data_library.all"));
-                Runnable syncCheck = () -> syncSelectionCheck(check, group.getValue().stream()
-                        .filter(entry -> selected.contains(key(entry))).count(), group.getValue().size());
-                syncCheck.run();
-                check.setOnCheckedChangeListener((button, checked) -> {
-                    for (DataLibraryUiRepository.Entry entry : group.getValue()) {
-                        if (checked) selected.add(key(entry)); else selected.remove(key(entry));
-                    }
-                    updateSelectionViews();
-                });
-                selectionViews.add(syncCheck);
-                LayoutParams checkParams = fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP);
-                checkParams.leftMargin = px(4);
-                checkParams.rightMargin = px(4);
-                header.addView(check, checkParams);
-                header.addView(disclosure, fixed(DataLibraryEntryCard.DISCLOSURE_WIDTH, 26));
-                title.setPadding(px(9), 0, 0, 0);
-                header.addView(title, new LayoutParams(0, px(26), 1));
-                header.setOnClickListener(v -> { String marker = "!" + groupKey; if (!expandedTypeGroups.remove(marker)) expandedTypeGroups.add(marker); rebuild(); });
-                LayoutParams hp = new LayoutParams(-1, px(26));
-                hp.leftMargin = px(depth * 14);
-                rightHost.addView(header, hp);
-                if (!expanded) return;
-                LinearLayout rows = new LinearLayout(getContext());
-                rows.setOrientation(VERTICAL);
-                LayoutParams gp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                gp.leftMargin = px(depth * 14);
-                rightHost.addView(rows, gp);
-                rowsHost.set(rows);
-            });
-            if (!expanded) continue;
-            for (DataLibraryUiRepository.Entry entry : group.getValue()) {
-                int index = rowIndex++;
-                actions.add(() -> addEntryRow(rowsHost.get(), entry, index));
-            }
+        for (var entry : entries) {
+            int index = rowIndex++;
+            actions.add(() -> addEntryRow(rightHost, entry, index));
         }
     }
 
@@ -1105,14 +1028,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean matches(DataLibraryUiRepository.Entry entry) {
         if (typeFilter != null && entry.type() != typeFilter) return false;
         if (!matchesColumns(entry, columnFilters)) return false;
-        return search.isEmpty() || entry.key().toLowerCase(Locale.ROOT).contains(search)
-                || entry.tags().stream().anyMatch(tag -> tag.toLowerCase(Locale.ROOT).contains(search))
-                || entry.type().name().toLowerCase(Locale.ROOT).contains(search)
-                || displayTypeName(entry.type()).toLowerCase(Locale.ROOT).contains(search);
+        return registryTypeFilter.isEmpty() || entityTypes.registryType(entry)
+                .toLowerCase(Locale.ROOT).contains(registryTypeFilter.toLowerCase(Locale.ROOT));
     }
 
     private boolean isFiltering() {
-        return typeFilter != null || columnFilters.active() || !search.isEmpty();
+        return typeFilter != null || columnFilters.active() || !registryTypeFilter.isEmpty();
     }
 
     static boolean matchesColumns(DataLibraryUiRepository.Entry entry, ColumnFilters filters) {
@@ -1128,10 +1049,18 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rebuild();
     }
 
+    private void setRegistryTypeFilter(String value) {
+        if (disposed || suspended || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        registryTypeFilter = Objects.requireNonNullElse(value, "").trim();
+        updateFilterIndicator();
+        rebuild();
+    }
+
     private void updateFilterIndicator() {
         filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
             case "name" -> !columnFilters.name().isEmpty();
             case "type" -> columnFilters.types().active();
+            case "registry_type" -> !registryTypeFilter.isEmpty();
             case "value" -> columnFilters.value().active();
             case "tags" -> !columnFilters.includedTags().isEmpty() || !columnFilters.excludedTags().isEmpty();
             default -> false;
@@ -1153,6 +1082,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 filterPopover.showChoices(anchor, tr("geometry_node.database.type"), options,
                         columnFilters.types(), value -> setColumnFilters(columnFilters.withTypes(value)));
             }
+            case "registry_type" -> filterPopover.showText(anchor, tr("geometry_node.database.registry_type"),
+                    registryTypeFilter, this::setRegistryTypeFilter);
             case "value" -> filterPopover.showNumber(anchor, tr("geometry_node.data_library.column_value"),
                     columnFilters.value(), value -> setColumnFilters(columnFilters.withValue(value)));
             case "tags" -> filterPopover.showTags(anchor, columnFilters.includedTags(), columnFilters.excludedTags(),
@@ -1240,9 +1171,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return card;
     }
 
-    private static void updateRowSummary(DataLibraryEntryCard presentation, DataLibraryUiRepository.Entry entry) {
+    private void updateRowSummary(DataLibraryEntryCard presentation, DataLibraryUiRepository.Entry entry) {
         String summary = DataLibraryValueEditors.compactValueSummary(entry).replace('\n', ' ').replace('\r', ' ');
-        presentation.setSummary(entry, summary);
+        presentation.setSummary(entry, summary, entityTypes.registryType(entry));
     }
 
     private static final class CardBinding {
@@ -1552,12 +1483,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private void saveState() {
         if (restoringState || stateScope == null) return;
         uiState.write(DatabaseViewState.LIBRARY, stateScope, new DatabaseViewState.Library(
-                search, typeFilter == null ? "" : typeFilter.name(), "", includeSubfolders,
-                groupByType, activeFolder == null ? "" : activeFolder.toString()));
+                typeFilter == null ? "" : typeFilter.name(), "", includeSubfolders,
+                activeFolder == null ? "" : activeFolder.toString(), registryTypeFilter));
         uiState.write(DatabaseViewState.LIBRARY_COLUMN_FILTERS, stateScope, columnFilters);
     }
 
     private void switchScope() {
+        entityTypes.cancel(true);
         cancelMount();
         removeCallbacks(refreshTask); refreshScheduled.set(false);
         dismissFilters(); dismissMenus();
@@ -1569,7 +1501,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rightHost.removeAllViews(); groupsHost.removeAllViews(); typeNavigation.removeAllViews();
         folderDropRows.clear(); snapshot = null;
         clearSelection(); updateSelectionViews();
-        expandedFolders.clear(); expandedEntries.clear(); expandedTypeGroups.clear();
+        expandedFolders.clear(); expandedEntries.clear();
         mountLeftAnchor = null; mountRightAnchor = null;
         pendingLeftAnchor = null; pendingRightAnchor = null;
         restoreState();
@@ -1581,7 +1513,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         var value = uiState.read(DatabaseViewState.LIBRARY, stateScope);
         restoringState = true;
         try {
-            search = value.search(); searchInput.setText(search);
+            registryTypeFilter = value.registryType();
             try { typeFilter = PortType.valueOf(value.type()); }
             catch (IllegalArgumentException ignored) { typeFilter = null; }
             columnFilters = uiState.read(DatabaseViewState.LIBRARY_COLUMN_FILTERS, stateScope);
@@ -1590,10 +1522,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 included.add(value.tag());
                 columnFilters = columnFilters.withTags(included, columnFilters.excludedTags());
             }
-            includeSubfolders = value.recursive(); groupByType = value.grouped();
+            includeSubfolders = value.recursive();
             try { activeFolder = UUID.fromString(value.activeFolder()); }
             catch (IllegalArgumentException ignored) { activeFolder = null; }
-            updateGroupButton(); updateScopeButton(); updateFilterIndicator();
+            updateScopeButton(); updateFilterIndicator();
         } finally { restoringState = false; }
     }
 
@@ -1604,6 +1536,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             switchScope();
         }
         suspended = false;
+        removeCallbacks(entityTypeRefresh);
+        postDelayed(entityTypeRefresh, 1000);
         if (!dropTargetRegistered) {
             WorkspaceDragDropRegistry.register(dropTarget);
             dropTargetRegistered = true;
@@ -1616,6 +1550,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (disposed) return;
         saveState();
         disposed = true;
+        removeCallbacks(entityTypeRefresh);
+        entityTypes.cancel(true);
         cancelMount();
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         dismissFilters();
@@ -1629,6 +1565,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         selectionListener = null;
         publishedSelection = null;
         publishedPaths = null;
+        publishedRegistryTypes = null;
         cancelInternalDrag();
         unregisterDropTarget();
         repository.removeChangeListener(repositoryChanged);
@@ -1636,6 +1573,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     @Override public void onHide() {
         saveState();
         suspended = true;
+        removeCallbacks(entityTypeRefresh);
+        entityTypes.cancel(false);
         cancelMount();
         dismissFilters();
         dismissMenus();

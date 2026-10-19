@@ -21,7 +21,7 @@
 
 ## 各层清单
 
-以下列出全部 69 个生产组件源文件：23 个 base、34 个 composite、12 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
+以下列出全部 70 个生产组件源文件：23 个 base、34 个 composite、13 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
 
 ### base：基础能力
 
@@ -57,7 +57,7 @@
 | --- | --- | --- |
 | `nativepreview` | [NativePreviewHost](integration/nativepreview/NativePreviewHost.java)、[ViewportNativePreview](integration/nativepreview/ViewportNativePreview.java)、[ViewportNativePreviewLayer](integration/nativepreview/ViewportNativePreviewLayer.java)、[ViewportNativePreviewView](integration/nativepreview/ViewportNativePreviewView.java) | 共享原生渲染 surface、注册协议、坐标变换、裁剪、attach/detach 和独立 surface 回退。 |
 | `overlay` | [InventoryItemPickerOverlay](integration/overlay/InventoryItemPickerOverlay.java)、[ItemStackTooltipOverlay](integration/overlay/ItemStackTooltipOverlay.java) | 读取客户端背包的选择器与从 ItemStack 获取内容的提示层。 |
-| `valuepreview` | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)、[EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java)、[ItemSlotView](integration/valuepreview/ItemSlotView.java)、[MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java)、[PreviewZoomController](integration/valuepreview/PreviewZoomController.java)、[ValuePreviewStyle](integration/valuepreview/ValuePreviewStyle.java) | 物品、实体和表格实体单元格；标记预览适配项目运行时注册表，缩放与样式辅助类跟随预览。 |
+| `valuepreview` | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)、[EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java)、[ItemPreviewCell](integration/valuepreview/ItemPreviewCell.java)、[ItemSlotView](integration/valuepreview/ItemSlotView.java)、[MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java)、[PreviewZoomController](integration/valuepreview/PreviewZoomController.java)、[ValuePreviewStyle](integration/valuepreview/ValuePreviewStyle.java) | 物品、实体和表格预览单元格；标记预览适配项目运行时注册表，缩放与样式辅助类跟随预览。 |
 
 `InventoryItemPickerOverlay.ItemStackView` 当前是公开嵌套展示组件，背包选择器、`ShopMenuFragment` 和 `ShopEditorOverlay` 都在使用。它随外层文件归入 `integration/overlay`；复用时应识别它是物品展示能力，不能因嵌套在选择器中就下沉到 base。原生桥接只认识 `NativePreviewHost` 协议，由 Graph 的 `Viewport` 实现宿主，不依赖具体编辑器类。
 
@@ -121,11 +121,11 @@
 
 ## 表格
 
-Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资产列表通过 `UiTagStrip` 组合，Graph 属性与数据库详情通过 `TagFlowLayout` 组合。禁止在业务界面另写标签背景、描边、删除图标和 hover 样式。Graph 的 `#` 是显示前缀，不进入底层标签值；删除回调仍由上层提交并维护历史。只读标签不会吞掉行选择手势，删除按钮则独立消费点击。
+Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资产列表通过 `UiTagStrip` 组合，Graph 属性与数据库详情通过 `TagFlowLayout` 组合。禁止在业务界面另写标签背景、描边、删除图标和 hover 样式。上述入口统一直接显示标签文字，不额外添加 `#` 前缀；删除回调仍由上层提交并维护历史。只读标签不会吞掉行选择手势，删除按钮则独立消费点击。
 
 [UiTableColumns](composite/table/UiTableColumns.java) 保存列定义和逻辑宽度；[UiTableRow](composite/table/UiTableRow.java) 让表头、数据行使用同一列模型并处理列边界拖动；[UiTableViewport](composite/table/UiTableViewport.java) 提供横向溢出与测量更新；[UiTableStyle](composite/table/UiTableStyle.java) 提供共享行、单元格、配色和固定序号列。
 
-表头需要列筛选时使用 [UiTableFilterHeader](composite/table/UiTableFilterHeader.java)：标题点击保留排序，右侧独立按钮打开筛选，`setFilterActive()` 标记已启用的条件。序号、勾选等特殊列不设置筛选。按钮右侧留出列宽拖动判定区。
+表头需要列筛选时使用 [UiTableFilterHeader](composite/table/UiTableFilterHeader.java)：标题点击保留排序，右侧独立的 18dp 正方形按钮打开筛选，始终显示一个下拉箭头，`setFilterActive()` 通过背景色标记已启用的条件。序号、勾选等特殊列不设置筛选。按钮右侧留出列宽拖动判定区。
 
 [UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java) 组合公共输入框、复选框和 `UiPopover`，提供关键词、多选（全选／反选）、数字区间、XYZ 区间、标签包含／排除编辑器；每次只打开一份草稿，应用／清除才回调，点击外部／Esc 不提交。它不保存状态、不发查询；调用方使用 `ColumnFilters` 表达条件，在各自数据入口做 AND 匹配，并通过 scoped MEMORY 状态保存。数字边界包含端点，空边界不限制；非数值只在启用数字条件时排除。标签按“包含标签块 → 输入框 → 排除标签块 → 输入框”排列，复用 `UiTagChip` 和 `TagFlowLayout`。Enter 将输入加入本地草稿，标签块可移除；应用时也包含尚未按 Enter 的输入，关闭弹层丢弃草稿。逗号属于标签内容，不作为分隔符。维度等多选菜单可以附加独立 scope 开关。
 
@@ -145,7 +145,8 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 | --- | --- |
 | 物品展示 | [ItemSlotView](integration/valuepreview/ItemSlotView.java) |
 | 实体模板／实体引用展示与转动预览 | [EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java) |
-| 表格中的只读实体值 | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)；64dp 正方形框，纵向留白12dp，窄列自动等比缩小 |
+| 表格／属性栏中的只读实体值 | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)；默认64dp 正方形框，纵向留白12dp，窄列自动等比缩小；`(Context, int preferredSizeDp)` 可指定属性栏尺寸 |
+| 表格／属性栏中的只读物品／方块外观 | [ItemPreviewCell](integration/valuepreview/ItemPreviewCell.java)；复用 `ItemSlotView`，默认尺寸、可配置尺寸构造器和可见性策略与实体单元格一致 |
 | 实体／物品内容缩放 | [PreviewZoomController](integration/valuepreview/PreviewZoomController.java)，通过两个预览组件的 `zoom()` 获取 |
 | 标记类型预览 | [MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java) |
 | 游戏背包物品选择 | [InventoryItemPickerOverlay](integration/overlay/InventoryItemPickerOverlay.java) |
@@ -160,6 +161,10 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 实体展示通过 `setDisplayTemplate()` 绑定保存的模板，或通过 `setDisplayReference(UUID, dimension)` 绑定当前世界实体（空维度表示当前维度）。模板实体在原生渲染线程创建；实体引用按 UUID 和维度校验，不持有或销毁真实实体。状态通知在 UI 线程交付，并忽略旧数据源／移除前的过期渲染结果。
 
 `EntityPreviewCell` 组合该预览与状态文字，保持只读、固定朝向、缩放关闭，点击和普通滚轮交给行／滚动容器。通过 `setTemplate()` / `setReference()` 更新已存在的单元格，并以 `setVisibilityRow(row)` 绑定所属数据行；空值与没有可渲染外观的值留空，未加载和渲染失败保留状态提示，不要再用序列化字符代替预览。
+
+两个预览单元格均接受正数 `preferredSizeDp`，表格继续使用默认64dp，数据库属性栏使用144dp，空间不足时自动缩小。属性栏以 `setVisibilityRow(cell)` 将单元格自身设为完整可见性锚点；面板取消激活时隐藏预览容器，恢复时复用原控件。不要另建属性栏专用原生预览或在业务层复制裁剪判断；尺寸配置不启用缩放，也不改变节点现有行为。
+
+`ItemPreviewCell` 通过 `setStack()` 更新只读物品外观，使用已有 `ItemSlotView` 原生绘制，不开启编辑或滚轮缩放。内容以 `ItemStack.matches` 比较，仅变更时保存副本并刷新原生控件，重复摘要刷新不会重新复制或重置 surface。64dp 预览框上下各留白 12dp，使普通宽度的数据行高为 88dp；窄列与实体单元格一样等比缩小。空 stack 留空并保留布局高度，点击与普通／Ctrl 滚轮交给行和滚动容器。必须以 `setVisibilityRow(row)` 绑定所属数据行，复用基类的整行裁剪与 surface 同步，不能在调用方另写滚动位置判断。数据仓库的业务 helper 将 BLOCK_STATE 转为对应物品外观；没有物品形态的方块留空，方块属性不作为独立方块渲染。注册类型由业务值或调用方异步元数据快照提供，不从预览可见性或绘制结果推导。
 
 原生实体绘制不继承 MUI 父级滚动容器裁剪。表格使用基类 `setFullVisibilityAnchor(row)`：UI 线程在滚动及每次绘制前检查祖先裁剪，只有数据行纵向完整可见、预览框横纵向均完整可见时才提交原生绘制。横向表格允许行宽超过视口。独立 surface 在 MUI `updateSurface()` 读取 alpha 时把裁剪结果编码为零／原透明度，由 MUI 与位置、尺寸一起同步；渲染回调只消费该帧的 alpha、当前绘制 pose 和 `onSurfaceChanged` 尺寸，不比较最新 UI 坐标，也不在渲染线程读取 View 几何，避免连续滚动时错误跳帧造成闪烁。普通节点预览默认不启用整行策略。共享 `NativePreviewHost` 路径仍通过不可变快照校验外部提供的变换，移除组件时注销监听；独立 surface 直接复用 MUI 自身的滚动／绘制监听，不额外注册每个预览的位置监听。
 

@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import icyllis.modernui.view.Gravity;
 import net.minecraft.network.chat.Component;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*;
 
 /** Two database views inside the existing Area; neither owns an independent workspace header. */
@@ -163,7 +164,11 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         var entry = entries.getFirst();
         String type = Component.translatable("geometry_node.port." + entry.type().name().toLowerCase(Locale.ROOT)).getString();
         if(type.startsWith("geometry_node."))type=entry.type().name();
-        var metadata = List.of(new DatabaseSelection.Field(tr("type"), type),
+        boolean registryValue = switch (entry.type()) {
+            case ENTITY, ENTITY_TEMPLATE, ITEM, ITEM_STACK, BLOCK_STATE -> true;
+            default -> false;
+        };
+        var metadata = List.of(new DatabaseSelection.Field(tr("type"), registryValue ? library.registryType(entry) : type),
                 new DatabaseSelection.Field(tr("folder"), repository.folderPath(entry.parentId())),
                 new DatabaseSelection.Field(tr("id"), entry.id().toString()));
         var sections = List.of(
@@ -181,7 +186,22 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                 new DatabaseSelection.Section(tr("node_reference"), tr("reference_hint"), DatabaseSelection.Kind.REFERENCE,
                         List.of(new DatabaseSelection.Field(tr("id"), entry.id().toString()))));
         return new DatabaseSelection(entry.key(), type + " · " + tr("shared_entry"),
-                "/assets/geometry_node/icons/ui/database/library.svg", entry.type().getColor(), List.of(), List.of(), sections);
+                "", entry.type().getColor(), List.of(), List.of(), sections, libraryPreview(entry));
+    }
+    private static DatabaseSelection.Preview libraryPreview(DataLibraryUiRepository.Entry entry) {
+        return switch (entry.type()) {
+            case ENTITY -> entry.value() instanceof java.util.UUID id
+                    ? new DatabaseSelection.EntityPreview(id, "", null) : null;
+            case ENTITY_TEMPLATE -> {
+                var template = EntityTemplateValue.from(entry.value());
+                yield template.isEmpty() ? null : new DatabaseSelection.EntityPreview(null, "", template);
+            }
+            case ITEM, ITEM_STACK, BLOCK_STATE -> {
+                var stack = DataLibraryValuePresentation.previewStack(entry);
+                yield stack.isEmpty() ? null : new DatabaseSelection.ItemPreview(stack);
+            }
+            default -> null;
+        };
     }
     @Override public View getView() { return this; }
     @Override public UiSurfaceId surfaceId() { return registration == null ? null : registration.id(); }

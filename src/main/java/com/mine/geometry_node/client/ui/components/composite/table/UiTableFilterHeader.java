@@ -22,7 +22,8 @@ public final class UiTableFilterHeader extends LinearLayout {
         filter.setText("▾");
         filter.setContentDescription(title);
         filter.setOnClickListener(view -> openFilter.run());
-        LayoutParams params = new LayoutParams(UIUtils.dp2pxInt(18), UIUtils.dp2pxInt(22));
+        int size = UIUtils.dp2pxInt(18);
+        LayoutParams params = new LayoutParams(size, size);
         params.rightMargin = UIUtils.dp2pxInt(5);
         addView(filter, params);
         setFilterActive(false);
@@ -32,7 +33,6 @@ public final class UiTableFilterHeader extends LinearLayout {
 
     public void setFilterActive(boolean active) {
         filter.setSelected(active);
-        filter.setText(active ? "▾•" : "▾");
         filter.setPalette(UiTableStyle.rowPalette(active, UiTheme.Surface.HEADER));
     }
 }

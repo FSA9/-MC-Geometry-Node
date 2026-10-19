@@ -12,8 +12,6 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
 import com.mine.geometry_node.core.query.ColumnFilters;
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
@@ -27,6 +25,7 @@ import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.worldquery.*;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
@@ -59,10 +58,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private static final class RegistryNativeTypeLabels implements NativeTypeLabels {
         @Override public Iterable<String> ids() {
-            List<String> ids = new ArrayList<>();
-            for (var type : BuiltInRegistries.ENTITY_TYPE)
-                ids.add(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
-            return ids;
+            return RegistryDataManager.getAllEntityTypes();
         }
         @Override public String label(String id) {
             Identifier identifier = Identifier.tryParse(id);
@@ -73,13 +69,11 @@ public final class WorldObjectsView extends FrameLayout {
     private final TextView status;
     private final UiActionButton focusButton;
     private ColumnFilters columnFilters = ColumnFilters.empty();
+    private String registryTypeFilter = "";
     private final Map<String, UiTableFilterHeader> filterHeaders = new LinkedHashMap<>();
-    private final UiSearchInput search;
-    private final UiSearchBar searchBar;
     private final UiStateContext uiState;
     private String stateScope;
     private boolean restoringState;
-    private String submittedSearch = "";
     private final Set<String> selected = new LinkedHashSet<>();
     private final Map<String, UiActionButton> rowViews = new LinkedHashMap<>();
     private final Map<String, RowBinding> rowBindings = new LinkedHashMap<>();
@@ -90,6 +84,7 @@ public final class WorldObjectsView extends FrameLayout {
             UiTableStyle.selectionColumn(),
             UiTableStyle.column("name", 240),
             UiTableStyle.column("type", 140),
+            UiTableStyle.column("registry_type", 180),
             UiTableStyle.column("value", 120),
             UiTableStyle.column("dimension", 150),
             UiTableStyle.column("position", 180),
@@ -178,20 +173,6 @@ public final class WorldObjectsView extends FrameLayout {
         column.setOrientation(LinearLayout.VERTICAL);
         column.setBackground(background(UiTheme.Surface.CANVAS));
         body.setPanes(navigation, column);
-        LinearLayout queryPanel = new LinearLayout(context); queryPanel.setOrientation(LinearLayout.VERTICAL);
-        queryPanel.setPadding(px(18),px(6),px(18),px(10));
-        queryPanel.setBackground(background(UiTheme.Surface.PANEL));
-        TextView breadcrumb = label(context,tr("world_breadcrumb"),UiTheme.Text.MUTED);
-        queryPanel.addView(breadcrumb,new LinearLayout.LayoutParams(-1,px(30)));
-        searchBar = new UiSearchBar(context, tr("search"),
-                Component.translatable("geometry_node.asset_library.toolbar.search").getString(), this::submitSearch);
-        search = searchBar.input();
-        LinearLayout queryRow = new LinearLayout(context);
-        queryRow.setBaselineAligned(false);
-        queryRow.setGravity(Gravity.CENTER_VERTICAL);
-        queryRow.addView(searchBar, new LinearLayout.LayoutParams(0, px(32), 1));
-        queryPanel.addView(queryRow, new LinearLayout.LayoutParams(-1, px(32)));
-        column.addView(queryPanel,new LinearLayout.LayoutParams(-1,-2));
         filterPopover = new UiColumnFilterPopover(context, this);
         LinearLayout resultBar=new LinearLayout(context); resultBar.setGravity(Gravity.CENTER_VERTICAL);
         resultBar.setPadding(px(14),0,px(10),0);
@@ -208,7 +189,7 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setContentDescription(tr("select_all"));
         selectAll.setOnCheckedChangeListener((checkbox, checked)->toggleAll());
         tableHeader.addView(UiTableStyle.selectionCell(context, selectAll),new ViewGroup.LayoutParams(-1,-1));
-        for(String key:List.of("name","type","value","dimension","position","lifetime","tags")) addHeader(key);
+        for(String key:List.of("name","type","registry_type","value","dimension","position","lifetime","tags")) addHeader(key);
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,px(UiTableStyle.HEADER_HEIGHT)));
         UiScrollView scroll=new UiScrollView(context); scroll.setFillViewport(true);
@@ -228,33 +209,26 @@ public final class WorldObjectsView extends FrameLayout {
         rebuildNavigation(); updateFilters();
         UiStateScopes.addChangeListener(scopeChanged);
     }
-    private void submitSearch() {
-        if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
-        String nextSearch = search.getText().toString().trim();
-        final WorldObjectQuery nextQuery;
-        try { nextQuery = buildQuery(columnFilters, range, nextSearch); }
-        catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
-        cancelMount();
-        submittedSearch = nextSearch;
-        search.clearFocus();
-        saveState();
-        if (shown && !disposed) submitQuery(nextQuery);
-    }
     private void rebuildNavigation() {
         categoryRows.removeAllViews();categoryButtons.clear();
         addCategory("",tr("all_objects"),
-                navigationCounts.total(),()->{category=null;extraProvider=provider="";queryNow();});
+                navigationCounts.total(),()->selectCategory(null, ""));
         for(var value:WorldObjectCategories.all()) addCategory(value.id(),Component.translatable(value.labelKey()).getString(),
-                navigationCounts.categories().getOrDefault(value.id(), 0L),()->{
-                    category=value;extraProvider=provider="";queryNow();
-                });
+                navigationCounts.categories().getOrDefault(value.id(), 0L),()->selectCategory(value, ""));
         Set<String> known=new HashSet<>();WorldObjectCategories.all().forEach(c->known.addAll(c.providers()));
         java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider).filter(p -> !known.contains(p)),
                 navigationCounts.otherProviders().keySet().stream())
-                .distinct().forEach(id->addCategory("provider:"+id,providerLabel(id),navigationCounts.otherProviders().getOrDefault(id, 0L),()->{
-                            category=null;extraProvider=provider=id;queryNow();
-                        }));
+                .distinct().forEach(id->addCategory("provider:"+id,providerLabel(id),navigationCounts.otherProviders().getOrDefault(id, 0L),
+                        ()->selectCategory(null, id)));
         updateNavigationSelection();
+    }
+    private void selectCategory(WorldObjectCategories.Category nextCategory, String nextProvider) {
+        if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        final WorldObjectQuery nextQuery;
+        try { nextQuery = buildQuery(columnFilters, range, registryTypeFilter, nextCategory, nextProvider); }
+        catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
+        category = nextCategory; extraProvider = provider = nextProvider;
+        saveState(); submitQuery(nextQuery);
     }
     private void addCategory(String id,String name,long count,Runnable action) {
         UiNavigationRow row=new UiNavigationRow(getContext(),name,count);
@@ -291,11 +265,15 @@ public final class WorldObjectsView extends FrameLayout {
 
     private void applyColumns(ColumnFilters next) { applyColumns(next, range); }
     private void applyColumns(ColumnFilters next, WorldObjectQuery.Range nextRange) {
+        applyColumns(next, nextRange, registryTypeFilter);
+    }
+    private void applyColumns(ColumnFilters next, WorldObjectQuery.Range nextRange, String nextRegistryType) {
         if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
         // Let the popover report validation errors while keeping every committed field intact.
-        WorldObjectQuery nextQuery = buildQuery(next, nextRange);
+        WorldObjectQuery nextQuery = buildQuery(next, nextRange, nextRegistryType);
         cancelMount();
         columnFilters = next;
+        registryTypeFilter = nextRegistryType;
         range = nextRange;
         selected.clear(); anchorKey = null; resetDoubleClick();
         saveState(); updateFilters(); updateSelection(); submitQuery(nextQuery);
@@ -327,6 +305,8 @@ public final class WorldObjectsView extends FrameLayout {
             case "type" -> {
                 filterPopover.showChoices(anchor, tr("type"), typeOptions(), columnFilters.types(), v -> applyColumns(columnFilters.withTypes(v)));
             }
+            case "registry_type" -> filterPopover.showText(anchor, tr("registry_type"), registryTypeFilter,
+                    v -> applyColumns(columnFilters, range, v));
             case "value" -> filterPopover.showNumber(anchor, Component.translatable("geometry_node.data_library.column_value").getString(), columnFilters.value(), v -> applyColumns(columnFilters.withValue(v)));
             case "dimension" -> {
                 LinkedHashMap<String, String> options = new LinkedHashMap<>();
@@ -354,21 +334,24 @@ public final class WorldObjectsView extends FrameLayout {
         catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); }
     }
     private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange) {
-        return buildQuery(filters, nextRange, submittedSearch);
+        return buildQuery(filters, nextRange, registryTypeFilter);
     }
-    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String searchText) {
-        Set<String> providers = one(provider), types = Set.of();
-        if (category != null && providers.isEmpty()) providers = category.providers();
-        if (category != null) {
-            Set<String> matching = new LinkedHashSet<>();
-            typeCatalog.stream().filter(t -> category.accepts().test(t.provider(),t.id())).forEach(t -> matching.add(t.id()));
-            // Entity registries can exceed the wire budget; retain provider filtering plus a page predicate.
-            if (!matching.isEmpty() && matching.size() <= WorldObjectQuery.MAX_FILTERS && !category.id().equals("entity")) types = matching;
-            if(category.id().equals("interaction"))types=Set.of("minecraft:interaction");
+    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String nextRegistryType) {
+        return buildQuery(filters, nextRange, nextRegistryType, category, provider);
+    }
+    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String nextRegistryType,
+                                        WorldObjectCategories.Category nextCategory, String nextProvider) {
+        ColumnFilters effectiveFilters = filters;
+        if (nextCategory != null) {
+            String id = "category:" + nextCategory.id();
+            // Compile sidebar and column choices into one AND predicate before the server result limit.
+            Set<String> selectedTypes = filters.types().matches(id) ? Set.of(id) : Set.of();
+            effectiveFilters = filters.withTypes(new ColumnFilters.Choice(true, selectedTypes));
         }
-        return new WorldObjectQuery(nextRange, "", providers, types, searchText,
+        return new WorldObjectQuery(nextRange, "", one(nextProvider), Set.of(), "",
                 Set.of(), Set.of(), Set.of(),
-                128, WorldObjectQuery.MAX_RESULTS, filters, compileNameFallbacks(searchText), compileNameFallbacks(filters.name()));
+                128, WorldObjectQuery.MAX_RESULTS, effectiveFilters, Set.of(), compileNameFallbacks(filters.name()),
+                nextRegistryType);
     }
     private Set<String> compileNameFallbacks(String keyword) {
         if (keyword.isEmpty()) return Set.of();
@@ -388,8 +371,7 @@ public final class WorldObjectsView extends FrameLayout {
         return Set.copyOf(matches);
     }
     private boolean needsFallbackQuery() {
-        return !compileNameFallbacks(submittedSearch).equals(snapshot.query().searchFallbackTypes())
-                || !compileNameFallbacks(columnFilters.name()).equals(snapshot.query().columnNameFallbackTypes());
+        return !compileNameFallbacks(columnFilters.name()).equals(snapshot.query().columnNameFallbackTypes());
     }
     private void submitQuery(WorldObjectQuery query) {
         cancelMount();
@@ -460,6 +442,7 @@ public final class WorldObjectsView extends FrameLayout {
         filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
             case "name" -> !columnFilters.name().isEmpty();
             case "type" -> columnFilters.types().active();
+            case "registry_type" -> !registryTypeFilter.isEmpty();
             case "value" -> columnFilters.value().active();
             case "dimension" -> columnFilters.dimensions().active() || range == WorldObjectQuery.Range.LOADED;
             case "position" -> columnFilters.x().active() || columnFilters.y().active() || columnFilters.z().active();
@@ -486,6 +469,7 @@ public final class WorldObjectsView extends FrameLayout {
     private List<WorldObjectEntry> sortedEntries() {
         Comparator<WorldObjectEntry> comparator = switch (sort) {
             case "type" -> Comparator.comparing(this::displayType, String.CASE_INSENSITIVE_ORDER);
+            case "registry_type" -> Comparator.comparing(WorldObjectEntries::registryType, String.CASE_INSENSITIVE_ORDER);
             case "dimension" -> Comparator.comparing(WorldObjectEntry::dimension);
             case "lifetime" -> Comparator.comparing(WorldObjectEntry::lifetime);
             case "tags" -> Comparator.comparing(entry -> String.join(",",entry.tags()));
@@ -498,6 +482,7 @@ public final class WorldObjectsView extends FrameLayout {
         if (!sortAscending) comparator = comparator.reversed();
         return snapshot.entries().stream().filter(e -> category == null || category.matches(e))
                 .filter(e -> provider.isEmpty() || provider.equals(e.provider()))
+                .filter(e -> WorldObjectQuery.matchesRegistryType(e, registryTypeFilter))
                 .filter(e -> columnFilters.matches(displayName(e), WorldObjectQuery.filterType(e), WorldObjectQuery.numericValue(e),
                         e.dimension(), e.position().x, e.position().y, e.position().z, e.lifetime(), e.tags())).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
     }
@@ -553,6 +538,7 @@ public final class WorldObjectsView extends FrameLayout {
         line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
         cell(line,displayName(entry));
         cell(line,displayType(entry));
+        cell(line,WorldObjectEntries.registryType(entry));
         if (entry.provider().equals("native") && !entry.type().equals("minecraft:interaction")) {
             EntityPreviewCell preview = new EntityPreviewCell(getContext());
             preview.setVisibilityRow(line);
@@ -676,7 +662,8 @@ public final class WorldObjectsView extends FrameLayout {
         var entry=entries.getFirst();
         var position=List.of(new DatabaseSelection.Field("X",number(entry.position().x)),
                 new DatabaseSelection.Field("Y",number(entry.position().y)),new DatabaseSelection.Field("Z",number(entry.position().z)));
-        var metadata=List.of(new DatabaseSelection.Field(tr("type"),typeOption(entry.provider(), entry.type())),
+        var metadata=List.of(new DatabaseSelection.Field(tr("type"), entry.provider().equals("native")
+                ? WorldObjectEntries.registryType(entry) : entry.type()),
                 new DatabaseSelection.Field(tr("lifetime"),lifetimeLabel(entry.lifetime())),
                 new DatabaseSelection.Field(tr("id"),entry.key()));
         var source=new ArrayList<DatabaseSelection.Field>();
@@ -699,7 +686,14 @@ public final class WorldObjectsView extends FrameLayout {
                                         : Component.translatable("geometry_node." + session.tagUpdateMessage()).getString(),
                                 tag -> submitTagEdit(entry, tag, true),
                                 tag -> submitTagEdit(entry, tag, false)) : null),
-                new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)));
+                new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)), entityPreview(entry));
+    }
+    private static DatabaseSelection.EntityPreview entityPreview(WorldObjectEntry entry) {
+        if (!entry.provider().equals("native") || entry.type().equals("minecraft:interaction")) return null;
+        try {
+            return new DatabaseSelection.EntityPreview(UUID.fromString(entry.references().getOrDefault("entityUuid", "")),
+                    entry.dimension(), null);
+        } catch (IllegalArgumentException invalid) { return null; }
     }
     private void submitTagEdit(WorldObjectEntry expected, String tag, boolean add) {
         // Equal inspector text may hide bounds/sub-pixel motion changes. Resolve the latest DTO while
@@ -722,9 +716,9 @@ public final class WorldObjectsView extends FrameLayout {
         if (restoringState || stateScope == null) return;
         uiState.write(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope, columnFilters);
         uiState.write(DatabaseViewState.WORLD, stateScope, new DatabaseViewState.World(
-                submittedSearch, "", "", range.name(),
+                "", "", range.name(),
                 "", provider, "", "", "", category == null ? "" : category.id(),
-                extraProvider, sort, sortAscending));
+                extraProvider, sort, sortAscending, registryTypeFilter));
     }
     private void switchScope() {
         cancelMount();
@@ -747,8 +741,8 @@ public final class WorldObjectsView extends FrameLayout {
         var value = uiState.read(DatabaseViewState.WORLD, stateScope);
         restoringState = true;
         try {
-            submittedSearch = value.search(); search.setText(submittedSearch);
             columnFilters = uiState.read(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope);
+            registryTypeFilter = value.registryType();
             try { range = WorldObjectQuery.Range.valueOf(value.range()); }
             catch (IllegalArgumentException ignored) { range = WorldObjectQuery.Range.GLOBAL; }
             // Migrate former single-choice filters into the independent in-memory column state.

@@ -12,6 +12,20 @@ import java.util.*;
 /** Metadata adapters, shared only with small owner-service snapshot accessors. */
 public final class WorldObjectEntries {
     private WorldObjectEntries() {}
+
+    /**
+     * Returns the registry ID represented by a native entry's server snapshot.
+     * Regular native entities (including interactions) return their entity registry ID, {@link WorldObjectEntry#type()}.
+     * Native {@code minecraft:item} entries return the carried item's registry ID from the {@code itemId} reference,
+     * captured only for a nonempty stack. Missing item metadata returns an empty string, never {@code minecraft:item}.
+     * Nonnative entries return an empty string. This reads snapshot metadata without resolving live entities and
+     * does not change provider, type, entity identity, or category semantics.
+     */
+    public static String registryType(WorldObjectEntry entry) {
+        if (!entry.provider().equals("native")) return "";
+        return entry.type().equals("minecraft:item") ? entry.references().getOrDefault("itemId", "") : entry.type();
+    }
+
     public static WorldObjectEntry graph(String provider, String type, GraphResourceId id, Vec3 position,
                                           AABB bounds, String identity, Map<String, String> extra) {
         Map<String, String> refs = new LinkedHashMap<>(extra);

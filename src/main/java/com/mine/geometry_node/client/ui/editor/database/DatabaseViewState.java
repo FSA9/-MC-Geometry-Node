@@ -14,21 +14,30 @@ public final class DatabaseViewState {
                 com.mine.geometry_node.core.query.ColumnFilters.class,
                 com.mine.geometry_node.core.query.ColumnFilters::empty, value -> value);
     }
-    public record World(String search, String tags, String source, String range, String dimension,
+    public record World(String tags, String source, String range, String dimension,
                         String provider, String type, String typeProvider, String lifetime,
-                        String category, String extraProvider, String sort, boolean ascending) {
+                        String category, String extraProvider, String sort, boolean ascending, String registryType) {
         public World {
-            search = text(search); tags = bounded(tags, 4096); source = text(source); range = text(range);
+            tags = bounded(tags, 4096); source = text(source); range = text(range);
             dimension = text(dimension); provider = text(provider); type = text(type);
             typeProvider = text(typeProvider); lifetime = text(lifetime); category = text(category);
             extraProvider = text(extraProvider); sort = text(sort);
+            registryType = text(registryType);
             if (!java.util.Set.of("GLOBAL", "LOADED").contains(range)) range = "GLOBAL";
-            if (!java.util.Set.of("name", "type", "dimension", "position", "lifetime", "tags").contains(sort)) sort = "name";
+            if (!java.util.Set.of("name", "type", "registry_type", "dimension", "position", "lifetime", "tags").contains(sort)) sort = "name";
+        }
+        public World(String tags, String source, String range, String dimension,
+                     String provider, String type, String typeProvider, String lifetime,
+                     String category, String extraProvider, String sort, boolean ascending) {
+            this(tags, source, range, dimension, provider, type, typeProvider, lifetime,
+                    category, extraProvider, sort, ascending, "");
         }
     }
-    public record Library(String search, String type, String tag, boolean recursive,
-                          boolean grouped, String activeFolder) {
-        public Library { search = bounded(search, 4096); type = text(type); tag = bounded(tag, 4096); activeFolder = text(activeFolder); }
+    public record Library(String type, String tag, boolean recursive, String activeFolder, String registryType) {
+        public Library {
+            type = text(type); tag = bounded(tag, 4096);
+            activeFolder = text(activeFolder); registryType = text(registryType);
+        }
     }
     public record Split(float extentDp) {
         public Split { extentDp = Float.isFinite(extentDp) ? Math.max(0, extentDp) : 216; }
@@ -60,11 +69,11 @@ public final class DatabaseViewState {
     }
     public static final UiStateKey<World> WORLD = new UiStateKey<>("database:world.filters", 1,
             UiStateLifetime.MEMORY, World.class,
-            () -> new World("", "", "", "GLOBAL", "", "", "", "", "", "", "", "name", true),
+            () -> new World("", "", "GLOBAL", "", "", "", "", "", "", "", "name", true),
             value -> value);
     public static final UiStateKey<Library> LIBRARY = new UiStateKey<>("database:library.filters", 1,
             UiStateLifetime.MEMORY, Library.class,
-            () -> new Library("", "", "", false, false, ""), value -> value);
+            () -> new Library("", "", false, "", ""), value -> value);
     public static final UiStateKey<Widths> WORLD_WIDTHS = widths("database:world.columns");
     public static final UiStateKey<Widths> LIBRARY_WIDTHS = widths("database:library.columns");
     private static UiStateKey<Widths> widths(String id) {

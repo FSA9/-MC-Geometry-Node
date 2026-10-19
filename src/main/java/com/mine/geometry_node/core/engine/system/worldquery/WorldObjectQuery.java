@@ -8,7 +8,8 @@ import net.minecraft.world.phys.Vec3;
 public record WorldObjectQuery(Range range, String dimension, Set<String> providers, Set<String> types,
                                String name, Set<String> tags, Set<String> sources, Set<String> lifetimes,
                                double radius, int limit, ColumnFilters columns,
-                               Set<String> searchFallbackTypes, Set<String> columnNameFallbackTypes) {
+                               Set<String> searchFallbackTypes, Set<String> columnNameFallbackTypes,
+                               String registryType) {
     public enum Range { GLOBAL, CURRENT_DIMENSION, LOADED, NEARBY }
     public static final int MAX_RESULTS = 256, MAX_FILTERS = 16, MAX_FILTER_TEXT = 1024;
     // Vanilla ServerboundCustomPayloadPacket.MAX_PAYLOAD_SIZE is 32767 bytes.
@@ -16,7 +17,7 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
     public static final int MAX_REQUEST_BYTES = 30 * 1024, MAX_TOTAL_TEXT = 8192;
     public static final double MAX_RADIUS = 4096;
     public WorldObjectQuery {
-        Objects.requireNonNull(columns); Objects.requireNonNull(range); check(dimension); check(name);
+        Objects.requireNonNull(columns); Objects.requireNonNull(range); check(dimension); check(name); check(registryType);
         providers = filters(providers); types = filters(types); tags = filters(tags);
         sources = filters(sources); lifetimes = filters(lifetimes);
         searchFallbackTypes = fallbackTypes(searchFallbackTypes);
@@ -25,17 +26,25 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
         for (Set<String> values : List.of(providers, types, tags, sources, lifetimes))
             for (String value : values) textBudget += value.length();
         int wireBytes = 128 + ColumnFilters.wireTextBytes(dimension) + ColumnFilters.wireTextBytes(name)
-                + columns.estimatedWireBytes();
+                + columns.estimatedWireBytes() + ColumnFilters.wireTextBytes(registryType);
         for (Set<String> values : List.of(providers, types, tags, sources, lifetimes))
             for (String text : values) wireBytes += ColumnFilters.wireTextBytes(text);
         int fallbackText = 0;
         for (Set<String> values : List.of(searchFallbackTypes, columnNameFallbackTypes))
             for (String text : values) { fallbackText += text.length(); wireBytes += ColumnFilters.wireTextBytes(text); }
-        if (textBudget + columns.textLength() + fallbackText > MAX_TOTAL_TEXT || wireBytes > MAX_REQUEST_BYTES)
+        if (textBudget + columns.textLength() + fallbackText + registryType.length() > MAX_TOTAL_TEXT || wireBytes > MAX_REQUEST_BYTES)
             throw new IllegalArgumentException("World query combined request budget exceeded");
         if (textBudget > 4096) throw new IllegalArgumentException("World query request text budget exceeded");
         if (!Double.isFinite(radius) || radius < 0 || radius > MAX_RADIUS || limit < 1 || limit > MAX_RESULTS)
             throw new IllegalArgumentException("Invalid world query limits");
+    }
+    /** Compatibility constructor for requests without a registry-type keyword. */
+    public WorldObjectQuery(Range range, String dimension, Set<String> providers, Set<String> types,
+                            String name, Set<String> tags, Set<String> sources, Set<String> lifetimes,
+                            double radius, int limit, ColumnFilters columns,
+                            Set<String> searchFallbackTypes, Set<String> columnNameFallbackTypes) {
+        this(range, dimension, providers, types, name, tags, sources, lifetimes, radius, limit, columns,
+                searchFallbackTypes, columnNameFallbackTypes, "");
     }
     /** Compatibility constructor for requests without column filters. */
     public WorldObjectQuery(Range range, String dimension, Set<String> providers, Set<String> types,
@@ -81,6 +90,13 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
     private static void check(String value) {
         if (value == null || value.length() > MAX_FILTER_TEXT) throw new IllegalArgumentException("World query filter too long");
     }
+    public boolean matchesRegistryType(WorldObjectEntry entry) {
+        return matchesRegistryType(entry, registryType);
+    }
+    public static boolean matchesRegistryType(WorldObjectEntry entry, String keyword) {
+        return keyword.isEmpty() || WorldObjectEntries.registryType(entry).toLowerCase(Locale.ROOT)
+                .contains(keyword.toLowerCase(Locale.ROOT));
+    }
     public boolean matchesMetadata(WorldObjectEntry entry) {
         String rawType = rawType(entry);
         String effectiveName = entry.name().isEmpty() && columnNameFallbackTypes.contains(rawType)
@@ -92,6 +108,7 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
                 && entry.tags().containsAll(tags)
                 && (sources.isEmpty() || sources.contains(entry.source()))
                 && (lifetimes.isEmpty() || lifetimes.contains(entry.lifetime()))
+                && matchesRegistryType(entry)
                 && columns.matches(effectiveName, filterType(entry), numericValue(entry), entry.dimension(),
                         entry.position().x, entry.position().y, entry.position().z, entry.lifetime(), entry.tags());
     }

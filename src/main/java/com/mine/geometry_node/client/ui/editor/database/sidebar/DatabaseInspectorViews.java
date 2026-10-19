@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemPreviewCell;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -79,6 +81,27 @@ final class DatabaseInspectorViews {
             row.addView(button, params);
         }
         return row;
+    }
+
+    static View preview(Context context, DatabaseSelection.Preview source) {
+        FrameLayout frame = new FrameLayout(context);
+        View preview = switch (source) {
+            case DatabaseSelection.EntityPreview entity -> {
+                EntityPreviewCell cell = new EntityPreviewCell(context, 144);
+                cell.setVisibilityRow(cell);
+                if (entity.template() != null) cell.setTemplate(entity.template());
+                else cell.setReference(entity.entityId(), entity.dimension());
+                yield cell;
+            }
+            case DatabaseSelection.ItemPreview item -> {
+                ItemPreviewCell cell = new ItemPreviewCell(context, 144);
+                cell.setVisibilityRow(cell);
+                cell.setStack(item.stack());
+                yield cell;
+            }
+        };
+        frame.addView(preview, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        return frame;
     }
 
     static LinearLayout section(Context context, String title, String subtitle) {

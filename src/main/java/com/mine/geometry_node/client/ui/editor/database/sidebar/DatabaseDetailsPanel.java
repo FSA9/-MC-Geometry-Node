@@ -32,6 +32,8 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     private final LinearLayout content;
     private DatabaseSelection current;
     private boolean initialized;
+    private boolean active;
+    private View previewView;
 
     private DatabaseDetailsPanel(Context context, DatabaseWindow owner) {
         super(context);
@@ -44,7 +46,15 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     }
 
     @Override public View getView() { return this; }
-    @Override public void onSelected() { refresh(); }
+    @Override public void onSelected() {
+        active = true;
+        refresh();
+        if (previewView != null) previewView.setVisibility(VISIBLE);
+    }
+    @Override public void onDeselected() {
+        active = false;
+        if (previewView != null) previewView.setVisibility(INVISIBLE);
+    }
 
     public void refresh() {
         DatabaseSelection selection = owner.selection();
@@ -52,6 +62,7 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
         current = selection;
         if (unchanged) return;
         initialized = true;
+        previewView = null;
         content.removeAllViews();
         if (selection == null) {
             showEmpty();
@@ -62,6 +73,13 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
                 : new SvgIconView(getContext(), selection.iconPath(), selection.accent());
         content.addView(DatabaseInspectorViews.identity(getContext(), selection.title(),
                 selection.subtitle(), icon, selection.accent()), new LinearLayout.LayoutParams(-1, -2));
+        if (selection.preview() != null) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.topMargin = px(12);
+            previewView = DatabaseInspectorViews.preview(getContext(), selection.preview());
+            previewView.setVisibility(active ? VISIBLE : INVISIBLE);
+            content.addView(previewView, params);
+        }
         if (!selection.actions().isEmpty()) {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
             params.topMargin = px(17);

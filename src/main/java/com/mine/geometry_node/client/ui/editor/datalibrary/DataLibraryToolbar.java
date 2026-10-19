@@ -4,69 +4,29 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
-import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-/** Search and creation commands. */
-final class DataLibraryToolbar extends LinearLayout {
+/** Creation, deletion and directory scope controls, mounted in their owning toolbar rows. */
+final class DataLibraryToolbar {
     final UiIconButton addFolderButton;
+    final UiIconButton newEntryButton;
     final UiIconButton deleteButton;
     final UiActionButton scopeButton;
-    final UiSearchBar searchBar;
-    final UiSearchInput searchInput;
-    private final UiActionButton newEntryButton;
 
     DataLibraryToolbar(Context context, Runnable addFolder, Consumer<View> addEntry,
-                       Runnable delete, Runnable toggleScope, Runnable search) {
-        super(context);
-        setOrientation(VERTICAL);
-        setPadding(px(10), 0, px(10), px(8));
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(UiTheme.Surface.PANEL);
-        setBackground(background);
-
-        LinearLayout queries = new LinearLayout(context);
-        queries.setBaselineAligned(false);
-        queries.setGravity(Gravity.CENTER_VERTICAL);
-        addView(queries, new LayoutParams(-1, px(32)));
-        searchBar = new UiSearchBar(context, tr("geometry_node.data_library.search"),
-                tr("geometry_node.asset_library.toolbar.search"), search);
-        searchInput = searchBar.input();
-        queries.addView(searchBar, new LayoutParams(0, px(32), 1));
-        newEntryButton = action(context, tr("geometry_node.data_library.add"));
-        newEntryButton.setOnClickListener(addEntry::accept);
-        queries.addView(newEntryButton, dimensions(104, 32, 8));
-
-        scopeButton = action(context, tr("geometry_node.data_library.include_subfolders"));
-        scopeButton.setOnClickListener(view -> toggleScope.run());
-
-        // Mounted by the window in the directory heading and results toolbar respectively.
+                       Runnable delete, Runnable toggleScope) {
+        scopeButton = DatabaseWidgets.button(context, tr("geometry_node.data_library.include_subfolders"), toggleScope);
         addFolderButton = icon(context, SvgIconView.Icon.PLUS, "geometry_node.data_library.add_folder");
         addFolderButton.setOnClickListener(view -> addFolder.run());
+        newEntryButton = icon(context, SvgIconView.Icon.PLUS, "geometry_node.data_library.add");
+        newEntryButton.setOnClickListener(addEntry::accept);
         deleteButton = icon(context, SvgIconView.Icon.CLEAR, "geometry_node.common.delete");
         deleteButton.setOnClickListener(view -> delete.run());
-    }
-
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int available = Math.max(0, MeasureSpec.getSize(widthMeasureSpec) - getPaddingLeft() - getPaddingRight());
-        newEntryButton.getLayoutParams().width = Math.min(px(104), Math.max(px(56), available / 3));
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-    }
-
-    private static UiActionButton action(Context context, String text) {
-        return DatabaseWidgets.button(context, text, () -> {});
     }
 
     private static UiIconButton icon(Context context, SvgIconView.Icon icon, String key) {
@@ -76,12 +36,5 @@ final class DataLibraryToolbar extends LinearLayout {
         return button;
     }
 
-    private static LayoutParams dimensions(int width, int height, int margin) {
-        LayoutParams params = new LayoutParams(px(width), px(height));
-        params.leftMargin = px(margin);
-        return params;
-    }
-
-    private static int px(float value) { return UIUtils.dp2pxInt(value); }
     private static String tr(String key) { return Component.translatable(key).getString(); }
 }

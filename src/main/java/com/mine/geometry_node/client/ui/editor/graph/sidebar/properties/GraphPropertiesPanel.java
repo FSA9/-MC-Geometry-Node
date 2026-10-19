@@ -424,7 +424,6 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
 
     private View createTagChip(String tag) {
         UiTagChip chip = new UiTagChip(getContext(), tag);
-        chip.setPrefix("#");
         chip.setOnRemove(tr("geometry_node.common.delete"), () -> removeTag(tag));
         return chip;
     }

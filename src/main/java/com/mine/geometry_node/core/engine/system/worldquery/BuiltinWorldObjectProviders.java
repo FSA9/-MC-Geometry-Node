@@ -13,6 +13,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.*;
 import java.util.*;
 import com.mine.geometry_node.core.engine.metadata.*;
@@ -165,6 +166,13 @@ final class BuiltinWorldObjectProviders {
                 if (!sink.scan()) return;
                 if (entity.isRemoved()) continue;
                 String dim = dimension(level);
+                // Server snapshot metadata: type remains the entity registry ID; itemId describes the carried item.
+                Map<String, String> references = new LinkedHashMap<>();
+                references.put("entityUuid", entity.getUUID().toString());
+                if (entity instanceof ItemEntity itemEntity) {
+                    var stack = itemEntity.getItem();
+                    if (!stack.isEmpty()) references.put("itemId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+                }
                 if (!sink.emit(new WorldObjectEntry(WorldObjectEntry.key("native", "", entity.getUUID().toString()), "native",
                         BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(),
                         entity.hasCustomName() ? entity.getCustomName().getString() : "", dim,
@@ -173,7 +181,7 @@ final class BuiltinWorldObjectProviders {
                                 ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT).customTags() : List.of(),
                         "", "loaded",
                         (entity instanceof net.minecraft.world.entity.Interaction || SceneNativeEntities.eligible(entity)) ? entity.getUUID() : null,
-                        entity.getId(), Map.of("entityUuid", entity.getUUID().toString())))) return;
+                        entity.getId(), references))) return;
             }
         });
     }

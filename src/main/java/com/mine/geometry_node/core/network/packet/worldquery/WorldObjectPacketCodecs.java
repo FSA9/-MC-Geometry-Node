@@ -29,6 +29,7 @@ final class WorldObjectPacketCodecs {
         b.writeDouble(q.radius()); b.writeVarInt(q.limit()); columns(b, q.columns());
         strings(b, q.searchFallbackTypes(), ColumnFilters.MAX_TEXT);
         strings(b, q.columnNameFallbackTypes(), ColumnFilters.MAX_TEXT);
+        b.writeUtf(q.registryType(), WorldObjectQuery.MAX_FILTER_TEXT);
     }
     static WorldObjectQuery query(RegistryFriendlyByteBuf b) {
         DecodeBudget budget = new DecodeBudget();
@@ -41,8 +42,9 @@ final class WorldObjectPacketCodecs {
         ColumnFilters columns = columns(b, budget);
         Set<String> searchFallbackTypes = budget.set(b, ColumnFilters.MAX_CHOICES, ColumnFilters.MAX_TEXT, TextScope.FALLBACK);
         Set<String> columnNameFallbackTypes = budget.set(b, ColumnFilters.MAX_CHOICES, ColumnFilters.MAX_TEXT, TextScope.FALLBACK);
+        String registryType = budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.COLUMN);
         return new WorldObjectQuery(WorldObjectQuery.Range.values()[range], dimension, providers, types, name,
-                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes);
+                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType);
     }
     private static Set<String> filters(RegistryFriendlyByteBuf b, DecodeBudget budget) {
         return budget.set(b, WorldObjectQuery.MAX_FILTERS, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.LEGACY);

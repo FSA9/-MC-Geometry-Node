@@ -144,7 +144,6 @@ final class AssetFileItemView extends LinearLayout {
             nameRow.addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
             if (!mTags.isEmpty()) {
                 UiTagStrip tagRow = new UiTagStrip(getContext());
-                tagRow.setPrefix("#");
                 tagRow.setPadding(dp2pxInt(8), 0, 0, 0);
                 tagRow.setTags(mTags);
                 nameRow.addView(tagRow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));

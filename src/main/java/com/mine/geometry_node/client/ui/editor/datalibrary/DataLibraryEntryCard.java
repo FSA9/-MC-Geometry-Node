@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemPreviewCell;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
@@ -29,7 +30,9 @@ final class DataLibraryEntryCard {
     private final DataLibraryDragSurface surface;
     private final TextView name;
     private final TextView value;
+    private final TextView registryType;
     private final EntityPreviewCell entityPreview;
+    private final ItemPreviewCell itemPreview;
     private final TextView rowNumber;
     private final UiTagStrip tags;
     private final UiCheckBox check;
@@ -66,11 +69,16 @@ final class DataLibraryEntryCard {
         header.addView(name, new ViewGroup.LayoutParams(-1, -1));
         header.addView(UiTableStyle.cell(context, typeName, UiTheme.Text.NORMAL),
                 new ViewGroup.LayoutParams(-1, -1));
+        registryType = UiTableStyle.cell(context, "", UiTheme.Text.NORMAL);
+        header.addView(registryType, new ViewGroup.LayoutParams(-1, -1));
         boolean entity = type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE;
+        boolean item = type == PortType.BLOCK_STATE || type == PortType.ITEM || type == PortType.ITEM_STACK;
         entityPreview = entity ? new EntityPreviewCell(context) : null;
         if (entityPreview != null) entityPreview.setVisibilityRow(header);
-        value = entity ? null : UiTableStyle.cell(context, "", UiTheme.Text.SECONDARY);
-        header.addView(entity ? entityPreview : value, new ViewGroup.LayoutParams(-1, -1));
+        itemPreview = item ? new ItemPreviewCell(context) : null;
+        if (itemPreview != null) itemPreview.setVisibilityRow(header);
+        value = entity || item ? null : UiTableStyle.cell(context, "", UiTheme.Text.SECONDARY);
+        header.addView(entity ? entityPreview : item ? itemPreview : value, new ViewGroup.LayoutParams(-1, -1));
         tags = new UiTagStrip(context);
         header.addView(tags, new ViewGroup.LayoutParams(-1, -1));
         surface.addView(header, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -94,12 +102,21 @@ final class DataLibraryEntryCard {
     }
 
     void setSummary(DataLibraryUiRepository.Entry entry, String summary) {
+        setSummary(entry, summary, "");
+    }
+
+    /** resolvedEntityType belongs to the caller's current metadata snapshot, independently of preview visibility. */
+    void setSummary(DataLibraryUiRepository.Entry entry, String summary, String resolvedEntityType) {
+        String registryId = DataLibraryValuePresentation.registryType(entry, resolvedEntityType);
+        if (!Objects.equals(registryType.getText().toString(), registryId)) registryType.setText(registryId);
         if (entityPreview != null) {
             if (entry.type() == PortType.ENTITY_TEMPLATE) {
                 entityPreview.setTemplate(EntityTemplateValue.from(entry.value()));
             } else {
                 entityPreview.setReference(entry.value() instanceof UUID id ? id : null, "");
             }
+        } else if (itemPreview != null) {
+            itemPreview.setStack(DataLibraryValuePresentation.previewStack(entry));
         } else {
             if (!Objects.equals(value.getText().toString(), summary)) value.setText(summary);
             value.setTooltipText(summary);

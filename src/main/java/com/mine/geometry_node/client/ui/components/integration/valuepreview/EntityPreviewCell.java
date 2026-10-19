@@ -19,10 +19,18 @@ public final class EntityPreviewCell extends ViewGroup {
     public static final int VERTICAL_PADDING_DP = 12;
     private final EntityTemplatePreviewView preview;
     private final UiDisplayText placeholder;
+    private final int preferredSizeDp;
     private int previewSize;
 
     public EntityPreviewCell(Context context) {
+        this(context, PREVIEW_SIZE_DP);
+    }
+
+    /** Preferred square size for non-table hosts; ordinary table cells keep their 64dp default. */
+    public EntityPreviewCell(Context context, int preferredSizeDp) {
         super(context);
+        if (preferredSizeDp <= 0) throw new IllegalArgumentException("Preview size must be positive");
+        this.preferredSizeDp = preferredSizeDp;
         preview = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.FIXED);
         placeholder = new UiDisplayText(context, "", 11, UiTheme.Text.MUTED);
         placeholder.setGravity(Gravity.CENTER);
@@ -57,8 +65,8 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
-        int width = resolveSize(px(PREVIEW_SIZE_DP + 15), widthSpec);
-        int desiredSize = Math.min(px(PREVIEW_SIZE_DP), Math.max(0, width - px(15)));
+        int width = resolveSize(px(preferredSizeDp + 15), widthSpec);
+        int desiredSize = Math.min(px(preferredSizeDp), Math.max(0, width - px(15)));
         int height = resolveSize(desiredSize + px(VERTICAL_PADDING_DP * 2), heightSpec);
         previewSize = Math.min(desiredSize, Math.max(0, height - px(VERTICAL_PADDING_DP * 2)));
         int square = MeasureSpec.makeMeasureSpec(previewSize, MeasureSpec.EXACTLY);
