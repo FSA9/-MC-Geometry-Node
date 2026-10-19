@@ -46,16 +46,14 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     private void showStatus(EntityTemplatePreviewView.Status status) {
-        placeholder.setVisibility(status == EntityTemplatePreviewView.Status.READY ? GONE : VISIBLE);
-        if (status != EntityTemplatePreviewView.Status.READY) {
-            String key = switch (status) {
-                case EMPTY -> "empty";
-                case UNAVAILABLE -> "unavailable";
-                case NO_APPEARANCE -> "no_appearance";
-                default -> "error";
-            };
-            placeholder.setText(Component.translatable("geometry_node.ui.entity_preview." + key).getString());
-        }
+        String key = switch (status) {
+            case UNAVAILABLE -> "unavailable";
+            case ERROR -> "error";
+            default -> null;
+        };
+        placeholder.setText(key == null ? ""
+                : Component.translatable("geometry_node.ui.entity_preview." + key).getString());
+        placeholder.setVisibility(key == null ? GONE : VISIBLE);
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {

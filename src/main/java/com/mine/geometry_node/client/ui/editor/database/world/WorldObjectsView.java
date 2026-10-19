@@ -487,8 +487,7 @@ public final class WorldObjectsView extends FrameLayout {
                 preview.setReference(entityId, entry.dimension());
                 line.addView(preview, new ViewGroup.LayoutParams(-1, -1));
             } else {
-                cell(line, entry.provider().equals("native")
-                        ? Component.translatable("geometry_node.ui.entity_preview.no_appearance").getString() : "—");
+                cell(line, "");
             }
             cell(line,dimensionLabel(entry.dimension()));
             cell(line,position(entry));

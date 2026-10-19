@@ -79,7 +79,7 @@
 
 实体展示通过 `setDisplayTemplate()` 绑定保存的模板，或通过 `setDisplayReference(UUID, dimension)` 绑定当前世界实体（空维度表示当前维度）。模板实体在原生渲染线程创建；实体引用按 UUID 和维度校验，不持有或销毁真实实体。状态通知在 UI 线程交付，并忽略旧数据源／移除前的过期渲染结果。
 
-`EntityPreviewCell` 组合该预览与状态文字，保持只读、固定朝向、缩放关闭，点击和普通滚轮交给行／滚动容器。通过 `setTemplate()` / `setReference()` 更新已存在的单元格，并以 `setVisibilityRow(row)` 绑定所属数据行；空值、未加载、无外观和渲染失败均有状态提示，不要再用序列化字符代替预览。
+`EntityPreviewCell` 组合该预览与状态文字，保持只读、固定朝向、缩放关闭，点击和普通滚轮交给行／滚动容器。通过 `setTemplate()` / `setReference()` 更新已存在的单元格，并以 `setVisibilityRow(row)` 绑定所属数据行；空值与没有可渲染外观的值留空，未加载和渲染失败保留状态提示，不要再用序列化字符代替预览。
 
 原生实体绘制不继承 MUI 父级滚动容器裁剪。表格使用基类 `setFullVisibilityAnchor(row)`：UI 线程在滚动及每次绘制前检查祖先裁剪，只有数据行纵向完整可见、预览框横纵向均完整可见时才提交原生绘制。横向表格允许行宽超过视口。独立 surface 在 MUI `updateSurface()` 读取 alpha 时把裁剪结果编码为零／原透明度，由 MUI 与位置、尺寸一起同步；渲染回调只消费该帧的 alpha、当前绘制 pose 和 `onSurfaceChanged` 尺寸，不比较最新 UI 坐标，也不在渲染线程读取 View 几何，避免连续滚动时错误跳帧造成闪烁。普通节点预览默认不启用整行策略。共享 `NativePreviewHost` 路径仍通过不可变快照校验外部提供的变换，移除组件时注销监听；独立 surface 直接复用 MUI 自身的滚动／绘制监听，不额外注册每个预览的位置监听。
 

@@ -239,14 +239,14 @@ final class DataLibraryValueEditors {
     }
 
     static String compactValueSummary(DataLibraryUiRepository.Entry entry) {
+        if (entry.value() == null) return "";
         if (entry.type() == PortType.AREA) return areaSummary(entry.value());
         if (isSummaryType(entry.type())) return valueSummary(entry);
         if (entry.type() == PortType.ITEM_STACK && entry.value() instanceof ItemStack stack) {
             return stack.isEmpty() ? "" : stack.getHoverName().getString() + " x" + stack.getCount();
         }
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
-            return entry.value() == null ? tr("geometry_node.data_library.reference_unavailable")
-                    : tr("geometry_node.data_library.preview_available");
+            return tr("geometry_node.data_library.preview_available");
         }
         String value = String.valueOf(entry.value());
         return value.length() <= 42 ? value : value.substring(0, 39) + "...";
