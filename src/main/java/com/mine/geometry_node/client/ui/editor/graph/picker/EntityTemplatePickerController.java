@@ -21,6 +21,7 @@ public final class EntityTemplatePickerController {
     private static final AtomicInteger NEXT_REQUEST_ID = new AtomicInteger(1);
 
     private static Session activeSession;
+    private static volatile long connectionGeneration;
 
     private EntityTemplatePickerController() {
     }
@@ -28,7 +29,12 @@ public final class EntityTemplatePickerController {
     public static boolean open(Consumer<EntityTemplateValue> onPicked, Runnable onDismissed) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.execute(() -> open(onPicked, onDismissed));
+            long generation = connectionGeneration;
+            minecraft.execute(() -> {
+                if (generation != connectionGeneration || !open(onPicked, onDismissed)) {
+                    if (onDismissed != null) MuiModApi.postToUiThread(onDismissed);
+                }
+            });
             return true;
         }
         if (activeSession != null || minecraft.player == null || minecraft.level == null) {
@@ -88,7 +94,22 @@ public final class EntityTemplatePickerController {
     }
 
     public static void reset() {
+        reset(MuiModApi::postToUiThread);
+    }
+
+    static void reset(Consumer<Runnable> uiQueue) {
+        connectionGeneration++;
+        Session previous = activeSession;
         activeSession = null;
+        if (previous != null) uiQueue.accept(() -> complete(previous, EntityTemplateValue.EMPTY));
+    }
+
+    private static void complete(Session session, EntityTemplateValue template) {
+        try {
+            if (!template.isEmpty() && session.onPicked != null) session.onPicked.accept(template);
+        } finally {
+            if (session.onDismissed != null) session.onDismissed.run();
+        }
     }
 
     public static boolean isActive() {
@@ -105,14 +126,9 @@ public final class EntityTemplatePickerController {
             minecraft.player.sendSystemMessage(Component.translatable(messageKey));
         }
 
-        MuiModApi.postToUiThread(() -> {
-            if (!template.isEmpty() && session.onPicked != null) {
-                session.onPicked.accept(template);
-            }
-            if (session.onDismissed != null) {
-                session.onDismissed.run();
-            }
-        });
+        long generation = connectionGeneration;
+        MuiModApi.postToUiThread(() -> complete(session,
+                generation == connectionGeneration ? template : EntityTemplateValue.EMPTY));
     }
 
     private static final class Session {

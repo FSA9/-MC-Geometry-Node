@@ -365,7 +365,20 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) {
+            mPressed = false;
+            mDragging = false;
+            setPressed(false);
+        }
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
+        mPressed = false;
+        mDragging = false;
+        setPressed(false);
         replacePreviewEntity(null);
         super.onDetachedFromWindow();
     }

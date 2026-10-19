@@ -20,7 +20,7 @@ public class CustomHintRenderer implements UIHintRenderer {
             return new ColorRampView(context, nodeData, editorContext);
         }
         if (DataLibraryReference.INFO_WIDGET_ID.equals(row.customWidgetId())) {
-            return new DataLibraryReferenceInfoView(context, nodeData, editorContext);
+            return new DataLibraryReferenceInfoView(context, nodeData);
         }
         return null;
     }

@@ -76,6 +76,7 @@ public class UiNumericInput extends FrameLayout {
     private double mDragStartValue;
     private Object mDragOldValue;
     private EditText mEditor;
+    private boolean mDiscardEditorFocusLoss;
 
     public UiNumericInput(Context context, Binding binding, Spec spec, String inlineLabel,
                           float textSizeDp, java.util.function.Consumer<EditText> configureEditor) {
@@ -166,9 +167,7 @@ public class UiNumericInput extends FrameLayout {
         if (mSpec != null && !isEnabled()) {
             // A child EditText stays enabled when its parent is disabled. Cancel its draft
             // now so re-enabling the control cannot commit a stale edit on later focus loss.
-            closeEditor(false);
-            clearInteractionState();
-            setDisplayValue(mCommittedValue, false);
+            cancelInteraction();
         }
         invalidate();
     }
@@ -248,6 +247,24 @@ public class UiNumericInput extends FrameLayout {
         }
     }
 
+    @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) cancelInteraction();
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        cancelInteraction();
+        super.onDetachedFromWindow();
+    }
+
+    private void cancelInteraction() {
+        closeEditor(false);
+        clearInteractionState();
+        setDisplayValue(mCommittedValue, false);
+    }
+
     private void handleClick(float x) {
         if (mSpec.showArrows() && mHovered) {
             float arrowWidth = UIUtils.dp2px(ARROW_HIT_WIDTH_DP);
@@ -284,13 +301,26 @@ public class UiNumericInput extends FrameLayout {
 
         EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(textSizeDp, TEXT_PADDING_DP,
                 UiTheme.Metrics.RADIUS_SMALL, UiTheme.Metrics.BORDER, COLOR_TEXT, UiTheme.Text.HINT,
-                COLOR_BG_ACTIVE, COLOR_BORDER_HOVER));
+                COLOR_BG_ACTIVE, COLOR_BORDER_HOVER)) {
+            @Override
+            public void clearFocusInternal(icyllis.modernui.view.View focused, boolean propagate, boolean refocus) {
+                // ModernUI removes a focused subtree via unFocus(null) before detach.
+                // A normal focus transfer supplies its replacement; explicit clearFocus propagates.
+                boolean previous = mDiscardEditorFocusLoss;
+                mDiscardEditorFocusLoss = focused == null && !propagate && !refocus;
+                try {
+                    super.clearFocusInternal(focused, propagate, refocus);
+                } finally {
+                    mDiscardEditorFocusLoss = previous;
+                }
+            }
+        };
         editor.setText(mSpec.display(mDisplayValue));
         if (configureEditor != null) configureEditor.accept(editor);
         editor.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         editor.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) {
-                closeEditor(true);
+                closeEditor(!mDiscardEditorFocusLoss);
             }
         });
 

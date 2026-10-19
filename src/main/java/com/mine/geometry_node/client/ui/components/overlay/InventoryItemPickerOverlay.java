@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuFocus;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -51,6 +52,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     private ItemStackView hoveredSlot;
     private OverlayHandle overlayHandle;
     private boolean closed;
+    private final UiMenuFocus focus = new UiMenuFocus();
     private boolean picking;
 
     private InventoryItemPickerOverlay(Context context, Consumer<ItemStack> onPicked, Runnable onDismissed) {
@@ -120,6 +122,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             return true;
         }, reason -> overlay.finishClosed());
         if (overlay.overlayHandle == null) {
+            overlay.focus.capture(anchor);
             fallbackHost.addView(overlay, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
@@ -214,13 +217,17 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             overlayHandle.requestClose(reason);
             return;
         }
-        if (getParent() instanceof ViewGroup parent) parent.removeView(this);
-        finishClosed();
+        try {
+            finishClosed();
+        } finally {
+            if (getParent() instanceof ViewGroup parent) parent.removeView(this);
+        }
     }
 
     private void finishClosed() {
         if (closed) return;
         closed = true;
+        focus.restoreAndClear(this);
         hoveredSlot = null;
         ItemTooltipProxy.clearTooltipTask();
         ItemStackTooltipOverlay.hide();

@@ -15,7 +15,7 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
     private final Object mTransformLock = new Object();
 
     private NativePreviewHost.Registration mPreviewRegistration;
-    private MinecraftSurfaceView mFallbackSurface;
+    private volatile MinecraftSurfaceView mFallbackSurface;
     private float mViewportScale = 1.0f;
     private float mWindowLeftPx;
     private float mWindowTopPx;
@@ -185,6 +185,7 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
 
     @Override
     protected void onDetachedFromWindow() {
+        mAggregatedVisible = false;
         releaseNativePreviewRegistration();
         super.onDetachedFromWindow();
     }
@@ -206,11 +207,12 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
 
     private void ensureFallbackSurface() {
         if (mFallbackSurface != null) return;
-        mFallbackSurface = new MinecraftSurfaceView(getContext());
-        mFallbackSurface.setEnabled(false);
-        mFallbackSurface.setClickable(false);
-        mFallbackSurface.setFocusable(false);
-        mFallbackSurface.setRenderer(new MinecraftSurfaceView.Renderer() {
+        MinecraftSurfaceView surface = new MinecraftSurfaceView(getContext());
+        mFallbackSurface = surface;
+        surface.setEnabled(false);
+        surface.setClickable(false);
+        surface.setFocusable(false);
+        surface.setRenderer(new MinecraftSurfaceView.Renderer() {
             private final int[] mLocationInWindow = new int[2];
 
             @Override
@@ -226,7 +228,8 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
                     double guiScale,
                     float alpha
             ) {
-                mFallbackSurface.getLocationInWindow(mLocationInWindow);
+                if (surface != mFallbackSurface) return;
+                surface.getLocationInWindow(mLocationInWindow);
                 renderAt(
                         graphics,
                         deltaTick,
@@ -234,19 +237,20 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
                         alpha,
                         mLocationInWindow[0],
                         mLocationInWindow[1],
-                        mFallbackSurface.getWidth(),
-                        mFallbackSurface.getHeight(),
+                        surface.getWidth(),
+                        surface.getHeight(),
                         1.0f
                 );
             }
         });
-        addView(mFallbackSurface, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        addView(surface, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }
 
     private void removeFallbackSurface() {
-        if (mFallbackSurface == null) return;
-        removeView(mFallbackSurface);
+        MinecraftSurfaceView surface = mFallbackSurface;
+        if (surface == null) return;
         mFallbackSurface = null;
+        removeView(surface);
     }
 
     private static float sanitizeScale(float scale) {

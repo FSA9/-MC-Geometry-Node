@@ -96,6 +96,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             }
             if (!java.util.Objects.equals(previous.parentId(), entry.parentId())) {
                 sendMoveEntry(previous, entry.parentId(), response -> {
+                    if (!isGenerationActive(generation)) return;
                     if (!response.success()) {
                         failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
                         refreshNow(generation, finished);
@@ -134,6 +135,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
                         RemoteDataLibraryOperation.DELETE, Set.copyOf(objectKeys),
                         null, null, "", expected), response -> {
+                    if (!isGenerationActive(generation)) return;
                     if (!response.success()) failure(RemoteDataLibraryOperation.DELETE, response.message());
                     refreshNow(generation, finished);
                 });
@@ -152,6 +154,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 control(new PacketRemoteDataLibraryRequest(
                         REQUESTS.nextRequestId(), RemoteDataLibraryOperation.CREATE_FOLDER, Set.of(),
                         null, folder.parentId(), folder.name(), ""), response -> {
+                    if (!isGenerationActive(generation)) return;
                     if (!response.success()) failure(RemoteDataLibraryOperation.CREATE_FOLDER, response.message());
                     refreshNow(generation, finished);
                 });
@@ -179,6 +182,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             try {
                 control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(), operation, Set.of(),
                         folder.id(), folder.parentId(), name, expected), response -> {
+                    if (!isGenerationActive(generation)) return;
                     if (!response.success()) {
                         failure(operation, response.message());
                         refreshNow(generation, finished);
@@ -195,6 +199,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                     control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
                             RemoteDataLibraryOperation.UPDATE_FOLDER, Set.of(), folder.id(),
                             folder.parentId(), folder.name(), renameExpected), renamed -> {
+                        if (!isGenerationActive(generation)) return;
                         if (!renamed.success()) {
                             failure(RemoteDataLibraryOperation.UPDATE_FOLDER, renamed.message());
                         }
@@ -222,6 +227,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 return;
             }
             sendMoveEntry(current, parentId, response -> {
+                if (!isGenerationActive(generation)) return;
                 if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_ENTRY, response.message());
                 refreshNow(generation, finished);
             });
@@ -245,6 +251,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
             control(new PacketRemoteDataLibraryRequest(REQUESTS.nextRequestId(),
                     RemoteDataLibraryOperation.MOVE_FOLDER, Set.of(), current.id(), parentId, "", expected),
                     response -> {
+                        if (!isGenerationActive(generation)) return;
                         if (!response.success()) failure(RemoteDataLibraryOperation.MOVE_FOLDER, response.message());
                         refreshNow(generation, finished);
                     });
@@ -336,9 +343,11 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                             transferFailure(result, error, "Data Library download failed"));
                     return;
                 }
+                if (!Files.isRegularFile(target)) {
+                    throw new java.io.IOException("Downloaded Data Library file is missing");
+                }
                 DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                publishSnapshot(generation, new Snapshot(DataLibraryUiMapper.folders(loaded),
-                        DataLibraryUiMapper.fromDocument(loaded), true));
+                publishLoadedSnapshot(generation, loaded);
             } catch (Exception exception) {
                 if (isGenerationActive(generation)) {
                     failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, exception.getMessage());
@@ -348,6 +357,13 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                 if (isGenerationActive(generation)) run(completion);
             }
         });
+    }
+
+    void publishLoadedSnapshot(long generation, DataLibraryLoadResult loaded) {
+        if (!isGenerationActive(generation)) return;
+        loaded.requireValidDocument();
+        publishSnapshot(generation, new Snapshot(DataLibraryUiMapper.folders(loaded),
+                DataLibraryUiMapper.fromDocument(loaded), true));
     }
 
     void rejectSnapshot(long generation, AssetTransferJobSnapshot result) {
@@ -365,21 +381,6 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
 
     private static Set<DataLibraryObjectKey> keys(Set<DataLibraryUiRepository.EntryKey> keys) {
         return DataLibraryUiMapper.toKeys(keys);
-    }
-
-    private static void control(RemoteDataLibraryOperation operation, Set<DataLibraryObjectKey> keys,
-                                Consumer<PacketRemoteDataLibraryResponse> completion) {
-        int requestId = REQUESTS.nextRequestId();
-        REQUESTS.register(requestId, PacketRemoteDataLibraryResponse.class, completion,
-                () -> completion.accept(new PacketRemoteDataLibraryResponse(
-                        requestId, false, "Data Library request timed out", "")));
-        try {
-            NetworkHandler.sendToServer(new PacketRemoteDataLibraryRequest(requestId, operation, keys));
-        } catch (RuntimeException exception) {
-            REQUESTS.cancel(requestId);
-            ClientAssetCallbacks.execute(() -> completion.accept(new PacketRemoteDataLibraryResponse(
-                    requestId, false, exception.getMessage(), "")));
-        }
     }
 
     private static void control(PacketRemoteDataLibraryRequest request,

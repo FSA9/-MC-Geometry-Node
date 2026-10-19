@@ -92,7 +92,7 @@ public final class RemoteDataLibraryService {
     public DataLibraryLoadResult create(MinecraftServer server, DataLibraryDocument incoming) throws IOException {
         requireObjects(incoming);
         return update(server, document -> {
-            mergeFolders(document, incoming, false);
+            mergeFolders(document, incoming);
             for (DataLibraryEntry entry : incoming.entries().values()) {
                 if (document.find(entry.id()).isPresent()) {
                     throw new IllegalStateException("Data Library entry already exists: " + entry.id());
@@ -249,10 +249,10 @@ public final class RemoteDataLibraryService {
         }
     }
 
-    private static void mergeFolders(DataLibraryDocument target, DataLibraryDocument incoming, boolean updateExisting) {
+    private static void mergeFolders(DataLibraryDocument target, DataLibraryDocument incoming) {
         for (DataLibraryFolder folder : incoming.folders().values()) {
             DataLibraryFolder current = target.findFolder(folder.id()).orElse(null);
-            if (current == null || updateExisting) target.putFolder(folder);
+            if (current == null) target.putFolder(folder);
             else if (!current.equals(folder)) {
                 throw new IllegalStateException("Data Library folder UUID already exists: " + folder.id());
             }

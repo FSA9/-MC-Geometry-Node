@@ -38,11 +38,6 @@ public record PacketRemoteDataLibraryRequest(
         validateFields(operation, keys, objectId, name, expectedFingerprint);
     }
 
-    public PacketRemoteDataLibraryRequest(int requestId, RemoteDataLibraryOperation operation,
-                                          Set<DataLibraryObjectKey> keys) {
-        this(requestId, operation, keys, null, null, "", "");
-    }
-
     private static void write(RegistryFriendlyByteBuf buffer, PacketRemoteDataLibraryRequest packet) {
         buffer.writeInt(packet.requestId);
         buffer.writeVarInt(packet.operation.ordinal());

@@ -14,4 +14,15 @@ public record DataLibraryLoadResult(DataLibraryDocument document, List<DataLibra
     public DataLibraryLoadResult(DataLibraryDocument document, List<DataLibraryDiagnostic> diagnostics) {
         this(document, diagnostics, Map.of());
     }
+
+    /** Editable snapshots and uploads must never silently accept partially decoded data. */
+    public DataLibraryDocument requireValidDocument() {
+        if (!diagnostics.isEmpty()) {
+            String details = diagnostics.stream().limit(8)
+                    .map(diagnostic -> diagnostic.path() + ": " + diagnostic.message())
+                    .collect(java.util.stream.Collectors.joining("; "));
+            throw new IllegalArgumentException("Invalid Data Library: " + details);
+        }
+        return document;
+    }
 }

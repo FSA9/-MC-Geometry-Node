@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuFocus;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
@@ -61,6 +62,8 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     private final EditText editor;
     private OverlayHandle overlayHandle;
     private boolean closed;
+    private final UiMenuFocus focus = new UiMenuFocus();
+    private boolean committing;
     private Runnable onDismissed;
 
     private ExpandedTextInputOverlay(Context context, PortType expectedType, Object value,
@@ -223,6 +226,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         closeOpenOverlay();
         overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> false, overlay::onClosed);
         if (overlay.overlayHandle == null) {
+            overlay.focus.capture(anchor);
             host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         sOpenOverlay = overlay;
@@ -256,13 +260,19 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private void commit() {
-        if (closed) return;
-        Object parsedValue = valueParser.parse(editor.getText());
-        if (!valueValidator.test(parsedValue)) {
-            return;
+        if (closed || committing) return;
+        committing = true;
+        try {
+            Object parsedValue = valueParser.parse(editor.getText());
+            if (!valueValidator.test(parsedValue)) return;
+            try {
+                commitHandler.accept(parsedValue);
+            } finally {
+                dismiss();
+            }
+        } finally {
+            committing = false;
         }
-        commitHandler.accept(parsedValue);
-        dismiss();
     }
 
     private void dismiss() {
@@ -275,16 +285,17 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             overlayHandle.requestClose(reason);
             return;
         }
-        onClosed(reason);
-        if (getParent() instanceof ViewGroup parent) {
-            parent.removeView(this);
-            parent.requestFocus();
+        try {
+            onClosed(reason);
+        } finally {
+            if (getParent() instanceof ViewGroup parent) parent.removeView(this);
         }
     }
 
     private void onClosed(OverlayCloseReason reason) {
         if (closed) return;
         closed = true;
+        focus.restoreAndClear(this);
         overlayHandle = null;
         if (sOpenOverlay == this) {
             sOpenOverlay = null;

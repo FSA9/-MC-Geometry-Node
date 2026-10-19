@@ -42,6 +42,10 @@ public final class UiTableColumns {
         return Math.max(viewport, total);
     }
     public void setOnWidthsChanged(Runnable changed) { this.changed = changed == null ? () -> {} : changed; }
+    void clearOnWidthsChanged(Runnable listener) {
+        if (changed == listener) changed = () -> {};
+    }
+
     public void setViewportWidth(int pixels) {
         int value = Math.max(0, pixels);
         if (viewport == value && resolvedDensity == UIUtils.dp2px(1)) return;

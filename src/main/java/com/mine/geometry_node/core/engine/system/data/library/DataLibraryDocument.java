@@ -6,7 +6,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.ArrayDeque;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,14 +140,35 @@ public final class DataLibraryDocument {
     /** Removes a folder and every descendant folder and entry. */
     public boolean removeFolder(UUID folderId) {
         if (!folders.containsKey(folderId)) return false;
-        List<UUID> childFolders = folders.values().stream()
-                .filter(folder -> folderId.equals(folder.parentId())).map(DataLibraryFolder::id).toList();
-        childFolders.forEach(this::removeFolder);
-        entries.values().stream().filter(entry -> folderId.equals(entry.parentId()))
-                .map(DataLibraryEntry::id).toList().forEach(this::remove);
-        DataLibraryFolder removed = folders.remove(folderId);
-        folderIdsByLocation.remove(new FolderLocation(removed.parentId(), removed.name()), folderId);
+        for (UUID id : subtreeIds(Set.of(folderId))) {
+            if (remove(id)) continue;
+            DataLibraryFolder removed = folders.remove(id);
+            folderIdsByLocation.remove(new FolderLocation(removed.parentId(), removed.name()), id);
+        }
         return true;
+    }
+
+    /** Shared by deletion and its fingerprint so both cover exactly the same objects. */
+    Set<UUID> subtreeIds(Set<UUID> roots) {
+        for (UUID root : roots) {
+            if (!folders.containsKey(root) && !entries.containsKey(root)) {
+                throw new IllegalStateException("STALE_OBJECT: " + root);
+            }
+        }
+        Map<UUID, List<UUID>> children = new LinkedHashMap<>();
+        for (DataLibraryFolder folder : folders.values()) {
+            children.computeIfAbsent(folder.parentId(), ignored -> new ArrayList<>()).add(folder.id());
+        }
+        for (DataLibraryEntry entry : entries.values()) {
+            children.computeIfAbsent(entry.parentId(), ignored -> new ArrayList<>()).add(entry.id());
+        }
+        Set<UUID> result = new LinkedHashSet<>();
+        ArrayDeque<UUID> pending = new ArrayDeque<>(roots);
+        while (!pending.isEmpty()) {
+            UUID id = pending.removeFirst();
+            if (result.add(id)) pending.addAll(children.getOrDefault(id, List.of()));
+        }
+        return result;
     }
 
     public DataLibraryDocument copy() {

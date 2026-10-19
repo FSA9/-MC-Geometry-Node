@@ -2,6 +2,9 @@ package com.mine.geometry_node.client.ui.components.overlay;
 
 import com.mine.geometry_node.client.ui.components.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.menu.UiMenuFocus;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
 
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -69,6 +72,8 @@ public final class ColorPickerDialog extends FrameLayout {
     private boolean mPointerDownInsideWindow;
     private OverlayHandle mOverlayHandle;
     private boolean mClosed;
+    private final UiMenuFocus mFocus = new UiMenuFocus();
+    private AreaLifecycle.Subscription mLifetime = AreaLifecycle.Subscription.NONE;
     private boolean mApplying;
 
     private ColorPickerDialog(Context context, int initialColor, View returnFocusTarget, OnColorSelected listener) {
@@ -263,17 +268,20 @@ public final class ColorPickerDialog extends FrameLayout {
             mOverlayHandle.requestClose(reason);
             return;
         }
-        finishClosed();
-        if (getParent() instanceof ViewGroup parent) {
-            parent.removeView(this);
-        }
-        if (mReturnFocusTarget != null) {
-            mReturnFocusTarget.requestFocus();
+        try {
+            finishClosed();
+        } finally {
+            if (getParent() instanceof ViewGroup parent) parent.removeView(this);
         }
     }
 
     private void applyAndDismiss() {
         if (mClosed || mApplying) return;
+        if (getVisibility() != VISIBLE || !ownerVisible() || !mReturnFocusTarget.isEnabled()
+                || mReturnFocusTarget.getRootView() != getRootView()) {
+            dismiss(OverlayCloseReason.OWNER_CLOSED);
+            return;
+        }
         mApplying = true;
         try {
             if (mListener != null) mListener.onColorSelected(mColor);
@@ -282,16 +290,32 @@ public final class ColorPickerDialog extends FrameLayout {
         }
     }
 
+    private boolean ownerVisible() {
+        for (View view = mReturnFocusTarget; view != null;
+             view = view.getParent() instanceof View parent ? parent : null) {
+            if (view.getVisibility() != VISIBLE) return false;
+        }
+        return true;
+    }
+
     private void mount(View anchor, ViewGroup fallbackHost) {
         mOverlayHandle = OverlayMount.modal(anchor, this, () -> {
             dismiss(OverlayCloseReason.ESCAPE);
             return true;
         }, reason -> finishClosed());
-        if (mOverlayHandle == null) addFullscreen(fallbackHost, this);
+        if (mOverlayHandle == null) {
+            mFocus.capture(anchor);
+            addFullscreen(fallbackHost, this);
+        }
+        if (!mClosed) mLifetime = AreaTransientUi.bind(anchor, this,
+                () -> dismiss(OverlayCloseReason.OWNER_CLOSED));
     }
 
     private void finishClosed() {
         mClosed = true;
+        mLifetime.close();
+        mLifetime = AreaLifecycle.Subscription.NONE;
+        mFocus.restoreAndClear(this);
         mDragging = false;
         mPointerDownInsideWindow = false;
     }
@@ -494,6 +518,7 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     private void initializeWindowPosition() {
+        if (mClosed || getParent() == null) return;
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mWindow.getLayoutParams();
         ensureWindowHasAbsolutePosition(lp);
         moveWindowTo(lp.leftMargin, lp.topMargin);

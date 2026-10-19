@@ -77,10 +77,9 @@ public final class DataLibraryJsonCodec {
     }
 
     public static DataLibraryLoadResult decode(String json, HolderLookup.Provider registries) {
-        JsonElement parsed = JsonParser.parseString(json == null || json.isBlank() ? "{}" : json);
+        JsonElement parsed = JsonParser.parseString(java.util.Objects.requireNonNull(json, "Data Library JSON is required"));
         if (!parsed.isJsonObject()) throw new IllegalArgumentException("Data Library root must be a JSON object");
         JsonObject root = parsed.getAsJsonObject();
-        if (!root.has(FOLDERS) && !root.has(ENTRIES)) return decodeLegacy(root, registries);
 
         DataLibraryDocument document = new DataLibraryDocument();
         List<DataLibraryDiagnostic> diagnostics = new ArrayList<>();
@@ -145,38 +144,10 @@ public final class DataLibraryJsonCodec {
         }
     }
 
-    /** Reads the former type-first layout into the new tree's root directory. */
-    private static DataLibraryLoadResult decodeLegacy(JsonObject root, HolderLookup.Provider registries) {
-        DataLibraryDocument document = new DataLibraryDocument();
-        List<DataLibraryDiagnostic> diagnostics = new ArrayList<>();
-        for (Map.Entry<String, JsonElement> group : root.entrySet()) {
-            PortType type = parseType(group.getKey());
-            if (!DataLibraryTypes.supports(type) || !group.getValue().isJsonObject()) {
-                diagnostics.add(new DataLibraryDiagnostic(group.getKey(), "Unsupported Data Library type group"));
-                continue;
-            }
-            for (Map.Entry<String, JsonElement> raw : group.getValue().getAsJsonObject().entrySet()) {
-                String path = group.getKey() + "." + raw.getKey();
-                try {
-                    UUID id = UUID.fromString(raw.getKey());
-                    JsonObject value = requireObject(raw.getValue(), "Entry must be an object");
-                    JsonElement keyValue = value.has("key") ? value.get("key") : value.get("name");
-                    if (keyValue == null || !keyValue.isJsonPrimitive()) throw new IllegalArgumentException("Entry key must be a string");
-                    document.put(new DataLibraryEntry(id, null, type, keyValue.getAsString(),
-                            DataLibraryValueCodec.decode(type, value.get("value"), registries)));
-                } catch (RuntimeException exception) {
-                    diagnostics.add(new DataLibraryDiagnostic(path, readableMessage(exception)));
-                }
-            }
-        }
-        return new DataLibraryLoadResult(document, diagnostics);
-    }
-
     private static JsonObject objectMember(JsonObject root, String name,
                                            List<DataLibraryDiagnostic> diagnostics) {
         JsonElement value = root.get(name);
-        if (value == null || value.isJsonNull()) return new JsonObject();
-        if (value.isJsonObject()) return value.getAsJsonObject();
+        if (value != null && value.isJsonObject()) return value.getAsJsonObject();
         diagnostics.add(new DataLibraryDiagnostic(name, "Value must be an object"));
         return new JsonObject();
     }

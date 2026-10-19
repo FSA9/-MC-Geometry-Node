@@ -35,6 +35,13 @@ public final class UiSearchBar extends LinearLayout {
         addView(submit, params);
     }
 
+    @Override
+    public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        if (input != null) input.setEnabled(enabled);
+        if (submit != null) submit.setEnabled(enabled);
+    }
+
     public UiSearchInput input() { return input; }
     public UiIconButton submitButton() { return submit; }
 }

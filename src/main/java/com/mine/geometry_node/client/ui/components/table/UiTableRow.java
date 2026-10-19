@@ -118,7 +118,20 @@ public final class UiTableRow extends ViewGroup {
 
     @Override public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
-        if (!enabled) finishDrag();
+        if (!enabled) {
+            hovered = -1;
+            finishDrag();
+            invalidate();
+        }
+    }
+
+    @Override public void onWindowFocusChanged(boolean focused) {
+        if (!focused) {
+            hovered = -1;
+            finishDrag();
+            invalidate();
+        }
+        super.onWindowFocusChanged(focused);
     }
 
     @Override public boolean dispatchHoverEvent(MotionEvent event) {

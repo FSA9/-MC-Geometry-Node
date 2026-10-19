@@ -30,6 +30,7 @@ public final class ColorSwatchView extends View {
     private final RectF mRect = new RectF();
 
     private ColorValue mColor = ColorValue.WHITE;
+    private long mPickerGeneration;
 
     public ColorSwatchView(Context context, Supplier<ColorValue> colorSupplier, Consumer<ColorValue> onColorSelected) {
         super(context);
@@ -104,16 +105,28 @@ public final class ColorSwatchView extends View {
         if (!isEnabled() || mOnColorSelected == null) return;
         if (mColorSupplier != null) syncFromSupplier();
         ColorValue currentColor = mColor;
+        long generation = ++mPickerGeneration;
         ColorPickerDialog.show(getContext(), this, currentColor.toArgb(), argb -> {
-            if (!isEnabled()) return;
+            if (!isEnabled() || generation != mPickerGeneration) return;
             ColorValue selected = ColorValue.fromArgb(argb);
             ColorValue next = new ColorValue(selected.r(), selected.g(), selected.b(), currentColor.a());
             mOnColorSelected.accept(next);
             mColor = next;
             if (mColorSupplier != null) syncFromSupplier();
             invalidate();
-            requestFocus();
         });
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        if (!enabled) mPickerGeneration++;
+        super.setEnabled(enabled);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        mPickerGeneration++;
+        super.onDetachedFromWindow();
     }
 
     private void syncFromSupplier() {

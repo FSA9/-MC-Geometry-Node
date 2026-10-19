@@ -9,7 +9,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -49,8 +48,8 @@ public final class DataLibraryObjectFingerprint {
         if (document == null || roots == null || roots.isEmpty()) {
             throw new IllegalArgumentException("Delete fingerprint requires at least one object");
         }
-        Set<UUID> ids = new LinkedHashSet<>();
-        for (DataLibraryObjectKey root : roots) collectSubtree(document, root.id(), ids);
+        Set<UUID> ids = document.subtreeIds(roots.stream()
+                .map(DataLibraryObjectKey::id).collect(java.util.stream.Collectors.toSet()));
         List<UUID> ordered = new ArrayList<>(ids);
         ordered.sort(Comparator.comparing(UUID::toString));
         StringBuilder canonical = new StringBuilder();
@@ -79,18 +78,6 @@ public final class DataLibraryObjectFingerprint {
     private static void addParent(JsonObject json, java.util.UUID parentId) {
         if (parentId == null) json.add("parent", com.google.gson.JsonNull.INSTANCE);
         else json.addProperty("parent", parentId.toString());
-    }
-
-    private static void collectSubtree(DataLibraryDocument document, UUID id, Set<UUID> destination) {
-        if (!destination.add(id)) return;
-        if (document.find(id).isPresent()) return;
-        if (document.findFolder(id).isEmpty()) throw new IllegalStateException("STALE_OBJECT: " + id);
-        document.folders().values().stream()
-                .filter(folder -> id.equals(folder.parentId()))
-                .forEach(folder -> collectSubtree(document, folder.id(), destination));
-        document.entries().values().stream()
-                .filter(entry -> id.equals(entry.parentId()))
-                .forEach(entry -> destination.add(entry.id()));
     }
 
     private static String sha256(String value) {

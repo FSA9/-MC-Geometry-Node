@@ -52,6 +52,9 @@ public interface DataLibraryUiRepository {
 
     void update(Entry expected, Entry replacement);
 
+    /** True until this entry's queued writes and their refreshes have finished. */
+    default boolean isUpdatePending(UUID entryId) { return false; }
+
     void updateFolder(Folder expected, Folder replacement);
 
     void moveEntry(UUID entryId, UUID parentId);

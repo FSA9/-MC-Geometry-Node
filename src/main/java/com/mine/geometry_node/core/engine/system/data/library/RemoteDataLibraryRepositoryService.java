@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /** Runs Data Library serialization and persistence outside the Minecraft server thread. */
 public final class RemoteDataLibraryRepositoryService {
@@ -27,7 +26,7 @@ public final class RemoteDataLibraryRepositoryService {
         return io.submit(() -> {
             DataLibraryLoadResult loaded = RemoteDataLibraryService.INSTANCE.refresh(server);
             byte[] content = DataLibraryJsonCodec.encode(
-                    loaded.document(), server.overworld().registryAccess()).getBytes(StandardCharsets.UTF_8);
+                    loaded.requireValidDocument(), server.overworld().registryAccess()).getBytes(StandardCharsets.UTF_8);
             if (content.length > AssetTransferLimits.MAX_FILE_BYTES) {
                 throw new IllegalStateException("Data Library exceeds file limit: " + content.length);
             }
@@ -85,17 +84,12 @@ public final class RemoteDataLibraryRepositoryService {
         return io.run(() -> {
             DataLibraryLoadResult incoming = DataLibraryJsonCodec.decode(
                     new String(content, StandardCharsets.UTF_8), server.overworld().registryAccess());
-            if (!incoming.diagnostics().isEmpty()) {
-                String details = incoming.diagnostics().stream()
-                        .map(diagnostic -> diagnostic.path() + ": " + diagnostic.message())
-                        .collect(Collectors.joining("; "));
-                throw new IllegalArgumentException("Uploaded Data Library contains invalid entries: " + details);
-            }
+            DataLibraryDocument document = incoming.requireValidDocument();
             if (update) {
                 Map<UUID, String> fingerprints = incoming.expectedFingerprints();
-                RemoteDataLibraryService.INSTANCE.update(server, incoming.document(), fingerprints);
+                RemoteDataLibraryService.INSTANCE.update(server, document, fingerprints);
             } else {
-                RemoteDataLibraryService.INSTANCE.create(server, incoming.document());
+                RemoteDataLibraryService.INSTANCE.create(server, document);
             }
         });
     }

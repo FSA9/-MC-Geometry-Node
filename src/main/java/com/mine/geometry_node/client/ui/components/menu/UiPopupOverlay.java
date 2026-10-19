@@ -53,14 +53,18 @@ public abstract class UiPopupOverlay extends FrameLayout {
     }
 
     public void dismiss() {
+        dismiss(false);
+    }
+
+    private void dismiss(boolean deferRemoval) {
         outsidePressed = false;
         binding.close();
         binding = AreaLifecycle.Subscription.NONE;
         onDismissRequested();
         focus.restoreAndClear(this);
         if (getParent() != null) clearTooltipState(this);
-        if (getParent() != null && isInLayout()) {
-            // Sibling layout callbacks must not mutate the host's child array mid traversal.
+        if (getParent() != null && (deferRemoval || isInLayout())) {
+            // Layout and window-focus dispatch both traverse the host's child array.
             if (!dismissPending) {
                 dismissPending = true;
                 setVisibility(GONE);
@@ -78,6 +82,9 @@ public abstract class UiPopupOverlay extends FrameLayout {
     }
 
     @Override protected void onDetachedFromWindow() {
+        removeCallbacks(deferredDismiss);
+        dismissPending = false;
+        outsidePressed = false;
         binding.close();
         binding = AreaLifecycle.Subscription.NONE;
         onDismissRequested();
@@ -165,6 +172,6 @@ public abstract class UiPopupOverlay extends FrameLayout {
 
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
-        if (!focused) dismiss();
+        if (!focused) dismiss(true);
     }
 }

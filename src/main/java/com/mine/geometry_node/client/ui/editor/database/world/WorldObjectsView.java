@@ -69,7 +69,7 @@ public final class WorldObjectsView extends FrameLayout {
     private List<WorldObjectType> typeCatalog = List.of();
     private List<String> dimensionCatalog = List.of();
     private WorldObjectQuery.Range range = WorldObjectQuery.Range.CURRENT_DIMENSION;
-    private String dimension = "", type = "", provider = "", lifetime = "";
+    private String dimension = "", type = "", typeProvider = "", provider = "", lifetime = "";
     private volatile boolean shown, disposed;
     private boolean sortAscending = true;
     private String sort = "name", anchorKey;
@@ -198,7 +198,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void resetFilters() {
         range=WorldObjectQuery.Range.CURRENT_DIMENSION;
-        dimension=type=provider=lifetime=extraProvider="";category=null;
+        dimension=type=typeProvider=provider=lifetime=extraProvider="";category=null;
         submittedSearch="";
         search.setText("");tags.setText("");source.setText("");radius.setText("128");
         updateFilters();rebuildNavigation();queryNow();
@@ -206,15 +206,16 @@ public final class WorldObjectsView extends FrameLayout {
     private void rebuildNavigation() {
         categoryRows.removeAllViews();categoryButtons.clear();
         addCategory("",tr("all_objects"),
-                snapshot.entries().size(),()->{category=null;extraProvider=provider=type="";queryNow();});
+                snapshot.entries().size(),()->{category=null;extraProvider=provider=type=typeProvider="";queryNow();});
         for(var value:WorldObjectCategories.all()) addCategory(value.id(),Component.translatable(value.labelKey()).getString(),
                 snapshot.entries().stream().filter(value::matches).count(),()->{
-                    category=value;extraProvider=provider=type="";queryNow();
+                    category=value;extraProvider=provider=type=typeProvider="";queryNow();
                 });
         Set<String> known=new HashSet<>();WorldObjectCategories.all().forEach(c->known.addAll(c.providers()));
-        typeCatalog.stream().map(WorldObjectType::provider).filter(p->!known.contains(p)&&!p.equals("scene"))
+        java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider),
+                snapshot.entries().stream().map(WorldObjectEntry::provider)).filter(p->!known.contains(p)&&!p.equals("scene"))
                 .distinct().forEach(id->addCategory("provider:"+id,providerLabel(id),snapshot.entries().stream().filter(e->e.provider().equals(id)).count(),()->{
-                            category=null;extraProvider=provider=id;type="";queryNow();
+                            category=null;extraProvider=provider=id;type=typeProvider="";queryNow();
                         }));
         updateNavigationSelection();
     }
@@ -246,6 +247,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void addHeader(String key) {
         UiActionButton button = UiTableStyle.headerCell(getContext(), tr(key), () -> {
+            if (!shown || disposed) return;
             sortAscending = !sort.equals(key) || !sortAscending; sort = key; resetDoubleClick();
             if (!snapshot.loading()) rebuildRows();
         });
@@ -262,8 +264,8 @@ public final class WorldObjectsView extends FrameLayout {
         try {
             double distance = range == WorldObjectQuery.Range.NEARBY
                     ? Double.parseDouble(radius.getText().toString().trim()) : 128;
-            Set<String> providers = one(provider), types = one(type);
-            if (category != null && provider.isEmpty()) providers = category.providers();
+            Set<String> providers = one(typeProvider.isEmpty() ? provider : typeProvider), types = one(type);
+            if (category != null && providers.isEmpty()) providers = category.providers();
             if (category != null && type.isEmpty()) {
                 Set<String> matching = new LinkedHashSet<>();
                 typeCatalog.stream().filter(t -> category.accepts().test(t.provider(),t.id())).forEach(t -> matching.add(t.id()));
@@ -291,8 +293,8 @@ public final class WorldObjectsView extends FrameLayout {
         if (snapshot.equals(renderedSnapshot)) { updateInteractionState(); return; }
         renderedSnapshot=snapshot;
         if (!snapshot.loading()) {
-            if (!snapshot.types().isEmpty()) typeCatalog = snapshot.types();
-            if (!snapshot.dimensionIds().isEmpty()) dimensionCatalog = snapshot.dimensionIds();
+            typeCatalog = snapshot.types();
+            dimensionCatalog = snapshot.dimensionIds();
         }
         updateFilters();
         rebuildNavigation();
@@ -314,8 +316,8 @@ public final class WorldObjectsView extends FrameLayout {
         setStatus(text);
     }
     private void setStatus(String text) { status.setText(text); }
-    private String typeLabel(String id) {
-        for (WorldObjectType value : typeCatalog) if (value.id().equals(id))
+    private String typeLabel(String providerId, String id) {
+        for (WorldObjectType value : typeCatalog) if (value.provider().equals(providerId) && value.id().equals(id))
             return value.labelKey().isEmpty() ? id : Component.translatable(value.labelKey()).getString();
         return id;
     }
@@ -323,7 +325,7 @@ public final class WorldObjectsView extends FrameLayout {
         scopeButton.setText(tr("range." + range.name().toLowerCase(Locale.ROOT)));
         dimensionButton.setText(dimension.isEmpty() ? tr("automatic_dimension") : dimension);
         providerButton.setText(provider.isEmpty() ? tr("all") : providerLabel(provider));
-        typeButton.setText(type.isEmpty() ? tr("all") : typeLabel(type));
+        typeButton.setText(type.isEmpty() ? tr("all") : typeLabel(typeProvider, type));
         lifetimeButton.setText(lifetime.isEmpty() ? tr("all") : lifetimeLabel(lifetime));
         for (UiActionButton button : List.of(scopeButton, dimensionButton, providerButton, typeButton, lifetimeButton)) {
             button.setEllipsize(TextUtils.TruncateAt.END);
@@ -351,17 +353,39 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void chooseProvider() {
         LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
-        typeCatalog.stream().map(WorldObjectType::provider).distinct().forEach(id -> options.put(id, providerLabel(id)));
-        choose(providerButton, "provider", options, value -> { provider = value; extraProvider=value; category=null; type = ""; updateFilters(); queryNow(); });
+        java.util.stream.Stream.concat(typeCatalog.stream().map(WorldObjectType::provider),
+                snapshot.entries().stream().map(WorldObjectEntry::provider))
+                .distinct().forEach(id -> options.put(id, providerLabel(id)));
+        choose(providerButton, "provider", options, value -> { provider = value; extraProvider=value; category=null; type = typeProvider = ""; updateFilters(); queryNow(); });
     }
     private void chooseType() {
+        record TypeIdentity(String provider, String id) {}
+        LinkedHashMap<String, TypeIdentity> identities = new LinkedHashMap<>();
+        for (var value : typeCatalog) {
+            if ((provider.isEmpty() || provider.equals(value.provider()))
+                    && (category == null || category.accepts().test(value.provider(), value.id()))) {
+                identities.put(WorldObjectEntry.key(value.provider(), "", value.id()),
+                        new TypeIdentity(value.provider(), value.id()));
+            }
+        }
+        for (var entry : snapshot.entries()) {
+            if ((provider.isEmpty() || provider.equals(entry.provider())) && (category == null || category.matches(entry))) {
+                identities.putIfAbsent(WorldObjectEntry.key(entry.provider(), "", entry.type()),
+                        new TypeIdentity(entry.provider(), entry.type()));
+            }
+        }
         LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
-        for (var value : typeCatalog) if ((provider.isEmpty() || provider.equals(value.provider())) && (category==null || category.accepts().test(value.provider(),value.id()))) options.put(value.id(), typeOption(value.id()));
-        for (var entry : snapshot.entries()) if ((provider.isEmpty() || provider.equals(entry.provider())) && (category==null || category.matches(entry))) options.putIfAbsent(entry.type(), typeOption(entry.type()));
-        choose(typeButton, "type", options, value -> { type = value; updateFilters(); queryNow(); });
+        identities.forEach((key, value) -> options.put(key,
+                typeOption(value.provider(), value.id()) + " · " + providerLabel(value.provider())));
+        choose(typeButton, "type", options, value -> {
+            TypeIdentity identity = identities.get(value);
+            type = identity == null ? "" : identity.id();
+            typeProvider = identity == null ? "" : identity.provider();
+            updateFilters(); queryNow();
+        });
     }
-    private String typeOption(String id) {
-        String label = typeLabel(id);
+    private String typeOption(String providerId, String id) {
+        String label = typeLabel(providerId, id);
         return label.equals(id) ? id : label + " · " + id;
     }
     private String lifetimeLabel(String id) {
@@ -387,17 +411,20 @@ public final class WorldObjectsView extends FrameLayout {
     private void dismissMenu() { if (menu != null) { menu.dismiss(); menu = null; } }
     private List<WorldObjectEntry> sortedEntries() {
         Comparator<WorldObjectEntry> comparator = switch (sort) {
-            case "type" -> Comparator.comparing(entry -> typeLabel(entry.type()), String.CASE_INSENSITIVE_ORDER);
+            case "type" -> Comparator.comparing(entry -> typeLabel(entry.provider(), entry.type()), String.CASE_INSENSITIVE_ORDER);
             case "dimension" -> Comparator.comparing(WorldObjectEntry::dimension);
             case "lifetime" -> Comparator.comparing(WorldObjectEntry::lifetime);
             case "tags" -> Comparator.comparing(entry -> String.join(",",entry.tags()));
-            case "position" -> Comparator.comparing(WorldObjectEntry::dimension).thenComparingDouble(entry -> entry.position().x);
+            case "position" -> Comparator.comparing(WorldObjectEntry::dimension)
+                    .thenComparingDouble(entry -> entry.position().x)
+                    .thenComparingDouble(entry -> entry.position().y)
+                    .thenComparingDouble(entry -> entry.position().z);
             default -> Comparator.comparing(this::displayName, String.CASE_INSENSITIVE_ORDER);
         };
         if (!sortAscending) comparator = comparator.reversed();
         return snapshot.entries().stream().filter(e -> category == null || category.matches(e)).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
     }
-    private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.type()) : entry.name(); }
+    private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.provider(), entry.type()) : entry.name(); }
     private void rebuildRows() {
         List<WorldObjectEntry> entries = sortedEntries();
         if (entries.equals(mountedEntries) && typeCatalog.equals(mountedTypes)) {
@@ -427,7 +454,7 @@ public final class WorldObjectsView extends FrameLayout {
             line.addView(checkboxHost,new ViewGroup.LayoutParams(-1,-1));
             var presentation=WorldObjectCategories.forEntry(entry);
             cell(line,displayName(entry));
-            cell(line,presentation==null?typeLabel(entry.type()):Component.translatable(presentation.labelKey()).getString());
+            cell(line,presentation==null?typeLabel(entry.provider(), entry.type()):Component.translatable(presentation.labelKey()).getString());
             cell(line,dimensionLabel(entry.dimension()));
             cell(line,position(entry));
             cell(line,lifetimeLabel(entry.lifetime()));
@@ -542,7 +569,7 @@ public final class WorldObjectsView extends FrameLayout {
         var entry=entries.getFirst();
         var position=List.of(new DatabaseSelection.Field("X",number(entry.position().x)),
                 new DatabaseSelection.Field("Y",number(entry.position().y)),new DatabaseSelection.Field("Z",number(entry.position().z)));
-        var metadata=List.of(new DatabaseSelection.Field(tr("type"),typeOption(entry.type())),
+        var metadata=List.of(new DatabaseSelection.Field(tr("type"),typeOption(entry.provider(), entry.type())),
                 new DatabaseSelection.Field(tr("lifetime"),lifetimeLabel(entry.lifetime())),
                 new DatabaseSelection.Field(tr("id"),entry.key()));
         var source=new ArrayList<DatabaseSelection.Field>();
@@ -550,7 +577,7 @@ public final class WorldObjectsView extends FrameLayout {
         source.add(new DatabaseSelection.Field(tr("provider"),providerLabel(entry.provider())));
         entry.references().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(ref->
                 source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
-        return new DatabaseSelection(displayName(entry),typeLabel(entry.type())+" · "+tr("world"),
+        return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
                 "",UiTheme.Text.MUTED,List.of(),
                 List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of(
                 new DatabaseSelection.Section(tr("spatial_position"),dimensionLabel(entry.dimension()),DatabaseSelection.Kind.POSITION,position),

@@ -246,6 +246,12 @@ public final class UiGradientStopEditor extends View {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) cancelDrag();
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         cancelDrag();
         super.onDetachedFromWindow();

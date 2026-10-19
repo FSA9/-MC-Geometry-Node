@@ -1,12 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
 import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntryPresentationResolver;
-import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.nodes.data.DataLibraryReference;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.TextView;
@@ -17,13 +14,15 @@ import java.util.UUID;
 final class DataLibraryReferenceInfoView extends TextView {
     static final float HEIGHT_DP = 64.0f;
     private final NodeData nodeData;
-    private final EditorContext editorContext;
-    private final Runnable refreshListener = () -> post(this::refreshPresentation);
+    private final Runnable refreshTask = this::refreshPresentation;
+    private final Runnable refreshListener = () -> {
+        removeCallbacks(refreshTask);
+        post(refreshTask);
+    };
 
-    DataLibraryReferenceInfoView(Context context, NodeData nodeData, EditorContext editorContext) {
+    DataLibraryReferenceInfoView(Context context, NodeData nodeData) {
         super(context);
         this.nodeData = nodeData;
-        this.editorContext = editorContext;
         setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         UIUtils.setLockedTextSize(this, 10.0f);
         setTextColor(0xFFB9BEC6);
@@ -37,12 +36,14 @@ final class DataLibraryReferenceInfoView extends TextView {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         ClientDataLibraryRepository.INSTANCE.addChangeListener(refreshListener);
+        refreshPresentation();
         ClientDataLibraryRepository.INSTANCE.ensureLoaded(null);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         ClientDataLibraryRepository.INSTANCE.removeChangeListener(refreshListener);
+        removeCallbacks(refreshTask);
         super.onDetachedFromWindow();
     }
 
@@ -57,11 +58,7 @@ final class DataLibraryReferenceInfoView extends TextView {
                 + "    " + tr("geometry_node.port.type") + ": " + presentation.type().name()
                 + "\n" + tr("geometry_node.port.data_library_value") + ": " + presentation.value());
 
-        Object cachedType = nodeData.inputs.get(DataLibraryReference.ENTRY_TYPE);
-        if (!presentation.type().name().equals(cachedType)) {
-            post(() -> UIHintValueBinder.commit(editorContext, nodeData,
-                    DataLibraryReference.ENTRY_TYPE, presentation.type().name()));
-        }
+
     }
 
     private static DataLibraryEntryPresentationResolver.Presentation resolve(NodeData nodeData) {

@@ -59,6 +59,7 @@ public final class EditorSidebar extends LinearLayout {
     private final float[] railPoint = new float[2];
 
     private boolean mPanelsActive = true;
+    private final Runnable revealSelectedTab = this::revealSelectedTab;
     private boolean mContentVisible = true;
     private Runnable mOnCollapseRequested;
     private Runnable mOnExpandRequested;
@@ -177,7 +178,13 @@ public final class EditorSidebar extends LinearLayout {
         dragTab=null;dragging=false;dropIndex=-1;mTabStrip.invalidate();
     }
 
+    @Override public void onWindowFocusChanged(boolean focused) {
+        if (!focused) cancelTabDrag();
+        super.onWindowFocusChanged(focused);
+    }
+
     @Override protected void onDetachedFromWindow() {
+        removeCallbacks(revealSelectedTab);
         cancelTabDrag();super.onDetachedFromWindow();
     }
 
@@ -334,7 +341,10 @@ public final class EditorSidebar extends LinearLayout {
 
         if (previous != null) previous.tab().setSelected(false);
         next.tab().setSelected(true);
-        if (isAttachedToWindow()) post(() -> mTabScroll.scrollToDescendant(next.tab()));
+        if (isAttachedToWindow()) {
+            removeCallbacks(revealSelectedTab);
+            post(revealSelectedTab);
+        }
         if (notify && mOnSelectedPanelChanged != null) mOnSelectedPanelChanged.accept(next.id());
         return true;
     }
@@ -342,7 +352,16 @@ public final class EditorSidebar extends LinearLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        if (mSelected != null) post(() -> mTabScroll.scrollToDescendant(mSelected.tab()));
+        if (mSelected != null) {
+            removeCallbacks(revealSelectedTab);
+            post(revealSelectedTab);
+        }
+    }
+
+    private void revealSelectedTab() {
+        if (isAttachedToWindow() && mSelected != null && mSelected.tab().getParent() == mTabStrip) {
+            mTabScroll.scrollToDescendant(mSelected.tab());
+        }
     }
 
     private static String normalizeId(String id) {

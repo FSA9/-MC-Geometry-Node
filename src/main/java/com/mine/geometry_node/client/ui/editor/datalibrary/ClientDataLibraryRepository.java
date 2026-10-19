@@ -16,6 +16,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     private final java.util.ArrayList<Runnable> pendingInitialLoad = new java.util.ArrayList<>();
     private boolean initialLoadInFlight;
     private long connectionGeneration;
+    private final java.util.Map<UUID, Integer> pendingUpdates = new java.util.HashMap<>();
 
     private ClientDataLibraryRepository() { this(NetworkRemoteDataLibraryGateway.INSTANCE); }
 
@@ -59,7 +60,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
                 initialLoadInFlight = false;
             }
             notifyChanged();
-            callbacks.forEach(Runnable::run);
+            callbacks.forEach(ClientDataLibraryRepository::runCallback);
         });
     }
 
@@ -68,6 +69,7 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
             connectionGeneration++;
             pendingInitialLoad.clear();
             initialLoadInFlight = false;
+            pendingUpdates.clear();
         }
     }
 
@@ -85,7 +87,31 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
 
     @Override
     public void update(Entry expected, Entry replacement) {
-        remote.update(expected, replacement, this::notifyChanged);
+        UUID id = replacement.id();
+        long generation;
+        synchronized (pendingInitialLoad) {
+            generation = connectionGeneration;
+            pendingUpdates.merge(id, 1, Integer::sum);
+        }
+        java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+        Runnable completion = () -> {
+            if (!finished.compareAndSet(false, true)) return;
+            synchronized (pendingInitialLoad) {
+                if (generation != connectionGeneration) return;
+                pendingUpdates.computeIfPresent(id, (ignored, count) -> count > 1 ? count - 1 : null);
+            }
+            notifyChanged();
+        };
+        try {
+            remote.update(expected, replacement, completion);
+        } catch (RuntimeException failure) {
+            completion.run();
+            throw failure;
+        }
+    }
+
+    @Override public boolean isUpdatePending(UUID entryId) {
+        synchronized (pendingInitialLoad) { return pendingUpdates.containsKey(entryId); }
     }
 
     @Override
@@ -145,6 +171,15 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
     }
 
     private void notifyChanged() {
-        listeners.forEach(Runnable::run);
+        listeners.forEach(ClientDataLibraryRepository::runCallback);
+    }
+
+    private static void runCallback(Runnable callback) {
+        try {
+            callback.run();
+        } catch (RuntimeException failure) {
+            System.getLogger(ClientDataLibraryRepository.class.getName()).log(
+                    System.Logger.Level.WARNING, "Data Library callback failed", failure);
+        }
     }
 }

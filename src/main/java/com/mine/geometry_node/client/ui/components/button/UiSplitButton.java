@@ -34,6 +34,13 @@ public final class UiSplitButton extends LinearLayout {
         addView(secondary, new LayoutParams(-2, -1));
     }
 
+    @Override
+    public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        if (primary != null) primary.setEnabled(enabled);
+        if (secondary != null) secondary.setEnabled(enabled);
+    }
+
     public UiActionButton primaryButton() { return primary; }
     public UiActionButton secondaryButton() { return secondary; }
 

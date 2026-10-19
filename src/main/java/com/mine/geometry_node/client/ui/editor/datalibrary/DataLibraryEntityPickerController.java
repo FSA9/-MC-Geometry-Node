@@ -11,10 +11,12 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /** Temporarily returns to the world and captures an entity reference plus a preview snapshot. */
 public final class DataLibraryEntityPickerController {
     private static Session active;
+    private static volatile long connectionGeneration;
 
     private DataLibraryEntityPickerController() {}
 
@@ -22,7 +24,12 @@ public final class DataLibraryEntityPickerController {
                                Runnable dismissed) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.execute(() -> open(picked, dismissed));
+            long generation = connectionGeneration;
+            minecraft.execute(() -> {
+                if (generation != connectionGeneration || !open(picked, dismissed)) {
+                    if (dismissed != null) MuiModApi.postToUiThread(dismissed);
+                }
+            });
             return true;
         }
         if (active != null || minecraft.player == null || minecraft.level == null) return false;
@@ -49,7 +56,22 @@ public final class DataLibraryEntityPickerController {
     }
 
     public static void reset() {
+        reset(MuiModApi::postToUiThread);
+    }
+
+    static void reset(Consumer<Runnable> uiQueue) {
+        connectionGeneration++;
+        Session previous = active;
         active = null;
+        if (previous != null) uiQueue.accept(() -> complete(previous, null, null));
+    }
+
+    private static void complete(Session session, UUID reference, EntityTemplateValue preview) {
+        try {
+            if (reference != null && session.picked != null) session.picked.accept(reference, preview);
+        } finally {
+            if (session.dismissed != null) session.dismissed.run();
+        }
     }
 
     private static void finish(Session session, UUID reference,
@@ -57,10 +79,9 @@ public final class DataLibraryEntityPickerController {
         if (active != session) return;
         active = null;
         Minecraft.getInstance().setScreen(session.previousScreen);
-        MuiModApi.postToUiThread(() -> {
-            if (reference != null && session.picked != null) session.picked.accept(reference, preview);
-            if (session.dismissed != null) session.dismissed.run();
-        });
+        long generation = connectionGeneration;
+        MuiModApi.postToUiThread(() -> complete(session,
+                generation == connectionGeneration ? reference : null, preview));
     }
 
     private record Session(Screen previousScreen,

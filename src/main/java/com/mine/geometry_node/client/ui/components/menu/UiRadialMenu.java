@@ -133,6 +133,7 @@ public final class UiRadialMenu extends FrameLayout {
     /** x/y are in this overlay's local coordinates, never screen pixels. */
     public boolean showAt(View anchor, float x, float y) {
         dismiss();
+        if (!isEnabled()) return false;
         lastActivated = null;
         var placement = RadialMenuLayout.fit(getWidth(), getHeight(), x, y, UIUtils.dp2px(1));
         if (placement == null) return false;
@@ -174,7 +175,12 @@ public final class UiRadialMenu extends FrameLayout {
         return showAtRoot(anchor, pointer[0], pointer[1]);
     }
 
-    public boolean isOpen() { return getVisibility() == VISIBLE; }
+    public boolean isOpen() { return isEnabled() && getVisibility() == VISIBLE; }
+
+    @Override public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        if (!enabled && buttons != null) dismiss();
+    }
 
     /** Apply the hovered item once and close. Cancellation must call dismiss instead. */
     public boolean confirmHoveredAndDismiss() {

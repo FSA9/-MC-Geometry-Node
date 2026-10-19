@@ -240,7 +240,18 @@ public class ItemSlotView extends ViewportNativePreviewView {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) {
+            mPressed = false;
+            setPressed(false);
+        }
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
+        mPressed = false;
+        setPressed(false);
         onStackHoverExit(mDisplayStack);
         super.onDetachedFromWindow();
     }

@@ -133,6 +133,15 @@ public class ResizableDivider extends FrameLayout {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) {
+            mHovered = false;
+            finishDrag();
+        }
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         mHovered = false;
         finishDrag();

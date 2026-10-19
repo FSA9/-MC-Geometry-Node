@@ -20,13 +20,13 @@ final class DataLibraryDropPolicy {
                 if (source == null || Objects.equals(source.parentId(), target)) return false;
                 for (var other : snapshot.childEntries.getOrDefault(target, java.util.List.of())) {
                     if (!other.id().equals(id) && other.type() == source.type()
-                            && other.key().trim().equalsIgnoreCase(source.key().trim())) return false;
+                            && other.key().trim().equals(source.key().trim())) return false;
                 }
             }
             Set<String> incoming = new HashSet<>();
             for (UUID id : payload.entryIds()) {
                 var entry = snapshot.entries.get(id);
-                if (!incoming.add(entry.type().name() + ":" + entry.key().trim().toLowerCase(java.util.Locale.ROOT))) return false;
+                if (!incoming.add(entry.type().name() + ":" + entry.key().trim())) return false;
             }
             return !payload.entryIds().isEmpty();
         }
@@ -35,9 +35,9 @@ final class DataLibraryDropPolicy {
             var source = snapshot.folders.get(id);
             if (source == null || Objects.equals(source.parentId(), target)
                     || isInFolderTree(target, id, snapshot.folders)) return false;
-            if (!incoming.add(source.name().trim().toLowerCase(java.util.Locale.ROOT))) return false;
+            if (!incoming.add(source.name().trim())) return false;
             for (var other : snapshot.childFolders.getOrDefault(target, java.util.List.of())) {
-                if (!other.id().equals(id) && other.name().trim().equalsIgnoreCase(source.name().trim())) return false;
+                if (!other.id().equals(id) && other.name().trim().equals(source.name().trim())) return false;
             }
         }
         return !payload.folderIds().isEmpty();

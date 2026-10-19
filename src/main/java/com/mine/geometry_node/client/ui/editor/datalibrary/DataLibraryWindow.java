@@ -176,14 +176,16 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         setBackground(solid(BG, 0));
 
         toolbar = new DataLibraryToolbar(context,
-                () -> { prepareCreation(); this.repository.createFolder(activeFolder); },
+                () -> { if (disposed || suspended) return; prepareCreation(); this.repository.createFolder(activeFolder); },
                 anchor -> showTypeMenu(anchor, type -> {
+                    if (disposed || suspended) return;
                     prepareCreation();
                     String groupKey = (activeFolder == null ? "root" : activeFolder.toString()) + ":" + type.name();
                     expandedTypeGroups.remove("!" + groupKey);
                     this.repository.create(activeFolder, type);
                 }, false),
                 () -> {
+                    if (disposed || suspended) return;
                     if (selected.isEmpty() && selectedFolders.isEmpty()) return;
                     Set<DataLibraryUiRepository.EntryKey> entries = Set.copyOf(selected);
                     Set<UUID> folders = Set.copyOf(selectedFolders);
@@ -469,6 +471,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
         // Deleted/type-changed entries must stop accepting edits even while another draft is open.
         retireMissingCards(next);
+        selection.retain(next);
         folderDropRows.entrySet().removeIf(item -> {
             if (next.folders.containsKey(item.getValue())) return false;
             View row = item.getKey();
@@ -478,7 +481,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (hasActiveDraft()) {
             structurePending = true;
             refreshCardValues(next);
-            publishSelection();
+            updateSelectionViews();
             deferRefresh();
             return;
         }
@@ -490,7 +493,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             WorkspaceDragService.INSTANCE.cancelIfSource(this);
             snapshot = next;
             next.indexChildren();
-            selection.retain(next);
             if (activeFolder != null && !next.folders.containsKey(activeFolder)) activeFolder = null;
             expandedFolders.retainAll(next.folders.keySet());
             expandedEntries.retainAll(next.entries.keySet());
@@ -615,8 +617,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             if (changed || binding.presentation.isExpanded() != expanded) deferRefresh();
             return;
         }
-        // A local write may still be in flight while its blur refresh sees the old snapshot.
-        if (!changed && localPending && !authoritative) {
+        // Another entry's acknowledgement must not confirm or reject this entry's queued writes.
+        if (repository.isUpdatePending(entry.id()) || localPending && !changed && !authoritative) {
             updateRowSummary(binding.presentation, binding.current.get());
             if (binding.presentation.isExpanded() != expanded) {
                 binding.presentation.setExpandedContent(expanded, expanded
@@ -1336,7 +1338,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (disposed || suspended) return false;
+        return super.dispatchTouchEvent(event);
+    }
+
+    @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (disposed || suspended) return false;
         if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
         KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
         KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));

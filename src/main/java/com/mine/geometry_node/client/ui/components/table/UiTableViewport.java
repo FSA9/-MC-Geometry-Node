@@ -12,6 +12,7 @@ import icyllis.modernui.widget.LinearLayout;
 public final class UiTableViewport extends UiHorizontalScrollView {
     private final UiTableColumns columns;
     private final LinearLayout table;
+    private final Runnable widthsChanged = this::refreshTableWidths;
 
     public UiTableViewport(Context context, UiTableColumns columns, LinearLayout table) {
         super(context);
@@ -19,12 +20,25 @@ public final class UiTableViewport extends UiHorizontalScrollView {
         this.table = table;
         setFillViewport(true);
         addView(table, new FrameLayout.LayoutParams(columns.contentWidth(), -1));
-        columns.setOnWidthsChanged(() -> {
-            var params = table.getLayoutParams();
-            params.width = columns.contentWidth();
-            table.setLayoutParams(params);
-            requestRowLayouts(table);
-        });
+        columns.setOnWidthsChanged(widthsChanged);
+    }
+
+    private void refreshTableWidths() {
+        var params = table.getLayoutParams();
+        params.width = columns.contentWidth();
+        table.setLayoutParams(params);
+        requestRowLayouts(table);
+    }
+
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        columns.setOnWidthsChanged(widthsChanged);
+        refreshTableWidths();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        columns.clearOnWidthsChanged(widthsChanged);
+        super.onDetachedFromWindow();
     }
 
     private static void requestRowLayouts(View view) {
