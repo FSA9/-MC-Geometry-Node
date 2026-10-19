@@ -3,7 +3,8 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.google.gson.JsonParser;
-import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
@@ -72,6 +73,7 @@ final class DataLibraryValueEditors {
     private static final int MUTED = UiTheme.Text.MUTED;
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final int CARD_PREVIEW_SIZE_DP = 64;
+    private static final int EDIT_ACTION_SIZE_DP = 26;
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
     private final Context context;
@@ -196,9 +198,9 @@ final class DataLibraryValueEditors {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
         content.setPadding(px(UiTableStyle.ROW_NUMBER_WIDTH + UiTableStyle.SELECTION_COLUMN_WIDTH + 6),
-                px(8), px(12), px(8));
+                px(12), px(16), px(16));
 
-        View valueEditor = createExpandedValueEditor(entry, current);
+        ExpandedValueEditor editor = createExpandedValueEditor(entry, current);
         int height = expandedValueHeightDp(entry.type());
         TextView key = label(getContext(), tr("geometry_node.port.data_library_value"), EDITOR_TEXT_SIZE_DP, MUTED);
         key.setSingleLine(true);
@@ -206,15 +208,19 @@ final class DataLibraryValueEditors {
         key.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LayoutParams valueParams = entry.type() == PortType.BOOLEAN
                 ? fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP)
-                : hasPreview(entry.type()) ? new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(height))
+                : hasPreview(entry.type()) ? fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP)
                 : new LayoutParams(0, px(height), 1);
-        content.addView(new UiPropertyRow(getContext(), key, valueEditor, null,
-                        new UiPropertyRow.Layout(66, height, 6, 0, 0), valueParams),
+        content.addView(new UiPropertyRow(getContext(), key, editor.value(), editor.action(),
+                        new UiPropertyRow.Layout(66, height, 6, EDIT_ACTION_SIZE_DP, 16), valueParams),
                 new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return content;
     }
 
-    private View createExpandedValueEditor(DataLibraryUiRepository.Entry entry,
+    private record ExpandedValueEditor(View value, View action) {
+        private ExpandedValueEditor(View value) { this(value, null); }
+    }
+
+    private ExpandedValueEditor createExpandedValueEditor(DataLibraryUiRepository.Entry entry,
                                            AtomicReference<DataLibraryUiRepository.Entry> current) {
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
@@ -223,47 +229,39 @@ final class DataLibraryValueEditors {
                 Entity entity = resolveClientEntity(entityId);
                 if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
             }
-            UiActionButton edit = button(getContext(), tr(entry.type() == PortType.ENTITY
-                            ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"),
-                    UiActionButton.Role.INLINE);
-            edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
+            UiIconButton edit = editButton(tr(entry.type() == PortType.ENTITY
+                    ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"));
             edit.setOnClickListener(v -> editEntityValue(entry, current));
-            return previewEditor(preview, edit);
+            return new ExpandedValueEditor(centeredPreview(preview), edit);
         } else if (entry.type() == PortType.ITEM_STACK) {
             ItemSlotView preview = new ItemSlotView(getContext());
             preview.setDisplayStack(entry.value() instanceof ItemStack stack ? stack : ItemStack.EMPTY);
             preview.setOpenEditorOnClick(false);
             preview.setDisplayPasteAction(json -> pasteItemStack(current, json));
-            UiActionButton edit = button(getContext(), tr("geometry_node.node.pick_item_stack"),
-                    UiActionButton.Role.INLINE);
-            edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
+            UiIconButton edit = editButton(tr("geometry_node.node.pick_item_stack"));
             edit.setOnClickListener(v -> editItemStackValue(current));
-            return previewEditor(preview, edit);
+            return new ExpandedValueEditor(centeredPreview(preview), edit);
         } else if (entry.type() == PortType.XYZ) {
-            return createXyzValueEditor(current);
+            return new ExpandedValueEditor(createXyzValueEditor(current));
         } else if (entry.type() == PortType.AREA) {
-            TextView summary = label(getContext(), areaSummary(entry.value()), 11, TEXT);
-            summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            return summary;
+            return new ExpandedValueEditor(valueLabel(areaSummary(entry.value())));
         } else if (isSummaryType(entry.type())) {
-            TextView summary = label(getContext(), valueSummary(entry), 11, TEXT);
-            summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            return summary;
+            return new ExpandedValueEditor(valueLabel(valueSummary(entry)));
         } else if (isInlineValueType(entry.type())) {
             return switch (entry.type()) {
-                case BOOLEAN -> createBooleanValueEditor(entry, current);
-                case STRING -> createPlainTextValueEditor(current);
+                case BOOLEAN -> new ExpandedValueEditor(createBooleanValueEditor(entry, current));
+                case STRING -> new ExpandedValueEditor(createPlainTextValueEditor(current));
                 case PATH -> createPathValueEditor(current);
                 case RICH_TEXT -> createRichTextValueEditor(current);
                 case ITEM, BLOCK_STATE -> createRegistryValueEditor(entry.type(), current);
-                default -> createValueEditor(entry, current);
+                default -> new ExpandedValueEditor(createValueEditor(entry, current));
             };
         }
-        return createValueEditor(entry, current);
+        return new ExpandedValueEditor(createValueEditor(entry, current));
     }
 
     static int expandedValueHeightDp(PortType type) {
-        if (hasPreview(type)) return CARD_PREVIEW_SIZE_DP + 8 + 26;
+        if (hasPreview(type)) return CARD_PREVIEW_SIZE_DP;
         if (type == PortType.XYZ) return 56;
         if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 28;
         return 54;
@@ -273,18 +271,12 @@ final class DataLibraryValueEditors {
         return type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK;
     }
 
-    private View previewEditor(View preview, UiActionButton edit) {
-        LinearLayout content = new LinearLayout(getContext());
-        content.setOrientation(VERTICAL);
-        content.setGravity(Gravity.RIGHT);
-        content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
-        edit.setMaxWidth(px(180));
-        edit.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
-        edit.setGravity(Gravity.CENTER);
-        LayoutParams editParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(26));
-        editParams.topMargin = px(8);
-        content.addView(edit, editParams);
-        return content;
+    private TextView valueLabel(String text) {
+        TextView summary = label(getContext(), text, EDITOR_TEXT_SIZE_DP, TEXT);
+        summary.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        summary.setSingleLine(true);
+        summary.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
+        return summary;
     }
 
     static String compactValueSummary(DataLibraryUiRepository.Entry entry) {
@@ -317,18 +309,18 @@ final class DataLibraryValueEditors {
         return editor;
     }
 
-    private View createPathValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private ExpandedValueEditor createPathValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
         String path = current.get().value() instanceof String value ? value : "";
-        UiActionButton button = button(getContext(), pathLabel(path), UiActionButton.Role.INLINE);
-        button.setContentDescription(path.isBlank() ? tr("geometry_node.data_library.choose_path") : path);
+        TextView summary = valueLabel(path);
+        UiIconButton button = editButton(tr("geometry_node.data_library.choose_path"));
         button.setOnClickListener(v -> {
+            if (!canUpdate(current) || isEditing(current.get().id())) return;
             Runnable finished = beginExternalEdit(current);
             try {
                 FilePickerDialog picker = FilePickerDialog.showPath(button,
                         current.get().value() instanceof String value ? value : "", selectedPath -> {
                     updateValue(current, selectedPath);
-                    button.setText(pathLabel(selectedPath));
-                    button.setContentDescription(selectedPath);
+                    summary.setText(selectedPath);
                 });
                 finishOnDetach(picker, finished);
             } catch (RuntimeException failure) {
@@ -336,38 +328,43 @@ final class DataLibraryValueEditors {
                 throw failure;
             }
         });
-        return button;
+        return new ExpandedValueEditor(summary, button);
     }
 
-    private View createRichTextValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
-        UiActionButton button = button(getContext(), tr("geometry_node.data_library.edit"),
-                UiActionButton.Role.INLINE);
-        button.setContentDescription(tr("geometry_node.graph_properties.quest.edit_rich_text"));
+    private ExpandedValueEditor createRichTextValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+        TextView summary = valueLabel(RichTextValue.from(current.get().value()).plain());
+        UiIconButton button = editButton(tr("geometry_node.graph_properties.quest.edit_rich_text"));
         button.setOnClickListener(v -> {
+            if (!canUpdate(current) || isEditing(current.get().id())) return;
             Runnable finished = beginExternalEdit(current);
             try {
                 ExpandedTextInputOverlay.showRichText(getContext(), button,
-                        RichTextValue.from(current.get().value()), value -> updateValue(current, value), finished);
+                        RichTextValue.from(current.get().value()), value -> {
+                            updateValue(current, value);
+                            summary.setText(value.plain());
+                        }, finished);
             } catch (RuntimeException failure) {
                 finished.run();
                 throw failure;
             }
         });
-        return button;
+        return new ExpandedValueEditor(summary, button);
     }
 
-    private View createRegistryValueEditor(PortType type,
+    private ExpandedValueEditor createRegistryValueEditor(PortType type,
                                            AtomicReference<DataLibraryUiRepository.Entry> current) {
-        UiActionButton button = button(getContext(), registryValueLabel(type, current.get().value()),
-                UiActionButton.Role.INLINE);
-        button.setContentDescription(tr(type == PortType.ITEM
+        TextView summary = valueLabel(registryValueLabel(type, current.get().value()));
+        UiIconButton button = editButton(tr(type == PortType.ITEM
                 ? "geometry_node.data_library.choose_item"
                 : "geometry_node.data_library.choose_block"));
-        button.setOnClickListener(v -> showRegistryValueMenu(button, type, current));
-        return button;
+        button.setOnClickListener(v -> {
+            if (canUpdate(current) && !isEditing(current.get().id()))
+                showRegistryValueMenu(button, summary, type, current);
+        });
+        return new ExpandedValueEditor(summary, button);
     }
 
-    private void showRegistryValueMenu(UiActionButton anchor, PortType type,
+    private void showRegistryValueMenu(View anchor, TextView summary, PortType type,
                                        AtomicReference<DataLibraryUiRepository.Entry> current) {
         ViewGroup host = overlayHost();
         if (host == null) return;
@@ -382,7 +379,7 @@ final class DataLibraryValueEditors {
                     Object selectedValue = registryValue(type, selectedId);
                     if (selectedValue == null) return;
                     updateValue(current, selectedValue);
-                    anchor.setText(selectedId);
+                    summary.setText(selectedId);
                 });
         Runnable finished = beginExternalEdit(current);
         finishOnDetach(menu, finished);
@@ -415,18 +412,7 @@ final class DataLibraryValueEditors {
         if (type == PortType.BLOCK_STATE && value instanceof BlockState state) {
             return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         }
-        return "-";
-    }
-
-    private static String pathLabel(String path) {
-        if (path == null || path.isBlank()) {
-            return tr("geometry_node.data_library.choose_path");
-        }
-        String normalized = path.replace('\\', '/');
-        int separator = normalized.lastIndexOf('/');
-        return separator >= 0 && separator + 1 < normalized.length()
-                ? normalized.substring(separator + 1)
-                : normalized;
+        return "";
     }
 
     private LinearLayout createXyzValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
@@ -698,14 +684,10 @@ final class DataLibraryValueEditors {
         return Component.translatable(key).getString();
     }
 
-    private static UiActionButton button(Context context, String text, UiActionButton.Role role) {
-        UiActionButton button = new UiActionButton(context, text, role, UiActionButton.Density.COMPACT);
-        button.setMinWidth(0);
-        button.setMinHeight(0);
-        button.setPadding(px(8), 0, px(8), 0);
-        button.setSingleLine(true);
-        button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        UIUtils.setLockedTextSize(button, 11);
+    private UiIconButton editButton(String description) {
+        UiIconButton button = new UiIconButton(getContext(),
+                new SvgIconView(getContext(), SvgIconView.Icon.MORE_HORIZONTAL, TEXT));
+        button.setContentDescription(description);
         return button;
     }
 
