@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.asset.preview;
 
+import com.mine.geometry_node.client.platform.ClientServerIdentity;
+
 import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
@@ -32,7 +34,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     public synchronized Subscription subscribe(AssetPreviewRevision revision, Listener listener) {
         if (revision == null) throw new IllegalArgumentException("revision cannot be null");
         if (listener == null) throw new IllegalArgumentException("listener cannot be null");
-        String serverIdentity = ClientAssetPreviewServerIdentity.current();
+        String serverIdentity = ClientServerIdentity.current();
         CacheKey key = new CacheKey(serverIdentity, revision);
         Entry entry = entries.computeIfAbsent(key,
                 ignored -> new Entry(key, cache.generation(serverIdentity)));
@@ -51,7 +53,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     public CompletableFuture<Void> clearCurrentServerCache() {
-        String serverIdentity = ClientAssetPreviewServerIdentity.current();
+        String serverIdentity = ClientServerIdentity.current();
         synchronized (this) {
             cache.invalidate(serverIdentity);
             cancelServerEntries(serverIdentity);

@@ -115,3 +115,13 @@ preview.zoom().reset();        // 回到 1，受当前范围约束
 - 明显操作使用 `contentDescription`，避免重复 tooltip；完整数据值需要提示时使用能正确透传行点击的展示控件。
 - 草稿与已提交值分开；视觉刷新不能调用业务提交、触发历史命令或覆盖未提交输入。
 - 目录按职责分类，修改组件时迁移已有调用方；不保留旧包名转发类或平行实现。
+
+## 界面状态接入
+
+组件不自行保存文件。调用方通过 `UiStateContext` 选择 `MEMORY`（本次游戏进程）或 `PERSISTENT`（跨重启）；完整分层、生命周期和接入约定见 [界面状态架构](../../../../../../../../../docs/ui/ui-state.md)。
+
+- `UiTableColumns.exportCustomWidths()` / `restoreCustomWidths(Map<String, Float>)`：按稳定列 ID 保存逻辑 dp，仅导出显式调整的可调列；忽略未知／固定列及非法数值。`addUserStateListener(Runnable)` 返回可解除的订阅，不覆盖 viewport 的布局回调。
+- `UiFixedSplitLayout.preferredExtentDp()` / `restorePreferredExtentDp(float)`：保存期望尺寸，窗口空间不足时的临时压缩不会写回偏好；用户拖拽使用 `addUserStateListener`。
+- `SidebarLayoutController(split, sidebar, Consumer<Boolean>)`：固定尺寸侧栏只通知显隐，宽度由 split 管理；旧权重式构造器保持权重语义。
+
+先恢复状态，再订阅用户变更。自动测量、缩放及恢复不会触发用户变更通知；表格 `setOnWidthsChanged` 属于布局刷新通道，不能作为存储通道。保存、作用域选择及订阅生命周期由编辑器管理。

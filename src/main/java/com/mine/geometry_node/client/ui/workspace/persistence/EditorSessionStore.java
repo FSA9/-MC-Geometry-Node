@@ -10,7 +10,9 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -23,10 +25,7 @@ public final class EditorSessionStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final int MAX_DEPTH = 32;
     private static final int MAX_LEAVES = 32;
-    private static final int MAX_TERMINAL_TABS = 32;
-    private static final int MAX_PATH_LENGTH = 4096;
-    private static final int MAX_TERMINAL_TITLE_LENGTH = 80;
-    private static final int MAX_TERMINAL_PROFILE_ID_LENGTH = 128;
+    private static final int MAX_FILE_BYTES = 4 * 1024 * 1024;
     private static final Set<String> EDITOR_TYPES = Set.of(
             "GRAPH_EDITOR", "ASSET_BROWSER", "DATA_LIBRARY", "TERMINAL", "PERFORMANCE", "GAME_VIEWPORT");
 
@@ -42,13 +41,15 @@ public final class EditorSessionStore {
             return new EditorSessionState();
         }
         try {
+            if (Files.size(file) > MAX_FILE_BYTES) return new EditorSessionState();
             EditorSessionState loaded = GSON.fromJson(
                     Files.readString(file, StandardCharsets.UTF_8), EditorSessionState.class);
-            if (loaded == null || loaded.version != EditorSessionState.CURRENT_VERSION) {
+            if (loaded == null || (loaded.version < 1 || loaded.version > EditorSessionState.CURRENT_VERSION)) {
                 return new EditorSessionState();
             }
+            loaded.version = EditorSessionState.CURRENT_VERSION;
             int[] leafCount = {0};
-            loaded.layout = sanitizeArea(loaded.layout, 0, leafCount);
+            loaded.layout = sanitizeArea(loaded.layout, 0, leafCount, new HashSet<>());
             return loaded;
         } catch (Exception exception) {
             System.err.println("[EditorSession] Failed to load editor document: " + exception.getMessage());
@@ -60,127 +61,82 @@ public final class EditorSessionStore {
         if (state == null || state.layout == null) {
             return;
         }
-        state.version = EditorSessionState.CURRENT_VERSION;
         Path target = sessionFile.get();
         Path temp = target.resolveSibling(target.getFileName() + ".tmp");
         try {
+            // Never replace documents written by a newer application version.
+            if (Files.isRegularFile(target)) {
+                if (Files.size(target) > MAX_FILE_BYTES) return;
+                try {
+                    var document = com.google.gson.JsonParser.parseString(Files.readString(target)).getAsJsonObject();
+                    if (document.has("version") && document.get("version").getAsInt() > EditorSessionState.CURRENT_VERSION) return;
+                } catch (RuntimeException ignored) { /* A valid snapshot may repair a corrupt file. */ }
+            }
+            if (state.version > EditorSessionState.CURRENT_VERSION || !validTree(state.layout, 0,
+                    new int[]{0}, Collections.newSetFromMap(new IdentityHashMap<>()))) return;
+            EditorSessionState snapshot = com.mine.geometry_node.client.ui.workspace.state.UiStateContext.snapshotSession(state);
+            snapshot.version = EditorSessionState.CURRENT_VERSION;
+            snapshot.layout = sanitizeArea(snapshot.layout, 0, new int[]{0}, new HashSet<>());
+            if (snapshot.layout == null) return;
+            String json = GSON.toJson(snapshot);
+            if (json.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_BYTES) return;
             Path parent = target.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            Files.writeString(temp, GSON.toJson(state), StandardCharsets.UTF_8);
+            Files.writeString(temp, json, StandardCharsets.UTF_8);
             try {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException ignored) {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             System.err.println("[EditorSession] Failed to save editor document: " + exception.getMessage());
+        } finally {
+            try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
         }
     }
 
+    private static boolean validTree(EditorSessionState.AreaState state, int depth, int[] leaves,
+                                     Set<EditorSessionState.AreaState> seen) {
+        if (state == null || depth > MAX_DEPTH || !seen.add(state)) return false;
+        if ("split".equals(state.kind)) return validTree(state.first, depth + 1, leaves, seen)
+                && validTree(state.second, depth + 1, leaves, seen);
+        return "leaf".equals(state.kind) && ++leaves[0] <= MAX_LEAVES;
+    }
+
     private static EditorSessionState.AreaState sanitizeArea(
-            EditorSessionState.AreaState state, int depth, int[] leafCount) {
+            EditorSessionState.AreaState state, int depth, int[] leafCount, Set<String> owners) {
         if (state == null || depth > MAX_DEPTH) {
             return null;
         }
         if ("split".equals(state.kind)) {
+            state.ownerId = null;
+            state.slots = null;
+            state.assetBrowser = null;
+            state.terminal = null;
             state.direction = "VERTICAL".equals(state.direction) ? "VERTICAL" : "HORIZONTAL";
             state.ratio = Float.isFinite(state.ratio)
                     ? Math.max(0.12f, Math.min(0.88f, state.ratio))
                     : 0.5f;
-            state.first = sanitizeArea(state.first, depth + 1, leafCount);
-            state.second = sanitizeArea(state.second, depth + 1, leafCount);
+            state.first = sanitizeArea(state.first, depth + 1, leafCount, owners);
+            state.second = sanitizeArea(state.second, depth + 1, leafCount, owners);
             return state.first != null && state.second != null ? state : null;
         }
         if (!"leaf".equals(state.kind) || ++leafCount[0] > MAX_LEAVES) {
             return null;
         }
-        if (!EDITOR_TYPES.contains(state.editorType)) {
+        if (state.editorType == null || !EDITOR_TYPES.contains(state.editorType)) {
             state.editorType = "GRAPH_EDITOR";
         }
-        if (state.assetBrowser == null) {
-            state.assetBrowser = new EditorSessionState.AssetBrowserState();
+        com.mine.geometry_node.client.ui.workspace.state.BuiltinUiStateKeys.migrateLegacy(state);
+        if (!owners.add(state.ownerId)) {
+            state.ownerId = UUID.randomUUID().toString();
+            owners.add(state.ownerId);
         }
-        String location = state.assetBrowser.location;
-        state.assetBrowser.location = "REMOTE".equals(location) || "FAVORITES".equals(location)
-                ? location
-                : "LOCAL";
-        state.assetBrowser.localPath = sanitizePath(state.assetBrowser.localPath);
-        state.assetBrowser.remotePath = sanitizePath(state.assetBrowser.remotePath);
-        state.assetBrowser.navigationWeight = sanitizeWeight(state.assetBrowser.navigationWeight);
-        if (state.terminal == null) {
-            state.terminal = new EditorSessionState.TerminalState();
-        }
-        sanitizeTerminal(state.terminal);
-        state.terminal.activeTab = Math.max(0, Math.min(state.terminal.tabCount - 1, state.terminal.activeTab));
         state.first = null;
         state.second = null;
         return state;
     }
 
-    private static void sanitizeTerminal(EditorSessionState.TerminalState terminal) {
-        if (terminal.tabs == null) {
-            terminal.tabs = new ArrayList<>();
-        }
-        if (terminal.tabs.size() > MAX_TERMINAL_TABS) {
-            terminal.tabs = new ArrayList<>(terminal.tabs.subList(0, MAX_TERMINAL_TABS));
-        }
-        if (terminal.tabs.isEmpty()) {
-            int count = Math.max(1, Math.min(MAX_TERMINAL_TABS, terminal.tabCount));
-            for (int i = 0; i < count; i++) {
-                terminal.tabs.add(defaultTerminalTab(i + 1));
-            }
-        }
-        for (int i = 0; i < terminal.tabs.size(); i++) {
-            EditorSessionState.TerminalTabState tab = terminal.tabs.get(i);
-            if (tab == null) {
-                tab = defaultTerminalTab(i + 1);
-                terminal.tabs.set(i, tab);
-            }
-            tab.id = sanitizeUuid(tab.id);
-            tab.title = sanitizeText(tab.title, "Terminal " + (i + 1), MAX_TERMINAL_TITLE_LENGTH);
-            tab.mode = "SHELL".equals(tab.mode) ? tab.mode : "COMMAND";
-            tab.profileId = sanitizeText(tab.profileId, "", MAX_TERMINAL_PROFILE_ID_LENGTH);
-        }
-        terminal.tabCount = terminal.tabs.size();
-    }
-
-    private static EditorSessionState.TerminalTabState defaultTerminalTab(int number) {
-        EditorSessionState.TerminalTabState tab = new EditorSessionState.TerminalTabState();
-        tab.id = UUID.randomUUID().toString();
-        tab.title = "Terminal " + number;
-        return tab;
-    }
-
-    private static String sanitizeUuid(String value) {
-        try {
-            return UUID.fromString(value).toString();
-        } catch (RuntimeException ignored) {
-            return UUID.randomUUID().toString();
-        }
-    }
-
-    private static String sanitizeText(String value, String fallback, int maxLength) {
-        if (value == null) {
-            return fallback;
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return fallback;
-        }
-        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
-    }
-
-    private static String sanitizePath(String path) {
-        if (path == null) {
-            return "";
-        }
-        String trimmed = path.trim();
-        return trimmed.length() <= MAX_PATH_LENGTH ? trimmed : trimmed.substring(0, MAX_PATH_LENGTH);
-    }
-
-    private static float sanitizeWeight(float weight) {
-        return Float.isFinite(weight) ? Math.max(0.05f, Math.min(0.45f, weight)) : 0.2f;
-    }
 }

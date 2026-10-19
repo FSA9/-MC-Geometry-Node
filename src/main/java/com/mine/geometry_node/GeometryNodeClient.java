@@ -61,6 +61,8 @@ public class GeometryNodeClient {
         NeoForge.EVENT_BUS.addListener(this::onSelectionDiscs);
         NeoForge.EVENT_BUS.addListener(this::onSubmitCustomGeometry);
         NeoForge.EVENT_BUS.addListener(this::onClientLoggingOut);
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) ->
+                com.mine.geometry_node.client.ui.workspace.state.UiStateScopes.connected(event.getPlayer().getUUID()));
         NeoForge.EVENT_BUS.addListener(this::onInteractionKeyMappingTriggered);
 
         // 渲染注册
@@ -113,6 +115,7 @@ public class GeometryNodeClient {
     }
 
     private void onClientLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.mine.geometry_node.client.ui.workspace.state.UiStateScopes.disconnected();
         com.mine.geometry_node.client.runtime.game.input.GameViewportInput.reset();
         com.mine.geometry_node.client.runtime.game.scene.ViewportDebugClient.clear();
         ClientBlueprintInputManager.reset();

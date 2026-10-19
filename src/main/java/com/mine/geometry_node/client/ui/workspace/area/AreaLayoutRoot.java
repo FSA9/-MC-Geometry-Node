@@ -175,6 +175,7 @@ public final class AreaLayoutRoot extends FrameLayout {
 
         replaceNodeView(parent, sibling);
         leaf.dispose();
+        com.mine.geometry_node.client.ui.workspace.state.UiStateContext.forgetOwner(leaf.sessionState().ownerId);
         leaf.setParent(null);
         parent.setParent(null);
         removeNodeView(parent);
@@ -439,8 +440,8 @@ public final class AreaLayoutRoot extends FrameLayout {
             state.ratio = split.ratio();
             state.first = snapshotNode(split.first());
             state.second = snapshotNode(split.second());
-            state.assetBrowser = null;
-            state.terminal = null;
+            state.ownerId = null;
+            state.slots = null;
             return state;
         }
         return null;

@@ -26,6 +26,9 @@ public interface DataLibraryUiRepository {
 
     List<Entry> entries();
 
+    /** False while the current connection has no authoritative snapshot, including after a failed load. */
+    default boolean hasLoadedSnapshot() { return true; }
+
     default Entry findEntry(UUID id) {
         return entries().stream().filter(entry -> entry.id().equals(id)).findFirst().orElse(null);
     }

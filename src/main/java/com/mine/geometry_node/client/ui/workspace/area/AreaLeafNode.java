@@ -21,12 +21,7 @@ final class AreaLeafNode extends AreaNode {
         mEditorType = parseEditorType(mSessionState.editorType);
         mSessionState.kind = "leaf";
         mSessionState.editorType = mEditorType.name();
-        if (mSessionState.assetBrowser == null) {
-            mSessionState.assetBrowser = new EditorSessionState.AssetBrowserState();
-        }
-        if (mSessionState.terminal == null) {
-            mSessionState.terminal = new EditorSessionState.TerminalState();
-        }
+        com.mine.geometry_node.client.ui.workspace.state.BuiltinUiStateKeys.migrateLegacy(mSessionState);
     }
 
     AreaEditorType editorType() {

@@ -25,6 +25,8 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.ui.workspace.state.EditorSidebarState;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -70,6 +72,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mPropertiesSidebar;
     private final SidebarLayoutController mSidebarLayout;
+    private final UiStateContext mUiStateContext;
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
@@ -88,7 +91,16 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             Context context,
             EditorSessionState.AssetBrowserState sessionState,
             Runnable sessionChanged) {
+        this(context, sessionState, sessionChanged, UiStateContext.ephemeral());
+    }
+
+    public AssetBrowserWindow(
+            Context context,
+            EditorSessionState.AssetBrowserState sessionState,
+            Runnable sessionChanged,
+            UiStateContext uiStateContext) {
         super(context);
+        mUiStateContext = java.util.Objects.requireNonNull(uiStateContext);
         mSessionState = sessionState == null
                 ? new EditorSessionState.AssetBrowserState()
                 : sessionState;
@@ -109,8 +121,15 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mMainLayout.addView(ResizableDivider.weighted(
                 context, ResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
 
-        AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
-        float sidebarWeight = browserConfig.rightSidebarWeight;
+        if (!mUiStateContext.contains(EditorSidebarState.ASSETS, EditorSidebarState.SCOPE)) {
+            AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
+            mUiStateContext.write(EditorSidebarState.ASSETS, EditorSidebarState.SCOPE,
+                    new EditorSidebarState(browserConfig.rightSidebarVisible,
+                            browserConfig.rightSidebarWeight, browserConfig.rightSidebarTab));
+        }
+        EditorSidebarState sidebarState = mUiStateContext.read(
+                EditorSidebarState.ASSETS, EditorSidebarState.SCOPE);
+        float sidebarWeight = sidebarState.weight();
 
         LinearLayout browserWorkspace = new LinearLayout(context);
         browserWorkspace.setOrientation(LinearLayout.HORIZONTAL);
@@ -127,7 +146,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0.8f - sidebarWeight));
 
-        View propertiesDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
+        View propertiesDivider = ResizableDivider.weighted(
+                context, ResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         browserWorkspace.addView(propertiesDivider);
 
         mPropertiesSidebar = new EditorSidebar(context);
@@ -137,7 +157,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mPropertiesPanel = mPropertiesSidebar.requirePanel(
                 GraphPropertiesPanel.PANEL_ID,
                 GraphPropertiesPanel.class);
-        mPropertiesSidebar.restoreSelectedPanel(browserConfig.rightSidebarTab);
+        mPropertiesSidebar.restoreSelectedPanel(sidebarState.tab());
         browserWorkspace.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -149,21 +169,22 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 propertiesDivider,
                 mPropertiesSidebar,
                 sidebarWeight,
-                (visible, weight) -> ConfigManager.INSTANCE.update(config -> {
-                    config.assetBrowser.rightSidebarVisible = visible;
-                    config.assetBrowser.rightSidebarWeight = weight;
-                    config.assetBrowser.rightSidebarTab = mPropertiesSidebar.getSelectedPanelId();
-                }));
+                (visible, weight) -> mUiStateContext.write(
+                        EditorSidebarState.ASSETS, EditorSidebarState.SCOPE,
+                        new EditorSidebarState(visible, weight, mPropertiesSidebar.getSelectedPanelId())));
         mPropertiesSidebar.setOnCollapseRequested(() -> mSidebarLayout.setVisible(false, true));
-        mPropertiesSidebar.setOnSelectedPanelChanged(id -> ConfigManager.INSTANCE.update(
-                config -> config.assetBrowser.rightSidebarTab = id));
+        mPropertiesSidebar.setOnSelectedPanelChanged(id -> persistSidebarState());
         mBrowserPanel.setSelectionChangedListener(entries -> mPropertiesPanel.bind(
                 AssetFilePropertiesTarget.fromSelection(entries, mBrowserPanel::refreshFileList)));
         mBrowserPanel.setLocationChangedListener(this::captureLocationState);
-        mSidebarLayout.initialize(browserConfig.rightSidebarVisible);
+        mSidebarLayout.initialize(sidebarState.visible());
 
         restoreInitialLocation();
         requestRemoteCapabilities();
+    }
+
+    private void persistSidebarState() {
+        mSidebarLayout.persistState();
     }
 
     /**

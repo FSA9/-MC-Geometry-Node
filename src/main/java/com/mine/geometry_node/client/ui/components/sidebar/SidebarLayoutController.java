@@ -21,12 +21,21 @@ public final class SidebarLayoutController {
     private float mExpandedWeight;
     private boolean mOwnerVisible = true;
     private UiFixedSplitLayout mFixedSplit;
+    private java.util.function.Consumer<Boolean> mVisibilityListener;
 
     /** Fixed-width variant; the middle content absorbs resize and collapse changes. */
     public SidebarLayoutController(UiFixedSplitLayout split, EditorSidebar sidebar) {
         this(split, split.flexiblePane(), split.divider(), sidebar, 0, null);
         if (split.fixedPane() != sidebar) throw new IllegalArgumentException("Sidebar must be the fixed pane");
         mFixedSplit = split;
+    }
+
+    /** Fixed-width binding without weight semantics. initialize() and setVisible(..., false)
+     * restore silently; notified actions and persistState() publish visibility to the owner. */
+    public SidebarLayoutController(UiFixedSplitLayout split, EditorSidebar sidebar,
+                                   java.util.function.Consumer<Boolean> visibilityListener) {
+        this(split, sidebar);
+        mVisibilityListener = visibilityListener;
     }
 
     public SidebarLayoutController(
@@ -117,6 +126,10 @@ public final class SidebarLayoutController {
     }
 
     private void notifyStateChanged() {
+        if (mFixedSplit != null) {
+            if (mVisibilityListener != null) mVisibilityListener.accept(isVisible());
+            return;
+        }
         rememberExpandedWeight();
         if (mStateListener != null) mStateListener.onStateChanged(isVisible(), mExpandedWeight);
     }

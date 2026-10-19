@@ -20,6 +20,8 @@ import com.mine.geometry_node.client.ui.components.table.UiTableRowFrame;
 import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.table.UiTableViewport;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
+import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.worldquery.*;
@@ -39,7 +41,8 @@ import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*
 
 /** Server query presentation. Only immutable summaries cross from the client thread to this UI. */
 public final class WorldObjectsView extends FrameLayout {
-    private final ClientWorldObjectRepository.Session session;
+    private ClientWorldObjectRepository.Session session;
+    private boolean awaitingScopeResponse;
     private final Consumer<DatabaseSelection> selectionChanged;
     private final LinearLayout rows;
     private final TextView status;
@@ -47,6 +50,9 @@ public final class WorldObjectsView extends FrameLayout {
     private final UiSearchInput search, tags, source;
     private final UiSearchBar searchBar;
     private final UiActionButton filterButton;
+    private final UiStateContext uiState;
+    private String stateScope;
+    private boolean restoringState;
     private String submittedSearch = "";
     private final Set<String> selected = new LinkedHashSet<>();
     private final Map<String, UiActionButton> rowViews = new LinkedHashMap<>();
@@ -88,6 +94,12 @@ public final class WorldObjectsView extends FrameLayout {
     private long lastClickNanos;
     private String lastClickKey;
 
+    private final Runnable scopeTask = () -> {
+        if (disposed || Objects.equals(stateScope, UiStateScopes.current())) return;
+        switchScope();
+        if (shown) { if (!Boolean.getBoolean("gn.standalone")) queryNow(); else refresh(); }
+    };
+    private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
     private final Runnable queryTask = this::query;
     private final Runnable renderTask = this::refresh;
     private final Runnable changed = () -> {
@@ -95,11 +107,22 @@ public final class WorldObjectsView extends FrameLayout {
     };
 
     public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged) {
-        super(context); this.selectionChanged = selectionChanged;
+        this(context, selectionChanged, UiStateContext.ephemeral());
+    }
+    public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state) {
+        super(context);
+        uiState = Objects.requireNonNull(state);
+        columns.restoreCustomWidths(uiState.read(DatabaseViewState.WORLD_WIDTHS, DatabaseViewState.GLOBAL).columns());
+        columns.addUserStateListener(() -> uiState.write(DatabaseViewState.WORLD_WIDTHS, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Widths(columns.exportCustomWidths())));
+        this.selectionChanged = selectionChanged;
         session = ClientWorldObjectRepository.INSTANCE.newSession();
         snapshot = session.snapshot(); session.addChangeListener(changed);
         UiFixedSplitLayout body = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
                 UiFixedSplitLayout.Edge.FIRST, 216, 100, 240);
+        body.restorePreferredExtentDp(uiState.read(DatabaseViewState.WORLD_SPLIT, DatabaseViewState.GLOBAL).extentDp());
+        body.addUserStateListener(() -> uiState.write(DatabaseViewState.WORLD_SPLIT, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Split(body.preferredExtentDp())));
         addView(body, new LayoutParams(-1, -1));
         navigation = new LinearLayout(context); navigation.setOrientation(LinearLayout.VERTICAL);
         navigation.setPadding(px(8), px(10), px(8), px(10));
@@ -179,7 +202,9 @@ public final class WorldObjectsView extends FrameLayout {
         column.addView(status,new LinearLayout.LayoutParams(-1,px(UiTableStyle.STATUS_BAR_HEIGHT)));
         for(UiSearchInput input:List.of(tags,source))input.setOnQueryChanged(value->scheduleQuery());
         selectAll.setEnabled(false);
+        restoreState();
         rebuildNavigation(); updateFilters();
+        UiStateScopes.addChangeListener(scopeChanged);
     }
     private void showFilters() {
         if (!shown || disposed) return;
@@ -246,7 +271,7 @@ public final class WorldObjectsView extends FrameLayout {
         String title = key.equals("value") ? Component.translatable("geometry_node.data_library.column_value").getString() : tr(key);
         UiActionButton button = UiTableStyle.headerCell(getContext(), title, key.equals("value") ? null : () -> {
             if (!shown || disposed) return;
-            sortAscending = !sort.equals(key) || !sortAscending; sort = key; resetDoubleClick();
+            sortAscending = !sort.equals(key) || !sortAscending; sort = key; saveState(); resetDoubleClick();
             if (!snapshot.loading()) rebuildRows();
         });
         if (key.equals("value")) {
@@ -256,12 +281,15 @@ public final class WorldObjectsView extends FrameLayout {
         tableHeader.addView(button, new ViewGroup.LayoutParams(-1, -1));
     }
     private void scheduleQuery() {
+        if (restoringState) return;
+        saveState();
         removeCallbacks(queryTask);
         if (shown && !disposed) postDelayed(queryTask, 300);
     }
-    private void queryNow() { removeCallbacks(queryTask); query(); }
+    private void queryNow() { if (restoringState) return; saveState(); removeCallbacks(queryTask); query(); }
     private void query() {
         if (!shown || disposed) return;
+        if (!Objects.equals(stateScope, UiStateScopes.current())) switchScope();
         final WorldObjectQuery query;
         try {
             Set<String> providers = one(typeProvider.isEmpty() ? provider : typeProvider), types = one(type);
@@ -278,6 +306,7 @@ public final class WorldObjectsView extends FrameLayout {
                     128, WorldObjectQuery.MAX_RESULTS);
         } catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
         dismissMenu(); resetDoubleClick();
+        awaitingScopeResponse = false;
         session.query(query);
         refresh();
     }
@@ -288,7 +317,7 @@ public final class WorldObjectsView extends FrameLayout {
         return result;
     }
     private void refresh() {
-        if (disposed || !shown) return;
+        if (disposed || !shown || awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current())) return;
         snapshot = session.snapshot();
         if (snapshot.equals(renderedSnapshot)) { updateInteractionState(); return; }
         renderedSnapshot=snapshot;
@@ -501,7 +530,7 @@ public final class WorldObjectsView extends FrameLayout {
         TextView cell = UiTableStyle.cell(getContext(), text, UiTheme.Text.NORMAL);
         row.addView(cell, new ViewGroup.LayoutParams(-1, -1));
     }
-    private boolean canSelect() { return shown && !disposed && !snapshot.loading(); }
+    private boolean canSelect() { return shown && !disposed && !awaitingScopeResponse && Objects.equals(stateScope, UiStateScopes.current()) && !snapshot.loading(); }
     private void toggleCheckbox(WorldObjectEntry entry, boolean checked) {
         resetDoubleClick();
         if (!canSelect()) { updateSelection(); return; }
@@ -564,7 +593,7 @@ public final class WorldObjectsView extends FrameLayout {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
     }
     public DatabaseSelection selection() {
-        if(snapshot.loading())return null;
+        if(awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
         List<WorldObjectEntry> entries = selectedEntries();
         if (entries.isEmpty()) return null;
         if(entries.size()>1)return new DatabaseSelection(tr("selected",entries.size()),tr("world"),"",0,
@@ -601,18 +630,59 @@ public final class WorldObjectsView extends FrameLayout {
     private void focusSelected() {
         if (canSelect() && !selectedEntries().isEmpty()) setStatus(WorldObjectNavigation.focus(selectedEntries()));
     }
+    private void saveState() {
+        if (restoringState || stateScope == null) return;
+        uiState.write(DatabaseViewState.WORLD, stateScope, new DatabaseViewState.World(
+                submittedSearch, tags.getText().toString(), source.getText().toString(), range.name(),
+                dimension, provider, type, typeProvider, lifetime, category == null ? "" : category.id(),
+                extraProvider, sort, sortAscending));
+    }
+    private void switchScope() {
+        removeCallbacks(queryTask); removeCallbacks(renderTask);
+        dismissMenu(); if (filterPopover != null) filterPopover.dismiss();
+        saveState(); restoreState(); selected.clear(); anchorKey = null;
+        session.removeChangeListener(changed); session.close();
+        session = ClientWorldObjectRepository.INSTANCE.newSession(); session.addChangeListener(changed);
+        awaitingScopeResponse = true;
+        snapshot = new ClientWorldObjectRepository.Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), true, 0);
+        renderedSnapshot = null; mountedEntries = null; mountedTypes = null;
+        typeCatalog = List.of(); dimensionCatalog = List.of();
+        rows.removeAllViews(); rowViews.clear(); rowBindings.clear(); resetDoubleClick();
+        updateFilters(); rebuildNavigation(); updateSelection();
+    }
+    private void restoreState() {
+        stateScope = UiStateScopes.current();
+        var value = uiState.read(DatabaseViewState.WORLD, stateScope);
+        restoringState = true;
+        try {
+            submittedSearch = value.search(); search.setText(submittedSearch);
+            tags.setText(value.tags()); source.setText(value.source());
+            try { range = WorldObjectQuery.Range.valueOf(value.range()); }
+            catch (IllegalArgumentException ignored) { range = WorldObjectQuery.Range.GLOBAL; }
+            dimension = value.dimension(); provider = value.provider(); type = value.type();
+            typeProvider = value.typeProvider(); lifetime = value.lifetime(); extraProvider = value.extraProvider();
+            category = WorldObjectCategories.all().stream().filter(c -> c.id().equals(value.category())).findFirst().orElse(null);
+            sort = value.sort(); sortAscending = value.ascending();
+        } finally { restoringState = false; }
+    }
     public void onShow() {
         if (disposed || shown) return;
+        if (!Objects.equals(stateScope, UiStateScopes.current())) {
+            switchScope();
+        }
         shown = true;
         if (!Boolean.getBoolean("gn.standalone")) queryNow(); else refresh();
     }
     public void onHide() {
+        saveState();
         shown = false; resetDoubleClick(); removeCallbacks(queryTask); removeCallbacks(renderTask); dismissMenu();
         if(filterPopover!=null)filterPopover.dismiss();
         updateInteractionState();
     }
     public void onDispose() {
         if (disposed) return;
-        onHide(); disposed = true; session.removeChangeListener(changed); session.close();
+        onHide(); disposed = true;
+        UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
+        session.removeChangeListener(changed); session.close();
     }
 }

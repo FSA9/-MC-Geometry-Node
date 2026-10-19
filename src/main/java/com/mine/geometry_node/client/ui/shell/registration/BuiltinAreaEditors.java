@@ -10,6 +10,8 @@ import com.mine.geometry_node.client.ui.workspace.area.AreaEditorRegistry;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorType;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
+import com.mine.geometry_node.client.ui.workspace.state.BuiltinUiStateKeys;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -24,16 +26,26 @@ public final class BuiltinAreaEditors {
 
     public static void register(AreaEditorRegistry registry) {
         registry.register(AreaEditorType.GRAPH_EDITOR, UiSurfaceType.VIEWPORT,
-                (context, state, changed) -> new GraphEditorWindow(context));
+                (context, state, changed) -> new GraphEditorWindow(context, UiStateContext.forArea(state, changed)));
         registry.register(AreaEditorType.GAME_VIEWPORT, UiSurfaceType.GAME_VIEWPORT,
                 (context, state, changed) -> new GameViewportWindow(context));
         registry.register(AreaEditorType.ASSET_BROWSER, UiSurfaceType.ASSET_BROWSER,
-                (context, state, changed) -> new AssetBrowserWindow(context, state.assetBrowser, changed));
+                (context, state, changed) -> {
+                    var uiState = UiStateContext.forArea(state, changed);
+                    var snapshot = uiState.read(BuiltinUiStateKeys.ASSET_BROWSER, BuiltinUiStateKeys.SCOPE);
+                    return new AssetBrowserWindow(context, snapshot,
+                            () -> uiState.write(BuiltinUiStateKeys.ASSET_BROWSER, BuiltinUiStateKeys.SCOPE, snapshot), uiState);
+                });
         registry.register(AreaEditorType.DATA_LIBRARY, UiSurfaceType.DATA_LIBRARY,
-                (context, state, changed) -> new DatabaseWindow(context));
+                (context, state, changed) -> new DatabaseWindow(context, UiStateContext.forArea(state, changed)));
         registry.register(AreaEditorType.TERMINAL, UiSurfaceType.TERMINAL,
-                (context, state, changed) -> new TerminalWindow(context, state.terminal, changed,
-                        new McpTerminalRuntimeFactory()));
+                (context, state, changed) -> {
+                    var uiState = UiStateContext.forArea(state, changed);
+                    var snapshot = uiState.read(BuiltinUiStateKeys.TERMINAL, BuiltinUiStateKeys.SCOPE);
+                    return new TerminalWindow(context, snapshot,
+                            () -> uiState.write(BuiltinUiStateKeys.TERMINAL, BuiltinUiStateKeys.SCOPE, snapshot),
+                            new McpTerminalRuntimeFactory());
+                });
         registry.register(AreaEditorType.PERFORMANCE, UiSurfaceType.PERFORMANCE,
                 (context, state, changed) -> createPlaceholder(context,
                         Component.translatable(AreaEditorType.PERFORMANCE.translationKey()).getString()));

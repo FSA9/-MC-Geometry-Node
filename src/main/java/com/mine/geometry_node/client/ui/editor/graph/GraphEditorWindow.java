@@ -11,6 +11,8 @@ import com.mine.geometry_node.client.ui.components.sidebar.api.SidebarPanelScope
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.graph.properties.session.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.ui.workspace.state.EditorSidebarState;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -36,14 +38,27 @@ public class GraphEditorWindow extends LinearLayout
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
     private final SidebarLayoutController mSidebarLayout;
+    private final UiStateContext mUiStateContext;
 
     public GraphEditorWindow(Context context) {
+        this(context, UiStateContext.ephemeral());
+    }
+
+    public GraphEditorWindow(Context context, UiStateContext uiStateContext) {
         super(context);
+        mUiStateContext = java.util.Objects.requireNonNull(uiStateContext);
         setOrientation(LinearLayout.HORIZONTAL);
         setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
 
-        AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
-        float sidebarWeight = viewportConfig.rightSidebarWeight;
+        if (!mUiStateContext.contains(EditorSidebarState.GRAPH, EditorSidebarState.SCOPE)) {
+            AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
+            mUiStateContext.write(EditorSidebarState.GRAPH, EditorSidebarState.SCOPE,
+                    new EditorSidebarState(viewportConfig.rightSidebarVisible,
+                            viewportConfig.rightSidebarWeight, viewportConfig.rightSidebarTab));
+        }
+        EditorSidebarState sidebarState = mUiStateContext.read(
+                EditorSidebarState.GRAPH, EditorSidebarState.SCOPE);
+        float sidebarWeight = sidebarState.weight();
 
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(LinearLayout.HORIZONTAL);
@@ -53,7 +68,8 @@ public class GraphEditorWindow extends LinearLayout
         workspace.addView(mGraphViewportPanel, createWeightParams(
                 UIConstants.MainUI.WEIGHT_CENTER + UIConstants.MainUI.WEIGHT_RIGHT - sidebarWeight));
 
-        View sidebarDivider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
+        View sidebarDivider = ResizableDivider.weighted(
+                context, ResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         workspace.addView(sidebarDivider);
 
         mRightSidebar = new EditorSidebar(context);
@@ -63,7 +79,7 @@ public class GraphEditorWindow extends LinearLayout
         mPropertiesPanel = mRightSidebar.requirePanel(
                 GraphPropertiesPanel.PANEL_ID,
                 GraphPropertiesPanel.class);
-        mRightSidebar.restoreSelectedPanel(viewportConfig.rightSidebarTab);
+        mRightSidebar.restoreSelectedPanel(sidebarState.tab());
         workspace.addView(mRightSidebar, createWeightParams(sidebarWeight));
 
         mSidebarLayout = new SidebarLayoutController(
@@ -72,18 +88,19 @@ public class GraphEditorWindow extends LinearLayout
                 sidebarDivider,
                 mRightSidebar,
                 sidebarWeight,
-                (visible, weight) -> ConfigManager.INSTANCE.update(config -> {
-                    config.viewport.rightSidebarVisible = visible;
-                    config.viewport.rightSidebarWeight = weight;
-                    config.viewport.rightSidebarTab = mRightSidebar.getSelectedPanelId();
-                }));
+                (visible, weight) -> mUiStateContext.write(
+                        EditorSidebarState.GRAPH, EditorSidebarState.SCOPE,
+                        new EditorSidebarState(visible, weight, mRightSidebar.getSelectedPanelId())));
         mRightSidebar.setOnCollapseRequested(() -> mSidebarLayout.setVisible(false, true));
-        mRightSidebar.setOnSelectedPanelChanged(id -> ConfigManager.INSTANCE.update(
-                config -> config.viewport.rightSidebarTab = id));
+        mRightSidebar.setOnSelectedPanelChanged(id -> persistSidebarState());
         mGraphViewportPanel.setSessionChangedListener(session -> mPropertiesPanel.bind(
                 session != null ? new GraphSessionPropertiesTarget(session) : null));
         mGraphViewportPanel.setBeforeSessionSaveListener(session -> mPropertiesPanel.commitPendingEdits());
-        mSidebarLayout.initialize(viewportConfig.rightSidebarVisible);
+        mSidebarLayout.initialize(sidebarState.visible());
+    }
+
+    private void persistSidebarState() {
+        mSidebarLayout.persistState();
     }
 
     @Override

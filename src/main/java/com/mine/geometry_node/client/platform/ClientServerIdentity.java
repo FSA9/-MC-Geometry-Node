@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.asset.preview;
+package com.mine.geometry_node.client.platform;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -7,9 +7,9 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.nio.file.Path;
 import java.util.Locale;
 
-/** Stable cache namespace for the currently connected multiplayer server or integrated world. */
-public final class ClientAssetPreviewServerIdentity {
-    private ClientAssetPreviewServerIdentity() {
+/** Stable namespace for the currently connected multiplayer server or integrated world. */
+public final class ClientServerIdentity {
+    private ClientServerIdentity() {
     }
 
     public static String current() {

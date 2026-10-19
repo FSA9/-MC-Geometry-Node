@@ -18,6 +18,8 @@ import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import icyllis.modernui.core.Context;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateScopes;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -38,6 +40,13 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     private final Map<UiActionButton,View> tabUnderlines = new LinkedHashMap<>();
     private final SidebarLayoutController sidebarLayout;
     private final DatabaseDetailsPanel details;
+    private final UiStateContext uiState;
+    private final UiFixedSplitLayout workspace;
+    private String stateScope;
+    private final Runnable scopeTask = () -> {
+        if (!this.disposed) restoreTabScope();
+    };
+    private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
     private DatabaseSelection selection;
     private boolean worldSelected = true;
     private boolean shown, disposed;
@@ -45,7 +54,13 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
 
     public DatabaseWindow(Context context) { this(context, ClientDataLibraryRepository.INSTANCE); }
     public DatabaseWindow(Context context, DataLibraryUiRepository repository) {
-        super(context); this.repository = repository == null ? DataLibraryUiRepository.EMPTY : repository;
+        this(context, repository, UiStateContext.ephemeral());
+    }
+    public DatabaseWindow(Context context, UiStateContext state) {
+        this(context, ClientDataLibraryRepository.INSTANCE, state);
+    }
+    public DatabaseWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
+        super(context); uiState = java.util.Objects.requireNonNull(state); this.repository = repository == null ? DataLibraryUiRepository.EMPTY : repository;
         setOrientation(VERTICAL); setBackground(background(UiTheme.Surface.ROOT));
         LinearLayout tabs = new LinearLayout(context);
         tabs.setBackground(background(UiTheme.Surface.PANEL));
@@ -56,25 +71,43 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         addView(tabs, new LayoutParams(-1, px(36)));
 
         FrameLayout main = new FrameLayout(context);
-        world = new WorldObjectsView(context, this::setSelection);
-        library = new DataLibraryWindow(context, this.repository);
+        world = new WorldObjectsView(context, this::setSelection, state);
+        library = new DataLibraryWindow(context, this.repository, state);
         library.onHide(); library.setVisibility(GONE);
         main.addView(world, new FrameLayout.LayoutParams(-1, -1));
         main.addView(library, new FrameLayout.LayoutParams(-1, -1));
-        UiFixedSplitLayout workspace = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
+        workspace = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
                 UiFixedSplitLayout.Edge.LAST, 320, 180, 320);
         EditorSidebar sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.DATA_LIBRARY, this));
         details = sidebar.requirePanel(DatabaseDetailsPanel.PANEL_ID, DatabaseDetailsPanel.class);
         workspace.setPanes(main, sidebar);
-        sidebarLayout = new SidebarLayoutController(workspace, sidebar);
+        var savedSidebar = uiState.read(DatabaseViewState.SIDEBAR, DatabaseViewState.GLOBAL);
+        workspace.restorePreferredExtentDp(savedSidebar.extentDp());
+        workspace.addUserStateListener(this::saveSidebar);
+        sidebarLayout = new SidebarLayoutController(workspace, sidebar, visible -> saveSidebar());
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
-        sidebarLayout.initialize(true); sidebarLayout.onOwnerHidden();
+        sidebarLayout.initialize(savedSidebar.visible()); sidebarLayout.onOwnerHidden();
         addView(workspace, new LayoutParams(-1, 0, 1));
         library.setSelectionListener(entries -> { if (!worldSelected) setSelection(librarySelection(entries)); });
+        restoreTabScope();
+        UiStateScopes.addChangeListener(scopeChanged);
         updateTabs();
     }
 
+    private void saveSidebar() {
+        uiState.write(DatabaseViewState.SIDEBAR, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Sidebar(workspace.preferredExtentDp(), sidebarLayout.isVisible()));
+    }
+    private void saveTab() {
+        if (stateScope != null) uiState.write(DatabaseViewState.TAB, stateScope, new DatabaseViewState.Tab(worldSelected));
+    }
+    private void restoreTabScope() {
+        String next = UiStateScopes.current();
+        if (java.util.Objects.equals(stateScope, next)) return;
+        saveTab(); stateScope = next;
+        showWorld(uiState.read(DatabaseViewState.TAB, next).world());
+    }
     public DatabaseSelection selection() { return selection; }
     private void setSelection(DatabaseSelection selection) {
         this.selection = selection;
@@ -84,6 +117,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         if (disposed || worldSelected == value) return;
         if (shown) { if (worldSelected) world.onHide(); else library.onHide(); }
         worldSelected = value;
+        saveTab();
         world.setVisibility(value ? VISIBLE : GONE); library.setVisibility(value ? GONE : VISIBLE);
         if (shown) { if (value) world.onShow(); else library.onShow(); }
         setSelection(value ? world.selection() : librarySelection(library.selectedEntries()));
@@ -142,14 +176,18 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     @Override public void bindSurfaceRegistration(UiSurfaceRegistry.Registration value) { registration = value; }
     @Override public void onShow() {
         if (disposed || shown) return;
+        restoreTabScope();
         shown = true; sidebarLayout.onOwnerShown();
         if (worldSelected) world.onShow(); else library.onShow();
     }
     @Override public void onHide() {
+        saveTab(); saveSidebar();
         shown = false; sidebarLayout.onOwnerHidden(); world.onHide(); library.onHide();
     }
     @Override public void onDispose() {
         if (disposed) return;
-        onHide(); disposed = true; world.onDispose(); library.onDispose();
+        onHide(); disposed = true;
+        UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
+        world.onDispose(); library.onDispose();
     }
 }

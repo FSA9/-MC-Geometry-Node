@@ -15,6 +15,7 @@ public final class UiFixedSplitLayout extends LinearLayout {
     private final Edge edge;
     private final float minimumDp, flexibleMinimumDp;
     private final ThinResizableDivider divider;
+    private final java.util.List<Runnable> userStateListeners = new java.util.ArrayList<>();
     private float preferredExtentDp;
     private View fixedPane, flexiblePane;
     private boolean collapsed;
@@ -53,6 +54,25 @@ public final class UiFixedSplitLayout extends LinearLayout {
     public ThinResizableDivider divider() { return divider; }
     public float preferredExtentDp() { return preferredExtentDp; }
 
+    /** Restore owner-managed logical dp. Nonfinite values are ignored; values below the minimum
+     * are clamped. Layout constraints never overwrite this preference. No user event is emitted. */
+    public void restorePreferredExtentDp(float value) {
+        if (!Float.isFinite(value)) return;
+        float next = Math.max(minimumDp, value);
+        if (next == preferredExtentDp) return;
+        preferredExtentDp = next;
+        requestLayout();
+    }
+
+    /** User drag changes only; read preferredExtentDp() in the callback and let the owner store it.
+     * Close on the UI thread to unsubscribe. Restore, collapse and measurement are silent. */
+    public AutoCloseable addUserStateListener(Runnable listener) {
+        java.util.Objects.requireNonNull(listener);
+        Runnable subscription = listener::run;
+        userStateListeners.add(subscription);
+        return () -> userStateListeners.remove(subscription);
+    }
+
     /** Collapse to a tab rail without replacing the expanded size. */
     public void setCollapsed(boolean value, int extentPx) {
         if (collapsed == value && collapsedExtentPx == extentPx) return;
@@ -89,7 +109,7 @@ public final class UiFixedSplitLayout extends LinearLayout {
     }
 
     private void resizePane(float delta) {
-        if (fixedPane == null || collapsed || fixedPane.getVisibility() == GONE) return;
+        if (!Float.isFinite(delta) || fixedPane == null || collapsed || fixedPane.getVisibility() == GONE) return;
         int available = horizontal ? getWidth() - getPaddingLeft() - getPaddingRight() - divider.getWidth()
                 : getHeight() - getPaddingTop() - getPaddingBottom() - divider.getHeight();
         int requested = clampExtent(Math.round(pendingExtentPx + (edge == Edge.FIRST ? delta : -delta)), Math.max(0, available));
@@ -97,6 +117,7 @@ public final class UiFixedSplitLayout extends LinearLayout {
         pendingExtentPx = requested;
         preferredExtentDp = requested / UIUtils.dp2px(1);
         requestLayout();
+        for (Runnable listener : java.util.List.copyOf(userStateListeners)) listener.run();
     }
 
     private LayoutParams paneParams(boolean flexible) {

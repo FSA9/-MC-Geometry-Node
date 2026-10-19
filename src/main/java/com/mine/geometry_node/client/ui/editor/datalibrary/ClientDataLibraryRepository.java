@@ -34,6 +34,8 @@ public final class ClientDataLibraryRepository implements DataLibraryUiRepositor
         return List.copyOf(remote.snapshot());
     }
 
+    @Override public boolean hasLoadedSnapshot() { return remote.hasLoadedSnapshot(); }
+
     @Override public Entry findEntry(UUID id) { return remote.findEntry(id); }
 
     @Override public String folderPath(UUID folderId) { return remote.folderPath(folderId); }

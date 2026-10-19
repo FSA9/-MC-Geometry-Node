@@ -17,6 +17,8 @@ import com.mine.geometry_node.client.ui.components.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.table.UiTableViewport;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
+import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.layout.ThinResizableDivider;
@@ -78,6 +80,15 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
     private final DataLibraryUiRepository repository;
+    private final UiStateContext uiState;
+    private String stateScope;
+    private boolean restoringState;
+    private volatile boolean scopeSnapshotConfirmed = true;
+    private boolean folderSnapshotReady() {
+        return Objects.equals(stateScope, UiStateScopes.current())
+                && scopeSnapshotConfirmed && repository.hasLoadedSnapshot();
+    }
+    private volatile long stateGeneration;
     private final DataLibraryTreeLayout groupsHost;
     private final DataLibraryTreeLayout rightHost;
     private final ScrollView scrollHost;
@@ -121,6 +132,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private UUID activeFolder;
     private final Map<View, UUID> folderDropRows = new java.util.LinkedHashMap<>();
     private final WorkspaceDragDropRegistry.DropTarget dropTarget = this::acceptInternalDrop;
+    private final Runnable scopeTask = () -> {
+        if (this.disposed || Objects.equals(stateScope, UiStateScopes.current())) return;
+        switchScope();
+        if (!this.suspended) { rebuild(); refresh(); }
+    };
+    private final Runnable scopeChanged = () -> { removeCallbacks(scopeTask); post(scopeTask); };
     private final AtomicBoolean authoritativeQueued = new AtomicBoolean();
     private final Runnable repositoryChanged = () -> {
         authoritativeQueued.set(true);
@@ -168,11 +185,20 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     public DataLibraryWindow(Context context, DataLibraryUiRepository repository) {
+        this(context, repository, UiStateContext.ephemeral());
+    }
+
+    public DataLibraryWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
         super(context);
+        uiState = Objects.requireNonNull(state);
+        columns.restoreCustomWidths(uiState.read(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL).columns());
+        columns.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Widths(columns.exportCustomWidths())));
         this.repository = repository != null ? repository : DataLibraryUiRepository.EMPTY;
         selectAll = new UiCheckBox(context);
         this.valueEditors = new DataLibraryValueEditors(context, this.repository,
-                this::overlayHost, this::refresh, this::scheduleRefresh, () -> !disposed);
+                this::overlayHost, this::refresh, this::scheduleRefresh,
+                () -> !disposed && Objects.equals(stateScope, UiStateScopes.current()) && folderSnapshotReady());
         this.repository.addChangeListener(repositoryChanged);
         setOrientation(VERTICAL);
         setBackground(solid(BG, 0));
@@ -241,6 +267,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         leftPanel.addView(directoryHeading, new LayoutParams(-1, px(30)));
         UiFixedSplitLayout navigationPanes = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.VERTICAL,
                 UiFixedSplitLayout.Edge.FIRST, 360, 60, 80);
+        navigationPanes.restorePreferredExtentDp(uiState.read(DatabaseViewState.LIBRARY_TREE_SPLIT, DatabaseViewState.GLOBAL).extentDp());
+        navigationPanes.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_TREE_SPLIT, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Split(navigationPanes.preferredExtentDp())));
         navigationPanes.setPanes(scrollHost, typeScroll);
         leftPanel.addView(navigationPanes, new LayoutParams(-1, 0, 1));
 
@@ -297,10 +326,15 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
         UiFixedSplitLayout split = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
                 UiFixedSplitLayout.Edge.FIRST, 216, 100, 240);
+        split.restorePreferredExtentDp(uiState.read(DatabaseViewState.LIBRARY_SPLIT, DatabaseViewState.GLOBAL).extentDp());
+        split.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_SPLIT, DatabaseViewState.GLOBAL,
+                new DatabaseViewState.Split(split.preferredExtentDp())));
         split.setBackground(solid(BG, 0));
         split.setPanes(leftPanel, rightPanel);
         addView(split, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        restoreState();
         rebuild();
+        UiStateScopes.addChangeListener(scopeChanged);
     }
 
     /** Publishes repository entries for the shared Inspector; null disconnects it. Runs on the UI thread. */
@@ -430,7 +464,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void refresh() {
-        if (!disposed) repository.refresh(this::scheduleRefresh);
+        if (!disposed) {
+            long generation = stateGeneration;
+            repository.refresh(() -> {
+                if (generation != stateGeneration || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+                scopeSnapshotConfirmed = true;
+                scheduleRefresh();
+            });
+        }
     }
 
     private void scheduleRefresh() {
@@ -444,9 +485,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             rebuildPending = true;
             return;
         }
-        DataLibrarySnapshot next = new DataLibrarySnapshot(repository);
+        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
         observeAuthority();
-        if (!structurePending && next.sameStructure(snapshot)) {
+        if (!structurePending && next.sameStructure(snapshot)
+                && !(folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder))) {
             snapshot = next;
             refreshCardValues(next);
             publishSelection();
@@ -456,12 +498,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void rebuild() {
-        if (disposed) return;
+        if (disposed || restoringState) return;
+        saveState();
         // Explicit navigation keeps its original focus-loss submission semantics.
         View focused = findFocus();
         if (focused instanceof EditText && focused != searchInput) focused.clearFocus();
         observeAuthority();
-        rebuild(new DataLibrarySnapshot(repository));
+        rebuild(new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY));
     }
 
     private void observeAuthority() {
@@ -497,7 +540,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             WorkspaceDragService.INSTANCE.cancelIfSource(this);
             snapshot = next;
             next.indexChildren();
-            if (activeFolder != null && !next.folders.containsKey(activeFolder)) activeFolder = null;
+            if (folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder)) {
+                activeFolder = null;
+                saveState();
+            }
             expandedFolders.retainAll(next.folders.keySet());
             expandedEntries.retainAll(next.entries.keySet());
             groupsHost.removeAllViews();
@@ -1441,9 +1487,53 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return drawable;
     }
 
+    private void saveState() {
+        if (restoringState || stateScope == null) return;
+        uiState.write(DatabaseViewState.LIBRARY, stateScope, new DatabaseViewState.Library(
+                search, typeFilter == null ? "" : typeFilter.name(), tagFilter, includeSubfolders,
+                groupByType, activeFolder == null ? "" : activeFolder.toString()));
+    }
+
+    private void switchScope() {
+        removeCallbacks(refreshTask); refreshScheduled.set(false);
+        dismissFilters(); dismissMenus();
+        saveState();
+        scopeSnapshotConfirmed = false; authoritativeQueued.set(false);
+        // Retire editor references before detaching: blur or delayed picker callbacks must not write into another scope.
+        cards.values().forEach(binding -> binding.current.set(null));
+        cards.clear(); selectionViews.clear(); renderedEntries.clear();
+        rightHost.removeAllViews(); groupsHost.removeAllViews(); typeNavigation.removeAllViews();
+        folderDropRows.clear(); snapshot = null;
+        clearSelection(); updateSelectionViews();
+        expandedFolders.clear(); expandedEntries.clear(); expandedTypeGroups.clear();
+        restoreState();
+        structurePending = true;
+    }
+    private void restoreState() {
+        stateScope = UiStateScopes.current();
+        stateGeneration++;
+        var value = uiState.read(DatabaseViewState.LIBRARY, stateScope);
+        restoringState = true;
+        try {
+            search = value.search(); searchInput.setText(search);
+            try { typeFilter = PortType.valueOf(value.type()); }
+            catch (IllegalArgumentException ignored) { typeFilter = null; }
+            tagFilter = value.tag().isEmpty() ? null : value.tag();
+            includeSubfolders = value.recursive(); groupByType = value.grouped();
+            try { activeFolder = UUID.fromString(value.activeFolder()); }
+            catch (IllegalArgumentException ignored) { activeFolder = null; }
+            typeButton.setText(typeFilter == null ? tr("geometry_node.data_library.all_types") : displayTypeName(typeFilter));
+            toolbar.tagButton.setText(tagFilter == null ? tr("geometry_node.data_library.all_tags") : tagFilter);
+            updateGroupButton(); updateScopeButton(); updateFilterIndicator();
+        } finally { restoringState = false; }
+    }
+
     @Override public View getView() { return this; }
     @Override public void onShow() {
         if (disposed) return;
+        if (!Objects.equals(stateScope, UiStateScopes.current())) {
+            switchScope();
+        }
         suspended = false;
         if (!dropTargetRegistered) {
             WorkspaceDragDropRegistry.register(dropTarget);
@@ -1455,7 +1545,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     @Override public void onDispose() {
         if (disposed) return;
+        saveState();
         disposed = true;
+        UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         dismissFilters();
         dismissMenus();
         removeCallbacks(refreshTask);
@@ -1472,6 +1564,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         repository.removeChangeListener(repositoryChanged);
     }
     @Override public void onHide() {
+        saveState();
         suspended = true;
         dismissFilters();
         dismissMenus();
