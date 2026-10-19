@@ -81,7 +81,7 @@
 | 图标动作按钮 | [UiIconButton](base/button/UiIconButton.java) | 包装图标并统一命中尺寸、背景和状态；不要直接把 SVG 当按钮。 |
 | 左右分段按钮 | [UiSplitButton](composite/button/UiSplitButton.java) | 一个外框、两个独立动作；如吸附开关＋配置下拉。组合 `UiActionButton`；外层 `setEnabled()` 同步控制两侧按钮。 |
 | SVG／简单矢量图标 | [SvgIconView](base/icon/SvgIconView.java)、[VectorIconView](base/icon/VectorIconView.java) | 仅绘制；统一着色使用 [UiIconColors](base/icon/UiIconColors.java)。 |
-| 文本输入、错误提示 | [UiTextInput](base/input/UiTextInput.java) | 输入框视觉与 `setErrorMessage()`；输入草稿、解析、提交和撤销仍由调用方决定。 |
+| 文本输入、错误提示 | [UiTextInput](base/input/UiTextInput.java) | 输入框视觉、鼠标手势保护、`setErrorMessage()` 与可选 `setEditActions(confirm, cancel)`；输入草稿、解析、提交和撤销仍由调用方决定。 |
 | 搜索输入 | [UiSearchInput](base/input/UiSearchInput.java) | 继承文本输入视觉，增加单行约束与 `setOnQueryChanged()`；程序设置文本也会通知。 |
 | 输入＋方形查找按钮 | [UiSearchBar](composite/input/UiSearchBar.java) | 组合搜索输入和 32×32 逻辑像素按钮；点击或 Enter 提交，键入不自动查询；外层禁用同步控制输入和按钮，保留草稿。 |
 | 多输入共享搜索提交 | [UiSearchSubmit](base/input/UiSearchSubmit.java) | `bind(button, action, inputs...)` 统一普通／小键盘 Enter、过滤重复按键；不改草稿、不执行筛选。资产浏览器双输入使用此入口。 |
@@ -189,7 +189,10 @@ preview.zoom().reset();        // 回到 1，受当前范围约束
 
 ## 公共输入与生命周期契约
 
-- `UiNumericInput` 的拖动只在松键时提交；普通编辑器失焦提交有效草稿。取消手势、禁用、移除及窗口失焦由组件处理；原生移除中先于 detach 的失焦也不会提交旧草稿。`UiGradientStopEditor` 在同类中断时回退预览；调用方只提供绑定和业务提交校验，无需复制生命周期防护。
+- `UiTextInput` 接受鼠标按下后保护整段文本选择手势，即使移出输入框也不转为父级滚动／拖动。松键、取消、禁用、隐藏、移除、失焦或窗口失焦会释放保护；仅有输入焦点不会锁住整个界面。拖拽容器必须遵循原生子控件优先分发顺序，仅在自己的 `onTouchEvent` 回退路径启动容器手势，禁止在 `dispatchTouchEvent` 中先执行选择／拖动再分发给子控件。按钮、复选框和其他可编辑子控件同样拥有各自手势，只读展示仍可透传。
+- 单行值编辑调用 `UiTextInput.setEditActions(confirm, cancel)` 绑定普通／小键盘 Enter 确认和 Esc 取消；重复按键不重复执行。多行 Enter 保留换行，现有 `OnKeyListener`（搜索提交、标签输入、弹层关闭等）保留优先级。该 API 不擅自保存或回滚业务值：调用方确认时提交，取消时恢复草稿／关闭编辑器，避免随后的失焦再次提交被取消内容。未绑定动作时保留原生键盘行为。
+- `UiNumericInput` 的拖动只在松键时提交；普通编辑器失焦或 Enter 提交有效草稿，Esc 丢弃草稿。数值拖动也会保护父级拦截，释放或中断时归还。取消手势、禁用、移除及窗口失焦由组件处理；原生移除中先于 detach 的失焦也不会提交旧草稿。`UiGradientStopEditor` 在同类中断时回退预览；调用方只提供绑定和业务提交校验，无需复制生命周期防护。
+- 调整包含编辑器的容器层级时使用 `bringChildToFront()`，不要先 `removeView()` 再挂回：原生移除会清除焦点、取消手势并触发编辑器生命周期。Graph 节点置顶遵循此规则；自定义捕获和原生分发路径各自结束对应手势，避免漏发或重复发送取消事件。
 - `UiPopupOverlay` 负责 Area 绑定、窗口失焦关闭、延迟移除和焦点归还。布局或窗口焦点遍历中先关闭交互，再延迟移除；调用方以 `isOpen()` 判断状态，不以 `getParent()` 判断是否仍可操作。
 - `ColorPickerDialog` 通过 `show()`／`showIn()` 绑定 owner 与 Area；正常 modal 获取键盘焦点不会关闭它，owner 移除或 Area 失效会取消；应用前逐级检查 owner／祖先可见性，不要求 standalone 已 attach。`ColorSwatchView` 忽略禁用、移除或再次打开之前遗留的回调；supplier 仍是权威值。颜色、长文本、背包弹层处理重复应用和关闭；应用或关闭回调抛异常时也会清理弹层，异常继续交给调用方处理。
 - MainUI 中的模态焦点由 `OverlayMount`／层管理器负责；独立颜色、长文本和背包弹层复用 `UiMenuFocus`，归还同一根和有效 Area 内的原焦点，并尊重主动转移到其他控件的焦点。物品／实体预览在禁用、移除或窗口失焦时清除按压手势；原生预览注册由 `ViewportNativePreviewView` 在 attach／detach 时管理；fallback renderer 捕获自身 surface，并校验它仍是当前实例，忽略已废弃的 surface 回调。

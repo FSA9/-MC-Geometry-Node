@@ -612,8 +612,12 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
 
     @Override public boolean dispatchTouchEvent(MotionEvent ev) {
         if (ev.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-            mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()));
-            return mInteractionManager.onTouchEvent(ev);
+            boolean hintHandled = mEventDispatcher.handleTouchEvent(ev, isHitOverlay(ev.getX(), ev.getY()));
+            // Hint gestures bypass native dispatch; cancel only the path that owns the gesture.
+            boolean nativeHandled = false;
+            if (!hintHandled) nativeHandled = super.dispatchTouchEvent(ev);
+            boolean interactionHandled = mInteractionManager.onTouchEvent(ev);
+            return hintHandled || nativeHandled || interactionHandled;
         }
         if (hasBlockingOverlay()) {
             super.dispatchTouchEvent(ev);
@@ -669,7 +673,11 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     }
 
     @Override public boolean onGenericMotionEvent(MotionEvent event) { return mInteractionManager.onHoverMove(event.getX(), event.getY()) || mInteractionManager.onGenericMotionEvent(event) || super.onGenericMotionEvent(event); }
-    @Override public boolean onTouchEvent(MotionEvent event) { return mInteractionManager.onTouchEvent(event) || super.onTouchEvent(event); }
+    @Override public boolean onTouchEvent(MotionEvent event) {
+        // dispatchTouchEvent cancels interactions after native dispatch, including this fallback.
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) return super.onTouchEvent(event);
+        return mInteractionManager.onTouchEvent(event) || super.onTouchEvent(event);
+    }
     @Override public boolean onKeyDown(int keyCode, icyllis.modernui.view.KeyEvent event) { return mInteractionManager.onKeyDown(event) || mKeyManager.onKeyDown(event) || super.onKeyDown(keyCode, event); }
     public void beginKeyboardMoveSelection() { mInteractionManager.beginKeyboardMoveSelection(); }
 

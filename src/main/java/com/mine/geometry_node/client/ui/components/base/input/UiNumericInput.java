@@ -15,6 +15,7 @@ import icyllis.modernui.text.TextShaper;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.ViewConfiguration;
+import icyllis.modernui.view.ViewParent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 
@@ -77,6 +78,7 @@ public class UiNumericInput extends FrameLayout {
     private Object mDragOldValue;
     private EditText mEditor;
     private boolean mDiscardEditorFocusLoss;
+    private ViewParent pointerParent;
 
     public UiNumericInput(Context context, Binding binding, Spec spec, String inlineLabel,
                           float textSizeDp, java.util.function.Consumer<EditText> configureEditor) {
@@ -198,6 +200,8 @@ public class UiNumericInput extends FrameLayout {
                 requestFocus();
                 closeEditor(false);
                 syncFromBinding();
+                pointerParent = getParent();
+                if (pointerParent != null) pointerParent.requestDisallowInterceptTouchEvent(true);
                 mPressed = true;
                 mDragging = false;
                 mDownX = event.getX();
@@ -222,6 +226,7 @@ public class UiNumericInput extends FrameLayout {
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
+                releasePointer();
                 boolean wasDragging = mDragging;
                 boolean wasPressed = mPressed;
                 mPressed = false;
@@ -235,6 +240,7 @@ public class UiNumericInput extends FrameLayout {
                 return true;
             }
             case MotionEvent.ACTION_CANCEL -> {
+                releasePointer();
                 mPressed = false;
                 mDragging = false;
                 setDisplayValue(mCommittedValue, false);
@@ -299,7 +305,7 @@ public class UiNumericInput extends FrameLayout {
             return;
         }
 
-        EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(textSizeDp, TEXT_PADDING_DP,
+        UiTextInput editor = new UiTextInput(getContext(), new UiTextInput.Style(textSizeDp, TEXT_PADDING_DP,
                 UiTheme.Metrics.RADIUS_SMALL, UiTheme.Metrics.BORDER, COLOR_TEXT, UiTheme.Text.HINT,
                 COLOR_BG_ACTIVE, COLOR_BORDER_HOVER)) {
             @Override
@@ -317,6 +323,7 @@ public class UiNumericInput extends FrameLayout {
         };
         editor.setText(mSpec.display(mDisplayValue));
         if (configureEditor != null) configureEditor.accept(editor);
+        editor.setEditActions(() -> closeEditor(true), () -> closeEditor(false));
         editor.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         editor.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) {
@@ -472,10 +479,17 @@ public class UiNumericInput extends FrameLayout {
     }
 
     private void clearInteractionState() {
+        releasePointer();
         mHovered = false;
         mPressed = false;
         mDragging = false;
         persistHover(false);
+    }
+
+    private void releasePointer() {
+        ViewParent parent = pointerParent;
+        pointerParent = null;
+        if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
     }
 
     private boolean shouldUseDraggedFloatFormat(Object value) {

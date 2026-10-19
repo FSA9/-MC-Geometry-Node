@@ -34,6 +34,8 @@ final class DataLibraryDragSurface extends LinearLayout {
                            Runnable pressedAction, Runnable finishAction, Consumer<MotionEvent> draggedAction) {
         super(context);
         setClickable(true);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
         gesture = new WorkspaceDragGesture(getContext(), new WorkspaceDragGesture.Listener() {
             @Override public void onPressed(MotionEvent event) {
                 pressedAction.run();
@@ -44,7 +46,7 @@ final class DataLibraryDragSurface extends LinearLayout {
                 MotionEvent cancel = event.copy();
                 cancel.setAction(MotionEvent.ACTION_CANCEL);
                 try {
-                    dispatchToChildren(cancel);
+                    DataLibraryDragSurface.super.onTouchEvent(cancel);
                 } finally {
                     cancel.recycle();
                 }
@@ -72,10 +74,6 @@ final class DataLibraryDragSurface extends LinearLayout {
                 finishAction.run();
             }
         });
-    }
-
-    private boolean dispatchToChildren(MotionEvent event) {
-        return super.dispatchTouchEvent(event);
     }
 
     void setResultRow() {
@@ -115,9 +113,16 @@ final class DataLibraryDragSurface extends LinearLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        int action = event.getActionMasked();
         shiftPressed = event.isShiftPressed();
         ctrlPressed = event.isCtrlPressed();
+        return super.dispatchTouchEvent(event);
+    }
+
+    /** Native dispatch lets an interactive child own its entire gesture before row fallback. */
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (!isEnabled()) return false;
+        int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             secondaryPressed = (event.getButtonState() & MotionEvent.BUTTON_SECONDARY) != 0
                     || event.getActionButton() == MotionEvent.BUTTON_SECONDARY;
@@ -126,7 +131,8 @@ final class DataLibraryDragSurface extends LinearLayout {
             pressed = true;
             dragging = false;
             gesture.onTouch(this, event);
-            dispatchToChildren(event);
+            requestFocus();
+            super.onTouchEvent(event);
             return true;
         }
         if (secondaryPressed) {
@@ -136,13 +142,39 @@ final class DataLibraryDragSurface extends LinearLayout {
             }
             return true;
         }
-        if (!pressed) return dispatchToChildren(event);
+        if (!pressed) return false;
         gesture.onTouch(this, event);
-        if (!dragging) dispatchToChildren(event);
+        if (!dragging) super.onTouchEvent(event);
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             pressed = false;
             dragging = false;
         }
         return true;
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) cancelGesture();
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        cancelGesture();
+        super.onDetachedFromWindow();
+    }
+
+    @Override
+    public void setEnabled(boolean enabled) {
+        if (!enabled) cancelGesture();
+        super.setEnabled(enabled);
+    }
+
+    private void cancelGesture() {
+        if (gesture != null) gesture.cancel(this);
+        pressed = false;
+        dragging = false;
+        secondaryPressed = false;
+        setPressed(false);
     }
 }

@@ -22,6 +22,8 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
     private float downY;
     private boolean moved;
     private boolean dragging;
+    private boolean active;
+    private boolean mayDrag;
 
     public WorkspaceDragGesture(Context context, Listener listener) {
         this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
@@ -31,17 +33,23 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
     @Override
     public boolean onTouch(View view, MotionEvent event) {
         if (event == null || listener == null) return false;
+        if (event.getActionMasked() != MotionEvent.ACTION_DOWN && !active) return false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
+                if (active) cancel(view);
                 downX = event.getRawX();
                 downY = event.getRawY();
                 moved = false;
                 dragging = false;
+                active = true;
+                int buttons = event.getButtonState() | event.getActionButton();
+                mayDrag = (buttons & (MotionEvent.BUTTON_SECONDARY | MotionEvent.BUTTON_TERTIARY)) == 0;
                 disallowParentIntercept(view, true);
                 listener.onPressed(event);
                 return true;
             }
             case MotionEvent.ACTION_MOVE -> {
+                if (!mayDrag) return true;
                 if (!dragging && distanceFromDown(event) >= touchSlop) {
                     moved = true;
                     dragging = true;
@@ -51,23 +59,33 @@ public final class WorkspaceDragGesture implements View.OnTouchListener {
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
-                listener.onReleased(event, moved);
+                active = false;
                 disallowParentIntercept(view, false);
+                boolean wasMoved = moved;
                 moved = false;
                 dragging = false;
+                listener.onReleased(event, wasMoved);
                 return true;
             }
             case MotionEvent.ACTION_CANCEL -> {
-                listener.onCancelled(event);
+                active = false;
                 disallowParentIntercept(view, false);
                 moved = false;
                 dragging = false;
+                listener.onCancelled(event);
                 return true;
             }
             default -> {
                 return true;
             }
         }
+    }
+
+    /** Retire a source on detach, disable or window focus loss without leaving a live drag. */
+    public void cancel(View view) {
+        if (!active) return;
+        MotionEvent event = MotionEvent.obtain(System.nanoTime(), MotionEvent.ACTION_CANCEL, downX, downY, 0);
+        try { onTouch(view, event); } finally { event.recycle(); }
     }
 
     private float distanceFromDown(MotionEvent event) {

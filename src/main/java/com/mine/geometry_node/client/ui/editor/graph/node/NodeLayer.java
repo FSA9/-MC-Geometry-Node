@@ -117,13 +117,8 @@ public class NodeLayer extends FrameLayout {
         View overlayHost = node.getOverlayHostView();
         if (overlayHost == null || overlayHost.getParent() != this) return;
 
-        LayoutParams lp = (LayoutParams) overlayHost.getLayoutParams();
-        removeView(overlayHost);
-        if (lp != null) {
-            addView(overlayHost, lp);
-        } else {
-            addView(overlayHost);
-        }
+        // Reordering must preserve focused editors and any gesture captured by the overlay.
+        if (getChildAt(getChildCount() - 1) != overlayHost) bringChildToFront(overlayHost);
     }
 
     public void updateNodePosition(String nodeId, float x, float y) {

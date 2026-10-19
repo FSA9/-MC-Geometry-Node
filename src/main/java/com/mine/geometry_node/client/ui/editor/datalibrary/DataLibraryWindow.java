@@ -119,7 +119,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final LinearLayout typeNavigation;
     private final TextView statusView;
     private final TextView resultsView;
-    private final UiActionButton scopeButton;
+    private final UiIconButton scopeButton;
     private final DataLibraryToolbar toolbar;
     private UiColumnFilterPopover filterPopover;
     private final Map<String, UiTableFilterHeader> filterHeaders = new HashMap<>();
@@ -291,7 +291,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         LinearLayout pathRow = new LinearLayout(context);
         pathRow.setGravity(Gravity.CENTER_VERTICAL);
         pathRow.addView(breadcrumbScroll, new LayoutParams(0, px(40), 1));
-        pathRow.addView(scopeButton, new LayoutParams(-2, px(28)));
         rightPanel.addView(pathRow, new LayoutParams(-1, px(40)));
         statusView = label(context, "", 11, MUTED);
         statusView.setSingleLine(true);
@@ -308,6 +307,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         resultsView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
         LayoutParams resultsParams = new LayoutParams(0, -1, 1);
         results.addView(resultsView, resultsParams);
+        LayoutParams scopeParams = fixed(26, 26);
+        scopeParams.rightMargin = px(6);
+        results.addView(scopeButton, scopeParams);
         LayoutParams createParams = fixed(26, 26);
         createParams.rightMargin = px(6);
         results.addView(toolbar.newEntryButton, createParams);
@@ -419,7 +421,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void updateScopeButton() {
-        scopeButton.setPalette(UiTableStyle.rowPalette(includeSubfolders, 0));
         scopeButton.setSelected(includeSubfolders);
         updateFilterIndicator();
     }

@@ -445,6 +445,12 @@ final class DataLibraryValueEditors {
 
     private void commitEditedTextOnBlur(EditText editor, Consumer<String> commit) {
         String[] baseline = {editor.getText().toString()};
+        if (editor instanceof UiTextInput input) {
+            input.setEditActions(editor::clearFocus, () -> {
+                editor.setText(baseline[0]);
+                editor.clearFocus();
+            });
+        }
         editor.setOnFocusChangeListener((view, focused) -> {
             if (focused) return;
             String draft = editor.getText().toString();

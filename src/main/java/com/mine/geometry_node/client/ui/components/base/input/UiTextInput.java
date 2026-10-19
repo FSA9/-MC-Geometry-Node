@@ -4,9 +4,13 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.graphics.Rect;
+import icyllis.modernui.view.KeyEvent;
+import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.ViewParent;
 import icyllis.modernui.widget.EditText;
 
-/** Shared text-field visuals. Callers own filtering, validation and commit/cancel timing. */
+/** Shared text-field visuals and gesture ownership. Callers own validation and edit actions. */
 public class UiTextInput extends EditText {
     public static final Style DEFAULT_STYLE = new Style(
             UiTheme.Metrics.TEXT_CONTROL, 7.0f, UiTheme.Metrics.RADIUS_INPUT,
@@ -17,6 +21,11 @@ public class UiTextInput extends EditText {
     private final ShapeDrawable background = new ShapeDrawable();
     private CharSequence errorMessage;
     private CharSequence ordinaryTooltip;
+    private ViewParent pointerParent;
+    private Runnable confirmEdit;
+    private Runnable cancelEdit;
+    private boolean singleLineInput;
+    private int finishingKey = -1;
 
     public UiTextInput(Context context) {
         this(context, DEFAULT_STYLE);
@@ -34,6 +43,77 @@ public class UiTextInput extends EditText {
         background.setCornerRadius(UIUtils.dp2px(this.style.cornerRadiusDp()));
         setBackground(background);
         updateVisualState();
+    }
+
+    /** Optional edit actions; ordinary key listeners (search, tags, overlays) retain first priority. */
+    public void setEditActions(Runnable confirm, Runnable cancel) {
+        confirmEdit = confirm;
+        cancelEdit = cancel;
+    }
+
+    @Override
+    public void setSingleLine(boolean singleLine) {
+        singleLineInput = singleLine;
+        super.setSingleLine(singleLine);
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        boolean enter = singleLineInput && (keyCode == KeyEvent.KEY_ENTER || keyCode == KeyEvent.KEY_KP_ENTER);
+        Runnable action = keyCode == KeyEvent.KEY_ESCAPE ? cancelEdit : enter ? confirmEdit : null;
+        if (isEnabled() && isFocused() && action != null) {
+            finishingKey = keyCode;
+            if (event.getRepeatCount() == 0) action.run();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == finishingKey) {
+            finishingKey = -1;
+            return true;
+        }
+        return super.onKeyUp(keyCode, event);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            releasePointer();
+            if (isEnabled() && getParent() != null) {
+                pointerParent = getParent();
+                pointerParent.requestDisallowInterceptTouchEvent(true);
+            }
+        }
+        boolean handled = false;
+        try {
+            handled = super.dispatchTouchEvent(event);
+            return handled;
+        } finally {
+            int action = event.getActionMasked();
+            if (!handled || action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) releasePointer();
+        }
+    }
+
+    private void releasePointer() {
+        ViewParent parent = pointerParent;
+        pointerParent = null;
+        if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean focused) {
+        if (!focused) releasePointer();
+        super.onWindowFocusChanged(focused);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        releasePointer();
+        finishingKey = -1;
+        super.onDetachedFromWindow();
     }
 
     /** The caller supplies localized text; showing an error never edits or submits the draft. */
@@ -62,7 +142,20 @@ public class UiTextInput extends EditText {
     @Override
     protected void drawableStateChanged() {
         super.drawableStateChanged();
+        if (!isEnabled()) releasePointer();
         if (style != null) updateVisualState();
+    }
+
+    @Override
+    protected void onFocusChanged(boolean focused, int direction, Rect previous) {
+        if (!focused) releasePointer();
+        super.onFocusChanged(focused, direction, previous);
+    }
+
+    @Override
+    protected void onVisibilityChanged(icyllis.modernui.view.View changedView, int visibility) {
+        if (visibility != VISIBLE) releasePointer();
+        super.onVisibilityChanged(changedView, visibility);
     }
 
     private void updateVisualState() {
