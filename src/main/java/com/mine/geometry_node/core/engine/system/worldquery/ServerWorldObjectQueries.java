@@ -1,10 +1,10 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.worldquery.*;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -83,25 +83,24 @@ public final class ServerWorldObjectQueries {
         String current = player.level().dimension().identifier().toString();
         if (query.range() == WorldObjectQuery.Range.NEARBY && !query.dimension().isEmpty() && !query.dimension().equals(current))
             return WorldObjectPage.empty(request.requestId(), "nearby_requires_current_dimension");
-        String selected = query.dimension().isEmpty() && query.range() != WorldObjectQuery.Range.GLOBAL ? current : query.dimension();
+        String selected = query.selectedDimension(current);
         java.util.function.Predicate<String> acceptsDimension = dim -> selected.isEmpty() || selected.equals(dim);
         Map<String, ServerLevel> allLevels = new LinkedHashMap<>();
         allLevels.put(current, player.level());
         LinkedHashSet<String> dimensions = new LinkedHashSet<>();
-        if (current.length() <= 128) dimensions.add(current);
         boolean metadataTruncated = false;
+        // Registry catalog is independent of selected scope, scan budgets and matching objects.
+        for (String dim : RegistryDataManager.getDimensions(server.registryAccess())) {
+            if (dim.length() > 128) { metadataTruncated = true; continue; }
+            if (dimensions.size() >= WorldObjectPage.MAX_METADATA) { metadataTruncated = true; break; }
+            dimensions.add(dim);
+        }
         boolean levelLimitReached = false;
         for (ServerLevel level : server.getAllLevels()) {
             String dim = level.dimension().identifier().toString();
             if (allLevels.containsKey(dim)) continue;
-            if (allLevels.size() == MAX_LEVELS) { metadataTruncated = levelLimitReached = true; break; }
+            if (allLevels.size() == MAX_LEVELS) { levelLimitReached = true; break; }
             allLevels.put(dim, level);
-            if (dim.length() <= 128) dimensions.add(dim); else metadataTruncated = true;
-        }
-        for (String dim : SceneSavedData.get(server).worldQueryDimensions()) {
-            if (dim.length() > 128) { metadataTruncated = true; continue; }
-            if (dimensions.size() >= WorldObjectPage.MAX_METADATA && !dimensions.contains(dim)) { metadataTruncated = true; break; }
-            dimensions.add(dim);
         }
         List<ServerLevel> levels = allLevels.entrySet().stream().filter(e -> acceptsDimension.test(e.getKey())).map(Map.Entry::getValue).toList();
         var context = new WorldObjectProvider.Context(server, levels, acceptsDimension);
@@ -116,7 +115,6 @@ public final class ServerWorldObjectQueries {
         coverage.addAll(catalog.failures());
         class Collector implements WorldObjectProvider.Sink {
             int scanned, bytes;
-            boolean dimensionTruncated;
             boolean truncated, stopped;
             String provider;
             // A time cap supplements the cardinality budget; results explicitly report incompleteness.
@@ -130,9 +128,6 @@ public final class ServerWorldObjectQueries {
             public boolean emit(WorldObjectEntry entry) {
                 if (stopped) return false;
                 if (!entry.provider().equals(provider)) throw new IllegalArgumentException("Provider identity mismatch");
-                if (entry.dimension().length() > 128) dimensionTruncated = true;
-                else if (dimensions.size() < WorldObjectPage.MAX_METADATA) dimensions.add(entry.dimension());
-                else if (!dimensions.contains(entry.dimension())) dimensionTruncated = true;
                 if (!acceptsDimension.test(entry.dimension()) || !query.matchesMetadata(entry)) return true;
                 if (query.range() == WorldObjectQuery.Range.NEARBY && !query.withinRadius(entry, origin)) return true;
                 if (query.range() == WorldObjectQuery.Range.LOADED) {
@@ -166,7 +161,6 @@ public final class ServerWorldObjectQueries {
                 collector.truncated = true; coverage.add(provider.id() + ":failed");
             }
         }
-        metadataTruncated |= collector.dimensionTruncated;
         if (metadataTruncated) coverage.add("metadata:partial");
         if (query.range() == WorldObjectQuery.Range.LOADED) coverage.add("range:pivot_in_loaded_chunk");
         coverage.add("models:server_collision_instances_only");

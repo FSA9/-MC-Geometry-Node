@@ -32,6 +32,10 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
+    private final PreviewZoomController mZoom = new PreviewZoomController(() -> {
+        requestNativePreviewRender();
+        invalidate();
+    });
 
     private volatile ItemStack mDisplayStack = ItemStack.EMPTY;
     private Runnable mDisplayClickAction;
@@ -80,7 +84,7 @@ public class ItemSlotView extends ViewportNativePreviewView {
             float slotGuiH = heightPx / guiScale;
             float padding = UIUtils.dp2px(ITEM_PADDING_DP) * viewportScale / guiScale;
             float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
-            float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI) * ITEM_VISUAL_SCALE;
+            float itemScale = Math.min(ITEM_MAX_SCALE * viewportScale, contentSize / ITEM_SIZE_GUI) * ITEM_VISUAL_SCALE * mZoom.getFactor();
             float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
             float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
 
@@ -92,6 +96,9 @@ public class ItemSlotView extends ViewportNativePreviewView {
             graphics.pose().popMatrix();
         }
     }
+
+    /** Content zoom is opt-in and independent of the surrounding viewport's scale. */
+    public final PreviewZoomController zoom() { return mZoom; }
 
     public final void setViewportScale(float scale) {
         updateNativePreviewScale(scale);
@@ -205,7 +212,8 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        // Wheel input belongs to the containing menu/list's scroll view.
+        if (isEnabled() && mZoom.handleScroll(event)) return true;
+        // Unless explicitly opted in, wheel input still belongs to the surrounding menu/list.
         if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) return super.dispatchGenericMotionEvent(event);
         super.dispatchGenericMotionEvent(event);
         handleHover(event);

@@ -73,6 +73,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static final int TEXT = UiTheme.Text.NORMAL;
     private static final int MUTED = UiTheme.Text.MUTED;
     private static final int TREE_INDENT_DP = 20;
+    private static final int TREE_ROW_PADDING_DP = 4;
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
@@ -86,8 +87,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     /** Shared by the header and every cached card; width changes only remeasure views. */
     private final UiTableColumns columns = new UiTableColumns(List.of(
             UiTableStyle.rowNumberColumn(),
-            new UiTableColumns.Column("selection", DataLibraryEntryCard.SELECTION_WIDTH,
-                    DataLibraryEntryCard.SELECTION_WIDTH, false),
+            UiTableStyle.selectionColumn(),
             new UiTableColumns.Column("disclosure", DataLibraryEntryCard.DISCLOSURE_WIDTH,
                     DataLibraryEntryCard.DISCLOSURE_WIDTH, false),
             UiTableStyle.column("name", 240),
@@ -96,7 +96,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             UiTableStyle.column("tags", 128)));
     private final LinearLayout breadcrumbTrail;
     private final LinearLayout typeNavigation;
-    private final TextView scopeView;
+    private final TextView statusView;
     private final TextView resultsView;
     private final UiSearchInput searchInput;
     private final UiActionButton typeButton;
@@ -109,6 +109,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final UiActionButton groupButton;
     private final UiIconButton addFolderButton;
     private final View deleteButton;
+    private final UiCheckBox selectAll;
     private final DataLibrarySelection selection = new DataLibrarySelection();
     private final Set<DataLibraryUiRepository.EntryKey> selected = selection.entries;
     private final Set<UUID> selectedFolders = selection.folders;
@@ -169,6 +170,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     public DataLibraryWindow(Context context, DataLibraryUiRepository repository) {
         super(context);
         this.repository = repository != null ? repository : DataLibraryUiRepository.EMPTY;
+        selectAll = new UiCheckBox(context);
         this.valueEditors = new DataLibraryValueEditors(context, this.repository,
                 this::overlayHost, this::refresh, this::scheduleRefresh, () -> !disposed);
         this.repository.addChangeListener(repositoryChanged);
@@ -232,7 +234,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         directoryHeading.setGravity(Gravity.CENTER_VERTICAL);
         directoryHeading.addView(leftTitle, new LayoutParams(0, -1, 1));
         LayoutParams addFolderParams = fixed(24, 24);
-        addFolderParams.rightMargin = px(8);
+        // Match the checkbox center, including the tree's reserved scrollbar gutter.
+        addFolderParams.rightMargin = scrollHost.getVerticalScrollbarWidth() + groupsHost.getPaddingRight()
+                + px(TREE_ROW_PADDING_DP) + (px(CHECKBOX_SIZE_DP) - addFolderParams.width) / 2;
         directoryHeading.addView(addFolderButton, addFolderParams);
         leftPanel.addView(directoryHeading, new LayoutParams(-1, px(30)));
         UiFixedSplitLayout navigationPanes = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.VERTICAL,
@@ -255,20 +259,20 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         breadcrumbScroll.setPadding(0, px(8), 0, px(8));
         rightPanel.addView(breadcrumbScroll, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(40)));
         rightPanel.addView(toolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        scopeView = label(context, tr("geometry_node.data_library.current_folder_only"), 11, MUTED);
-        scopeView.setGravity(Gravity.CENTER_VERTICAL);
-        scopeView.setPadding(px(10), 0, px(10), 0);
+        statusView = label(context, "", 11, MUTED);
+        statusView.setSingleLine(true);
+        statusView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
+        statusView.setGravity(Gravity.CENTER_VERTICAL);
+        statusView.setPadding(px(14), 0, px(14), 0);
         LinearLayout results = new LinearLayout(context);
         results.setGravity(Gravity.CENTER_VERTICAL);
-        results.setPadding(px(10), 0, px(8), 0);
+        results.setPadding(px(14), 0, px(10), 0);
         results.setBackground(solid(UiTheme.Surface.CANVAS, 0));
-        results.addView(new SvgIconView(context, SvgIconView.Icon.DATA_LIBRARY, UiTheme.Text.SECONDARY), fixed(16, 16));
-        resultsView = label(context, "", 11, TEXT);
+        resultsView = label(context, "", UiTableStyle.CELL_TEXT_SIZE_DP, TEXT);
         resultsView.setGravity(Gravity.CENTER_VERTICAL);
         resultsView.setSingleLine(true);
         resultsView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
         LayoutParams resultsParams = new LayoutParams(0, -1, 1);
-        resultsParams.leftMargin = px(8);
         results.addView(resultsView, resultsParams);
         groupButton = DatabaseWidgets.button(context, tr("geometry_node.data_library.group_by_type"),
                 () -> setGroupByType(!groupByType));
@@ -278,14 +282,14 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         groupParams.rightMargin = px(6);
         results.addView(groupButton, groupParams);
         results.addView(deleteButton, fixed(26, 26));
-        rightPanel.addView(results, new LayoutParams(-1, px(38)));
+        rightPanel.addView(results, new LayoutParams(-1, px(UiTableStyle.RESULT_BAR_HEIGHT)));
         LinearLayout table = new LinearLayout(context);
         table.setOrientation(VERTICAL);
         table.addView(createColumnHeader(), new LayoutParams(-1, px(UiTableStyle.HEADER_HEIGHT)));
         table.addView(rightScroll, new LayoutParams(-1, 0, 1));
         rightPanel.addView(new UiTableViewport(context, columns, table), new LayoutParams(-1, 0, 1));
-        scopeView.setBackground(solid(UiTheme.Surface.PANEL, 0));
-        rightPanel.addView(scopeView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(24)));
+        statusView.setBackground(solid(UiTheme.Surface.PANEL, 0));
+        rightPanel.addView(statusView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(UiTableStyle.STATUS_BAR_HEIGHT)));
         groupsHost.setOnClickListener(v -> clearSelection());
         rightHost.setOnClickListener(v -> clearSelection());
         scrollHost.setOnClickListener(v -> clearSelection());
@@ -653,6 +657,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             boolean checked = selected.contains(key(binding.current.get()));
             binding.presentation.setSelected(checked);
         }
+        syncSelectionCheck(selectAll, renderedEntries.stream()
+                .filter(id -> selected.contains(new DataLibraryUiRepository.EntryKey(id))).count(),
+                renderedEntries.size());
+        selectAll.setEnabled(!renderedEntries.isEmpty());
         selectionViews.forEach(Runnable::run);
         updateActions();
         publishSelection();
@@ -677,8 +685,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             breadcrumbTrail.addView(separator, fixed(18, 24));
             addBreadcrumb(folder.name(), folder.id());
         }
-        scopeView.setText(tr(includeSubfolders ? "geometry_node.data_library.recursive_scope"
-                : "geometry_node.data_library.current_folder_only"));
     }
 
     private void updateTypeNavigation() {
@@ -740,7 +746,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private View createColumnHeader() {
         UiTableRow header = UiTableStyle.header(getContext(), columns);
         header.addView(UiTableStyle.rowNumberCell(getContext(), 0), new ViewGroup.LayoutParams(-1, -1));
-        header.addView(new View(getContext()), new ViewGroup.LayoutParams(-1, -1));
+        selectAll.setContentDescription(tr("geometry_node.database.select_all"));
+        selectAll.setOnCheckedChangeListener((button, checked) -> {
+            if (disposed || suspended) return;
+            selection.selectRendered(checked);
+            updateSelectionViews();
+        });
+        header.addView(UiTableStyle.selectionCell(getContext(), selectAll), new ViewGroup.LayoutParams(-1, -1));
         header.addView(new View(getContext()), new ViewGroup.LayoutParams(-1, -1));
         addColumnLabel(header, "geometry_node.data_library.column_name");
         addColumnLabel(header, "geometry_node.database.type");
@@ -865,7 +877,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private View createFolderRow(DataLibraryUiRepository.Folder folder, int depth, boolean expanded) {
         DataLibraryDragSurface row = dragSurface(() -> dragPayloadForFolder(folder.id()));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(px(4 + depth * TREE_INDENT_DP), 0, px(4), 0);
+        row.setPadding(px(TREE_ROW_PADDING_DP + depth * TREE_INDENT_DP), 0, px(TREE_ROW_PADDING_DP), 0);
         boolean active = Objects.equals(activeFolder, folder.id());
         boolean selectedFolder = selectedFolders.contains(folder.id());
         // Tree rows are deliberately flat and borderless at every depth.  Keep the
@@ -932,7 +944,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private View createRootRow() {
         LinearLayout row = new LinearLayout(getContext());
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(px(4), 0, px(4), 0);
+        row.setPadding(px(TREE_ROW_PADDING_DP), 0, px(TREE_ROW_PADDING_DP), 0);
         // Root follows the same flat tree treatment as child folders.
         row.setBackground(solid(activeFolder == null ? UiTheme.Control.CHECKED : 0, 0f, 0));
         row.setOnClickListener(v -> { clearSelection(); activeFolder = null; rebuild(); });
@@ -1099,7 +1111,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             updateSelectionViews();
         });
         DataLibraryEntryCard presentation = new DataLibraryEntryCard(card, columns, entry.key(),
-                displayTypeName(entry.type()),
+                displayTypeName(entry.type()), entry.type(),
                 selected.contains(key(entry)), () -> toggleEntry(entry.id()), checked -> {
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
             selection.anchor = entry.id();
@@ -1122,7 +1134,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static void updateRowSummary(DataLibraryEntryCard presentation, DataLibraryUiRepository.Entry entry) {
         String summary = DataLibraryValueEditors.compactValueSummary(entry).replace('\n', ' ').replace('\r', ' ');
-        presentation.setSummary(summary, entry.tags());
+        presentation.setSummary(entry, summary);
     }
 
     private static final class CardBinding {
@@ -1372,8 +1384,11 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (snapshot != null) {
             long count = snapshot.entries.values().stream().filter(entry -> DataLibraryTypes.supports(entry.type())
                     && inFolderScope(entry.parentId()) && matches(entry)).count();
-            String summary = Component.translatable("geometry_node.database.result_count", count, selected.size()).getString();
-            resultsView.setText(summary);
+            resultsView.setText(tr("geometry_node.database.all_objects") + " · " + count);
+            String scope = tr(includeSubfolders ? "geometry_node.data_library.recursive_scope"
+                    : "geometry_node.data_library.current_folder_only");
+            statusView.setText(Component.translatable("geometry_node.data_library.result_status",
+                    count, selected.size(), scope).getString());
         }
     }
 

@@ -66,6 +66,14 @@ final class DataLibrarySelection {
         for (UUID id : snapshot.entries.keySet()) entries.add(new DataLibraryUiRepository.EntryKey(id));
     }
 
+    /** Header checkbox changes only mounted result rows, preserving other directories' selection. */
+    void selectRendered(boolean checked) {
+        for (UUID id : rendered) {
+            var key = new DataLibraryUiRepository.EntryKey(id);
+            if (checked) entries.add(key); else entries.remove(key);
+        }
+    }
+
     void retain(DataLibrarySnapshot snapshot) {
         entries.removeIf(key -> !snapshot.entries.containsKey(key.id()));
         folders.retainAll(snapshot.folders.keySet());

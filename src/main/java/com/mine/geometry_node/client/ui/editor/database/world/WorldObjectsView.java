@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.components.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.list.UiListSelection;
 import com.mine.geometry_node.client.ui.components.display.UiTagStrip;
+import com.mine.geometry_node.client.ui.components.valuepreview.EntityPreviewCell;
 import com.mine.geometry_node.client.ui.components.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.input.UiSearchBar;
@@ -15,6 +16,7 @@ import com.mine.geometry_node.client.ui.components.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.table.UiTableRow;
+import com.mine.geometry_node.client.ui.components.table.UiTableRowFrame;
 import com.mine.geometry_node.client.ui.components.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.table.UiTableViewport;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
@@ -41,8 +43,8 @@ public final class WorldObjectsView extends FrameLayout {
     private final Consumer<DatabaseSelection> selectionChanged;
     private final LinearLayout rows;
     private final TextView status;
-    private final UiActionButton scopeButton, dimensionButton, typeButton, providerButton, lifetimeButton, focusButton;
-    private final UiSearchInput search, tags, source, radius;
+    private final UiActionButton dimensionButton, typeButton, providerButton, lifetimeButton, focusButton;
+    private final UiSearchInput search, tags, source;
     private final UiSearchBar searchBar;
     private final UiActionButton filterButton;
     private String submittedSearch = "";
@@ -53,9 +55,10 @@ public final class WorldObjectsView extends FrameLayout {
                               UiTableRow cells, int baseColor) {}
     private final UiTableColumns columns = new UiTableColumns(List.of(
             UiTableStyle.rowNumberColumn(),
-            UiTableStyle.column("selection", 32),
+            UiTableStyle.selectionColumn(),
             UiTableStyle.column("name", 240),
             UiTableStyle.column("type", 140),
+            UiTableStyle.column("value", 120),
             UiTableStyle.column("dimension", 150),
             UiTableStyle.column("position", 180),
             UiTableStyle.column("lifetime", 100),
@@ -68,7 +71,7 @@ public final class WorldObjectsView extends FrameLayout {
     private DatabaseSelection publishedSelection;
     private List<WorldObjectType> typeCatalog = List.of();
     private List<String> dimensionCatalog = List.of();
-    private WorldObjectQuery.Range range = WorldObjectQuery.Range.CURRENT_DIMENSION;
+    private WorldObjectQuery.Range range = WorldObjectQuery.Range.GLOBAL;
     private String dimension = "", type = "", typeProvider = "", provider = "", lifetime = "";
     private volatile boolean shown, disposed;
     private boolean sortAscending = true;
@@ -125,7 +128,6 @@ public final class WorldObjectsView extends FrameLayout {
         queryRow.setBaselineAligned(false);
         queryRow.setGravity(Gravity.CENTER_VERTICAL);
         queryRow.addView(searchBar, new LinearLayout.LayoutParams(0, px(32), 1));
-        scopeButton=button(context,"",this::chooseScope);
         lifetimeButton=button(context,"",this::chooseLifetime);
         filterButton=button(context,tr("filter"),this::showFilters);
         LinearLayout.LayoutParams filterParams = new LinearLayout.LayoutParams(px(60), px(32));
@@ -137,35 +139,30 @@ public final class WorldObjectsView extends FrameLayout {
         dimensionButton=button(context,"",this::chooseDimension);
         providerButton=button(context,"",this::chooseProvider);
         typeButton=button(context,"",this::chooseType);
-        tags=input(tr("tags_hint")); source=input(tr("source_hint")); radius=input(tr("radius_hint"));
-        radius.setText("128");
-        filterField(advancedFilters,tr("scope"),scopeButton);
-        filterField(advancedFilters,tr("lifetime"),lifetimeButton);
+        tags=input(tr("tags_hint")); source=input(tr("source_hint"));
         filterField(advancedFilters,tr("dimension"),dimensionButton);
+        filterField(advancedFilters,tr("lifetime"),lifetimeButton);
         filterField(advancedFilters,tr("provider"),providerButton);
         filterField(advancedFilters,tr("type"),typeButton);
-        filterField(advancedFilters,tr("radius"),radius);
         filterField(advancedFilters,tr("tags"),tags);
         filterField(advancedFilters,tr("source"),source);
         filterReset(advancedFilters,this::resetFilters);
         LinearLayout resultBar=new LinearLayout(context); resultBar.setGravity(Gravity.CENTER_VERTICAL);
         resultBar.setPadding(px(14),0,px(10),0);
         resultTitle=label(context,tr("all_objects"),UiTheme.Text.NORMAL);
+        UIUtils.setLockedTextSize(resultTitle,UiTableStyle.CELL_TEXT_SIZE_DP);
         resultTitle.setSingleLine(true);resultTitle.setEllipsize(TextUtils.TruncateAt.END);
         resultBar.addView(resultTitle,new LinearLayout.LayoutParams(0,-1,1));
         focusButton=button(context,tr("focus"),this::focusSelected); focusButton.setEnabled(false);
         resultBar.addView(focusButton,new LinearLayout.LayoutParams(-2,px(28)));
-        column.addView(resultBar,new LinearLayout.LayoutParams(-1,px(38)));
+        column.addView(resultBar,new LinearLayout.LayoutParams(-1,px(UiTableStyle.RESULT_BAR_HEIGHT)));
         tableHeader=UiTableStyle.header(context, columns);
         tableHeader.addView(UiTableStyle.rowNumberCell(context, 0),new ViewGroup.LayoutParams(-1,-1));
         selectAll=new UiCheckBox(context);
         selectAll.setContentDescription(tr("select_all"));
         selectAll.setOnCheckedChangeListener((checkbox, checked)->toggleAll());
-        FrameLayout selectAllHost=new FrameLayout(context);
-        selectAllHost.setOnClickListener(view->selectAll.performClick());
-        selectAllHost.addView(selectAll,new LayoutParams(px(14),px(14),Gravity.CENTER));
-        tableHeader.addView(selectAllHost,new ViewGroup.LayoutParams(-1,-1));
-        for(String key:List.of("name","type","dimension","position","lifetime","tags")) addHeader(key);
+        tableHeader.addView(UiTableStyle.selectionCell(context, selectAll),new ViewGroup.LayoutParams(-1,-1));
+        for(String key:List.of("name","type","value","dimension","position","lifetime","tags")) addHeader(key);
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,px(UiTableStyle.HEADER_HEIGHT)));
         UiScrollView scroll=new UiScrollView(context); scroll.setFillViewport(true);
@@ -179,8 +176,8 @@ public final class WorldObjectsView extends FrameLayout {
         status=label(context,tr("query_hint"),UiTheme.Text.MUTED);
         UIUtils.setLockedTextSize(status,11); status.setPadding(px(14),0,px(14),0); status.setSingleLine(true);
         status.setBackground(background(UiTheme.Surface.PANEL));
-        column.addView(status,new LinearLayout.LayoutParams(-1,px(28)));
-        for(UiSearchInput input:List.of(tags,source,radius))input.setOnQueryChanged(value->scheduleQuery());
+        column.addView(status,new LinearLayout.LayoutParams(-1,px(UiTableStyle.STATUS_BAR_HEIGHT)));
+        for(UiSearchInput input:List.of(tags,source))input.setOnQueryChanged(value->scheduleQuery());
         selectAll.setEnabled(false);
         rebuildNavigation(); updateFilters();
     }
@@ -197,10 +194,10 @@ public final class WorldObjectsView extends FrameLayout {
         queryNow();
     }
     private void resetFilters() {
-        range=WorldObjectQuery.Range.CURRENT_DIMENSION;
+        range=WorldObjectQuery.Range.GLOBAL;
         dimension=type=typeProvider=provider=lifetime=extraProvider="";category=null;
         submittedSearch="";
-        search.setText("");tags.setText("");source.setText("");radius.setText("128");
+        search.setText("");tags.setText("");source.setText("");
         updateFilters();rebuildNavigation();queryNow();
     }
     private void rebuildNavigation() {
@@ -246,11 +243,16 @@ public final class WorldObjectsView extends FrameLayout {
         UIUtils.setLockedTextSize(input, 12); input.setHint(hint); return input;
     }
     private void addHeader(String key) {
-        UiActionButton button = UiTableStyle.headerCell(getContext(), tr(key), () -> {
+        String title = key.equals("value") ? Component.translatable("geometry_node.data_library.column_value").getString() : tr(key);
+        UiActionButton button = UiTableStyle.headerCell(getContext(), title, key.equals("value") ? null : () -> {
             if (!shown || disposed) return;
             sortAscending = !sort.equals(key) || !sortAscending; sort = key; resetDoubleClick();
             if (!snapshot.loading()) rebuildRows();
         });
+        if (key.equals("value")) {
+            button.setClickable(false);
+            button.setFocusable(false);
+        }
         tableHeader.addView(button, new ViewGroup.LayoutParams(-1, -1));
     }
     private void scheduleQuery() {
@@ -262,8 +264,6 @@ public final class WorldObjectsView extends FrameLayout {
         if (!shown || disposed) return;
         final WorldObjectQuery query;
         try {
-            double distance = range == WorldObjectQuery.Range.NEARBY
-                    ? Double.parseDouble(radius.getText().toString().trim()) : 128;
             Set<String> providers = one(typeProvider.isEmpty() ? provider : typeProvider), types = one(type);
             if (category != null && providers.isEmpty()) providers = category.providers();
             if (category != null && type.isEmpty()) {
@@ -275,7 +275,7 @@ public final class WorldObjectsView extends FrameLayout {
             }
             query = new WorldObjectQuery(range, dimension, providers, types, submittedSearch,
                     tagFilters(tags.getText().toString()), one(source.getText().toString().trim()), one(lifetime),
-                    distance, WorldObjectQuery.MAX_RESULTS);
+                    128, WorldObjectQuery.MAX_RESULTS);
         } catch (IllegalArgumentException invalid) { setStatus(tr("invalid_query")); return; }
         dismissMenu(); resetDoubleClick();
         session.query(query);
@@ -322,34 +322,30 @@ public final class WorldObjectsView extends FrameLayout {
         return id;
     }
     private void updateFilters() {
-        scopeButton.setText(tr("range." + range.name().toLowerCase(Locale.ROOT)));
-        dimensionButton.setText(dimension.isEmpty() ? tr("automatic_dimension") : dimension);
+        dimensionButton.setText(dimension.isEmpty() ? tr("range." + range.name().toLowerCase(Locale.ROOT)) : dimension);
         providerButton.setText(provider.isEmpty() ? tr("all") : providerLabel(provider));
         typeButton.setText(type.isEmpty() ? tr("all") : typeLabel(typeProvider, type));
         lifetimeButton.setText(lifetime.isEmpty() ? tr("all") : lifetimeLabel(lifetime));
-        for (UiActionButton button : List.of(scopeButton, dimensionButton, providerButton, typeButton, lifetimeButton)) {
+        for (UiActionButton button : List.of(dimensionButton, providerButton, typeButton, lifetimeButton)) {
             button.setEllipsize(TextUtils.TruncateAt.END);
         }
-        radius.setEnabled(range == WorldObjectQuery.Range.NEARBY);
     }
     private String providerLabel(String id) {
         String key = "geometry_node.database.provider." + id;
         String text = Component.translatable(key).getString();
         return text.equals(key) ? id : text;
     }
-    private void chooseScope() {
-        LinkedHashMap<String, String> options = new LinkedHashMap<>();
-        for (var value : WorldObjectQuery.Range.values()) options.put(value.name(), tr("range." + value.name().toLowerCase(Locale.ROOT)));
-        choose(scopeButton, "scope", options, value -> {
-            range = WorldObjectQuery.Range.valueOf(value);
-            // Nearby always refers to this connection's current dimension/camera.
-            dimension = ""; updateFilters(); queryNow();
-        });
-    }
     private void chooseDimension() {
-        LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("automatic_dimension"));
+        LinkedHashMap<String, String> options = new LinkedHashMap<>();
+        options.put(WorldObjectQuery.Range.GLOBAL.name(), tr("range.global"));
+        options.put(WorldObjectQuery.Range.LOADED.name(), tr("range.loaded"));
         for (String id : dimensionCatalog) options.put(id, id);
-        choose(dimensionButton, "dimension", options, value -> { dimension = value; updateFilters(); queryNow(); });
+        choose(dimensionButton, "dimension", options, this::selectDimension);
+    }
+    private void selectDimension(String value) {
+        range = value.equals(WorldObjectQuery.Range.LOADED.name()) ? WorldObjectQuery.Range.LOADED : WorldObjectQuery.Range.GLOBAL;
+        dimension = value.equals(WorldObjectQuery.Range.GLOBAL.name()) || value.equals(WorldObjectQuery.Range.LOADED.name()) ? "" : value;
+        updateFilters(); queryNow();
     }
     private void chooseProvider() {
         LinkedHashMap<String, String> options = new LinkedHashMap<>(); options.put("", tr("all"));
@@ -444,27 +440,35 @@ public final class WorldObjectsView extends FrameLayout {
             row.setPadding(0, 0, 0, 0);
             int baseColor=UiTableStyle.rowColor(index++%2!=0);
             UiTableRow line = new UiTableRow(getContext(), columns);
+            line.setMinimumHeight(px(UiTableStyle.ROW_HEIGHT));
             line.addView(UiTableStyle.rowNumberCell(getContext(), index),new ViewGroup.LayoutParams(-1,-1));
-            FrameLayout checkboxHost=new FrameLayout(getContext());
             UiCheckBox checkbox=new UiCheckBox(getContext());
             checkbox.setContentDescription(displayName(entry));
             checkbox.setOnCheckedChangeListener((view,checked)->toggleCheckbox(entry,checked));
-            checkboxHost.setOnClickListener(view->checkbox.performClick());
-            checkboxHost.addView(checkbox,new LayoutParams(px(14),px(14),Gravity.CENTER));
-            line.addView(checkboxHost,new ViewGroup.LayoutParams(-1,-1));
+            line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
             var presentation=WorldObjectCategories.forEntry(entry);
             cell(line,displayName(entry));
             cell(line,presentation==null?typeLabel(entry.provider(), entry.type()):Component.translatable(presentation.labelKey()).getString());
+            if (entry.provider().equals("native") && !entry.type().equals("minecraft:interaction")) {
+                EntityPreviewCell preview = new EntityPreviewCell(getContext());
+                preview.setVisibilityRow(line);
+                UUID entityId = null;
+                try { entityId = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
+                catch (IllegalArgumentException ignored) { }
+                preview.setReference(entityId, entry.dimension());
+                line.addView(preview, new ViewGroup.LayoutParams(-1, -1));
+            } else {
+                cell(line, entry.provider().equals("native")
+                        ? Component.translatable("geometry_node.ui.entity_preview.no_appearance").getString() : "—");
+            }
             cell(line,dimensionLabel(entry.dimension()));
             cell(line,position(entry));
             cell(line,lifetimeLabel(entry.lifetime()));
             UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
             line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
 
-            FrameLayout host = new FrameLayout(getContext());
-            host.addView(row, new LayoutParams(-1, -1));
-            // Text cells pass events to the row; the checkbox owns its separate hit target.
-            host.addView(line, new LayoutParams(-1, -1));
+            // Cells determine height; background and selection overlays follow without stretching the row.
+            FrameLayout host = new UiTableRowFrame(getContext(), line, row);
             View stripe=new View(getContext());stripe.setBackground(background(UiTheme.Control.FOCUS));
             host.addView(stripe,new LayoutParams(Math.max(1,px(2)),-1));
             View border=new View(getContext());border.setBackground(background(UiTableStyle.DIVIDER_COLOR));
@@ -489,7 +493,7 @@ public final class WorldObjectsView extends FrameLayout {
             });
             rowViews.put(entry.key(), row);
             rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor));
-            rows.addView(host, new LinearLayout.LayoutParams(-1, px(UiTableStyle.ROW_HEIGHT)));
+            rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
         }
         updateSelection();
     }

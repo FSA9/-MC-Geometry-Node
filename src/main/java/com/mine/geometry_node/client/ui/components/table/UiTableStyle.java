@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.table;
 
 import com.mine.geometry_node.client.ui.components.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -8,10 +9,16 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.widget.FrameLayout;
 
 /** Shared table presentation, independent of the rows' domain and interaction model. */
 public final class UiTableStyle {
     public static final int HEADER_HEIGHT = 30;
+    public static final int CELL_TEXT_SIZE_DP = 12;
+    public static final int RESULT_BAR_HEIGHT = 38;
+    public static final int STATUS_BAR_HEIGHT = 28;
+    public static final int CHECKBOX_SIZE = 16;
+    public static final int SELECTION_COLUMN_WIDTH = 32;
     public static final int ROW_HEIGHT = 44;
     public static final int MIN_COLUMN_WIDTH = 24;
     public static final int DIVIDER_COLOR = UiTheme.Control.INPUT_BORDER;
@@ -27,6 +34,19 @@ public final class UiTableStyle {
         cell.setGravity(Gravity.CENTER);
         cell.setPadding(0, 0, 0, 0);
         return cell;
+    }
+
+    public static UiTableColumns.Column selectionColumn() {
+        return new UiTableColumns.Column("selection", SELECTION_COLUMN_WIDTH, SELECTION_COLUMN_WIDTH, false);
+    }
+
+    /** Shared alignment and hit target for header and body selection cells. */
+    public static FrameLayout selectionCell(Context context, UiCheckBox checkbox) {
+        FrameLayout host = new FrameLayout(context);
+        int size = UIUtils.dp2pxInt(CHECKBOX_SIZE);
+        host.addView(checkbox, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+        host.setOnClickListener(view -> { if (checkbox.isEnabled()) checkbox.performClick(); });
+        return host;
     }
 
     private UiTableStyle() {}
@@ -45,7 +65,7 @@ public final class UiTableStyle {
     }
 
     public static UiDisplayText cell(Context context, String text, int color) {
-        UiDisplayText cell = new UiDisplayText(context, text, 12, color);
+        UiDisplayText cell = new UiDisplayText(context, text, CELL_TEXT_SIZE_DP, color);
         cell.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         cell.setPadding(UIUtils.dp2pxInt(9), 0, UIUtils.dp2pxInt(6), 0);
         cell.setSingleLine(true);
@@ -60,7 +80,7 @@ public final class UiTableStyle {
         button.setPadding(UIUtils.dp2pxInt(9), 0, UIUtils.dp2pxInt(6), 0);
         button.setSingleLine(true);
         button.setEllipsize(TextUtils.TruncateAt.END);
-        UIUtils.setLockedTextSize(button, 12);
+        UIUtils.setLockedTextSize(button, CELL_TEXT_SIZE_DP);
         button.setPalette(rowPalette(false, UiTheme.Surface.HEADER));
         if (action != null) button.setOnClickListener(view -> action.run());
         return button;

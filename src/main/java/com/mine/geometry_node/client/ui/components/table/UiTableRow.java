@@ -33,15 +33,30 @@ public final class UiTableRow extends ViewGroup {
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
-        int maxHeight = 0;
+        int maxHeight = getSuggestedMinimumHeight();
+        boolean exactHeight = MeasureSpec.getMode(heightSpec) == MeasureSpec.EXACTLY;
         for (int i = 0; i < Math.min(getChildCount(), columns.size()); i++) {
             View child = getChildAt(i);
             if (child.getVisibility() == GONE) continue;
-            int childHeightSpec = getChildMeasureSpec(heightSpec, 0, child.getLayoutParams().height);
+            int requestedHeight = child.getLayoutParams().height;
+            // MATCH_PARENT must not consume the parent's available height before the row has a height.
+            if (!exactHeight && requestedHeight == LayoutParams.MATCH_PARENT)
+                requestedHeight = LayoutParams.WRAP_CONTENT;
+            int childHeightSpec = getChildMeasureSpec(heightSpec, 0, requestedHeight);
             child.measure(MeasureSpec.makeMeasureSpec(columns.width(i), MeasureSpec.EXACTLY), childHeightSpec);
             maxHeight = Math.max(maxHeight, child.getMeasuredHeight());
         }
-        setMeasuredDimension(resolveSize(columns.contentWidth(), widthSpec), resolveSize(maxHeight, heightSpec));
+        int rowHeight = resolveSize(maxHeight, heightSpec);
+        setMeasuredDimension(resolveSize(columns.contentWidth(), widthSpec), rowHeight);
+        if (!exactHeight) {
+            for (int i = 0; i < Math.min(getChildCount(), columns.size()); i++) {
+                View child = getChildAt(i);
+                if (child.getVisibility() != GONE && child.getLayoutParams().height == LayoutParams.MATCH_PARENT) {
+                    child.measure(MeasureSpec.makeMeasureSpec(columns.width(i), MeasureSpec.EXACTLY),
+                            MeasureSpec.makeMeasureSpec(rowHeight, MeasureSpec.EXACTLY));
+                }
+            }
+        }
     }
 
     @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {

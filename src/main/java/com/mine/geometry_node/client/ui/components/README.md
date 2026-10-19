@@ -51,6 +51,10 @@
 
 [UiTableColumns](table/UiTableColumns.java) 保存列定义和逻辑宽度；[UiTableRow](table/UiTableRow.java) 让表头、数据行使用同一列模型并处理列边界拖动；[UiTableViewport](table/UiTableViewport.java) 提供横向溢出与测量更新；[UiTableStyle](table/UiTableStyle.java) 提供共享行、单元格、配色和固定序号列。
 
+自适应数据行使用 `WRAP_CONTENT` 并设置最小行高。`UiTableRow` 先按内容测量，再让 `MATCH_PARENT` 单元格填满最终高度。有背景按钮、选中条或边线等覆盖层时，使用 [UiTableRowFrame](table/UiTableRowFrame.java) 让它们跟随内容高度，避免覆盖层撑满剩余空间。
+
+两种数据库表格共用 `UiTableStyle` 的 30dp 表头、44dp 普通行、12dp 正文字号、38dp 结果栏和 28dp 状态栏；选择列统一通过 `selectionColumn()` / `selectionCell()` 创建，使用 32dp 列宽和 16dp 复选框。
+
 表头与数据行必须共用同一个列模型。序号表示筛选、排序后的显示顺序，不作为对象 ID。尺寸变化只更新测量布局，不触发业务查询或重建整张表。
 
 一个列模型由对应的 `UiTableViewport` 管理宽度监听；调用方不再覆盖 `setOnWidthsChanged()`。viewport 构造时建立监听，detach 时仅解除自己的监听，attach 时重新绑定并同步已有行。列边界与分割线按局部坐标拖动；取消、禁用、移除或窗口失焦均结束当前手势，重新获得焦点后的移动／松键不会续接旧拖动。
@@ -60,7 +64,9 @@
 | 用途 | 入口 |
 | --- | --- |
 | 物品展示 | [ItemSlotView](valuepreview/ItemSlotView.java) |
-| 实体模板展示与转动预览 | [EntityTemplatePreviewView](valuepreview/EntityTemplatePreviewView.java) |
+| 实体模板／实体引用展示与转动预览 | [EntityTemplatePreviewView](valuepreview/EntityTemplatePreviewView.java) |
+| 表格中的只读实体值 | [EntityPreviewCell](valuepreview/EntityPreviewCell.java)；64dp 正方形框，纵向留白12dp，窄列自动等比缩小 |
+| 实体／物品内容缩放 | [PreviewZoomController](valuepreview/PreviewZoomController.java)，通过两个预览组件的 `zoom()` 获取 |
 | 标记类型预览 | [MarkerTypePreview](valuepreview/MarkerTypePreview.java) |
 | 游戏背包物品选择 | [InventoryItemPickerOverlay](overlay/InventoryItemPickerOverlay.java) |
 | 物品提示覆盖层 | [ItemStackTooltipOverlay](overlay/ItemStackTooltipOverlay.java) |
@@ -70,6 +76,29 @@
 节点中的 `UIItemSlot`、`UIEntityTemplatePreview` 仅负责端口取值、提交与编辑器入口；底层展示已复用上述公共组件，不要在节点包内复制绘制实现。
 
 `nativepreview` 是 ModernUI 与 Minecraft 渲染的桥接层，`valuepreview` 是具体内容控件；已有物品／实体控件优先复用。模态编辑覆盖层通过项目的 `OverlayMount` 管理，与局部菜单生命周期不同。
+
+实体展示通过 `setDisplayTemplate()` 绑定保存的模板，或通过 `setDisplayReference(UUID, dimension)` 绑定当前世界实体（空维度表示当前维度）。模板实体在原生渲染线程创建；实体引用按 UUID 和维度校验，不持有或销毁真实实体。状态通知在 UI 线程交付，并忽略旧数据源／移除前的过期渲染结果。
+
+`EntityPreviewCell` 组合该预览与状态文字，保持只读、固定朝向、缩放关闭，点击和普通滚轮交给行／滚动容器。通过 `setTemplate()` / `setReference()` 更新已存在的单元格，并以 `setVisibilityRow(row)` 绑定所属数据行；空值、未加载、无外观和渲染失败均有状态提示，不要再用序列化字符代替预览。
+
+原生实体绘制不继承 MUI 父级滚动容器裁剪。表格使用基类 `setFullVisibilityAnchor(row)`：UI 线程在滚动及每次绘制前检查祖先裁剪，只有数据行纵向完整可见、预览框横纵向均完整可见时才提交原生绘制。横向表格允许行宽超过视口。独立 surface 在 MUI `updateSurface()` 读取 alpha 时把裁剪结果编码为零／原透明度，由 MUI 与位置、尺寸一起同步；渲染回调只消费该帧的 alpha、当前绘制 pose 和 `onSurfaceChanged` 尺寸，不比较最新 UI 坐标，也不在渲染线程读取 View 几何，避免连续滚动时错误跳帧造成闪烁。普通节点预览默认不启用整行策略。共享 `NativePreviewHost` 路径仍通过不可变快照校验外部提供的变换，移除组件时注销监听；独立 surface 直接复用 MUI 自身的滚动／绘制监听，不额外注册每个预览的位置监听。
+
+### 预览缩放（默认关闭交互）
+
+实体和物品保留各自的绘制实现，共用 `PreviewZoomController`。两者的 `zoom()` 默认倍率为 `1`、范围为 `0.5–2.0`，`WheelMode.DISABLED` 不接管滚轮。现有节点及其他调用方未开启此功能，原有外观、画布缩放和滚动行为不变。
+
+```java
+preview.zoom().setRange(0.5f, 2.0f);
+preview.zoom().setWheelMode(PreviewZoomController.WheelMode.CTRL_WHEEL);
+preview.zoom().setFactor(1.25f); // 可由滑块或固定展示配置驱动
+preview.zoom().reset();        // 回到 1，受当前范围约束
+```
+
+- `DISABLED` 禁用滚轮缩放；`CTRL_WHEEL` 仅接管 Ctrl＋纵向滚轮；`WHEEL` 接管普通纵向滚轮。控件禁用时不处理缩放，达到上限／下限后仍消费已接管的缩放事件，避免突然滚动父列表。
+- 配置和事件在 UI 线程处理，渲染线程读取安全发布的倍率。`getFactor()`／`getMinimum()`／`getMaximum()`／`getWheelMode()` 提供当前配置。
+- 倍率及范围必须为正的有限数，最小值不得大于最大值；设置倍率或收窄范围会自动钳制。非法配置抛出异常且不修改已有状态。
+- 程序设置倍率不需要开启滚轮；关闭滚轮也不隐式重置倍率。变更内容、开启编辑权限或切换视口倍率不会自动启用缩放。
+- 内容缩放作用于原有适配结果，不改变展示框尺寸、布局和 `setViewportScale()` 的坐标变换。倍率大于 1 时内容可能放大至框外，由现有渲染裁剪限制显示区域。
 
 ## 公共输入与生命周期契约
 

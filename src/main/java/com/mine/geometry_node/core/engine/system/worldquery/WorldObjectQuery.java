@@ -22,8 +22,13 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
             throw new IllegalArgumentException("Invalid world query limits");
     }
     public static WorldObjectQuery defaults() {
-        return new WorldObjectQuery(Range.CURRENT_DIMENSION, "", Set.of(), Set.of(), "", Set.of(),
+        return new WorldObjectQuery(Range.GLOBAL, "", Set.of(), Set.of(), "", Set.of(),
                 Set.of(), Set.of(), 128, MAX_RESULTS);
+    }
+    /** Empty means every dimension, except for the explicit current/nearby protocol ranges. */
+    public String selectedDimension(String currentDimension) {
+        return dimension.isEmpty() && (range == Range.CURRENT_DIMENSION || range == Range.NEARBY)
+                ? currentDimension : dimension;
     }
     private static Set<String> filters(Set<String> values) {
         Set<String> result = Set.copyOf(values);

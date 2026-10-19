@@ -21,11 +21,13 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /** Reusable entity-template preview without graph-editor state or commands. */
@@ -39,10 +41,26 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
+    private final PreviewZoomController mZoom = new PreviewZoomController(() -> {
+        requestNativePreviewRender();
+        invalidate();
+    });
     private final int mTouchSlop;
 
+    public enum Status { EMPTY, READY, UNAVAILABLE, NO_APPEARANCE, ERROR }
+    private record Reference(UUID id, String dimension) {}
+    private volatile Reference mReference;
+    private volatile Status mStatus = Status.EMPTY;
+    private volatile Consumer<Status> mStatusListener;
+    private volatile long mSourceRevision;
+    private Level mTemplateLevel;
+    private boolean mTemplateAttempted;
+    private final Runnable mNotifyStatus = () -> {
+        if (mStatusListener != null) mStatusListener.accept(mStatus);
+    };
+
     private volatile Entity mPreviewEntity;
-    private EntityTemplateValue mDisplayTemplate = EntityTemplateValue.EMPTY;
+    private volatile EntityTemplateValue mDisplayTemplate = EntityTemplateValue.EMPTY;
     private Object mLastRawValue;
     private Runnable mDisplayClickAction;
     private Consumer<EntityTemplateValue> mDisplayPasteAction;
@@ -84,10 +102,20 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             float viewportScale
     ) {
         refreshDisplayValue();
-        Entity entity = mPreviewEntity;
-        if (entity == null) return;
-
+        long revision = mSourceRevision;
+        Entity entity;
         try {
+            entity = resolveRenderEntity();
+            if (entity == null) {
+                Status status = mReference == null && mDisplayTemplate.isEmpty() ? Status.EMPTY
+                        : mReference == null && mTemplateAttempted ? Status.ERROR : Status.UNAVAILABLE;
+                updateStatus(revision, status);
+                return;
+            }
+            if (entity instanceof net.minecraft.world.entity.Interaction) {
+                updateStatus(revision, Status.NO_APPEARANCE);
+                return;
+            }
             EntityRenderState state = Minecraft.getInstance().getEntityRenderDispatcher().extractEntity(entity, deltaTick);
             state.shadowPieces.clear();
             state.outlineColor = 0;
@@ -103,7 +131,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             float padding = UIUtils.dp2px(PADDING_DP) * viewportScale / guiScale;
             float contentWidth = Math.max(1.0f, guiWidth - padding * 2.0f);
             float contentHeight = Math.max(1.0f, guiHeight - padding * 2.0f);
-            float size = Math.min(contentWidth / width, contentHeight / height) * 0.82f;
+            float size = Math.min(contentWidth / width, contentHeight / height) * 0.82f * mZoom.getFactor();
 
             float yaw = mYaw;
             float pitch = mPitch;
@@ -124,10 +152,15 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
             Vector3f translation = new Vector3f(0.0f, state.boundingBoxHeight / 2.0f, 0.0f);
             graphics.entity(state, size, translation, rotation, xRotation, x0, y0, x1, y1);
+            updateStatus(revision, Status.READY);
         } catch (RuntimeException ignored) {
             // Some addon entities require world state the preview renderer does not provide.
+            updateStatus(revision, Status.ERROR);
         }
     }
+
+    /** Content zoom is opt-in and independent of the surrounding viewport's scale. */
+    public final PreviewZoomController zoom() { return mZoom; }
 
     public final void setViewportScale(float scale) {
         updateNativePreviewScale(scale);
@@ -141,8 +174,76 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
         updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, previewOrder);
     }
 
-    public void setDisplayTemplate(EntityTemplateValue template) {
+    public synchronized void setDisplayTemplate(EntityTemplateValue template) {
+        boolean wasReference = mReference != null;
+        mReference = null;
         applyTemplate(template != null ? template : EntityTemplateValue.EMPTY);
+        if (wasReference) {
+            mSourceRevision++;
+            updateStatus(mDisplayTemplate.isEmpty() ? Status.EMPTY : Status.UNAVAILABLE);
+            requestNativePreviewRender();
+        }
+    }
+
+    /** Non-owning reference: resolving or detaching this preview never removes a world entity. */
+    public synchronized void setDisplayReference(UUID entityId, String dimension) {
+        Reference next = entityId == null ? null : new Reference(entityId, dimension == null ? "" : dimension);
+        if (Objects.equals(mReference, next) && mDisplayTemplate.isEmpty()) return;
+        applyTemplate(EntityTemplateValue.EMPTY);
+        mReference = next;
+        mTemplateLevel = null;
+        mTemplateAttempted = false;
+        mSourceRevision++;
+        updateStatus(next == null ? Status.EMPTY : Status.UNAVAILABLE);
+        requestNativePreviewRender();
+    }
+
+    public final Status getPreviewStatus() { return mStatus; }
+
+    /** Listener runs on the UI thread; references are resolved only during native rendering. */
+    public final void setOnPreviewStatusChanged(Consumer<Status> listener) {
+        mStatusListener = listener;
+        if (listener != null) listener.accept(mStatus);
+    }
+
+    private synchronized void updateStatus(long revision, Status status) {
+        if (revision == mSourceRevision) updateStatus(status);
+    }
+
+    private void updateStatus(Status status) {
+        if (mStatus == status) return;
+        mStatus = status;
+        if (mStatusListener != null && isAttachedToWindow()) {
+            removeCallbacks(mNotifyStatus);
+            post(mNotifyStatus);
+        }
+    }
+
+    private synchronized Entity resolveRenderEntity() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.level == null) {
+            replacePreviewEntity(null);
+            mTemplateLevel = null;
+            mTemplateAttempted = false;
+            return null;
+        }
+        Reference reference = mReference;
+        if (reference != null) {
+            if (!reference.dimension().isEmpty()
+                    && !minecraft.level.dimension().identifier().toString().equals(reference.dimension())) return null;
+            Entity entity = minecraft.level.getEntity(reference.id());
+            return entity != null && !entity.isRemoved() ? entity : null;
+        }
+        if (mTemplateLevel != minecraft.level) {
+            replacePreviewEntity(null);
+            mTemplateLevel = minecraft.level;
+            mTemplateAttempted = false;
+        }
+        if (!mTemplateAttempted && !mDisplayTemplate.isEmpty()) {
+            mTemplateAttempted = true;
+            replacePreviewEntity(mDisplayTemplate.create(minecraft.level, Vec3.ZERO));
+        }
+        return mPreviewEntity;
     }
 
     public void setDisplayClickAction(Runnable action) {
@@ -186,21 +287,18 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     protected void onOpenEditorRequested() {
     }
 
-    protected final void applyTemplate(Object raw) {
-        if (Objects.equals(raw, mLastRawValue)
-                && (mDisplayTemplate.isEmpty() || mPreviewEntity != null || Minecraft.getInstance().level == null)) {
-            return;
-        }
+    protected final synchronized void applyTemplate(Object raw) {
+        if (Objects.equals(raw, mLastRawValue)) return;
         mLastRawValue = raw;
         EntityTemplateValue template = EntityTemplateValue.from(raw);
-        if (template.equals(mDisplayTemplate) && mPreviewEntity != null) return;
-
+        if (template.equals(mDisplayTemplate)) return;
         replacePreviewEntity(null);
         mDisplayTemplate = template;
-        Minecraft minecraft = Minecraft.getInstance();
-        if (!template.isEmpty() && minecraft.level != null) {
-            replacePreviewEntity(template.create(minecraft.level, Vec3.ZERO));
-        }
+        mTemplateLevel = null;
+        mTemplateAttempted = false;
+        mSourceRevision++;
+        // Entity construction is deferred to the native render thread, where a client level is available.
+        updateStatus(template.isEmpty() ? Status.EMPTY : Status.UNAVAILABLE);
         requestNativePreviewRender();
         invalidate();
     }
@@ -233,7 +331,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
         invalidate();
     }
 
-    private void replacePreviewEntity(Entity entity) {
+    private synchronized void replacePreviewEntity(Entity entity) {
         Entity previous = mPreviewEntity;
         mPreviewEntity = entity;
         if (previous != null && previous != entity) previous.discard();
@@ -325,6 +423,12 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (isEnabled() && mZoom.handleScroll(event)) return true;
+        return super.dispatchGenericMotionEvent(event);
+    }
+
+    @Override
     public PointerIcon onResolvePointerIcon(MotionEvent event) {
         return PointerIcon.getSystemIcon(PointerIcon.TYPE_HAND);
     }
@@ -375,11 +479,24 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (mStatusListener != null) post(mNotifyStatus);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
+        removeCallbacks(mNotifyStatus);
         mPressed = false;
         mDragging = false;
         setPressed(false);
-        replacePreviewEntity(null);
+        synchronized (this) {
+            replacePreviewEntity(null);
+            mTemplateLevel = null;
+            mTemplateAttempted = false;
+            mSourceRevision++;
+            mStatus = mReference == null && mDisplayTemplate.isEmpty() ? Status.EMPTY : Status.UNAVAILABLE;
+        }
         super.onDetachedFromWindow();
     }
 
