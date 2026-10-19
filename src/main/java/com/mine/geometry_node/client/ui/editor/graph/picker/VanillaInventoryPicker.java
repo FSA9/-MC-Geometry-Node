@@ -166,8 +166,11 @@ public final class VanillaInventoryPicker {
             mFinished = true;
             Minecraft.getInstance().setScreen(mPreviousScreen);
             MuiModApi.postToUiThread(() -> {
-                if (mOnPicked != null) mOnPicked.accept(selected);
-                notifyDismissed();
+                try {
+                    if (mOnPicked != null) mOnPicked.accept(selected);
+                } finally {
+                    notifyDismissed();
+                }
             });
         }
 

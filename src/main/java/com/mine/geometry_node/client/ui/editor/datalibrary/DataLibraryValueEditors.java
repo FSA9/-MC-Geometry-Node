@@ -7,6 +7,8 @@ import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateScopes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
@@ -56,6 +58,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -68,7 +71,6 @@ final class DataLibraryValueEditors {
     private static final int TEXT = UiTheme.Text.NORMAL;
     private static final int MUTED = UiTheme.Text.MUTED;
     private static final int CHECKBOX_SIZE_DP = 16;
-    private static final int PREVIEW_SIZE_DP = 44;
     private static final int CARD_PREVIEW_SIZE_DP = 64;
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
@@ -130,28 +132,58 @@ final class DataLibraryValueEditors {
     }
 
     private void openNativePicker(AtomicReference<DataLibraryUiRepository.Entry> current,
-                                  Consumer<Runnable> open) {
+                                  BiConsumer<Consumer<Object>, Runnable> open) {
         if (!canUpdate(current) || isEditing(current.get().id())) return;
-        Runnable finished = beginExternalEdit(current);
+        NativeValueEdit edit = beginNativeValueEdit(current);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null) {
-            finished.run();
+            edit.finish().run();
             return;
         }
         minecraft.execute(() -> {
             if (!canUpdate(current)) {
-                finished.run();
+                edit.finish().run();
                 return;
             }
             try {
                 // Check the actual open result on the game thread, not its optimistic queued result.
-                open.accept(finished);
+                open.accept(edit.commit(), edit.finish());
             } catch (RuntimeException failure) {
-                finished.run();
+                edit.finish().run();
                 throw failure;
             }
         });
     }
+
+    /** A native screen destroys the MUI host; its one-shot edit belongs to the connection and entry. */
+    private NativeValueEdit beginNativeValueEdit(AtomicReference<DataLibraryUiRepository.Entry> current) {
+        DataLibraryUiRepository.Entry expected = current.get();
+        String scope = UiStateScopes.current();
+        AtomicBoolean retired = new AtomicBoolean();
+        AtomicBoolean committed = new AtomicBoolean();
+        Runnable scopeChanged = () -> retired.set(true);
+        UiStateScopes.addChangeListener(scopeChanged);
+        Runnable externalFinished = beginExternalEdit(current);
+        Runnable finish = () -> {
+            retired.set(true);
+            UiStateScopes.removeChangeListener(scopeChanged);
+            externalFinished.run();
+        };
+        Consumer<Object> commit = value -> {
+            if (retired.get() || !Objects.equals(scope, UiStateScopes.current())
+                    || !committed.compareAndSet(false, true) || !repository.hasLoadedSnapshot()) return;
+            DataLibraryUiRepository.Entry existing = repository.findEntry(expected.id());
+            if (existing == null || existing.type() != expected.type() || DataLibraryValueChanges.equivalent(expected, value)) return;
+            DataLibraryUiRepository.Entry updated = DataLibraryValueChanges.replace(expected, value);
+            // Never retarget a newer editor. The repository validates this captured snapshot by CAS.
+            if (current.get() == expected) current.set(updated);
+            repository.update(expected, updated);
+            changed();
+        };
+        return new NativeValueEdit(commit, finish);
+    }
+
+    private record NativeValueEdit(Consumer<Object> commit, Runnable finish) {}
 
     private boolean canUpdate(AtomicReference<DataLibraryUiRepository.Entry> current) {
         if (!active.getAsBoolean() || current == null || current.get() == null) return false;
@@ -163,7 +195,8 @@ final class DataLibraryValueEditors {
                                       AtomicReference<DataLibraryUiRepository.Entry> current) {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
-        content.setPadding(px(12), px(6), px(12), px(6));
+        content.setPadding(px(UiTableStyle.ROW_NUMBER_WIDTH + UiTableStyle.SELECTION_COLUMN_WIDTH + 6),
+                px(8), px(12), px(8));
 
         View valueEditor = createExpandedValueEditor(entry, current);
         int height = expandedValueHeightDp(entry.type());
@@ -173,6 +206,7 @@ final class DataLibraryValueEditors {
         key.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LayoutParams valueParams = entry.type() == PortType.BOOLEAN
                 ? fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP)
+                : hasPreview(entry.type()) ? new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(height))
                 : new LayoutParams(0, px(height), 1);
         content.addView(new UiPropertyRow(getContext(), key, valueEditor, null,
                         new UiPropertyRow.Layout(66, height, 6, 0, 0), valueParams),
@@ -183,40 +217,28 @@ final class DataLibraryValueEditors {
     private View createExpandedValueEditor(DataLibraryUiRepository.Entry entry,
                                            AtomicReference<DataLibraryUiRepository.Entry> current) {
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
-            LinearLayout content = new LinearLayout(getContext());
-            content.setGravity(Gravity.CENTER_VERTICAL);
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
             if (entry.value() instanceof EntityTemplateValue template) preview.setDisplayTemplate(template);
             else if (entry.value() instanceof UUID entityId) {
                 Entity entity = resolveClientEntity(entityId);
                 if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
             }
-            content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
             UiActionButton edit = button(getContext(), tr(entry.type() == PortType.ENTITY
                             ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"),
                     UiActionButton.Role.INLINE);
             edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
             edit.setOnClickListener(v -> editEntityValue(entry, current));
-            LayoutParams editLp = new LayoutParams(0, px(26), 1);
-            editLp.leftMargin = px(6);
-            content.addView(edit, editLp);
-            return content;
+            return previewEditor(preview, edit);
         } else if (entry.type() == PortType.ITEM_STACK) {
-            LinearLayout content = new LinearLayout(getContext());
-            content.setGravity(Gravity.CENTER_VERTICAL);
             ItemSlotView preview = new ItemSlotView(getContext());
             preview.setDisplayStack(entry.value() instanceof ItemStack stack ? stack : ItemStack.EMPTY);
             preview.setOpenEditorOnClick(false);
             preview.setDisplayPasteAction(json -> pasteItemStack(current, json));
-            content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
             UiActionButton edit = button(getContext(), tr("geometry_node.node.pick_item_stack"),
                     UiActionButton.Role.INLINE);
             edit.setContentDescription(tr("geometry_node.data_library.edit_value"));
             edit.setOnClickListener(v -> editItemStackValue(current));
-            LayoutParams editLp = new LayoutParams(0, px(26), 1);
-            editLp.leftMargin = px(6);
-            content.addView(edit, editLp);
-            return content;
+            return previewEditor(preview, edit);
         } else if (entry.type() == PortType.XYZ) {
             return createXyzValueEditor(current);
         } else if (entry.type() == PortType.AREA) {
@@ -241,10 +263,28 @@ final class DataLibraryValueEditors {
     }
 
     static int expandedValueHeightDp(PortType type) {
-        if (type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK) return 70;
+        if (hasPreview(type)) return CARD_PREVIEW_SIZE_DP + 8 + 26;
         if (type == PortType.XYZ) return 56;
         if (isInlineValueType(type) || isSummaryType(type) || type == PortType.AREA) return 28;
         return 54;
+    }
+
+    private static boolean hasPreview(PortType type) {
+        return type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE || type == PortType.ITEM_STACK;
+    }
+
+    private View previewEditor(View preview, UiActionButton edit) {
+        LinearLayout content = new LinearLayout(getContext());
+        content.setOrientation(VERTICAL);
+        content.setGravity(Gravity.RIGHT);
+        content.addView(centeredPreview(preview), fixed(CARD_PREVIEW_SIZE_DP, CARD_PREVIEW_SIZE_DP));
+        edit.setMaxWidth(px(180));
+        edit.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
+        edit.setGravity(Gravity.CENTER);
+        LayoutParams editParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(26));
+        editParams.topMargin = px(8);
+        content.addView(edit, editParams);
+        return content;
     }
 
     static String compactValueSummary(DataLibraryUiRepository.Entry entry) {
@@ -559,16 +599,18 @@ final class DataLibraryValueEditors {
     private FrameLayout centeredPreview(View preview) {
         FrameLayout host = new FrameLayout(getContext());
         host.addView(preview, new FrameLayout.LayoutParams(
-                px(PREVIEW_SIZE_DP), px(PREVIEW_SIZE_DP), Gravity.CENTER));
+                -1, -1, Gravity.CENTER));
+        if (preview instanceof com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView nativePreview)
+            nativePreview.setFullVisibilityAnchor(host);
         return host;
     }
 
     private void editItemStackValue(AtomicReference<DataLibraryUiRepository.Entry> current) {
         AtomicBoolean picked = new AtomicBoolean();
-        openNativePicker(current, finished -> {
+        openNativePicker(current, (commit, finished) -> {
             boolean opened = VanillaInventoryPicker.openItem(stack -> {
                 picked.set(true);
-                updateValue(current, stack == null || stack.isEmpty() ? null : stack.copy());
+                commit.accept(stack == null || stack.isEmpty() ? null : stack.copy());
             }, () -> {
                 try { if (!picked.get()) refresh(); } finally { finished.run(); }
             });
@@ -603,7 +645,7 @@ final class DataLibraryValueEditors {
     private void editEntityValue(DataLibraryUiRepository.Entry entry,
                                  AtomicReference<DataLibraryUiRepository.Entry> current) {
         AtomicBoolean picked = new AtomicBoolean();
-        openNativePicker(current, finished -> {
+        openNativePicker(current, (commit, finished) -> {
             Runnable refreshIfCancelled = () -> {
                 try { if (!picked.get()) refresh(); } finally { finished.run(); }
             };
@@ -611,12 +653,12 @@ final class DataLibraryValueEditors {
             if (entry.type() == PortType.ENTITY) {
                 opened = DataLibraryEntityPickerController.open((reference, preview) -> {
                     picked.set(true);
-                    updateValue(current, reference);
+                    commit.accept(reference);
                 }, refreshIfCancelled);
             } else if (entry.type() == PortType.ENTITY_TEMPLATE) {
                 opened = EntityTemplatePickerController.open(template -> {
                     picked.set(true);
-                    updateValue(current, template);
+                    commit.accept(template);
                 }, refreshIfCancelled);
             }
             if (!opened) finished.run();
