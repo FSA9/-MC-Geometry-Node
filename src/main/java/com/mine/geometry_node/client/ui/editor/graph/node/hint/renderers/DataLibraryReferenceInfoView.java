@@ -55,7 +55,7 @@ final class DataLibraryReferenceInfoView extends TextView {
         }
         setText(tr("geometry_node.port.path") + ": " + presentation.path()
                 + "\n" + tr("geometry_node.port.key") + ": " + presentation.key()
-                + "    " + tr("geometry_node.port.type") + ": " + presentation.type().name()
+                + "    " + tr("geometry_node.port.type") + ": " + tr(presentation.type().getTranslationKey())
                 + "\n" + tr("geometry_node.port.data_library_value") + ": " + presentation.value());
 
 

@@ -313,7 +313,7 @@ final class DatabaseInspectorViews {
 
     static TextView text(Context context, String value, float size, int color) {
         TextView label = UIUtils.createLockedTextView(context, value == null ? "" : value, size, color);
-        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         return label;
     }
 

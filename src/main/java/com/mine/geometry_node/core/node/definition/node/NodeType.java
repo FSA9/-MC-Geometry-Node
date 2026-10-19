@@ -1,6 +1,11 @@
 package com.mine.geometry_node.core.node.definition.node;
 
-/** Categories used to group node definitions and select their header color. */
+import java.util.Locale;
+
+/**
+ * Categories used to group node definitions and select their header color.
+ * Label keys derive from existing stable enum IDs without extra constructor arguments or translation lookup.
+ */
 public enum NodeType {
     EVENT(0xFFD32F2F),
     FLOW_CONTROL(0xFF616161),
@@ -17,6 +22,16 @@ public enum NodeType {
 
     NodeType(int color) {
         this.color = color;
+    }
+
+    /** Stable category ID based on the existing enum name. Do not rename. */
+    public String getId() {
+        return name();
+    }
+
+    /** Category label key; translation is resolved by the UI, not by core. */
+    public String getTranslationKey() {
+        return "geometry_node.node_type." + getId().toLowerCase(Locale.ROOT);
     }
 
     /** Returns the ARGB header color for this category. */

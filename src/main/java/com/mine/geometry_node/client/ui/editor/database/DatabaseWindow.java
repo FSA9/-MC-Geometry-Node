@@ -24,7 +24,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.List;
-import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import icyllis.modernui.view.Gravity;
@@ -165,8 +164,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                         .map(entry -> repository.folderPath(entry.parentId())).distinct().toList()))), List.of(), List.of());
         var entry = entries.getFirst();
         String selectionScope = stateScope;
-        String type = Component.translatable("geometry_node.port." + entry.type().name().toLowerCase(Locale.ROOT)).getString();
-        if(type.startsWith("geometry_node."))type=entry.type().name();
+        String type = Component.translatable(entry.type().getTranslationKey()).getString();
         boolean registryValue = switch (entry.type()) {
             case ENTITY, ENTITY_TEMPLATE, ITEM, ITEM_STACK, BLOCK_STATE -> true;
             default -> false;

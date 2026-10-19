@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
@@ -162,12 +163,20 @@ final class DataLibraryValueEditors {
                                       AtomicReference<DataLibraryUiRepository.Entry> current) {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
-        content.setPadding(0, px(5), px(6), px(6));
+        content.setPadding(px(12), px(6), px(12), px(6));
 
         View valueEditor = createExpandedValueEditor(entry, current);
-        LayoutParams valueLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                px(expandedValueHeightDp(entry.type())));
-        content.addView(valueEditor, valueLp);
+        int height = expandedValueHeightDp(entry.type());
+        TextView key = label(getContext(), tr("geometry_node.port.data_library_value"), EDITOR_TEXT_SIZE_DP, MUTED);
+        key.setSingleLine(true);
+        key.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
+        key.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        LayoutParams valueParams = entry.type() == PortType.BOOLEAN
+                ? fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP)
+                : new LayoutParams(0, px(height), 1);
+        content.addView(new UiPropertyRow(getContext(), key, valueEditor, null,
+                        new UiPropertyRow.Layout(66, height, 6, 0, 0), valueParams),
+                new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return content;
     }
 
@@ -404,7 +413,7 @@ final class DataLibraryValueEditors {
         EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(
                 EDITOR_TEXT_SIZE_DP, 5, 2, 1, MUTED, MUTED, INPUT_BG, BORDER));
         editor.setSingleLine(true);
-        editor.setGravity(Gravity.CENTER_VERTICAL);
+        editor.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         return editor;
     }
 
@@ -485,16 +494,11 @@ final class DataLibraryValueEditors {
 
     private View createBooleanValueEditor(DataLibraryUiRepository.Entry entry,
                                           AtomicReference<DataLibraryUiRepository.Entry> current) {
-        LinearLayout host = new LinearLayout(getContext());
-        host.setGravity(Gravity.CENTER_VERTICAL);
-        TextView label = label(getContext(), tr("geometry_node.port.data_library_value"), EDITOR_TEXT_SIZE_DP, TEXT);
-        host.addView(label, new LayoutParams(0, px(28), 1));
         UiCheckBox valueCheckBox = new UiCheckBox(getContext());
         valueCheckBox.setContentDescription(tr("geometry_node.data_library.edit_value"));
         valueCheckBox.setChecked(Boolean.TRUE.equals(entry.value()));
         valueCheckBox.setOnCheckedChangeListener((button, checked) -> updateValue(current, checked));
-        host.addView(valueCheckBox, fixed(CHECKBOX_SIZE_DP, CHECKBOX_SIZE_DP));
-        return host;
+        return valueCheckBox;
     }
 
     private static boolean isInlineValueType(PortType type) {
@@ -658,6 +662,7 @@ final class DataLibraryValueEditors {
         button.setMinHeight(0);
         button.setPadding(px(8), 0, px(8), 0);
         button.setSingleLine(true);
+        button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         UIUtils.setLockedTextSize(button, 11);
         return button;
     }

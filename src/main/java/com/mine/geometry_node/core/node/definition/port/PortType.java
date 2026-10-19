@@ -8,10 +8,12 @@ import com.mine.geometry_node.core.node.value.SlotRef;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 端口数据类型枚举。
  * 定义节点端口可以传递的数据类型。
+ * 类型翻译 key 由现有稳定枚举 ID 派生，无需额外构造参数；core 不解析翻译。
  */
 public enum PortType {
     EXECUTION(0xFFFFFFFF, null, true),
@@ -54,6 +56,16 @@ public enum PortType {
         this.color = color;
         this.defaultValue = defaultValue;
         this.flow = flow;
+    }
+
+    /** Stable type ID used by existing graph, library and filter serialization. Do not rename. */
+    public String getId() {
+        return name();
+    }
+
+    /** Type label key, distinct from the field labels in {@link StandardPorts}. Resolved by the UI. */
+    public String getTranslationKey() {
+        return "geometry_node.port_type." + getId().toLowerCase(Locale.ROOT);
     }
 
     public int getColor() {

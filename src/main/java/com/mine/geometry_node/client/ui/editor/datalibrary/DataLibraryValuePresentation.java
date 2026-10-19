@@ -43,6 +43,14 @@ public final class DataLibraryValuePresentation {
                 ? resolvedEntityType == null ? "" : resolvedEntityType : registryType(entry);
     }
 
+    /** Plain table value text; block states and items show only their registry ID, without state properties. */
+    public static String tableValueText(DataLibraryUiRepository.Entry entry, String summary) {
+        if (entry != null && (entry.type() == PortType.BLOCK_STATE || entry.type() == PortType.ITEM)) {
+            return registryType(entry);
+        }
+        return summary == null ? "" : summary;
+    }
+
     /**
      * Representative item appearance for block states and item values. Blocks without an item form
      * and empty/unsupported values produce an empty stack; no world or block renderer is consulted.

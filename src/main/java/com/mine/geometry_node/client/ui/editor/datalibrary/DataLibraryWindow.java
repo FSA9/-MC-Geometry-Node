@@ -1458,8 +1458,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private static String displayTypeName(PortType type) {
         if (type == null) return "";
-        String translated = tr("geometry_node.port." + type.name().toLowerCase(Locale.ROOT));
-        return translated.startsWith("geometry_node.") ? type.name() : translated;
+        return tr(type.getTranslationKey());
     }
 
     private ViewGroup overlayHost() {

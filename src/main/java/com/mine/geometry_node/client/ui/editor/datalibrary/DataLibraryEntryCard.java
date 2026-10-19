@@ -72,7 +72,7 @@ final class DataLibraryEntryCard {
         registryType = UiTableStyle.cell(context, "", UiTheme.Text.NORMAL);
         header.addView(registryType, new ViewGroup.LayoutParams(-1, -1));
         boolean entity = type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE;
-        boolean item = type == PortType.BLOCK_STATE || type == PortType.ITEM || type == PortType.ITEM_STACK;
+        boolean item = type == PortType.ITEM_STACK;
         entityPreview = entity ? new EntityPreviewCell(context) : null;
         if (entityPreview != null) entityPreview.setVisibilityRow(header);
         itemPreview = item ? new ItemPreviewCell(context) : null;
@@ -118,8 +118,9 @@ final class DataLibraryEntryCard {
         } else if (itemPreview != null) {
             itemPreview.setStack(DataLibraryValuePresentation.previewStack(entry));
         } else {
-            if (!Objects.equals(value.getText().toString(), summary)) value.setText(summary);
-            value.setTooltipText(summary);
+            String text = DataLibraryValuePresentation.tableValueText(entry, summary);
+            if (!Objects.equals(value.getText().toString(), text)) value.setText(text);
+            value.setTooltipText(text);
         }
         tags.setTags(entry.tags());
     }
