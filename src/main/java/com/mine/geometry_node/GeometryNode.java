@@ -166,7 +166,7 @@ public class GeometryNode {
         modEventBus.addListener(EntityChunkLoadingService::registerTicketController);
         com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService.register(modEventBus);
         modContainer.registerConfig(ModConfig.Type.SERVER, GeometryNodeServerConfig.SPEC,
-                "geometry_node-server.toml");
+                "geometry/geometry_node-server.toml");
 
         com.mine.geometry_node.core.engine.metadata.BuiltinMetadataCapabilities.init();
 

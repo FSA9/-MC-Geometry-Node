@@ -22,6 +22,16 @@
 | `integration/picker` | 共享的原版物品、实体引用、实体模板选择会话，分别保留各自协议。 |
 | `integration/game` | 将具体工作区宿主接入运行时视口策略。 |
 
+## 配置和缓存路径
+
+本模组配置统一保存到游戏目录的 `config/geometry/`（开发环境为 `run/config/geometry/`）：
+
+- `geometry_node_config.json`：客户端设置，由 `ClientPaths` 提供位置。
+- `geometry_node_editor_session.json`：编辑器布局和持久界面状态，同样由 `ClientPaths` 提供位置。
+- `geometry_node-server.toml`：通过 NeoForge 注册相对子路径 `geometry/geometry_node-server.toml`；保留 SERVER 配置同步和世界级覆盖语义。
+
+不再读取或生成 `.config/`，不提供旧目录回退或自动迁移。其他模组的配置仍由其自身管理。`geometry_nodes/caches/` 是可重建缓存（资产预览默认为 `asset_previews/`，模型为 `model/`，灯光为 `light/`），独立于配置；`.cache/jij/` 属于模组加载器。
+
 ## 运行时与模型
 
 | 目录 | 所有权 |
@@ -65,3 +75,12 @@
 - 移动 Java 类时同步 package、所有调用方、测试和文档，不保留旧包名转发实现。资源 ID、网络格式、存储路径和持久化键保持兼容。
 
 目录及关键依赖由 `ClientArchitectureTest` 检查。完整审查记录和验证入口见项目根目录 `docs/client/architecture-review.md`、`docs/client/architecture.md`。
+
+单元测试在 build 下的 test-runtime 工作目录中运行；源码、着色器和外部测试素材通过显式项目根目录读取，避免在项目根目录生成 config。
+
+## 发布依赖与加载器缓存
+
+- MUI、Architectury 为外部必需依赖；Sodium、Iris 为客户端可选依赖，版本范围集中在 `gradle.properties`，由模组元数据声明。它们不包含在本模组 JAR 中。
+- 普通 Java 库 QuickHull3D、LWJGL Meshoptimizer、pty4j 和 Kotlin 标准库保留 Jar-in-Jar。Meshoptimizer 的跨平台原生库同时随包分发。MixinExtras 由当前 NeoForge 提供，不重复打包。
+- Iris 内部的 GLSL Transformer、JCPP、ANTLR 和 Sodium 内部 JAR 由各自模组管理；声明外部依赖不会改变第三方模组的内嵌结构。
+- 当前 FML 11.0.13 将 `JIJ_CACHEDIR` 固定为 `.cache/jij`，早于本模组初始化解包。保留加载器原生目录（开发环境为 `run/.cache/jij/`），不设置目录联接或修改加载器。仅本模组自身的业务缓存统一放入 `geometry_nodes/caches/`。

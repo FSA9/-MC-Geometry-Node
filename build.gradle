@@ -189,6 +189,8 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_version            : mod_version,
             modernui_version_range : modernui_version_range,
             architectury_version_range: architectury_version_range,
+            sodium_version_range   : sodium_version_range,
+            iris_version_range     : iris_version_range,
     ]
     inputs.properties replaceProperties
     expand replaceProperties
@@ -218,6 +220,13 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test', Test).configure {
     useJUnitPlatform()
+    systemProperty 'geometry_node.test.projectDir', project.projectDir.absolutePath
+    doFirst {
+        def testDirectory = layout.buildDirectory.dir('test-runtime').get().asFile
+        testDirectory.mkdirs()
+        workingDir testDirectory
+        systemProperty 'user.dir', testDirectory.absolutePath
+    }
 }
 
 // JarJar identifies libraries by group/artifact, so classifiers cannot be separate nested jars.

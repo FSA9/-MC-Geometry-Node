@@ -87,8 +87,10 @@ public class AppConfig {
     }
 
     public static class PreviewCacheConfig {
+        public static final String DEFAULT_LOCATION = "geometry_nodes/caches/asset_previews";
+
         public int maxSizeMiB = 64;
-        public String location = ".cache/geometry_node/asset_previews";
+        public String location = DEFAULT_LOCATION;
 
         PreviewCacheConfig copy() {
             PreviewCacheConfig copy = new PreviewCacheConfig();

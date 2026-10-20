@@ -20,7 +20,7 @@ class ModelCollisionFixtureTest {
         var asset =
                 new GltfImporter()
                         .load(
-                                new FileModelResourceProvider(Path.of("docs/model")),
+                                new FileModelResourceProvider(com.mine.geometry_node.test.ProjectPaths.resolve("docs/model")),
                                 "collision-test.glb",
                                 token);
         assertEquals(12, asset.nodes().size());

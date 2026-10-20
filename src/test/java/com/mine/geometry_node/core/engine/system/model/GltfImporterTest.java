@@ -63,7 +63,7 @@ class GltfImporterTest {
         assertEquals("textures/a.png",ModelResourcePaths.resolve("models/a.gltf","../textures/a.png"));assertThrows(ModelProblem.class,()->ModelResourcePaths.resolve("a.gltf","%2e%2e/secret"));assertThrows(ModelProblem.class,()->ModelResourcePaths.resolve("a.gltf","https://example.org/a"));assertThrows(ModelProblem.class,()->ModelResourcePaths.resolve("a.gltf","%5csecret"));
     }
     @Test void optionalManualFixturesImportWithoutStartingGame() throws Exception {
-        Path fixtures=Path.of("docs/model/fixtures");
+        Path fixtures=com.mine.geometry_node.test.ProjectPaths.resolve("docs/model/fixtures");
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isDirectory(fixtures));
         for(String folder:List.of("P2","m8","P5")) {
             try(var files=Files.list(fixtures.resolve(folder))) {

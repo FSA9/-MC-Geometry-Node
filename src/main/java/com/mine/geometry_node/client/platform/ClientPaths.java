@@ -21,10 +21,10 @@ public class ClientPaths {
     }
 
     /**
-     * 获取全局配置目录 (.config)
+     * 获取本模组配置目录（游戏目录下的 config/geometry）
      */
     public static File getConfigDir() {
-        return new File(getWorkspaceRoot(), ".config");
+        return new File(new File(getWorkspaceRoot(), "config"), "geometry");
     }
 
     /**
