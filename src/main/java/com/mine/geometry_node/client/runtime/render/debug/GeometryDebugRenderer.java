@@ -152,7 +152,8 @@ public final class GeometryDebugRenderer {
             }
         }
         poseStack.popPose();
-        bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_POINT);
+        GeometryDebugPipelines.withVanillaPointShader(
+                () -> bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_POINT));
     }
 
     private static void drawFaces(PacketGeometryDebugSnapshot.Mesh mesh,

@@ -6,12 +6,14 @@ import com.mojang.blaze3d.platform.CompareOp;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
+import java.lang.reflect.Field;
+
 /** Dedicated overlays: no scene depth writes or shadow registration. */
 final class GeometryDebugPipelines {
     static final RenderPipeline FACE = irisOverlay("face", RenderPipelines.DEBUG_QUADS, "BASIC");
     static final RenderPipeline LINE = irisOverlay("line", RenderPipelines.LINES_TRANSLUCENT, "LINES");
     // Iris BASIC has no point-width attribute or gl_PointSize output. Leave this
-    // pipeline unassigned so Iris retains the original debug_point shader.
+    // pipeline unassigned and bypass Iris only while submitting this batch.
     static final RenderPipeline POINT = overlay("point", RenderPipelines.DEBUG_POINTS);
 
     private static RenderPipeline overlay(String name, RenderPipeline source) {
@@ -40,6 +42,43 @@ final class GeometryDebugPipelines {
             throw new IllegalStateException("Cannot register debug pipeline with Iris", e);
         }
         return pipeline;
+    }
+
+    static void withVanillaPointShader(Runnable draw) {
+        withVanillaPointShader(IrisPointShader.BYPASS, draw);
+    }
+
+    static void withVanillaPointShader(Field bypass, Runnable draw) {
+        if (bypass == null) {
+            draw.run();
+            return;
+        }
+        try {
+            boolean previous = bypass.getBoolean(null);
+            bypass.setBoolean(null, true);
+            try {
+                draw.run();
+            } finally {
+                bypass.setBoolean(null, previous);
+            }
+        } catch (IllegalAccessException e) {
+            throw new IllegalStateException("Cannot select the vanilla debug point shader", e);
+        }
+    }
+
+    private static final class IrisPointShader {
+        private static final Field BYPASS = findBypass();
+
+        private static Field findBypass() {
+            try {
+                return Class.forName("net.irisshaders.iris.vertices.ImmediateState")
+                        .getField("bypass");
+            } catch (ClassNotFoundException ignored) {
+                return null;
+            } catch (NoSuchFieldException e) {
+                throw new IllegalStateException("Cannot retain the vanilla debug point shader with this Iris version", e);
+            }
+        }
     }
 
     private GeometryDebugPipelines() {}
