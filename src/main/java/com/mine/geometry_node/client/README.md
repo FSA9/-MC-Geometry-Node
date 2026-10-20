@@ -84,3 +84,5 @@
 - 普通 Java 库 QuickHull3D、LWJGL Meshoptimizer、pty4j 和 Kotlin 标准库保留 Jar-in-Jar。Meshoptimizer 的跨平台原生库同时随包分发。MixinExtras 由当前 NeoForge 提供，不重复打包。
 - Iris 内部的 GLSL Transformer、JCPP、ANTLR 和 Sodium 内部 JAR 由各自模组管理；声明外部依赖不会改变第三方模组的内嵌结构。
 - 当前 FML 11.0.13 将 `JIJ_CACHEDIR` 固定为 `.cache/jij`，早于本模组初始化解包。保留加载器原生目录（开发环境为 `run/.cache/jij/`），不设置目录联接或修改加载器。仅本模组自身的业务缓存统一放入 `geometry_nodes/caches/`。
+- FML 11.0.13 动态创建游戏模块层，没有原生访问授权入口；仅在 JVM 参数中加入 `--enable-native-access=sodium` 无法授权这个后加载模块。`SodiumChunkMeshBufferMixin` 将 Sodium 0.9.x 区块缓冲中受限的 `MemorySegment.reinterpret` 替换为 LWJGL 直接缓冲的有界 `MemorySegment.ofBuffer` 视图，保持原分配、重分配和释放所有权；不放宽全局原生访问检查。Sodium 缺席时由 `@Pseudo` 跳过。
+- 调试面和线通过 Iris 公开 API 分别注册 BASIC、LINES。调试点保留原版 `debug_point` 着色器与 `POSITION_COLOR_LINE_WIDTH` 格式，不注册为 BASIC，避免丢失 `gl_PointSize`。Iris 对成功匹配面、线输出的 `okay` WARN 属于其正常日志。

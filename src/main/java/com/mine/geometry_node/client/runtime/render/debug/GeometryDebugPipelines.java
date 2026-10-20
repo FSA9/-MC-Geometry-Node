@@ -6,13 +6,15 @@ import com.mojang.blaze3d.platform.CompareOp;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
-/** Dedicated overlays: explicit Iris roles, no scene depth writes or shadow registration. */
+/** Dedicated overlays: no scene depth writes or shadow registration. */
 final class GeometryDebugPipelines {
-    static final RenderPipeline FACE = overlay("face", RenderPipelines.DEBUG_QUADS, "BASIC");
-    static final RenderPipeline LINE = overlay("line", RenderPipelines.LINES_TRANSLUCENT, "LINES");
-    static final RenderPipeline POINT = overlay("point", RenderPipelines.DEBUG_POINTS, "BASIC");
+    static final RenderPipeline FACE = irisOverlay("face", RenderPipelines.DEBUG_QUADS, "BASIC");
+    static final RenderPipeline LINE = irisOverlay("line", RenderPipelines.LINES_TRANSLUCENT, "LINES");
+    // Iris BASIC has no point-width attribute or gl_PointSize output. Leave this
+    // pipeline unassigned so Iris retains the original debug_point shader.
+    static final RenderPipeline POINT = overlay("point", RenderPipelines.DEBUG_POINTS);
 
-    private static RenderPipeline overlay(String name, RenderPipeline source, String irisRole) {
+    private static RenderPipeline overlay(String name, RenderPipeline source) {
         var builder = RenderPipeline.builder()
                 .withLocation(Identifier.fromNamespaceAndPath("geometry_node", "pipeline/debug_" + name))
                 .withVertexShader(source.getVertexShader()).withFragmentShader(source.getFragmentShader())
@@ -21,7 +23,11 @@ final class GeometryDebugPipelines {
                 // Hidden collision surfaces must not blend through every wall of a model.
                 .withDepthStencilState(new DepthStencilState(CompareOp.LESS_THAN_OR_EQUAL, false));
         for (var uniform : source.getUniforms()) builder.withUniform(uniform.name(), uniform.type());
-        RenderPipeline pipeline = builder.build();
+        return builder.build();
+    }
+
+    private static RenderPipeline irisOverlay(String name, RenderPipeline source, String irisRole) {
+        RenderPipeline pipeline = overlay(name, source);
         try {
             Class<?> apiType = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
             Class<?> roleType = Class.forName("net.irisshaders.iris.api.v0.IrisProgram");

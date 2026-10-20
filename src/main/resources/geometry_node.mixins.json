@@ -40,6 +40,7 @@
     "game.render.EditViewportLevelUpdatesMixin",
     "game.compat.sodium.EditViewportSodiumChunksMixin",
     "game.compat.sodium.EditViewportSodiumChunkEventsMixin",
+    "game.compat.sodium.SodiumChunkMeshBufferMixin",
     "game.render.EditViewportTargetMixin",
     "game.render.EditViewportMainTargetMixin",
     "game.compat.iris.EditViewportIrisPipelineMixin",
