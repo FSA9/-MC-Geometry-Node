@@ -36,7 +36,9 @@ public class BackgroundLayer {
         float scale = camera.getScale();
         float cx = camera.getX();
         float cy = camera.getY();
+        if (!Float.isFinite(scale) || scale <= 0 || !Float.isFinite(cx) || !Float.isFinite(cy)) return;
         float baseGridPx = UIUtils.dp2px(Math.max(1, ConfigManager.INSTANCE.getConfig().viewport.gridSize));
+        if (!Float.isFinite(baseGridPx) || baseGridPx <= 0) return;
         float gridSpacingPx = getAdaptiveGridSpacing(baseGridPx, scale);
 
         // 2. 绘制自适应网格：缩小时减少线密度，普通线低于可见阈值时不绘制。
@@ -70,11 +72,13 @@ public class BackgroundLayer {
     }
 
     private float getAdaptiveGridSpacing(float baseGridPx, float scale) {
-        float spacing = baseGridPx * scale;
+        // Multiply in double so a tiny positive export scale cannot underflow to
+        // zero and keep the doubling loop running forever.
+        double spacing = (double) baseGridPx * scale;
         while (spacing < MIN_GRID_SPACING_PX) {
             spacing *= 2f;
         }
-        return spacing;
+        return (float) Math.min(spacing, Float.MAX_VALUE / MAJOR_GRID_INTERVAL);
     }
 
     private int getMinorGridAlpha(float gridSpacingPx) {
@@ -85,20 +89,26 @@ public class BackgroundLayer {
     }
 
     private void drawGridLines(Canvas canvas, float originX, float originY, int width, int height, float spacingPx, boolean skipMajorLines) {
-        long firstX = (long) Math.floor(-originX / spacingPx);
-        long lastX = (long) Math.ceil((width - originX) / spacingPx);
-        for (long index = firstX; index <= lastX; index++) {
-            if (skipMajorLines && index % MAJOR_GRID_INTERVAL == 0) continue;
-            float x = originX + index * spacingPx;
+        // Bound work by visible pixels, never by absolute world coordinates.
+        // Huge finite origins can saturate a long index and then wrap forever.
+        double startX = originX % (double) spacingPx;
+        if (startX > 0) startX -= spacingPx;
+        int phaseX = (int) (Math.floor(-originX / (double) spacingPx) % MAJOR_GRID_INTERVAL);
+        int countX = (int) Math.ceil(width / (double) spacingPx) + 2;
+        for (int step = 0; step < countX; step++) {
+            if (skipMajorLines && (phaseX + step) % MAJOR_GRID_INTERVAL == 0) continue;
+            float x = (float) (startX + step * (double) spacingPx);
             if (x < 0f || x > width) continue;
             canvas.drawLine(x, 0, x, height, mGridPaint);
         }
 
-        long firstY = (long) Math.floor(-originY / spacingPx);
-        long lastY = (long) Math.ceil((height - originY) / spacingPx);
-        for (long index = firstY; index <= lastY; index++) {
-            if (skipMajorLines && index % MAJOR_GRID_INTERVAL == 0) continue;
-            float y = originY + index * spacingPx;
+        double startY = originY % (double) spacingPx;
+        if (startY > 0) startY -= spacingPx;
+        int phaseY = (int) (Math.floor(-originY / (double) spacingPx) % MAJOR_GRID_INTERVAL);
+        int countY = (int) Math.ceil(height / (double) spacingPx) + 2;
+        for (int step = 0; step < countY; step++) {
+            if (skipMajorLines && (phaseY + step) % MAJOR_GRID_INTERVAL == 0) continue;
+            float y = (float) (startY + step * (double) spacingPx);
             if (y < 0f || y > height) continue;
             canvas.drawLine(0, y, width, y, mGridPaint);
         }

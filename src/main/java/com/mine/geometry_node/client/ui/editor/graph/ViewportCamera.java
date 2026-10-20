@@ -27,12 +27,15 @@ public class ViewportCamera {
     public float getScale() { return mScale; }
 
     public void setPosition(float x, float y) {
+        if (!Float.isFinite(x) || !Float.isFinite(y)) return;
         mX = x;
         mY = y;
         notifyChange();
     }
 
     public void setScale(float scale) {
+        // Export cameras may use scales outside interactive zoom limits.
+        if (!Float.isFinite(scale) || scale <= 0) return;
         mScale = scale;
         notifyChange();
     }
@@ -40,12 +43,11 @@ public class ViewportCamera {
     // --- 交互操作 ---
 
     public void pan(float dx, float dy) {
-        mX += dx;
-        mY += dy;
-        notifyChange();
+        setPosition(mX + dx, mY + dy);
     }
 
     public void zoom(boolean zoomIn, float pivotScreenX, float pivotScreenY) {
+        if (!Float.isFinite(pivotScreenX) || !Float.isFinite(pivotScreenY)) return;
         float oldScale = mScale;
         float factor = zoomIn ? UIConstants.ViewPort.ZOOM_SENSITIVITY : -UIConstants.ViewPort.ZOOM_SENSITIVITY;
 
@@ -55,8 +57,14 @@ public class ViewportCamera {
         if (mScale == oldScale) return;
 
         float ratio = mScale / oldScale;
-        mX = pivotScreenX - (pivotScreenX - mX) * ratio;
-        mY = pivotScreenY - (pivotScreenY - mY) * ratio;
+        float nextX = pivotScreenX - (pivotScreenX - mX) * ratio;
+        float nextY = pivotScreenY - (pivotScreenY - mY) * ratio;
+        if (!Float.isFinite(nextX) || !Float.isFinite(nextY)) {
+            mScale = oldScale;
+            return;
+        }
+        mX = nextX;
+        mY = nextY;
 
         notifyChange();
     }

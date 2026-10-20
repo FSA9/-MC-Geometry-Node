@@ -20,9 +20,13 @@ public final class AssetPreviewView extends FrameLayout {
     private long mGeneration;
 
     public AssetPreviewView(Context context, AssetEntry entry, View fallbackView) {
+        this(context, entry, fallbackView, AssetPreviewProviders.resolve(entry));
+    }
+
+    AssetPreviewView(Context context, AssetEntry entry, View fallbackView, AssetPreviewProvider provider) {
         super(context);
         mEntry = entry;
-        mProvider = AssetPreviewProviders.resolve(entry);
+        mProvider = provider;
         mFallbackView = fallbackView;
         addView(fallbackView, matchParent());
     }
@@ -50,12 +54,18 @@ public final class AssetPreviewView extends FrameLayout {
         mSubscription = mProvider.subscribe(mEntry, new AssetPreviewProvider.Listener() {
             @Override
             public void available(File localSource) {
-                if (generation == mGeneration) showResolved(localSource);
+                // Providers deliver on the MC thread. Read UI-owned state only after posting;
+                // detach may invalidate this generation while the callback is queued.
+                post(() -> {
+                    if (generation == mGeneration) showResolved(localSource);
+                });
             }
 
             @Override
             public void unavailable() {
-                if (generation == mGeneration) clearResolvedView();
+                post(() -> {
+                    if (generation == mGeneration) clearResolvedView();
+                });
             }
         });
     }
