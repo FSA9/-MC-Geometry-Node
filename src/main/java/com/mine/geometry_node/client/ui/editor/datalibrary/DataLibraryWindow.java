@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 
@@ -23,7 +25,7 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
-import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.core.query.ColumnFilters;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
@@ -87,7 +89,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private DataLibraryScrollAnchor mountLeftAnchor;
     private DataLibraryScrollAnchor mountRightAnchor;
     private java.util.Iterator<Runnable> mountSteps;
-    private final DataLibraryUiRepository repository;
+    private final DataLibraryRepository repository;
     private final UiStateContext uiState;
     private String stateScope;
     private boolean restoringState;
@@ -119,18 +121,18 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private final LinearLayout typeNavigation;
     private final TextView statusView;
     private final TextView resultsView;
-    private final UiIconButton scopeButton;
+    private final UiActionButton scopeButton;
     private final DataLibraryToolbar toolbar;
     private UiColumnFilterPopover filterPopover;
     private final Map<String, UiTableFilterHeader> filterHeaders = new HashMap<>();
     private UiSearchableMenu activeMenu;
-    private FileContextMenu renameMenu;
+    private UiContextMenu renameMenu;
     private long renameGeneration;
     private final UiIconButton addFolderButton;
     private final View deleteButton;
     private final UiCheckBox selectAll;
     private final DataLibrarySelection selection = new DataLibrarySelection();
-    private final Set<DataLibraryUiRepository.EntryKey> selected = selection.entries;
+    private final Set<DataLibraryRepository.EntryKey> selected = selection.entries;
     private final Set<UUID> selectedFolders = selection.folders;
     private final Set<UUID> expandedFolders = new HashSet<>();
     private final Set<UUID> expandedEntries = new HashSet<>();
@@ -180,22 +182,22 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private boolean rootExpanded = true;
     private boolean internalDragActive;
     private boolean rebuildPending;
-    private Consumer<List<DataLibraryUiRepository.Entry>> selectionListener;
-    private List<DataLibraryUiRepository.Entry> publishedSelection;
+    private Consumer<List<DataLibraryRepository.Entry>> selectionListener;
+    private List<DataLibraryRepository.Entry> publishedSelection;
     private List<String> publishedPaths;
     private List<String> publishedRegistryTypes;
     private boolean publishingSelection;
-    private static DataLibraryUiRepository.Entry clipboardEntry;
+    private static DataLibraryRepository.Entry clipboardEntry;
 
     public DataLibraryWindow(Context context) {
-        this(context, DataLibraryUiRepository.EMPTY);
+        this(context, DataLibraryRepository.EMPTY);
     }
 
-    public DataLibraryWindow(Context context, DataLibraryUiRepository repository) {
+    public DataLibraryWindow(Context context, DataLibraryRepository repository) {
         this(context, repository, UiStateContext.ephemeral());
     }
 
-    public DataLibraryWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
+    public DataLibraryWindow(Context context, DataLibraryRepository repository, UiStateContext state) {
         super(context);
         mountWork = new UiTableBatchWork(this);
         entityTypes = new DataLibraryEntityTypes(this);
@@ -203,7 +205,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         columns.restoreCustomWidths(uiState.read(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL).columns());
         columns.addUserStateListener(() -> uiState.write(DatabaseViewState.LIBRARY_WIDTHS, DatabaseViewState.GLOBAL,
                 new DatabaseViewState.Widths(columns.exportCustomWidths())));
-        this.repository = repository != null ? repository : DataLibraryUiRepository.EMPTY;
+        this.repository = repository != null ? repository : DataLibraryRepository.EMPTY;
         selectAll = new UiCheckBox(context);
         this.valueEditors = new DataLibraryValueEditors(context, this.repository,
                 this::overlayHost, this::refresh, this::scheduleRefresh,
@@ -222,7 +224,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 () -> {
                     if (disposed || suspended) return;
                     if (selected.isEmpty() && selectedFolders.isEmpty()) return;
-                    Set<DataLibraryUiRepository.EntryKey> entries = Set.copyOf(selected);
+                    Set<DataLibraryRepository.EntryKey> entries = Set.copyOf(selected);
                     Set<UUID> folders = Set.copyOf(selectedFolders);
                     clearSelection();
                     this.repository.delete(entries, folders);
@@ -307,7 +309,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         resultsView.setEllipsize(icyllis.modernui.text.TextUtils.TruncateAt.END);
         LayoutParams resultsParams = new LayoutParams(0, -1, 1);
         results.addView(resultsView, resultsParams);
-        LayoutParams scopeParams = fixed(26, 26);
+        LayoutParams scopeParams = new LayoutParams(LayoutParams.WRAP_CONTENT, px(26));
         scopeParams.rightMargin = px(6);
         results.addView(scopeButton, scopeParams);
         LayoutParams createParams = fixed(26, 26);
@@ -341,7 +343,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     /** Publishes repository entries for the shared Inspector; null disconnects it. Runs on the UI thread. */
-    public void setSelectionListener(Consumer<List<DataLibraryUiRepository.Entry>> listener) {
+    public void setSelectionListener(Consumer<List<DataLibraryRepository.Entry>> listener) {
         if (disposed || selectionListener == listener) return;
         selectionListener = listener;
         if (publishingSelection) return;
@@ -352,9 +354,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     /** Stable selection order, resolved against the authoritative repository rather than editing drafts. */
-    public List<DataLibraryUiRepository.Entry> selectedEntries() {
+    public List<DataLibraryRepository.Entry> selectedEntries() {
         if (disposed) return List.of();
-        Map<UUID, DataLibraryUiRepository.Entry> entries = new DataLibrarySnapshot(repository).entries;
+        Map<UUID, DataLibraryRepository.Entry> entries = new DataLibrarySnapshot(repository).entries;
         return selected.stream().map(key -> entries.get(key.id())).filter(Objects::nonNull).toList();
     }
 
@@ -364,20 +366,20 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     /** Cached registry identity; live entity lookup belongs to the game-thread metadata resolver. */
-    public String registryType(DataLibraryUiRepository.Entry entry) {
+    public String registryType(DataLibraryRepository.Entry entry) {
         if (disposed || !Objects.equals(stateScope, UiStateScopes.current())) return "";
         return entityTypes.registryType(entry);
     }
 
     /** Complete stored value for the inspector and its copy action. Rows keep their compact summary. */
-    public static String valueDetails(DataLibraryUiRepository.Entry entry) {
+    public static String valueDetails(DataLibraryRepository.Entry entry) {
         if (entry.value() instanceof String text) return text;
         return DataLibraryValueChanges.serialize(entry);
     }
 
     private void publishSelection() {
         if (disposed || selectionListener == null || publishingSelection) return;
-        List<DataLibraryUiRepository.Entry> entries = selectedEntries();
+        List<DataLibraryRepository.Entry> entries = selectedEntries();
         List<String> paths = entries.stream().map(entry -> repository.folderPath(entry.parentId())).toList();
         List<String> registryTypes = entries.stream().map(this::registryType).toList();
         if (sameSelection(entries, publishedSelection) && paths.equals(publishedPaths)
@@ -394,8 +396,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private static boolean sameSelection(List<DataLibraryUiRepository.Entry> left,
-                                         List<DataLibraryUiRepository.Entry> right) {
+    private static boolean sameSelection(List<DataLibraryRepository.Entry> left,
+                                         List<DataLibraryRepository.Entry> right) {
         if (right == null || left.size() != right.size()) return false;
         for (int i = 0; i < left.size(); i++) {
             var entry = left.get(i);
@@ -422,6 +424,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private void updateScopeButton() {
         scopeButton.setSelected(includeSubfolders);
+        scopeButton.setPalette(UiActionButton.Palette.toggle(includeSubfolders));
         updateFilterIndicator();
     }
 
@@ -432,8 +435,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         columnFilters = ColumnFilters.empty();
         updateFilterIndicator();
         rootExpanded = true;
-        Map<UUID, DataLibraryUiRepository.Folder> folders = new HashMap<>();
-        for (DataLibraryUiRepository.Folder folder : repository.folders()) {
+        Map<UUID, DataLibraryRepository.Folder> folders = new HashMap<>();
+        for (DataLibraryRepository.Folder folder : repository.folders()) {
             if (folder != null && folder.id() != null) folders.put(folder.id(), folder);
         }
         collectAncestors(activeFolder, folders, expandedFolders);
@@ -466,7 +469,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             rebuildPending = true;
             return;
         }
-        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
+        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryRepository.EMPTY);
         if (refreshTypes) refreshEntityTypes(next);
         observeAuthority();
         if (!mountIncomplete && !structurePending && next.sameStructure(snapshot) && !valueMembershipChanged(next)
@@ -496,7 +499,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         View focused = findFocus();
         if (focused instanceof EditText) focused.clearFocus();
         observeAuthority();
-        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryUiRepository.EMPTY);
+        DataLibrarySnapshot next = new DataLibrarySnapshot(folderSnapshotReady() ? repository : DataLibraryRepository.EMPTY);
         refreshEntityTypes(next);
         rebuild(next);
     }
@@ -689,7 +692,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             // Retire before detaching, which can synchronously submit a focused editor's draft.
             binding.current.set(null);
             if (binding.card.getParent() instanceof ViewGroup parent) parent.removeView(binding.card);
-            selected.remove(new DataLibraryUiRepository.EntryKey(item.getKey()));
+            selected.remove(new DataLibraryRepository.EntryKey(item.getKey()));
             return true;
         });
     }
@@ -701,7 +704,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private void refreshCard(CardBinding binding, DataLibraryUiRepository.Entry entry) {
+    private void refreshCard(CardBinding binding, DataLibraryRepository.Entry entry) {
         boolean expanded = expandedEntries.contains(entry.id());
         boolean changed = !sameValue(binding.displayed, entry);
         boolean localPending = !sameValue(binding.current.get(), binding.displayed);
@@ -732,7 +735,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         binding.authoritativeRevision = authoritativeRevision;
     }
 
-    private static boolean sameValue(DataLibraryUiRepository.Entry left, DataLibraryUiRepository.Entry right) {
+    private static boolean sameValue(DataLibraryRepository.Entry left, DataLibraryRepository.Entry right) {
         if (left.type() != right.type()) return false;
         if (Objects.deepEquals(left.value(), right.value())) return true;
         try {
@@ -748,7 +751,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             binding.presentation.setSelected(checked);
         }
         syncSelectionCheck(selectAll, renderedEntries.stream()
-                .filter(id -> selected.contains(new DataLibraryUiRepository.EntryKey(id))).count(),
+                .filter(id -> selected.contains(new DataLibraryRepository.EntryKey(id))).count(),
                 renderedEntries.size());
         selectAll.setEnabled(!renderedEntries.isEmpty());
         selectionViews.forEach(Runnable::run);
@@ -757,12 +760,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void updateNavigationLabels() {
-        List<DataLibraryUiRepository.Folder> path = new ArrayList<>();
-        Map<UUID, DataLibraryUiRepository.Folder> folders = snapshot.folders;
+        List<DataLibraryRepository.Folder> path = new ArrayList<>();
+        Map<UUID, DataLibraryRepository.Folder> folders = snapshot.folders;
         Set<UUID> visited = new HashSet<>();
         UUID cursor = activeFolder;
         while (cursor != null && visited.add(cursor)) {
-            DataLibraryUiRepository.Folder folder = folders.get(cursor);
+            DataLibraryRepository.Folder folder = folders.get(cursor);
             if (folder == null) break;
             path.add(0, folder);
             cursor = folder.parentId();
@@ -808,7 +811,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (!includeSubfolders) return false;
         Set<UUID> visited = new HashSet<>();
         while (parentId != null && visited.add(parentId)) {
-            DataLibraryUiRepository.Folder folder = snapshot.folders.get(parentId);
+            DataLibraryRepository.Folder folder = snapshot.folders.get(parentId);
             if (folder == null) return false;
             parentId = folder.parentId();
             if (Objects.equals(activeFolder, parentId)) return true;
@@ -861,20 +864,20 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 new ViewGroup.LayoutParams(-1, -1));
     }
 
-    private void collectAncestors(UUID folderId, Map<UUID, DataLibraryUiRepository.Folder> foldersById,
+    private void collectAncestors(UUID folderId, Map<UUID, DataLibraryRepository.Folder> foldersById,
                                   Set<UUID> destination) {
         Set<UUID> visited = new HashSet<>();
         while (folderId != null && visited.add(folderId)) {
             destination.add(folderId);
-            DataLibraryUiRepository.Folder folder = foldersById.get(folderId);
+            DataLibraryRepository.Folder folder = foldersById.get(folderId);
             folderId = folder != null ? folder.parentId() : null;
         }
     }
 
     private void addTreeLevel(List<Runnable> actions, UUID parentId, int depth,
-                              Map<UUID, List<DataLibraryUiRepository.Folder>> childFolders,
+                              Map<UUID, List<DataLibraryRepository.Folder>> childFolders,
                               Set<UUID> visibleFolders, Set<UUID> visited) {
-        for (DataLibraryUiRepository.Folder folder : childFolders.getOrDefault(parentId, List.of())) {
+        for (DataLibraryRepository.Folder folder : childFolders.getOrDefault(parentId, List.of())) {
             if (!visited.add(folder.id())) continue;
             if (isFiltering() && !visibleFolders.contains(folder.id())) continue;
             boolean expanded = isFiltering() || expandedFolders.contains(folder.id());
@@ -886,16 +889,16 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     }
 
     private void addEntries(List<Runnable> actions, UUID parentId,
-                            Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries,
+                            Map<UUID, List<DataLibraryRepository.Entry>> childEntries,
                             Set<UUID> matchedEntries) {
-        List<DataLibraryUiRepository.Entry> candidates = includeSubfolders
+        List<DataLibraryRepository.Entry> candidates = includeSubfolders
                 ? snapshot.entries.values().stream().filter(entry -> inFolderScope(entry.parentId()))
                     .toList()
                 : childEntries.getOrDefault(parentId, List.of());
-        List<DataLibraryUiRepository.Entry> entries = candidates.stream()
+        List<DataLibraryRepository.Entry> entries = candidates.stream()
                 .filter(entry -> DataLibraryTypes.supports(entry.type()) && matchedEntries.contains(entry.id()))
-                .sorted(Comparator.comparing(DataLibraryUiRepository.Entry::key, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparing(DataLibraryUiRepository.Entry::id)).toList();
+                .sorted(Comparator.comparing(DataLibraryRepository.Entry::key, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(DataLibraryRepository.Entry::id)).toList();
         int rowIndex = 0;
         for (var entry : entries) {
             int index = rowIndex++;
@@ -903,7 +906,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private void addEntryRow(LinearLayout rows, DataLibraryUiRepository.Entry entry, int rowIndex) {
+    private void addEntryRow(LinearLayout rows, DataLibraryRepository.Entry entry, int rowIndex) {
         renderedEntries.add(entry.id());
         View card = createCard(entry);
         cards.get(entry.id()).presentation.setAlternate((rowIndex & 1) != 0);
@@ -912,7 +915,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rows.addView(card, new LayoutParams(-1, -2));
     }
 
-    private View createFolderRow(DataLibraryUiRepository.Folder folder, int depth, boolean expanded) {
+    private View createFolderRow(DataLibraryRepository.Folder folder, int depth, boolean expanded) {
         DataLibraryDragSurface row = dragSurface(() -> dragPayloadForFolder(folder.id()));
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(TREE_ROW_PADDING_DP + depth * TREE_INDENT_DP), 0, px(TREE_ROW_PADDING_DP), 0);
@@ -935,10 +938,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         name.setSingleLine(true);
         name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         row.contextMenu = event -> showRenameMenu(event, name, updatedName -> {
-            DataLibraryUiRepository.Folder latest = repository.folders().stream()
+            DataLibraryRepository.Folder latest = repository.folders().stream()
                     .filter(candidate -> candidate.id().equals(folder.id())).findFirst().orElse(null);
             if (latest != null && !Objects.equals(latest.name(), updatedName)) {
-                repository.updateFolder(latest, new DataLibraryUiRepository.Folder(
+                repository.updateFolder(latest, new DataLibraryRepository.Folder(
                         latest.id(), latest.parentId(), updatedName));
             }
         });
@@ -951,10 +954,10 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         Set<UUID> subtreeFolders = DataLibrarySelection.folderTreeIds(snapshot, folder.id());
         List<UUID> subtreeEntries = subtreeFolders.stream()
                 .flatMap(id -> snapshot.childEntries.getOrDefault(id, List.of()).stream())
-                .map(DataLibraryUiRepository.Entry::id).toList();
+                .map(DataLibraryRepository.Entry::id).toList();
         Runnable syncCheck = () -> syncSelectionCheck(check,
                 subtreeFolders.stream().filter(selectedFolders::contains).count()
-                        + subtreeEntries.stream().filter(id -> selected.contains(new DataLibraryUiRepository.EntryKey(id))).count(),
+                        + subtreeEntries.stream().filter(id -> selected.contains(new DataLibraryRepository.EntryKey(id))).count(),
                 subtreeFolders.size() + subtreeEntries.size());
         syncCheck.run();
         check.setOnCheckedChangeListener((button, checked) -> {
@@ -995,7 +998,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         UiCheckBox check = new UiCheckBox(getContext());
         check.setContentDescription(tr("geometry_node.data_library.all"));
         Runnable syncCheck = () -> syncSelectionCheck(check,
-                snapshot.entries.keySet().stream().filter(id -> selected.contains(new DataLibraryUiRepository.EntryKey(id))).count()
+                snapshot.entries.keySet().stream().filter(id -> selected.contains(new DataLibraryRepository.EntryKey(id))).count()
                         + snapshot.folders.keySet().stream().filter(selectedFolders::contains).count(),
                 snapshot.entries.size() + snapshot.folders.size());
         syncCheck.run();
@@ -1034,7 +1037,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return params;
     }
 
-    private boolean matches(DataLibraryUiRepository.Entry entry) {
+    private boolean matches(DataLibraryRepository.Entry entry) {
         if (typeFilter != null && entry.type() != typeFilter) return false;
         if (!matchesColumns(entry, columnFilters)) return false;
         return registryTypeFilter.isEmpty() || entityTypes.registryType(entry)
@@ -1045,7 +1048,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return typeFilter != null || columnFilters.active() || !registryTypeFilter.isEmpty();
     }
 
-    static boolean matchesColumns(DataLibraryUiRepository.Entry entry, ColumnFilters filters) {
+    static boolean matchesColumns(DataLibraryRepository.Entry entry, ColumnFilters filters) {
         Double numeric = entry.value() instanceof Number number ? number.doubleValue() : null;
         return filters.matches(entry.key(), entry.type().name(), numeric, null, null, null, null, null, entry.tags());
     }
@@ -1147,13 +1150,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         menu.showAt(anchor, overlayHost());
     }
 
-    private View createCard(DataLibraryUiRepository.Entry entry) {
+    private View createCard(DataLibraryRepository.Entry entry) {
         CardBinding cached = cards.get(entry.id());
         if (cached != null) {
             refreshCard(cached, entry);
             return cached.card;
         }
-        AtomicReference<DataLibraryUiRepository.Entry> current = new AtomicReference<>(entry);
+        AtomicReference<DataLibraryRepository.Entry> current = new AtomicReference<>(entry);
         DataLibraryDragSurface card = dragSurface(() -> dragPayloadForEntry(current.get()));
         card.setOnClickListener(v -> {
             selection.selectEntry(entry.id(), card.shiftPressed, card.ctrlPressed);
@@ -1169,9 +1172,9 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         TextView name = presentation.nameView();
         card.contextMenu = event -> showRenameMenu(event, name, updatedName -> {
             if (current.get() == null) return;
-            DataLibraryUiRepository.Entry latest = repository.findEntry(entry.id());
+            DataLibraryRepository.Entry latest = repository.findEntry(entry.id());
             if (latest != null && latest.type() == entry.type() && !Objects.equals(latest.key(), updatedName)) {
-                repository.update(latest, new DataLibraryUiRepository.Entry(
+                repository.update(latest, new DataLibraryRepository.Entry(
                         latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags()));
             }
         });
@@ -1182,7 +1185,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         return card;
     }
 
-    private void updateRowSummary(DataLibraryEntryCard presentation, DataLibraryUiRepository.Entry entry) {
+    private void updateRowSummary(DataLibraryEntryCard presentation, DataLibraryRepository.Entry entry) {
         String summary = DataLibraryValueEditors.compactValueSummary(entry).replace('\n', ' ').replace('\r', ' ');
         presentation.setSummary(entry, summary, entityTypes.registryType(entry));
     }
@@ -1190,12 +1193,12 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private static final class CardBinding {
         final DataLibraryDragSurface card;
         final DataLibraryEntryCard presentation;
-        final AtomicReference<DataLibraryUiRepository.Entry> current;
-        DataLibraryUiRepository.Entry displayed;
+        final AtomicReference<DataLibraryRepository.Entry> current;
+        DataLibraryRepository.Entry displayed;
         long authoritativeRevision;
 
-        CardBinding(DataLibraryEntryCard presentation, AtomicReference<DataLibraryUiRepository.Entry> current,
-                    DataLibraryUiRepository.Entry displayed) {
+        CardBinding(DataLibraryEntryCard presentation, AtomicReference<DataLibraryRepository.Entry> current,
+                    DataLibraryRepository.Entry displayed) {
             this.card = presentation.surface();
             this.presentation = presentation;
             this.current = current;
@@ -1208,7 +1211,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (focused != null) focused.clearFocus();
         if (!expandedEntries.remove(entryId)) expandedEntries.add(entryId);
         CardBinding binding = cards.get(entryId);
-        DataLibraryUiRepository.Entry latest = repository.findEntry(entryId);
+        DataLibraryRepository.Entry latest = repository.findEntry(entryId);
         observeAuthority();
         if (binding != null && latest != null && latest.type() == binding.current.get().type()) {
             refreshCard(binding, latest);
@@ -1223,7 +1226,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         ViewGroup host = overlayHost();
         int[] location = new int[2];
         host.getLocationOnScreen(location);
-        FileContextMenu menu = new FileContextMenu(getContext());
+        UiContextMenu menu = new UiContextMenu(getContext());
         long generation = renameGeneration;
         menu.addMenuItem(tr("geometry_node.asset_library.action.rename"),
                 () -> post(() -> {
@@ -1277,8 +1280,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
                 event -> updateDropIndicator(event.getRawX(), event.getRawY()));
     }
 
-    private DataLibraryDragPayload dragPayloadForEntry(DataLibraryUiRepository.Entry entry) {
-        Set<UUID> ids = selected.stream().map(DataLibraryUiRepository.EntryKey::id)
+    private DataLibraryDragPayload dragPayloadForEntry(DataLibraryRepository.Entry entry) {
+        Set<UUID> ids = selected.stream().map(DataLibraryRepository.EntryKey::id)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         if (!ids.contains(entry.id())) ids = Set.of(entry.id());
         return ids.size() == 1 ? DataLibraryDragPayload.entry(entry.id(), entry.type(), entry.key())
@@ -1336,13 +1339,13 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         if (y <= rootDropTarget.getBottom()) {
             return new DropDestination(null, rootDropTarget.getBottom(), rootIndent);
         }
-        Map<UUID, DataLibraryUiRepository.Folder> folders = snapshot.folders;
+        Map<UUID, DataLibraryRepository.Folder> folders = snapshot.folders;
         int lastBottom = rootDropTarget.getBottom();
         for (Map.Entry<View, UUID> candidate : folderDropRows.entrySet()) {
             View row = candidate.getKey();
             lastBottom = Math.max(lastBottom, row.getBottom());
             if (y > row.getBottom()) continue;
-            DataLibraryUiRepository.Folder folder = folders.get(candidate.getValue());
+            DataLibraryRepository.Folder folder = folders.get(candidate.getValue());
             if (folder == null) return null;
             int indent = row.getLeft() + row.getPaddingLeft();
             int edge = Math.min(px(6), row.getHeight() / 4);
@@ -1354,7 +1357,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             }
             // Row boundaries (and its left gutter) accept siblings. Moving left promotes them.
             while (folder.parentId() != null && x < indent - px(TREE_INDENT_DP / 2f)) {
-                DataLibraryUiRepository.Folder ancestor = folders.get(folder.parentId());
+                DataLibraryRepository.Folder ancestor = folders.get(folder.parentId());
                 if (ancestor == null) return null;
                 folder = ancestor;
                 indent -= px(TREE_INDENT_DP);
@@ -1427,7 +1430,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
         if (paste != null && UiInputBindings.matches(paste, event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && clipboardEntry != null && selected.size() == 1) {
-                DataLibraryUiRepository.Entry target = repository.findEntry(selected.iterator().next().id());
+                DataLibraryRepository.Entry target = repository.findEntry(selected.iterator().next().id());
                 if (target != null && target.type() == clipboardEntry.type()) valueEditors.updateValue(
                         new AtomicReference<>(target), clipboardEntry.value());
             }
@@ -1449,8 +1452,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         }
     }
 
-    private static DataLibraryUiRepository.EntryKey key(DataLibraryUiRepository.Entry entry) {
-        return new DataLibraryUiRepository.EntryKey(entry.id());
+    private static DataLibraryRepository.EntryKey key(DataLibraryRepository.Entry entry) {
+        return new DataLibraryRepository.EntryKey(entry.id());
     }
 
     private static String tr(String key) {

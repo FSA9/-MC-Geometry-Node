@@ -14,12 +14,12 @@ import com.mine.geometry_node.client.ai.command.NodeCatalogIndex;
 import com.mine.geometry_node.client.ai.graph.GraphPatchCodec;
 import com.mine.geometry_node.client.ai.graph.GraphPatchContractValidator;
 import com.mine.geometry_node.client.ai.graph.InputValueCodec;
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.connection.CmdConnect;
-import com.mine.geometry_node.client.ui.UICommand.commands.connection.CmdDisconnect;
-import com.mine.geometry_node.client.ui.UICommand.commands.frame.CmdRemoveFrames;
-import com.mine.geometry_node.client.ui.UICommand.commands.node.CmdRemoveNodes;
-import com.mine.geometry_node.client.ui.UICommand.commands.document.CmdReplaceGraphState;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.commands.connection.CmdConnect;
+import com.mine.geometry_node.client.ui.document.edit.commands.connection.CmdDisconnect;
+import com.mine.geometry_node.client.ui.document.edit.commands.frame.CmdRemoveFrames;
+import com.mine.geometry_node.client.ui.document.edit.commands.node.CmdRemoveNodes;
+import com.mine.geometry_node.client.ui.document.edit.commands.document.CmdReplaceGraphState;
 import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
@@ -146,7 +146,7 @@ public final class GraphPatchTransactionService {
 
         String beforeJson = snapshot.beforeJson;
         NodeGraph trialRoot = GraphJsonIO.fromJson(beforeJson);
-        EditorContext trialContext = new EditorContext(trialRoot);
+        EditorContext trialContext = session.editorContext.fork(trialRoot);
         enterScope(trialContext);
         NodeGraph trialScope = scope.resolve(trialRoot);
         if (trialScope == null) throw fail("GRAPH_SCOPE_CLOSED", "PowerShell 启动时绑定的 Group Scope 已不存在");

@@ -1741,6 +1741,7 @@
     "geometry_node.settings.action.apply":  "Apply",
     "geometry_node.settings.action.ok":  "OK",
     "geometry_node.settings.action.discard":  "Discard Changes",
+    "geometry_node.settings.save_failed": "Failed to save settings: %s",
     "geometry_node.settings.unsaved.title":  "Unapplied Changes",
     "geometry_node.settings.unsaved.message":  "These settings contain unapplied changes. Discard them?",
     "geometry_node.settings.directory.title":  "Select Folder",

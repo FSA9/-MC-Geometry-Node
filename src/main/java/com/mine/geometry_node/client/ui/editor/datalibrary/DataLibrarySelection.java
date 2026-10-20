@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import java.util.ArrayDeque;
 import com.mine.geometry_node.client.ui.components.base.list.UiListSelection;
 import java.util.LinkedHashSet;
@@ -8,7 +10,7 @@ import java.util.UUID;
 
 /** Stable-ID selection rules, independent from view lifetime and repository mutations. */
 final class DataLibrarySelection {
-    final Set<DataLibraryUiRepository.EntryKey> entries = new LinkedHashSet<>();
+    final Set<DataLibraryRepository.EntryKey> entries = new LinkedHashSet<>();
     final Set<UUID> folders = new LinkedHashSet<>();
     final Set<UUID> rendered = new LinkedHashSet<>();
     UUID anchor;
@@ -26,10 +28,10 @@ final class DataLibrarySelection {
     void selectEntry(UUID id, boolean range, boolean additive) {
         if (!rendered.contains(id)) return;
         if (!additive) folders.clear();
-        var key = new DataLibraryUiRepository.EntryKey(id);
-        var ordered = rendered.stream().map(DataLibraryUiRepository.EntryKey::new).toList();
+        var key = new DataLibraryRepository.EntryKey(id);
+        var ordered = rendered.stream().map(DataLibraryRepository.EntryKey::new).toList();
         var nextAnchor = UiListSelection.click(entries, ordered,
-                anchor == null ? null : new DataLibraryUiRepository.EntryKey(anchor), key, additive, range);
+                anchor == null ? null : new DataLibraryRepository.EntryKey(anchor), key, additive, range);
         anchor = nextAnchor == null ? null : nextAnchor.id();
     }
 
@@ -37,7 +39,7 @@ final class DataLibrarySelection {
         for (UUID id : folderTreeIds(snapshot, root)) {
             if (checked) folders.add(id); else folders.remove(id);
             for (var entry : snapshot.childEntries.getOrDefault(id, java.util.List.of())) {
-                var key = new DataLibraryUiRepository.EntryKey(entry.id());
+                var key = new DataLibraryRepository.EntryKey(entry.id());
                 if (checked) entries.add(key); else entries.remove(key);
             }
         }
@@ -63,13 +65,13 @@ final class DataLibrarySelection {
             return;
         }
         folders.addAll(snapshot.folders.keySet());
-        for (UUID id : snapshot.entries.keySet()) entries.add(new DataLibraryUiRepository.EntryKey(id));
+        for (UUID id : snapshot.entries.keySet()) entries.add(new DataLibraryRepository.EntryKey(id));
     }
 
     /** Header checkbox changes only mounted result rows, preserving other directories' selection. */
     void selectRendered(boolean checked) {
         for (UUID id : rendered) {
-            var key = new DataLibraryUiRepository.EntryKey(id);
+            var key = new DataLibraryRepository.EntryKey(id);
             if (checked) entries.add(key); else entries.remove(key);
         }
     }

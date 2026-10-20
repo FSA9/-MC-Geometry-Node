@@ -2,13 +2,11 @@ package com.mine.geometry_node.client.runtime.game.render;
 
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 
-import com.mine.geometry_node.client.ui.MainUI;
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.runtime.game.host.ViewportHostPolicy;
 import com.mine.geometry_node.mixin.game.hud.GameViewGuiRendererAccessor;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import icyllis.modernui.mc.MuiScreen;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -36,6 +34,7 @@ public final class SharedGameFrame {
     private static final ViewportFrameSurface GAME = new ViewportFrameSurface(GameFrameImage.gameChannel());
     private static boolean editorFrame;
     private static boolean opaqueEditorFrame;
+    private static int editorBackground;
     private static boolean consumersThisFrame;
     private static boolean captureThisFrame;
     private static GuiRenderer hudPassRenderer;
@@ -62,13 +61,18 @@ public final class SharedGameFrame {
 
     /** Freeze the render policy before extraction. A UI-thread detach/attach between
      * extraction and rendering must not suppress the world for a frame being captured.
-     * MainUiShell fills its root with BG_ROOT; transparent editor roots keep the world.
+     * The host supplies its root color; transparent editor roots keep the world.
      */
     public static void beginFrame() {
         Minecraft minecraft = Minecraft.getInstance();
-        editorFrame = minecraft.screen instanceof MuiScreen screen && screen.getFragment() instanceof MainUI;
-        opaqueEditorFrame = editorFrame && (UIConstants.MainUI.BG_ROOT >>> 24) == 255;
-        consumersThisFrame = EditViewportRuntime.hasScheduledWorld();
+        beginFrame(ViewportHostPolicy.snapshot(minecraft.screen), EditViewportRuntime.hasScheduledWorld());
+    }
+
+    static void beginFrame(ViewportHostPolicy.Snapshot host, boolean scheduledWorld) {
+        editorFrame = host.workspace();
+        opaqueEditorFrame = host.opaque();
+        editorBackground = host.background();
+        consumersThisFrame = scheduledWorld;
     }
 
     /** Controls GameRenderer.render's world branch. The runtime separately controls
@@ -115,7 +119,7 @@ public final class SharedGameFrame {
             var target = Minecraft.getInstance().getMainRenderTarget();
             var encoder = RenderSystem.getDevice().createCommandEncoder();
             if (target.getColorTexture() != null) {
-                encoder.clearColorTexture(target.getColorTexture(), UIConstants.MainUI.BG_ROOT);
+                encoder.clearColorTexture(target.getColorTexture(), editorBackground);
             }
             if (target.getDepthTexture() != null) encoder.clearDepthTexture(target.getDepthTexture(), 1.0);
         } else if (captureThisFrame) {
@@ -152,6 +156,7 @@ public final class SharedGameFrame {
         captureThisFrame = false;
         editorFrame = false;
         opaqueEditorFrame = false;
+        editorBackground = 0;
         consumersThisFrame = false;
         HUD.reset();
         GAME.clear();

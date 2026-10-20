@@ -9,14 +9,13 @@ import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRe
 import com.mine.geometry_node.client.ui.editor.asset.dialog.ConfirmDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.TransferProgressDialog;
 import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
-import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.editor.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.asset.remote.RemoteGraphPathIndex;
 import com.mine.geometry_node.client.asset.file.AssetSystemFileBrowser;
 import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.service.GraphAssetService;
@@ -29,8 +28,8 @@ import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
 import com.mine.geometry_node.client.graph.persistence.file.GraphFileRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
-import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
+import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationResponse;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -65,7 +64,11 @@ final class AssetBrowserActionController {
 
     private final AssetBrowserClipboard mClipboard = new AssetBrowserClipboard();
 
+    // UI-thread-owned state. Network callbacks only enqueue UI work.
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
+    private final Set<TransferProgressDialog> mRemoteProgress = new HashSet<>();
+    private long mRemoteGeneration;
+    private boolean mRemoteActive = true;
 
     AssetBrowserActionController(
             AssetFileBrowserPanel panel,
@@ -316,7 +319,7 @@ final class AssetBrowserActionController {
         }
     }
 
-    private void addLocalContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
+    private void addLocalContextActions(UiContextMenu menu, List<AssetEntry> entriesSnapshot) {
         List<File> filesSnapshot = entriesSnapshot.stream()
                 .filter(entry -> entry.sourceKind() == AssetSourceKind.LOCAL && entry.localFile() != null)
                 .map(AssetEntry::localFile)
@@ -414,7 +417,7 @@ final class AssetBrowserActionController {
                 });
     }
 
-    private void addRemoteContextActions(FileContextMenu menu, List<AssetEntry> entriesSnapshot) {
+    private void addRemoteContextActions(UiContextMenu menu, List<AssetEntry> entriesSnapshot) {
         if (entriesSnapshot.isEmpty() || !mEnableRemoteTransferActions) return;
         String suffix = entriesSnapshot.size() > 1 ? " (" + entriesSnapshot.size() + ")" : "";
         if (mCoordinator != null
@@ -451,7 +454,7 @@ final class AssetBrowserActionController {
     }
 
     private void showContextMenu(float localX, float localY, AssetEntry targetEntry) {
-        FileContextMenu menu = new FileContextMenu(mPanel.getContext());
+        UiContextMenu menu = new UiContextMenu(mPanel.getContext());
 
         if (targetEntry != null && !mPanel.selectedPathsSnapshot().contains(targetEntry.key())) {
             mPanel.selectOnly(targetEntry);
@@ -685,9 +688,8 @@ final class AssetBrowserActionController {
             String destinationPath,
             Runnable onSuccess
     ) {
-        if (paths.isEmpty() && operation != PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY) return;
+        if (!mRemoteActive || (paths.isEmpty() && operation != PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY)) return;
         int requestId = RemoteAssetClient.nextRequestId();
-        mRemoteRequestIds.add(requestId);
         String title = switch (operation) {
             case DELETE -> "删除云端文件";
             case COPY -> "复制云端文件";
@@ -695,44 +697,82 @@ final class AssetBrowserActionController {
             case CREATE_DIRECTORY -> "新建云端文件夹";
             case RENAME -> "重命名云端文件";
         };
-        TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title);
-        progress.show(mPanel);
-        RemoteAssetClient.onFileOperation(requestId, response -> {
-            mRemoteRequestIds.remove(requestId);
-            mPanel.post(() -> {
-                if (!response.success()) {
-                    progress.fail(response.message());
-                    System.err.println("[AssetBrowser] Remote file operation failed: " + response.message());
-                    return;
-                }
-                progress.update(response.message(), 1, 1);
-                if (operation == PacketRemoteAssetFileOperationRequest.Operation.MOVE) {
-                    mClipboard.clearRemote();
-                }
-                RemoteGraphPathIndex.INSTANCE.invalidateMutation(operation, paths, destinationPath);
-                mPanel.clearSelection();
-                if (onSuccess != null) {
-                    onSuccess.run();
-                    return;
-                }
-                mPanel.refreshFileList(() -> {
-                    if (operation == PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY) {
-                        selectRemotePath(destinationPath);
-                    }
-                });
-            });
-        }, () -> {
-            mRemoteRequestIds.remove(requestId);
-            mPanel.post(progress::closeSilently);
+        TransferProgressDialog progress = new TransferProgressDialog(mPanel.getContext(), title) {
+            @Override protected void onAssetDialogDestroyed() { mRemoteProgress.remove(this); }
+        };
+        long generation = beginRemoteRequest(requestId, progress);
+        try {
+            progress.enterCommitPhase();
+            progress.show(mPanel);
+            if (!isRemoteCurrent(generation)) return;
+            RemoteAssetClient.requestFileOperation(requestId, operation, paths, destinationPath,
+                    response -> postRemoteFileOperationResult(requestId, generation, operation,
+                            destinationPath, onSuccess, progress, response),
+                    () -> postRemoteCompletion(requestId, generation, progress::closeSilently));
+        } catch (RuntimeException failure) {
+            if (isRemoteCurrent(generation) && mRemoteRequestIds.remove(requestId)) {
+                progress.fail("发送失败: " + failure.getMessage());
+            }
+        }
+    }
+
+    private long beginRemoteRequest(int requestId, TransferProgressDialog progress) {
+        mRemoteRequestIds.add(requestId);
+        mRemoteProgress.add(progress);
+        return mRemoteGeneration;
+    }
+
+    private boolean isRemoteCurrent(long generation) {
+        return mRemoteActive && generation == mRemoteGeneration;
+    }
+
+    private void postRemoteCompletion(int requestId, long generation, Runnable action) {
+        mPanel.post(() -> {
+            if (!isRemoteCurrent(generation) || !mRemoteRequestIds.remove(requestId)) return;
+            action.run();
         });
-        NetworkHandler.sendToServer(new PacketRemoteAssetFileOperationRequest(requestId, operation, destinationPath, paths));
+    }
+
+    private void postRemoteFileOperationResult(int requestId, long generation,
+            PacketRemoteAssetFileOperationRequest.Operation operation, String destinationPath,
+            Runnable onSuccess, TransferProgressDialog progress, PacketRemoteAssetFileOperationResponse response) {
+        postRemoteCompletion(requestId, generation, () -> {
+            if (!response.success()) {
+                progress.fail(response.message());
+                System.err.println("[AssetBrowser] Remote file operation failed: " + response.message());
+                return;
+            }
+            progress.complete(response.message(), 1, 1);
+            if (!isRemoteCurrent(generation)) return; // Closing a modal may reenter owner lifecycle.
+            if (operation == PacketRemoteAssetFileOperationRequest.Operation.MOVE) mClipboard.clearRemote();
+            mPanel.clearSelection();
+            if (!isRemoteCurrent(generation)) return;
+            if (onSuccess != null) {
+                onSuccess.run();
+                return;
+            }
+            mPanel.refreshFileList(() -> {
+                if (isRemoteCurrent(generation)
+                        && operation == PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY) {
+                    selectRemotePath(destinationPath);
+                }
+            });
+        });
+    }
+
+    void activateRemoteRequests() {
+        mRemoteActive = true;
     }
 
     void cancelRemoteRequests() {
-        for (int requestId : mRemoteRequestIds) {
-            RemoteAssetClient.cancel(requestId);
-        }
+        mRemoteActive = false;
+        mRemoteGeneration++;
         mRemoteRequestIds.clear();
+        // Sent mutations still need their response to invalidate the connection-level asset index.
+        // Retire only this owner's UI delivery, leaving RemoteAssetClient's registration intact.
+        List<TransferProgressDialog> progress = List.copyOf(mRemoteProgress);
+        mRemoteProgress.clear();
+        for (TransferProgressDialog dialog : progress) dialog.closeSilently();
     }
 
     private void renameRemoteEntry(AssetEntry entry, String newName) {
@@ -803,7 +843,7 @@ final class AssetBrowserActionController {
             progress.fail("部分文件处理失败: " + summarizePaths(failedPaths));
             return;
         }
-        progress.update(successMessage, successCount, Math.max(1, successCount));
+        progress.complete(successMessage, successCount, Math.max(1, successCount));
     }
 
     private String summarizePaths(List<String> paths) {

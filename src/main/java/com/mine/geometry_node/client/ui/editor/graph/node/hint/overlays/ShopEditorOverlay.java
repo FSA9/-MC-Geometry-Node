@@ -1,5 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.OfferDraft;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.OfferState;
+import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.ShopState;
+
+import static com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.defaultOffer;
+import static com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.intValue;
+import static com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.parseShopState;
+import static com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.validConditionId;
+
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
@@ -10,11 +19,11 @@ import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.runtime.dialogue.ui.DialogueHudTheme;
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.overlay.InventoryItemPickerOverlay;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
+import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.OverlayMount;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.input.binding.InputBinding;
@@ -48,11 +57,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public final class ShopEditorOverlay extends FrameLayout {
     private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
@@ -295,18 +300,10 @@ public final class ShopEditorOverlay extends FrameLayout {
 
     private void commit() {
         if (mClosed) return;
-        Map<String, Object> shopData = new LinkedHashMap<>();
-        List<String> conditionPorts = conditionPorts();
-        List<Object> offers = new ArrayList<>();
-        Set<String> usedIds = new HashSet<>();
-        for (int i = 0; i < mOfferEditors.size(); i++) {
-            Map<String, Object> offer = mOfferEditors.get(i).toMap(usedIds, i + 1, conditionPorts);
-            if (offer != null) {
-                offers.add(offer);
-            }
-        }
-        shopData.put("offers", offers);
-        UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId, shopData);
+        List<OfferDraft> offers = new ArrayList<>();
+        for (OfferEditor editor : mOfferEditors) offers.add(editor.toDraft());
+        UIHintValueBinder.commit(mEditorContext, mNodeData, mPortId,
+                ShopEditorData.encode(offers, conditionPorts()));
         dismiss();
     }
 
@@ -322,18 +319,6 @@ public final class ShopEditorOverlay extends FrameLayout {
     private int resolveConditionInputCount() {
         Object raw = mNodeData.inputs != null ? mNodeData.inputs.get(StaticKeys.DYNAMIC_BRANCH_INPUT_COUNT.id()) : null;
         return Math.max(0, Math.min(intValue(raw, 0), OpenShop.MAX_CONDITION_INPUTS));
-    }
-
-    private static String validConditionId(String conditionId, List<String> conditionPorts) {
-        if (conditionId == null || conditionId.isBlank() || conditionPorts == null) {
-            return "";
-        }
-        for (String portId : conditionPorts) {
-            if (portId.equals(conditionId)) {
-                return conditionId;
-            }
-        }
-        return "";
     }
 
     private void dismiss() {
@@ -628,122 +613,6 @@ public final class ShopEditorOverlay extends FrameLayout {
         return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
     }
 
-    private static ShopState parseShopState(Object raw) {
-        if (!(raw instanceof Map<?, ?> root)) {
-            return new ShopState(List.of());
-        }
-        return new ShopState(parseOffers(root.get("offers")));
-    }
-
-    private static List<OfferState> parseOffers(Object offersObj) {
-        List<OfferState> result = new ArrayList<>();
-        if (!(offersObj instanceof List<?> offers)) {
-            return result;
-        }
-        int index = 1;
-        for (Object offerObj : offers) {
-            if (!(offerObj instanceof Map<?, ?> offerMap)) {
-                continue;
-            }
-            String id = stringValue(offerMap.get("id"), "trade_" + index);
-            String title = stringValue(offerMap.get("title"), "");
-            int maxUses = intValue(offerMap.get("max_uses"), 0);
-            boolean consumeSellerItems = boolValue(offerMap.get("consume_seller_items"), false);
-            boolean sellerReceivesPayment = boolValue(offerMap.get("seller_receives_payment"), false);
-            String visibleCondition = stringValue(offerMap.get("visible_condition"), "");
-            String enabledCondition = stringValue(offerMap.get("enabled_condition"), "");
-            String disabledReason = stringValue(offerMap.get("disabled_reason"), "");
-            result.add(new OfferState(
-                    id,
-                    title,
-                    maxUses,
-                    consumeSellerItems,
-                    sellerReceivesPayment,
-                    visibleCondition,
-                    enabledCondition,
-                    disabledReason,
-                    parseStacks(offerMap.get("costs")),
-                    parseStacks(offerMap.get("rewards"))
-            ));
-            index++;
-        }
-        return result;
-    }
-
-    private static List<String> parseStacks(Object raw) {
-        List<String> stacks = new ArrayList<>();
-        if (!(raw instanceof List<?> list)) {
-            return stacks;
-        }
-        for (Object item : list) {
-            String stack = "";
-            if (item instanceof Map<?, ?> map) {
-                stack = stringValue(map.get("stack"), "");
-            } else if (item instanceof String string) {
-                stack = string;
-            }
-            if (!stack.isBlank()) {
-                stacks.add(stack);
-            }
-        }
-        return stacks;
-    }
-
-    private static OfferState defaultOffer() {
-        return new OfferState("", "", 0, false, false, "", "", "", List.of(), List.of());
-    }
-
-
-    private static String normalizeOfferId(String raw, Set<String> usedIds, int index) {
-        String base = raw == null ? "" : raw.trim();
-        if (base.isEmpty()) {
-            base = "trade_" + index;
-        }
-        base = base.replaceAll("\\s+", "_");
-        String candidate = base;
-        int suffix = 2;
-        while (usedIds.contains(candidate)) {
-            candidate = base + "_" + suffix++;
-        }
-        usedIds.add(candidate);
-        return candidate;
-    }
-
-    private static String stringValue(Object value, String fallback) {
-        if (value instanceof String string) {
-            return string;
-        }
-        return fallback;
-    }
-
-    private static int intValue(Object value, int fallback) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof String string) {
-            try {
-                return Integer.parseInt(string.trim());
-            } catch (NumberFormatException ignored) {
-            }
-        }
-        return fallback;
-    }
-
-    private static boolean boolValue(Object value, boolean fallback) {
-        if (value instanceof Boolean bool) {
-            return bool;
-        }
-        if (value instanceof String string) {
-            if ("true".equalsIgnoreCase(string) || "1".equals(string)) {
-                return true;
-            }
-            if ("false".equalsIgnoreCase(string) || "0".equals(string)) {
-                return false;
-            }
-        }
-        return fallback;
-    }
-
     private static EditText field(Context context, String value, int gravity) {
         EditText input = new UiTextInput(context, new UiTextInput.Style(11, 8,
                 UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
@@ -793,23 +662,6 @@ public final class ShopEditorOverlay extends FrameLayout {
             drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
         }
         return drawable;
-    }
-
-    private record ShopState(List<OfferState> offers) {
-    }
-
-    private record OfferState(
-            String id,
-            String title,
-            int maxUses,
-            boolean consumeSellerItems,
-            boolean sellerReceivesPayment,
-            String visibleCondition,
-            String enabledCondition,
-            String disabledReason,
-            List<String> costs,
-            List<String> rewards
-    ) {
     }
 
     private record DropTarget(StackListEditor list, int index) {
@@ -945,22 +797,12 @@ public final class ShopEditorOverlay extends FrameLayout {
             rewards.clear();
         }
 
-        private Map<String, Object> toMap(Set<String> usedIds, int index, List<String> conditionPorts) {
-            int maxUses = infiniteUses.isChecked()
-                    ? 0
-                    : Math.max(1, intValue(maxUsesInput.getText().toString(), 1));
-            Map<String, Object> offer = new LinkedHashMap<>();
-            offer.put("id", normalizeOfferId(idInput.getText().toString(), usedIds, index));
-            offer.put("title", titleInput.getText().toString().trim());
-            offer.put("costs", costs.toList());
-            offer.put("rewards", rewards.toList());
-            offer.put("max_uses", maxUses);
-            offer.put("consume_seller_items", consumeSellerItems.isChecked());
-            offer.put("seller_receives_payment", sellerReceivesPayment.isChecked());
-            offer.put("visible_condition", validConditionId(visibleCondition.conditionId(), conditionPorts));
-            offer.put("enabled_condition", validConditionId(enabledCondition.conditionId(), conditionPorts));
-            offer.put("disabled_reason", disabledReasonInput.getText().toString().trim());
-            return offer;
+        private OfferDraft toDraft() {
+            return new OfferDraft(idInput.getText().toString(), titleInput.getText().toString(),
+                    maxUsesInput.getText().toString(), infiniteUses.isChecked(),
+                    consumeSellerItems.isChecked(), sellerReceivesPayment.isChecked(),
+                    visibleCondition.conditionId(), enabledCondition.conditionId(),
+                    disabledReasonInput.getText().toString(), costs.snapshot(), rewards.snapshot());
         }
 
         private void refreshConditionLabels() {
@@ -1271,17 +1113,9 @@ public final class ShopEditorOverlay extends FrameLayout {
             list.removeAllViews();
         }
 
-        private List<Object> toList() {
-            List<Object> result = new ArrayList<>();
-            for (StackEntryView entry : entries) {
-                String stack = entry.stackJson();
-                if (stack == null || stack.isBlank()) {
-                    continue;
-                }
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("stack", stack);
-                result.add(item);
-            }
+        private List<String> snapshot() {
+            List<String> result = new ArrayList<>();
+            for (StackEntryView entry : entries) result.add(entry.stackJson());
             return result;
         }
 

@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.runtime.game.chunk.EditCameraChunkClient;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
-import com.mine.geometry_node.client.ui.MainUI;
+import com.mine.geometry_node.client.runtime.game.host.ViewportHostPolicy;
 import icyllis.modernui.mc.MuiScreen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -102,7 +102,7 @@ public final class GameViewportInput {
     }
 
     public static boolean isEditor(Screen screen) {
-        return screen instanceof MuiScreen mui && mui.getFragment() instanceof MainUI;
+        return ViewportHostPolicy.snapshot(screen).workspace();
     }
 
     public static boolean isGameInputActive() {

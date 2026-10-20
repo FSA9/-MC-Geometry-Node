@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.model.diagnostic.ModelReportContext;
 import com.mine.geometry_node.client.model.diagnostic.ModelReportFiles;
 import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
 import com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -25,13 +26,20 @@ import java.util.concurrent.CompletableFuture;
 
 /** Render-thread capture with asynchronous disk output and nonblocking GPU queries. */
 public final class LightReports {
+    private static final System.Logger LOGGER = System.getLogger(LightReports.class.getName());
     private static final int MAX_SAMPLES = 16384;
     private static final List<Long> intervals = new ArrayList<>(), preparation = new ArrayList<>();
     private static long start, previous, frames, requestedAt, durationNanos, drainStarted;
     private static long idleFrames;
-    private static boolean saving;
+    private static final LightReportSession SESSION = new LightReportSession(() -> {
+        try {
+            ModelShaderGpuTimings.endCapture();
+            ModelShaderGpuTimings.releaseCapture();
+        } finally {
+            NodeLightPixelDiagnostics.release();
+        }
+    });
     private static boolean profiling;
-    private static Object captureWorld;
     private static Map<String, Object> pendingSnapshot;
     private static Instant capturedAt;
     private static boolean skipDiagnosticInterval;
@@ -74,7 +82,45 @@ public final class LightReports {
                         .executes(c -> begin(StringArgumentType.getString(c, "label"), 1, probes)));
     }
 
-    public static boolean capturing() { return start != 0; }
+    public static boolean capturing() { return SESSION.capturing(); }
+
+    /** Called at existing render-thread logout, shutdown and resource-reload boundaries. */
+    public static void cancel() {
+        RenderSystem.assertOnRenderThread();
+        cancelCapture(SESSION);
+    }
+
+    /** Internal cancellation boundary; the public entry verifies render-thread ownership first. */
+    static void cancelCapture(LightReportSession session) {
+        try { session.cancel(); }
+        catch (RuntimeException failure) {
+            LOGGER.log(System.Logger.Level.WARNING, "Failed to release light report diagnostics", failure);
+        }
+        finally { clearCapture(); }
+    }
+
+    private static void clearCapture() {
+        start = previous = frames = requestedAt = durationNanos = drainStarted = idleFrames = 0;
+        pendingSnapshot = null;
+        capturedAt = null;
+        startContext = null;
+        label = null;
+        profiling = skipDiagnosticInterval = false;
+        diagnosticFrames = 0;
+        intervals.clear(); preparation.clear();
+        submittedWork.clear(); froxelWork.clear();
+        pixelDraws.clear(); froxelProbeDraws.clear();
+    }
+
+    /** Cancellation must also progress while the workspace suppresses world rendering. */
+    public static void tick() {
+        RenderSystem.assertOnRenderThread();
+        if (SESSION.worldChanged(Minecraft.getInstance().level)
+                || (requestedAt != 0 && System.nanoTime() - requestedAt > 30_000_000_000L)) {
+            cancel();
+            message("cancelled");
+        }
+    }
 
     public static boolean probeFroxel(int program, int light) {
         if (!capturing() || !profiling || light != 0) return false;
@@ -141,12 +187,13 @@ public final class LightReports {
     }
 
     private static int begin(String name, int seconds, boolean probes) {
-        if (capturing() || requestedAt != 0 || pendingSnapshot != null || saving) { message("busy"); return 0; }
+        RenderSystem.assertOnRenderThread();
+        if (SESSION.busy()) { message("busy"); return 0; }
         if (Minecraft.getInstance().level == null) { message("world_required"); return 0; }
+        SESSION.queue(Minecraft.getInstance().level);
         label = name;
         profiling = probes;
         durationNanos = seconds * 1_000_000_000L;
-        captureWorld = Minecraft.getInstance().level;
         intervals.clear(); preparation.clear(); frames = previous = idleFrames = 0;
         submittedWork.clear();
         froxelWork.clear();
@@ -159,25 +206,28 @@ public final class LightReports {
     }
 
     public static void frame(long prepareNanos) {
+        RenderSystem.assertOnRenderThread();
+        try { captureFrame(prepareNanos); }
+        catch (RuntimeException error) {
+            cancel();
+            message("failed", error.toString());
+        }
+    }
+
+    private static void captureFrame(long prepareNanos) {
+        tick();
         long now = System.nanoTime();
         if (pendingSnapshot != null) { finishPending(now); return; }
         if (requestedAt != 0) {
-            if (Minecraft.getInstance().level != captureWorld || now - requestedAt > 30_000_000_000L) {
-                requestedAt = 0; message("cancelled"); return;
-            }
             if (Minecraft.getInstance().screen != null) return;
             requestedAt = 0;
+            SESSION.start();
             startContext = ModelReportContext.capture(Instant.now());
             ModelShaderGpuTimings.beginCapture();
             NodeLightPixelDiagnostics.beginCapture();
             start = now;
         }
         if (!capturing()) return;
-        if (Minecraft.getInstance().level != captureWorld) {
-            start = 0; ModelShaderGpuTimings.endCapture(); ModelShaderGpuTimings.releaseCapture();
-            NodeLightPixelDiagnostics.release();
-            message("cancelled"); return;
-        }
         NodeLightPixelDiagnostics.poll();
         if (previous != 0 && !skipDiagnosticInterval && intervals.size() < MAX_SAMPLES) intervals.add(now - previous);
         skipDiagnosticInterval=false;
@@ -190,6 +240,7 @@ public final class LightReports {
         }
         long elapsed = now - start;
         start = 0;
+        SESSION.drain();
         ModelShaderGpuTimings.endCapture();
         NodeLightPixelDiagnostics.endCapture();
         try {
@@ -236,9 +287,7 @@ public final class LightReports {
             drainStarted = now;
             finishPending(now);
         } catch (RuntimeException error) {
-            ModelShaderGpuTimings.releaseCapture(); pendingSnapshot = null;
-            NodeLightPixelDiagnostics.release();
-            saving = false; message("failed", error.toString());
+            cancel(); message("failed", error.toString());
         }
     }
 
@@ -297,23 +346,24 @@ public final class LightReports {
             snapshot.put("scope", "Capture begins after closing the UI, at a light-preparation boundary. renderedFrames counts frames whose draws belong to the capture, excluding the closing boundary. Preparation CPU samples belong to those frames. GPU draws are attributed at query submission; results drain asynchronously after the window, with a two-second timeout. Inspect gpuCollection, dropped/discarded samples and per-pass query counts. Frame intervals include all game work and frame limits. Composite includes froxel lookup and visible emitters. No synchronous GPU wait.");
             var directory = Minecraft.getInstance().gameDirectory.toPath().resolve("geometry_nodes/reports/light");
             Instant reportTime = capturedAt;
-            ModelShaderGpuTimings.releaseCapture();
-            NodeLightPixelDiagnostics.release();
-            pendingSnapshot = null;
-            saving = true;
+            long generation = SESSION.save();
+            clearCapture();
             CompletableFuture.runAsync(() -> {
                 try {
                     var path = ModelReportFiles.write(directory, reportTime, new GsonBuilder().setPrettyPrinting().create().toJson(snapshot));
-                    Minecraft.getInstance().execute(() -> { saving = false; message("saved", path.toString()); });
+                    Minecraft.getInstance().execute(() -> completeSave(generation, "saved", path.toString()));
                 } catch (Exception error) {
-                    Minecraft.getInstance().execute(() -> { saving = false; message("failed", error.toString()); });
+                    Minecraft.getInstance().execute(() -> completeSave(generation, "failed", error.toString()));
                 }
             });
         } catch (RuntimeException error) {
-            ModelShaderGpuTimings.releaseCapture(); pendingSnapshot = null;
-            NodeLightPixelDiagnostics.release();
-            saving = false; message("failed", error.toString());
+            cancel(); message("failed", error.toString());
         }
+    }
+
+    private static void completeSave(long generation, String key, String detail) {
+        RenderSystem.assertOnRenderThread();
+        if (SESSION.complete(generation)) message(key, detail);
     }
 
     private static final class Implementation {
@@ -325,6 +375,7 @@ public final class LightReports {
                         "/assets/geometry_node/shaders/include/node_light_froxels.glsl",
                         "/assets/geometry_node/shaders/include/node_light_material.glsl",
                         "/com/mine/geometry_node/client/runtime/light/diagnostic/LightReports.class",
+                        "/com/mine/geometry_node/client/runtime/light/diagnostic/LightReportSession.class",
                         "/com/mine/geometry_node/client/runtime/light/shader/NodeLightShader.class",
                         "/com/mine/geometry_node/client/runtime/light/render/NodeLightRenderer.class",
                         "/com/mine/geometry_node/client/runtime/light/render/NodeLightCookies.class",

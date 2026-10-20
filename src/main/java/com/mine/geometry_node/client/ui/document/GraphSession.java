@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.document;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.FrameBoundsPolicy;
 import com.mine.geometry_node.client.graph.persistence.file.GraphFileReference;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import java.nio.file.Path;
@@ -27,11 +28,11 @@ public class GraphSession implements AutoCloseable {
     public final List<String> selectedFrameIds = new ArrayList<>();
 
     // Session owns one claimed graph-file reference and does not hold UI objects.
-    public GraphSession(GraphFileReference fileReference, NodeGraph graph) {
+    public GraphSession(GraphFileReference fileReference, NodeGraph graph, FrameBoundsPolicy frameBoundsPolicy) {
         mFileReference = fileReference;
         Path path = fileReference.requireActivePath();
         this.tabName = path.getFileName() != null ? path.getFileName().toString() : path.toString();
-        this.editorContext = new EditorContext(graph, mSessionId.toString());
+        this.editorContext = new EditorContext(graph, mSessionId.toString(), frameBoundsPolicy);
         this.editorContext.getCommandManager().subscribeHistory(state -> {
             if (isDirty != state.dirty()) {
                 isDirty = state.dirty();

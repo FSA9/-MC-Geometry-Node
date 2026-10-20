@@ -6,7 +6,7 @@ import java.util.Objects;
 /** Isolated mutable settings transaction used by the future global settings dialog. */
 public final class ConfigDraft {
     private AppConfig mBaseline;
-    private final AppConfig mConfig;
+    private AppConfig mConfig;
 
     ConfigDraft(AppConfig source) {
         mBaseline = Objects.requireNonNull(source, "source").copy();
@@ -52,8 +52,9 @@ public final class ConfigDraft {
         return mConfig.copy();
     }
 
-    void acceptAppliedState() {
-        mBaseline = mConfig.copy();
+    void acceptAppliedState(AppConfig applied) {
+        mConfig = applied.copy();
+        mBaseline = applied.copy();
     }
 
     private <T> void resetTyped(ConfigEntry<T> entry) {

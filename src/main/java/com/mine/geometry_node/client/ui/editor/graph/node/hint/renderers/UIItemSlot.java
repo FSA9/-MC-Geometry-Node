@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStackTooltipOverlay;
-import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
+import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;

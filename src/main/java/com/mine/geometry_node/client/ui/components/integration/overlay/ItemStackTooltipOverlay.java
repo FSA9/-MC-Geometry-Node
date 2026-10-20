@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.overlay;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayMount;
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.OverlayMount;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;

@@ -37,15 +37,20 @@ public final class SceneEditBackends {
         }
     }
     private static final List<Backend> BACKENDS = new CopyOnWriteArrayList<>();
+    private static volatile BooleanSupplier nativeSubscription = () -> false;
     static {
         register(new Backend(NATIVE_ENTITIES, object -> object.typeId().equals(SceneNativeInteractions.TYPE_ID)
                         || object.typeId().equals(SceneNativeEntities.TYPE_ID),
                 packet -> NetworkManager.sendToServer(new com.mine.geometry_node.core.network.packet.viewport.PacketViewportNativeEntityEdit(packet)), 20,
-                com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization::requestedNativeEntities,
+                () -> nativeSubscription.getAsBoolean(),
                 Set.of(Mutation.CREATE, Mutation.UPDATE, Mutation.DELETE),
                 (object,mutation)->!object.typeId().equals(SceneNativeEntities.TYPE_ID)||mutation!=Mutation.UPDATE));
     }
     private SceneEditBackends() {}
+    /** Application composition supplies host visibility and viewport demand together. */
+    public static void configureNativeSubscription(BooleanSupplier subscribed) {
+        nativeSubscription = Objects.requireNonNull(subscribed);
+    }
     public static synchronized void register(Backend backend) {
         Objects.requireNonNull(backend);
         if (BACKENDS.stream().anyMatch(existing -> existing.id().equals(backend.id())))

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,7 +21,7 @@ public final class DataLibraryValuePresentation {
      * Entity templates supply their saved entity type; UUID references remain empty in this overload.
      * This method never resolves a UUID or inspects a live entity.
      */
-    public static String registryType(DataLibraryUiRepository.Entry entry) {
+    public static String registryType(DataLibraryRepository.Entry entry) {
         if (entry == null || entry.value() == null) return "";
         Object value = entry.value();
         return switch (entry.type()) {
@@ -38,13 +40,13 @@ public final class DataLibraryValuePresentation {
      * Callers own its source/lifecycle association and must clear it when the reference changes or becomes unavailable.
      * Static values always use their own metadata, regardless of the supplied resolved ID.
      */
-    public static String registryType(DataLibraryUiRepository.Entry entry, String resolvedEntityType) {
+    public static String registryType(DataLibraryRepository.Entry entry, String resolvedEntityType) {
         return entry != null && entry.type() == PortType.ENTITY && entry.value() instanceof UUID
                 ? resolvedEntityType == null ? "" : resolvedEntityType : registryType(entry);
     }
 
     /** Plain table value text; block states and items show only their registry ID, without state properties. */
-    public static String tableValueText(DataLibraryUiRepository.Entry entry, String summary) {
+    public static String tableValueText(DataLibraryRepository.Entry entry, String summary) {
         if (entry != null && (entry.type() == PortType.BLOCK_STATE || entry.type() == PortType.ITEM)) {
             return registryType(entry);
         }
@@ -56,7 +58,7 @@ public final class DataLibraryValuePresentation {
      * and empty/unsupported values produce an empty stack; no world or block renderer is consulted.
      * Existing stacks are borrowed read-only; the preview copies them only when their contents change.
      */
-    public static ItemStack previewStack(DataLibraryUiRepository.Entry entry) {
+    public static ItemStack previewStack(DataLibraryRepository.Entry entry) {
         if (entry == null || entry.value() == null) return ItemStack.EMPTY;
         Object value = entry.value();
         return switch (entry.type()) {

@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
-import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
+import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
 import java.util.function.Supplier;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestRewardDefinition;

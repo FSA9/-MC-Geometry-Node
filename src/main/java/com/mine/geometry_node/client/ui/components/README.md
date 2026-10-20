@@ -21,7 +21,7 @@
 
 ## 各层清单
 
-以下列出全部 70 个生产组件源文件：23 个 base、34 个 composite、13 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
+以下列出全部 72 个生产组件源文件：23 个 base、36 个 composite、13 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
 
 ### base：基础能力
 
@@ -45,8 +45,8 @@
 | `input` | [ColorSwatchView](composite/input/ColorSwatchView.java)、[UiGradientStopEditor](composite/input/UiGradientStopEditor.java)、[UiSearchBar](composite/input/UiSearchBar.java) | 完整搜索栏、带选择器的颜色块、渐变色标编辑。 |
 | `layout` | [UiFixedSplitLayout](composite/layout/UiFixedSplitLayout.java)、[UiPropertyRow](composite/layout/UiPropertyRow.java) | 属性行和固定尺寸分栏。 |
 | `list` | [UiNavigationRow](composite/list/UiNavigationRow.java) | 名称、数量与操作组成的导航行。 |
-| `menu` | [HeldMenuKey](composite/menu/HeldMenuKey.java)、[RadialMenuLayout](composite/menu/RadialMenuLayout.java)、[UiGridMenu](composite/menu/UiGridMenu.java)、[UiPopover](composite/menu/UiPopover.java)、[UiRadialMenu](composite/menu/UiRadialMenu.java)、[UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java)、[UiSearchableMenu](composite/menu/UiSearchableMenu.java) | 可搜索菜单、网格菜单、任意内容 popover、扇形菜单及配套布局和按键协议。 |
-| `overlay` | [ColorPickerDialog](composite/overlay/ColorPickerDialog.java)、[ExpandedTextInputOverlay](composite/overlay/ExpandedTextInputOverlay.java) | 完整颜色编辑、长文本与富文本编辑；文本编辑含 PortType、RichTextValue 适配，不属于通用输入底座。 |
+| `menu` | [UiContextMenu](composite/menu/UiContextMenu.java)、[HeldMenuKey](composite/menu/HeldMenuKey.java)、[RadialMenuLayout](composite/menu/RadialMenuLayout.java)、[UiGridMenu](composite/menu/UiGridMenu.java)、[UiPopover](composite/menu/UiPopover.java)、[UiRadialMenu](composite/menu/UiRadialMenu.java)、[UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java)、[UiSearchableMenu](composite/menu/UiSearchableMenu.java) | 可搜索菜单、网格菜单、任意内容 popover、扇形菜单及配套布局和按键协议。 |
+| `overlay` | [ModalWindowView](composite/overlay/ModalWindowView.java)、[ColorPickerDialog](composite/overlay/ColorPickerDialog.java)、[ExpandedTextInputOverlay](composite/overlay/ExpandedTextInputOverlay.java) | 完整颜色编辑、长文本与富文本编辑；文本编辑含 PortType、RichTextValue 适配，不属于通用输入底座。 |
 | `sidebar` | [EditorSidebar](composite/sidebar/EditorSidebar.java)、[SidebarLayoutController](composite/sidebar/SidebarLayoutController.java) | 标签栏、内容切换、拖动排序、展开收起和编辑器布局联动。 |
 | `sidebar/api` | [SidebarPanel](composite/sidebar/api/SidebarPanel.java)、[SidebarPanelContext](composite/sidebar/api/SidebarPanelContext.java)、[SidebarPanelDefinition](composite/sidebar/api/SidebarPanelDefinition.java)、[SidebarPanelFactory](composite/sidebar/api/SidebarPanelFactory.java)、[SidebarPanelRegistry](composite/sidebar/api/SidebarPanelRegistry.java)、[SidebarPanelScope](composite/sidebar/api/SidebarPanelScope.java) | 面板、上下文、作用域、工厂、定义和注册表；属于编辑器扩展协议，不作为 base API。 |
 | `table` | [UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java)、[UiTableBatchWork](composite/table/UiTableBatchWork.java)、[UiTableColumns](composite/table/UiTableColumns.java)、[UiTableFilterHeader](composite/table/UiTableFilterHeader.java)、[UiTableRow](composite/table/UiTableRow.java)、[UiTableRowFrame](composite/table/UiTableRowFrame.java)、[UiTableStyle](composite/table/UiTableStyle.java)、[UiTableViewport](composite/table/UiTableViewport.java) | 列模型、行与单元格、横向视口、表头筛选、样式和分帧建行。 |
@@ -105,6 +105,8 @@
 | 编辑器右侧栏 | [EditorSidebar](composite/sidebar/EditorSidebar.java)、[SidebarLayoutController](composite/sidebar/SidebarLayoutController.java) | 面板标签、展开／收起与布局联动；窗口失焦取消标签拖动，延迟滚动只定位当前仍在目录中的标签；可扩展面板通过 [sidebar/api](composite/sidebar/api) 注册。 |
 
 ## 菜单与弹层
+
+通用级联右键菜单使用 `UiContextMenu`，业务调用方仅组装菜单文字和动作，不依赖资产浏览器。可复用模态窗口外壳使用 `ModalWindowView`。共享弹层协议、句柄及挂载适配位于 `ui/overlay`；宿主实现 `OverlayHost`，`MainUiShell` 将请求委托给自己的层管理器。组件不查找具体 shell，不导入 `ui/shell`；无宿主时沿用各组件的独立展示模式。
 
 | 需求 | 推荐入口 | 组合关系 |
 | --- | --- | --- |

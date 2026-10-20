@@ -2,10 +2,10 @@ package com.mine.geometry_node.client.ui.shell.menu;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.ui.shell.layer.MainUiLayerManager;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
-import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOptions;
-import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOverlay;
+import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.ephemeral.TransientOptions;
+import com.mine.geometry_node.client.ui.overlay.ephemeral.TransientOverlay;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuDefinition;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuItemDefinition;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuRegistry;

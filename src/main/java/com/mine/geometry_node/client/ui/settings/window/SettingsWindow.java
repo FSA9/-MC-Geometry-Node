@@ -10,9 +10,9 @@ import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageDefinition;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayCloseReason;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalWindowView;
+import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
+import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -25,6 +25,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 
+import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -224,7 +225,16 @@ final class SettingsWindow extends ModalWindowView {
             return;
         }
         if (draft.isDirty()) {
-            ConfigManager.INSTANCE.apply(draft);
+            try {
+                ConfigManager.INSTANCE.apply(draft);
+            } catch (UncheckedIOException failure) {
+                statusView.setText(Component.translatable(
+                        "geometry_node.settings.save_failed",
+                        failure.getCause().getMessage()).getString());
+                statusView.setTextColor(COLOR_DANGER);
+                updateState();
+                return;
+            }
         }
         statusView.setText("");
         statusView.setTextColor(COLOR_MUTED);

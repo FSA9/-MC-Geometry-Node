@@ -40,7 +40,6 @@ public class SvgIconView extends View {
         TRANSFERS("panels/transfer.svg"),
         ASSET_LIBRARY("editors/asset_library.svg"),
         DATA_LIBRARY("editors/data_library.svg"),
-        INCLUDE_SUBFOLDERS("database/include-subfolders.svg"),
         TERMINAL("editors/console.svg"),
         PERFORMANCE("editors/analysis.svg"),
         COPY("actions/copy.svg"),

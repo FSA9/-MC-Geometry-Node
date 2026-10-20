@@ -29,16 +29,23 @@ public final class ClientRequestTracker {
 
     /** Creates a request group whose success and timeout callbacks use the supplied executor. */
     public static Group group(String name, Executor callbackExecutor) {
-        return new Group(name, callbackExecutor);
+        return group(name, callbackExecutor, TIMEOUT_EXECUTOR);
+    }
+
+    static Group group(String name, Executor callbackExecutor, ScheduledExecutorService deadlines) {
+        return new Group(name, callbackExecutor, deadlines);
     }
 
     public static final class Group {
         private final String name;
         private final Executor callbackExecutor;
+        private final ScheduledExecutorService deadlines;
+        private Object generation = new Object();
 
-        private Group(String name, Executor callbackExecutor) {
+        private Group(String name, Executor callbackExecutor, ScheduledExecutorService deadlines) {
             this.name = Objects.requireNonNull(name, "name");
             this.callbackExecutor = Objects.requireNonNull(callbackExecutor, "callbackExecutor");
+            this.deadlines = Objects.requireNonNull(deadlines, "deadlines");
         }
 
         public int nextRequestId() {
@@ -65,16 +72,16 @@ public final class ClientRequestTracker {
             registerKey(Objects.requireNonNull(requestId, "requestId"), responseType, callback, onTimeout);
         }
 
-        private <T> void registerKey(Object requestId, Class<T> responseType, Consumer<? super T> callback,
+        private synchronized <T> void registerKey(Object requestId, Class<T> responseType, Consumer<? super T> callback,
                                      Runnable onTimeout) {
             cancelKey(requestId);
             PendingRequest<T> pending = new PendingRequest<>(
-                    this, responseType, callback, onTimeout, callbackExecutor);
+                    this, generation, responseType, callback, onTimeout, callbackExecutor);
             PendingRequest<?> existing = REQUESTS.putIfAbsent(requestId, pending);
             if (existing != null) {
                 throw new IllegalStateException("Client request ID is already registered: " + requestId);
             }
-            pending.setTimeout(TIMEOUT_EXECUTOR.schedule(
+            pending.setTimeout(deadlines.schedule(
                     () -> {
                         if (REQUESTS.remove(requestId, pending)) {
                             pending.timeout();
@@ -122,13 +129,23 @@ public final class ClientRequestTracker {
             return true;
         }
 
-        public void reset() {
+        /**
+         * Invalidates pending requests and deliveries that have not passed their generation check.
+         * An admitted delivery (beforeCallback plus success, or timeout) may finish after reset.
+         * User callbacks run without this group's lock, so reset never waits for their completion.
+         */
+        public synchronized void reset() {
+            generation = new Object();
             for (Map.Entry<Object, PendingRequest<?>> entry : REQUESTS.entrySet()) {
                 PendingRequest<?> pending = entry.getValue();
                 if (pending.owner == this && REQUESTS.remove(entry.getKey(), pending)) {
                     pending.cancelTimeout();
                 }
             }
+        }
+
+        private synchronized boolean admitDelivery(Object capturedGeneration) {
+            return generation == capturedGeneration;
         }
 
         @Override
@@ -139,6 +156,7 @@ public final class ClientRequestTracker {
 
     private static final class PendingRequest<T> {
         private final Group owner;
+        private final Object generation;
         private final Class<T> responseType;
         private final Consumer<? super T> callback;
         private final Runnable timeoutCallback;
@@ -146,9 +164,10 @@ public final class ClientRequestTracker {
         private volatile ScheduledFuture<?> timeout;
         private boolean closed;
 
-        private PendingRequest(Group owner, Class<T> responseType, Consumer<? super T> callback,
+        private PendingRequest(Group owner, Object generation, Class<T> responseType, Consumer<? super T> callback,
                                Runnable timeoutCallback, Executor callbackExecutor) {
             this.owner = owner;
+            this.generation = generation;
             this.responseType = Objects.requireNonNull(responseType, "responseType");
             this.callback = callback != null ? callback : ignored -> { };
             this.timeoutCallback = timeoutCallback != null ? timeoutCallback : () -> { };
@@ -163,6 +182,7 @@ public final class ClientRequestTracker {
             cancelTimeout();
             T accepted = responseType.cast(response);
             callbackExecutor.execute(() -> {
+                if (!owner.admitDelivery(generation)) return;
                 if (beforeCallback != null) beforeCallback.run();
                 callback.accept(accepted);
             });
@@ -170,7 +190,9 @@ public final class ClientRequestTracker {
 
         private void timeout() {
             cancelTimeout();
-            callbackExecutor.execute(timeoutCallback);
+            callbackExecutor.execute(() -> {
+                if (owner.admitDelivery(generation)) timeoutCallback.run();
+            });
         }
 
         private synchronized void setTimeout(ScheduledFuture<?> timeout) {

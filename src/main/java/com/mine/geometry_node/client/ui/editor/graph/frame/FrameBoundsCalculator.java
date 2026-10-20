@@ -1,13 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.graph.frame;
 
 import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.document.edit.FrameBoundsPolicy;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.document.FrameData;
 import com.mine.geometry_node.core.node.document.NodeData;
 
 /**
- * Pure frame auto-bounds calculator shared by committed graph data and drag previews.
+ * UI geometry used by the document bounds policy and live drag previews.
  */
 public final class FrameBoundsCalculator {
     public static final float CONTENT_PADDING = 30f;
@@ -15,6 +16,13 @@ public final class FrameBoundsCalculator {
     public static final float FALLBACK_NODE_HEIGHT = 100f;
 
     private FrameBoundsCalculator() {}
+
+    /** UI composition supplies this policy to document editing, including detached planning forks. */
+    public static FrameBoundsPolicy.Bounds computeCommittedBounds(
+            String frameId, Iterable<NodeData> nodes, Iterable<FrameData> frames) {
+        Result result = computeCommittedBounds(frameId, nodes, frames, null);
+        return new FrameBoundsPolicy.Bounds(result.hasChildren(), result.x(), result.y(), result.width(), result.height());
+    }
 
     public static Result computeCommittedBounds(
             String frameId,

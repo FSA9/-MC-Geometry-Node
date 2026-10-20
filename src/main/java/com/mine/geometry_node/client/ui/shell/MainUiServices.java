@@ -62,6 +62,7 @@ public final class MainUiServices implements AutoCloseable {
 
     public Registration registerOpenSettingsAction(Runnable action) {
         Objects.requireNonNull(action, "action");
+        if (closed) throw new IllegalStateException("The MainUI services are closed");
         if (openSettingsAction != null) {
             throw new IllegalStateException("The MainUI settings action is already registered");
         }
@@ -104,11 +105,18 @@ public final class MainUiServices implements AutoCloseable {
             return;
         }
         closed = true;
-
-        for (int index = closeActions.size() - 1; index >= 0; index--) {
-            runCloseAction(closeActions.get(index));
+        openSettingsAction = null;
+        // Snapshot the iteration order; registrations may still withdraw a pending cleanup.
+        // Remove each action before invoking it so reentry cannot run the same registration twice.
+        List<Runnable> pending = List.copyOf(closeActions);
+        try {
+            for (int index = pending.size() - 1; index >= 0; index--) {
+                Runnable action = pending.get(index);
+                if (closeActions.remove(action)) runCloseAction(action);
+            }
+        } finally {
+            closeActions.clear();
         }
-        closeActions.clear();
     }
 
     private static void runCloseAction(Runnable action) {

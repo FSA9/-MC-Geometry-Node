@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
 import net.minecraft.client.Minecraft;
 
@@ -15,13 +17,13 @@ final class DataLibraryValueChanges {
     private DataLibraryValueChanges() {
     }
 
-    static DataLibraryUiRepository.Entry replace(DataLibraryUiRepository.Entry current, Object value) {
+    static DataLibraryRepository.Entry replace(DataLibraryRepository.Entry current, Object value) {
         if (current == null) throw new IllegalArgumentException("current entry is required");
-        return new DataLibraryUiRepository.Entry(current.id(), current.parentId(), current.type(),
+        return new DataLibraryRepository.Entry(current.id(), current.parentId(), current.type(),
                 current.key(), value, current.tags());
     }
 
-    static boolean equivalent(DataLibraryUiRepository.Entry current, Object candidate) {
+    static boolean equivalent(DataLibraryRepository.Entry current, Object candidate) {
         if (current == null) return candidate == null;
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null) return java.util.Objects.equals(current.value(), candidate);
@@ -36,7 +38,7 @@ final class DataLibraryValueChanges {
         }
     }
 
-    static String serialize(DataLibraryUiRepository.Entry entry) {
+    static String serialize(DataLibraryRepository.Entry entry) {
         if (entry == null) return "";
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null) return String.valueOf(entry.value());

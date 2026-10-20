@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -101,12 +103,12 @@ final class DataLibraryEntryCard {
         if (!Objects.equals(name.getText().toString(), value)) name.setText(value);
     }
 
-    void setSummary(DataLibraryUiRepository.Entry entry, String summary) {
+    void setSummary(DataLibraryRepository.Entry entry, String summary) {
         setSummary(entry, summary, "");
     }
 
     /** resolvedEntityType belongs to the caller's current metadata snapshot, independently of preview visibility. */
-    void setSummary(DataLibraryUiRepository.Entry entry, String summary, String resolvedEntityType) {
+    void setSummary(DataLibraryRepository.Entry entry, String summary, String resolvedEntityType) {
         String registryId = DataLibraryValuePresentation.registryType(entry, resolvedEntityType);
         if (!Objects.equals(registryType.getText().toString(), registryId)) registryType.setText(registryId);
         if (entityPreview != null) {

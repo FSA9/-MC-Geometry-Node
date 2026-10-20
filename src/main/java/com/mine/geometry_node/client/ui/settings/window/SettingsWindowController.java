@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
+import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
 import icyllis.modernui.core.Context;
 
 import java.util.Objects;

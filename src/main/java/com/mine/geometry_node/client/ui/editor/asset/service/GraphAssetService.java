@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.service;
 
+import com.mine.geometry_node.client.ui.editor.graph.frame.FrameBoundsCalculator;
+
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
@@ -37,7 +39,7 @@ public final class GraphAssetService {
 
             context.checkCancelled();
             if (GraphDocumentStore.INSTANCE.claimDocument(reference, snapshot.revision())) {
-                return new GraphSession(reference, graph);
+                return new GraphSession(reference, graph, FrameBoundsCalculator::computeCommittedBounds);
             }
         }
         throw new IOException("graph changed repeatedly while it was being opened");

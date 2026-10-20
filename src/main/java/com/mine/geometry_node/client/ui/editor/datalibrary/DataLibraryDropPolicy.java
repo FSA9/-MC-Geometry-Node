@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -61,7 +63,7 @@ final class DataLibraryDropPolicy {
     }
 
     private static boolean isInFolderTree(UUID folderId, UUID root,
-                                         Map<UUID, DataLibraryUiRepository.Folder> folders) {
+                                         Map<UUID, DataLibraryRepository.Folder> folders) {
         if (root == null) return false;
         Set<UUID> visited = new HashSet<>();
         for (UUID cursor = folderId; cursor != null && visited.add(cursor);) {

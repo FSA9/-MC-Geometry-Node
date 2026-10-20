@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
@@ -36,7 +36,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
-import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.client.datalibrary.NetworkRemoteDataLibraryGateway;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */

@@ -20,7 +20,7 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
-import com.mine.geometry_node.client.ui.editor.asset.menu.FileContextMenu;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
@@ -83,7 +83,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final ScopedKeyManager<AssetLibraryActionId, AssetFileBrowserPanel> mKeyManager;
     private final AssetTaskController mIoTasks;
     private final AssetBrowserActionController mActionController;
-    private FileContextMenu mActiveMenu;
+    private UiContextMenu mActiveMenu;
     private UiSearchableMenu mViewModeMenu;
 
     private File mCurrentDirectory;
@@ -368,6 +368,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void activatePanel() {
+        mActionController.activateRemoteRequests();
         mKeyManager.attach();
     }
 
@@ -687,7 +688,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mViewModeMenu.showAt(anchor, host);
     }
 
-    void showMenu(FileContextMenu menu, float localX, float localY) {
+    void showMenu(UiContextMenu menu, float localX, float localY) {
         dismissActiveMenu();
         if (menu == null || !menu.hasItems()) return;
 
@@ -706,7 +707,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         UiSearchableMenu viewMenu = mViewModeMenu;
         mViewModeMenu = null;
         if (viewMenu != null) viewMenu.dismiss();
-        FileContextMenu menu = mActiveMenu;
+        UiContextMenu menu = mActiveMenu;
         mActiveMenu = null;
         if (menu != null) menu.dismiss();
     }

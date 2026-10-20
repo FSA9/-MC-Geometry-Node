@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
-import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;

@@ -37,7 +37,6 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import com.mojang.blaze3d.ProjectionType;
-import com.mine.geometry_node.client.model.runtime.ClientModelService;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -57,6 +56,17 @@ import java.util.*;
  * transparent geometry keeps the deterministic P2 triangle sort as a safe fallback.
  */
 public final class ModelStaticRenderer {
+    private static volatile ModelRenderInstanceSource instanceSource = ModelRenderInstanceSource.EMPTY;
+
+    /** Installed by client bootstrap before any render callbacks or diagnostic commands run. */
+    public static void setInstanceSource(ModelRenderInstanceSource source) {
+        instanceSource = Objects.requireNonNull(source);
+    }
+
+    static void refreshLoadedCounts() {
+        var loaded = instanceSource.loadedCounts();
+        METRICS.modelLodMetrics().setLoadedCounts(loaded.instances(), loaded.objects());
+    }
     private static final int MAX_RUN_TRIANGLES = 16_384;
     private static long opaqueSubmissions, transparentTriangles, transparentDraws;
     private static String lastFailure = "";
@@ -128,7 +138,7 @@ public final class ModelStaticRenderer {
         com.mine.geometry_node.client.model.render.diagnostic.ModelDrawGpuTimings.poll();
         frame++; METRICS.beginFrame(frame); beginResidencyFrame(frame); ModelLightingProfiler.onFrameStart();
         mainCameraPosition = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        if (ClientModelService.INSTANCE.hasVisibleInstances()) LIGHT_CACHE.beginFrame(Minecraft.getInstance().level);
+        if (instanceSource.hasVisibleInstances()) LIGHT_CACHE.beginFrame(Minecraft.getInstance().level);
         mainCpuNanos = 0; mainDrawCount = mainPrimitiveCount = 0;
     }
 
@@ -186,7 +196,7 @@ public final class ModelStaticRenderer {
     public static void pollIrisLifecycle() {
         RenderSystem.assertOnRenderThread();
         if (IRIS.pollLifecycle()) {
-            ClientModelService.INSTANCE.invalidateRenderResources("iris_pipeline_changed");
+            instanceSource.invalidateRenderResources("iris_pipeline_changed");
             closeShadowResources();
         }
     }
@@ -210,8 +220,7 @@ public final class ModelStaticRenderer {
 
     public static void submit(PoseStack ignoredHostStack, SubmitNodeCollector collector, Vec3 camera, Frustum frustum, List<ModelRenderInstance> instances) {
         RenderSystem.assertOnRenderThread();
-        var loaded = ClientModelService.INSTANCE.loadedCounts();
-        METRICS.modelLodMetrics().setLoadedCounts(loaded.instances(), loaded.objects());
+        refreshLoadedCounts();
         if (instances.isEmpty()) { queuedIris = List.of(); queuedIrisImmediate = List.of(); queuedDirect = Map.of(); return; }
         long started = System.nanoTime();
         boolean iris = IRIS.available() && IRIS.active();
@@ -487,7 +496,7 @@ public final class ModelStaticRenderer {
         shadowCallbacks++;
         shadowCasters = 0;
         shadowToleranceMin = Float.POSITIVE_INFINITY; shadowToleranceMax = 0;
-        if (!ModelShadowDistancePolicy.enabled() || !ClientModelService.INSTANCE.hasVisibleInstances()) {
+        if (!ModelShadowDistancePolicy.enabled() || !instanceSource.hasVisibleInstances()) {
             shadowProjectionConsumed = false;
             METRICS.recordPass(ModelRenderMetrics.Pass.SHADOW, System.nanoTime() - started, 0, 0);
             return;
@@ -513,7 +522,7 @@ public final class ModelStaticRenderer {
             shadowFrustum.prepare(cameraX, cameraY, cameraZ);
             ModelShadowCulling shadowContainment = new ModelShadowCulling(view, projection, cameraX, cameraY, cameraZ);
             // This list is independent of main-camera culling; offscreen casters remain eligible.
-            var shadowInstances = ClientModelService.INSTANCE.renderSnapshots();
+            var shadowInstances = instanceSource.shadowInstances();
             for (var instance : shadowInstances) if (instance.visible() && instance.asset().gpuResident()) {
                 instance.asset().touch();
                 pinPreviousObjectLevels(instance, true, irisResidentEnabled);
@@ -1094,8 +1103,7 @@ public final class ModelStaticRenderer {
     private static void failed(RuntimeException error) { String message = error.toString(); if (!message.equals(lastFailure)) GeometryNode.LOGGER.error("P4 static model renderer stopped affected pass", error); lastFailure = message; }
     public static Map<String, Object> report() {
         Map<String, Object> result = new LinkedHashMap<>();
-        var loaded = ClientModelService.INSTANCE.loadedCounts();
-        METRICS.modelLodMetrics().setLoadedCounts(loaded.instances(), loaded.objects());
+        refreshLoadedCounts();
         result.put("materialUploads", ModelMaterialUploadQueue.report());
         result.put("modelLod", Map.of(
                 "policy", ModelLodPolicy.active().report(),

@@ -2,9 +2,9 @@ package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
-import com.mine.geometry_node.client.ui.shell.layer.OverlayHandle;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalWindowView;
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
+import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;

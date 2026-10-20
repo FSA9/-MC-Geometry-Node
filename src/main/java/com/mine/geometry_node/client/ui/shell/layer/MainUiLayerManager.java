@@ -1,13 +1,18 @@
 package com.mine.geometry_node.client.ui.shell.layer;
 
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
+import com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture;
+import com.mine.geometry_node.client.ui.overlay.UiOverlay;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
-import com.mine.geometry_node.client.ui.shell.layer.modal.MainUiModal;
-import com.mine.geometry_node.client.ui.shell.layer.modal.ModalOptions;
-import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOptions;
-import com.mine.geometry_node.client.ui.shell.layer.ephemeral.TransientOverlay;
+import com.mine.geometry_node.client.ui.overlay.modal.UiModal;
+import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
+import com.mine.geometry_node.client.ui.overlay.ephemeral.TransientOptions;
+import com.mine.geometry_node.client.ui.overlay.ephemeral.TransientOverlay;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.core.Core;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -35,7 +40,7 @@ public final class MainUiLayerManager implements AutoCloseable {
     private final MainUiLayerHost transientHost;
     private final MainUiLayerHost modalHost;
     private final MainUiLayerHost tooltipHost;
-    private final Map<MainUiOverlay, Entry> mounted = new IdentityHashMap<>();
+    private final Map<UiOverlay, Entry> mounted = new IdentityHashMap<>();
     private final Deque<Entry> modalStack = new ArrayDeque<>();
 
     private Entry transientEntry;
@@ -70,7 +75,7 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     /** Non-interactive hints coexist with the active menu and never receive focus. */
-    public OverlayHandle showTooltip(MainUiOverlay overlay, View owner) {
+    public OverlayHandle showTooltip(UiOverlay overlay, View owner) {
         Core.checkUiThread();
         ensureOpen();
         ensureNotMounted(Objects.requireNonNull(overlay, "overlay"));
@@ -113,11 +118,11 @@ public final class MainUiLayerManager implements AutoCloseable {
         return entry.handle;
     }
 
-    public OverlayHandle showModal(MainUiModal modal) {
+    public OverlayHandle showModal(UiModal modal) {
         return showModal(modal, ModalOptions.defaults());
     }
 
-    public OverlayHandle showModal(MainUiModal modal, ModalOptions options) {
+    public OverlayHandle showModal(UiModal modal, ModalOptions options) {
         Core.checkUiThread();
         ensureOpen();
         Objects.requireNonNull(modal, "modal");
@@ -199,7 +204,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         mounted.clear();
     }
 
-    private Entry mount(MainUiOverlay overlay, MainUiLayerHost host, boolean modal,
+    private Entry mount(UiOverlay overlay, MainUiLayerHost host, boolean modal,
                         boolean closeOnOutsideClick, boolean closeOnEscape, View returnFocusTarget,
                         int scrimColor) {
         View content = Objects.requireNonNull(overlay.createView(context), "overlay view");
@@ -398,7 +403,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         modalHost.removeAllViews();
     }
 
-    private void ensureNotMounted(MainUiOverlay overlay) {
+    private void ensureNotMounted(UiOverlay overlay) {
         if (mounted.containsKey(overlay)) {
             throw new IllegalStateException("The same overlay instance is already mounted");
         }
@@ -516,7 +521,7 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     private final class Entry {
-        private final MainUiOverlay overlay;
+        private final UiOverlay overlay;
         private final MainUiLayerHost host;
         private final boolean modal;
         private final boolean closeOnOutsideClick;
@@ -531,7 +536,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         private boolean open = true;
         private boolean checkingClose;
 
-        private Entry(MainUiOverlay overlay, MainUiLayerHost host, boolean modal,
+        private Entry(UiOverlay overlay, MainUiLayerHost host, boolean modal,
                       boolean closeOnOutsideClick, boolean closeOnEscape, View returnFocusTarget) {
             this.overlay = overlay;
             this.host = host;

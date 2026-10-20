@@ -15,8 +15,6 @@ import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPan
 import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -199,19 +197,23 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private void requestRemoteCapabilities() {
         int requestId = RemoteAssetClient.nextRequestId();
         mCapabilityRequestId = requestId;
-        RemoteAssetClient.onCapabilities(requestId, response -> post(() -> {
-            if (mCapabilityRequestId != requestId) return;
+        try {
+            RemoteAssetClient.requestCapabilities(requestId, response -> post(() -> {
+                if (mCapabilityRequestId != requestId) return;
+                mCapabilityRequestId = 0;
+                mLeftPanel.buildSidebar();
+                if (response.canBrowse() && mPendingRemoteInitialDirectory != null) {
+                    String target = mPendingRemoteInitialDirectory;
+                    mPendingRemoteInitialDirectory = null;
+                    mBrowser.navigateToRemote(target);
+                }
+            }), () -> post(() -> {
+                if (mCapabilityRequestId == requestId) mCapabilityRequestId = 0;
+            }));
+        } catch (RuntimeException failure) {
             mCapabilityRequestId = 0;
-            mLeftPanel.buildSidebar();
-            if (response.canBrowse() && mPendingRemoteInitialDirectory != null) {
-                String target = mPendingRemoteInitialDirectory;
-                mPendingRemoteInitialDirectory = null;
-                mBrowser.navigateToRemote(target);
-            }
-        }), () -> post(() -> {
-            if (mCapabilityRequestId == requestId) mCapabilityRequestId = 0;
-        }));
-        NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
+            mStatus.setText("远端资源暂不可用: " + failure.getMessage());
+        }
     }
 
     @Override

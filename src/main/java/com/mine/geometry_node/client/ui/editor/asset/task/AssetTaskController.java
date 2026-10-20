@@ -79,7 +79,7 @@ public final class AssetTaskController {
                 if (onSuccess != null) {
                     onSuccess.accept(completedResult, progress);
                 } else {
-                    progress.update("操作完成", 1, 1);
+                    progress.complete("操作完成", 1, 1);
                 }
             }, () -> closeAbandoned(completedResult));
         } catch (InterruptedException | CancellationException e) {

@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
-import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntryPresentationResolver;
+import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeData;
 import icyllis.modernui.core.Context;

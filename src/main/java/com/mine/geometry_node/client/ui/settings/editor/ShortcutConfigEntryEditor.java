@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
+import com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture;
+
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.config.ConfigDraft;
 import com.mine.geometry_node.client.config.ConfigEntry;
@@ -114,7 +116,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         setValidationSilently(valid, message);
     }
 
-    private final class CaptureView extends TextView implements com.mine.geometry_node.client.ui.shell.layer.OverlayEscapeCapture {
+    private final class CaptureView extends TextView implements com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture {
         CaptureView(Context context) { super(context); }
 
         @Override public boolean captureEscape(KeyEvent event) {

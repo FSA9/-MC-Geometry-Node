@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
-import com.mine.geometry_node.client.ui.UICommand.EditorContext;
-import com.mine.geometry_node.client.ui.UICommand.commands.node.CmdChangeInputValue;
+import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.ui.document.edit.commands.node.CmdChangeInputValue;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortType;

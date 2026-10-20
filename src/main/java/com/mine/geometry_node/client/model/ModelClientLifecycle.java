@@ -1,9 +1,13 @@
 package com.mine.geometry_node.client.model;
 
 import com.mine.geometry_node.client.model.render.pipeline.ModelStaticRenderer;
+import com.mine.geometry_node.client.model.render.pipeline.ModelRenderInstanceSource;
+import com.mine.geometry_node.client.model.render.geometry.ModelRenderInstance;
+import com.mine.geometry_node.client.model.render.lod.model.ModelLodMetrics;
 import com.mojang.blaze3d.systems.RenderSystem;
 import org.joml.Matrix4f;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
+import com.mine.geometry_node.client.runtime.light.diagnostic.LightReports;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
@@ -16,6 +20,12 @@ import net.neoforged.neoforge.client.event.lifecycle.ClientStoppingEvent;
 public final class ModelClientLifecycle {
     private ModelClientLifecycle(){}
     public static void register(IEventBus modBus){
+        ModelStaticRenderer.setInstanceSource(new ModelRenderInstanceSource() {
+            public boolean hasVisibleInstances() { return ClientModelService.INSTANCE.hasVisibleInstances(); }
+            public ModelLodMetrics.LoadedCounts loadedCounts() { return ClientModelService.INSTANCE.loadedCounts(); }
+            public java.util.List<ModelRenderInstance> shadowInstances() { return ClientModelService.INSTANCE.renderSnapshots(); }
+            public void invalidateRenderResources(String reason) { ClientModelService.INSTANCE.invalidateRenderResources(reason); }
+        });
         modBus.addListener(ModelClientLifecycle::reload);
         modBus.addListener(ModelClientLifecycle::guiLayers);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::submit);
@@ -24,6 +34,7 @@ public final class ModelClientLifecycle {
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawResolvedTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::logout);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::shutdown);
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> LightReports.tick());
     }
     private static void guiLayers(RegisterGuiLayersEvent event) {
         event.registerAboveAll(Identifier.fromNamespaceAndPath("geometry_node", "model_hud"),
@@ -32,6 +43,7 @@ public final class ModelClientLifecycle {
     private static void reload(AddClientReloadListenersEvent event){
         event.addListener(Identifier.fromNamespaceAndPath("geometry_node","model_loader"),(ResourceManagerReloadListener)manager->
                 Minecraft.getInstance().execute(() -> {
+                    LightReports.cancel();
                     ModelStaticRenderer.refreshIris();
                     ClientModelService.INSTANCE.invalidateRenderResources("resource_reload");
                     ModelStaticRenderer.closeShadowResources();
@@ -67,6 +79,6 @@ public final class ModelClientLifecycle {
         ModelStaticRenderer.drawResolvedTransparent(event.getModelViewMatrix(), event.getLevelRenderState().cameraRenderState.pos,
                 event.getLevelRenderState().cameraRenderState.cullFrustum, ClientModelService.INSTANCE.renderSnapshots());
     }
-    private static void shutdown(ClientStoppingEvent event){ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.close();}
-    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate(); });}
+    private static void shutdown(ClientStoppingEvent event){LightReports.cancel(); ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.close();}
+    private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { LightReports.cancel(); ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate(); });}
 }

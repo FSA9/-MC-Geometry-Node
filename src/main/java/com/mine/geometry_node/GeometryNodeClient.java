@@ -16,10 +16,10 @@ import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRen
 import com.mine.geometry_node.client.ui.MainUI;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.shell.registration.BuiltinSidebarPanels;
-import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
-import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryEntityPickerController;
-import com.mine.geometry_node.client.ui.editor.datalibrary.NetworkRemoteDataLibraryGateway;
-import com.mine.geometry_node.client.ui.editor.datalibrary.ClientDataLibraryRepository;
+import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.integration.picker.DataLibraryEntityPickerController;
+import com.mine.geometry_node.client.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
 import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
@@ -47,6 +47,7 @@ import net.neoforged.neoforge.common.NeoForge;
 public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
+        com.mine.geometry_node.client.integration.game.WorkspaceViewportIntegration.install();
         com.mine.geometry_node.client.graph.metadata.GraphTagMetadata.register(
                 com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL);
         com.mine.geometry_node.client.model.ModelClientLifecycle.register(modBus);

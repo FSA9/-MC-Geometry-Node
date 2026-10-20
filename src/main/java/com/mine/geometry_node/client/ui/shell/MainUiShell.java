@@ -1,5 +1,11 @@
 package com.mine.geometry_node.client.ui.shell;
 
+import com.mine.geometry_node.client.ui.overlay.OverlayHost;
+import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
+import com.mine.geometry_node.client.ui.overlay.UiOverlay;
+import com.mine.geometry_node.client.ui.overlay.modal.UiModal;
+import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
+
 import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLayoutRoot;
@@ -25,7 +31,7 @@ import icyllis.modernui.widget.LinearLayout;
 /**
  * Composition root for one MainUI instance.
  */
-public final class MainUiShell extends FrameLayout {
+public final class MainUiShell extends FrameLayout implements OverlayHost {
     private final MainUiServices services;
     private final MainUiLayerHost transientLayer;
     private final MainUiLayerHost modalLayer;
@@ -78,6 +84,19 @@ public final class MainUiShell extends FrameLayout {
 
     public MainUiServices services() {
         return services;
+    }
+
+    @Override public ViewGroup overlayRoot() { return this; }
+
+    @Override public OverlayHandle showModal(
+            UiModal overlay,
+            ModalOptions options) {
+        return services.layerManager().showModal(overlay, options);
+    }
+
+    @Override public OverlayHandle showTooltip(
+            UiOverlay overlay, View owner) {
+        return services.layerManager().showTooltip(overlay, owner);
     }
 
     @Override

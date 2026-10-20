@@ -1741,6 +1741,7 @@
     "geometry_node.settings.action.apply":  "应用",
     "geometry_node.settings.action.ok":  "确定",
     "geometry_node.settings.action.discard":  "放弃更改",
+    "geometry_node.settings.save_failed": "保存设置失败：%s",
     "geometry_node.settings.unsaved.title":  "未应用的更改",
     "geometry_node.settings.unsaved.message":  "当前设置包含尚未应用的更改。确定要放弃这些更改吗？",
     "geometry_node.settings.directory.title":  "选择文件夹",

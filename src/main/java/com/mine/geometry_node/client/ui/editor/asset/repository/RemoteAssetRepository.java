@@ -5,8 +5,6 @@ import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
-import com.mine.geometry_node.core.network.NetworkHandler;
-import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListRequest;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,22 +42,19 @@ public final class RemoteAssetRepository implements AssetRepository {
 
         int requestId = RemoteAssetClient.nextRequestId();
         AtomicBoolean cancelled = new AtomicBoolean(false);
-        RemoteAssetClient.onList(requestId, response -> {
-            if (cancelled.get()) return;
-            if (!response.success()) {
-                callback.accept(AssetListing.failure(location));
-                return;
-            }
-            AssetLocation.Remote responseLocation = new AssetLocation.Remote(response.directory(), false);
-            callback.accept(toListing(responseLocation, response.entries(), request.query()));
-        }, () -> {
-            if (!cancelled.get()) callback.accept(AssetListing.failure(location));
-        });
         try {
-            NetworkHandler.sendToServer(new PacketRemoteAssetListRequest(
-                    requestId, location.directory(), location.createIfMissing()));
+            RemoteAssetClient.requestList(requestId, location.directory(), location.createIfMissing(), response -> {
+                if (cancelled.get()) return;
+                if (!response.success()) {
+                    callback.accept(AssetListing.failure(location));
+                    return;
+                }
+                AssetLocation.Remote responseLocation = new AssetLocation.Remote(response.directory(), false);
+                callback.accept(toListing(responseLocation, response.entries(), request.query()));
+            }, () -> {
+                if (!cancelled.get()) callback.accept(AssetListing.failure(location));
+            });
         } catch (RuntimeException exception) {
-            RemoteAssetClient.cancel(requestId);
             ClientAssetCallbacks.execute(() -> {
                 if (!cancelled.get()) callback.accept(AssetListing.failure(location));
             });

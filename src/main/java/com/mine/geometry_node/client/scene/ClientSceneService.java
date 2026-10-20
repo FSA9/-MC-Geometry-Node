@@ -148,11 +148,12 @@ public final class ClientSceneService implements HistoryTarget {
             lastSyncTick = ticks;
             send(new PacketSceneEdit(UUID.randomUUID(), dimension, List.of()), generation);
         }
-        if (com.mine.geometry_node.client.runtime.game.input.GameViewportInput.isEditor(minecraft.screen)) {
-            for (var backend : SceneEditBackends.all()) if (backend.subscribed().getAsBoolean() && ticks % backend.syncIntervalTicks() == 0)
-                send(new PacketSceneEdit(UUID.randomUUID(), dimension, List.of()), generation, backend.id());
-        }
+        syncSubscribedBackends();
         retryPending();
+    }
+    synchronized void syncSubscribedBackends() {
+        for (var backend : SceneEditBackends.all()) if (backend.subscribed().getAsBoolean() && ticks % backend.syncIntervalTicks() == 0)
+            send(new PacketSceneEdit(UUID.randomUUID(), dimension, List.of()), generation, backend.id());
     }
     synchronized void advancePendingTick() { ticks++; retryPending(); }
     private void retryPending() {

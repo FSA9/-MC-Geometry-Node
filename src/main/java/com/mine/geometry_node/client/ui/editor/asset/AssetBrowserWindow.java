@@ -39,9 +39,7 @@ import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
-import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;
-import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetCapabilitiesRequest;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -75,6 +73,9 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     private final UiStateContext mUiStateContext;
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private final AssetTaskController mIoTasks;
+    // Both request sets and the owner generation are confined to the UI thread.
+    private long mRemoteGeneration;
+    private boolean mRemoteActive = true;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
     private final Set<Integer> mTransferPlanRequestIds = new HashSet<>();
     private final EditorSessionState.AssetBrowserState mSessionState;
@@ -139,7 +140,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 1.0f - navigationWeight));
 
         mBrowserPanel = new AssetFileBrowserPanel(context, this);
-        mSessionSavedListener = session -> post(() ->
+        mSessionSavedListener = session -> postRemote(mRemoteGeneration, () ->
                 mBrowserPanel.refreshIfDisplayingLocalFile(session.filePath()));
         browserWorkspace.addView(mBrowserPanel, new LinearLayout.LayoutParams(
                 0,
@@ -248,6 +249,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     public void createRemoteGraph(String targetPath, Runnable onSuccess) {
         if (targetPath == null || targetPath.isBlank() || mBrowserPanel == null
                 || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
+        if (!mRemoteActive) return;
+        long generation = mRemoteGeneration;
         mIoTasks.runSilent(context -> {
             Path temporary = Files.createTempFile("geometry-node-new-graph-", ".json");
             try {
@@ -258,6 +261,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 throw exception;
             }
         }, temporary -> {
+            if (!isRemoteCurrent(generation)) {
+                try { Files.deleteIfExists(temporary); }
+                catch (java.io.IOException exception) {
+                    System.err.println("[AssetBrowser] Failed to remove abandoned graph temporary file: " + temporary);
+                }
+                return;
+            }
             java.util.UUID jobId;
             try {
                 jobId = ClientAssetTransferService.INSTANCE.submit(List.of(ClientAssetTransferRequest.upload(
@@ -279,8 +289,10 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                             + temporary);
                 }
                 if (error == null && result.completedFileCount() == result.files().size()) {
-                    post(() -> {
-                        if (mBrowserPanel != null) mBrowserPanel.refreshFileList(onSuccess);
+                    postRemote(generation, () -> {
+                        if (mBrowserPanel != null) mBrowserPanel.refreshFileList(() -> {
+                            if (isRemoteCurrent(generation) && onSuccess != null) onSuccess.run();
+                        });
                     });
                 }
             });
@@ -306,6 +318,9 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onShow() {
+        boolean reactivate = !mRemoteActive;
+        mRemoteActive = true;
+        if (reactivate) requestRemoteCapabilities();
         mSidebarLayout.onOwnerShown();
         DocumentManager.INSTANCE.addOnSessionSavedListener(mSessionSavedListener);
         if (mBrowserPanel != null) {
@@ -321,6 +336,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onHide() {
+        cancelRemoteRequests();
         DocumentManager.INSTANCE.removeOnSessionSavedListener(mSessionSavedListener);
         mSidebarLayout.onOwnerHidden();
         mSidebarLayout.persistState();
@@ -369,17 +385,20 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void requestRemoteCapabilities() {
+        if (!mRemoteActive) return;
+        long generation = mRemoteGeneration;
         int requestId = beginRemoteRequest();
-        RemoteAssetClient.onCapabilities(requestId, response -> {
-            finishRemoteRequest(requestId);
-            post(() -> {
-                if (mNavigationPanel != null) {
-                    mNavigationPanel.buildSidebar();
-                }
-                restorePendingRemoteLocation();
-            });
-        }, () -> finishRemoteRequest(requestId));
-        NetworkHandler.sendToServer(new PacketRemoteAssetCapabilitiesRequest(requestId));
+        try {
+            RemoteAssetClient.requestCapabilities(requestId, response ->
+                    postRemoteRequest(requestId, generation, () -> {
+                        if (mNavigationPanel != null) mNavigationPanel.buildSidebar();
+                        if (isRemoteCurrent(generation)) restorePendingRemoteLocation();
+                    }), () -> postRemoteRequest(requestId, generation, () -> { }));
+        } catch (RuntimeException failure) {
+            mRemoteRequestIds.remove(requestId);
+            System.getLogger(AssetBrowserWindow.class.getName()).log(
+                    System.Logger.Level.WARNING, "Could not request remote asset capabilities", failure);
+        }
     }
 
     private void restoreInitialLocation() {
@@ -451,10 +470,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void preflightUpload(List<File> selectedFiles, String targetDirectory) {
+        if (!mRemoteActive) return;
+        long generation = mRemoteGeneration;
         List<File> selectedSnapshot = selectedFiles == null ? List.of() : List.copyOf(selectedFiles);
         mIoTasks.runSilent(
                 context -> mLocalAssetService.collectUploadSources(selectedSnapshot, targetDirectory, context),
                 result -> {
+                    if (!isRemoteCurrent(generation)) return;
                     if (result.files().isEmpty()) {
                         System.err.println("[AssetBrowser] No transferable upload sources: " + result.failedPaths());
                         return;
@@ -470,11 +492,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void requestUploadPreflight(List<LocalAssetService.UploadSource> files) {
+        if (!mRemoteActive) return;
+        long generation = mRemoteGeneration;
         int[] requestHolder = new int[1];
         int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.UPLOAD_CONFLICTS,
                 files.stream().map(LocalAssetService.UploadSource::targetPath).toList(), response -> {
-            mTransferPlanRequestIds.remove(requestHolder[0]);
-            post(() -> {
+            postTransferPlan(requestHolder, generation, () -> {
                 if (!response.success()) {
                     System.err.println("[AssetBrowser] Upload planning failed: " + response.message());
                     return;
@@ -490,6 +513,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 ConflictResolutionState<LocalAssetService.UploadSource> resolution =
                         new ConflictResolutionState<>(files, conflictPaths, LocalAssetService.UploadSource::targetPath);
                 new OverwriteConfirmDialog(getContext(), conflictPaths, decision -> {
+                    if (!isRemoteCurrent(generation)) return;
                     switch (decision) {
                         case OVERWRITE_CURRENT -> {
                             if (resolution.markCurrentOverwrite()) {
@@ -508,7 +532,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                     }
                 }).show(this);
             });
-        }, () -> mTransferPlanRequestIds.remove(requestHolder[0]));
+        }, () -> postTransferPlan(requestHolder, generation, () -> { }));
         requestHolder[0] = requestId;
         mTransferPlanRequestIds.add(requestId);
     }
@@ -518,36 +542,38 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void startUpload(List<LocalAssetService.UploadSource> files, boolean overwrite, List<String> overwritePaths) {
-        if (files.isEmpty()) return;
+        if (!mRemoteActive || files.isEmpty()) return;
+        long generation = mRemoteGeneration;
         Set<String> overwriteSet = new HashSet<>(overwritePaths);
         List<ClientAssetTransferRequest> requests = files.stream().map(file -> ClientAssetTransferRequest.upload(
                 file.sourcePath(), file.targetPath(), overwrite || overwriteSet.contains(file.targetPath())
                         ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS)).toList();
         java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> post(() -> {
+        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> postRemote(generation, () -> {
             if (error == null && mBrowserPanel != null) mBrowserPanel.refreshFileList();
         }));
     }
 
     private void startDownload(List<AssetEntry> remoteEntries, File targetDirectory) {
-        if (remoteEntries.isEmpty() || targetDirectory == null) return;
+        if (!mRemoteActive || remoteEntries.isEmpty() || targetDirectory == null) return;
+        long generation = mRemoteGeneration;
         List<String> paths = remoteEntries.stream().map(AssetEntry::path).toList();
         int[] requestHolder = new int[1];
         int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.DOWNLOAD_MANIFEST, paths, response -> {
-            mTransferPlanRequestIds.remove(requestHolder[0]);
-            post(() -> {
+            postTransferPlan(requestHolder, generation, () -> {
                 if (!response.success()) {
                     System.err.println("[AssetBrowser] Download planning failed: " + response.message());
                     return;
                 }
                 finishDownload(response.files(), targetDirectory);
             });
-        }, () -> mTransferPlanRequestIds.remove(requestHolder[0]));
+        }, () -> postTransferPlan(requestHolder, generation, () -> { }));
         requestHolder[0] = requestId;
         mTransferPlanRequestIds.add(requestId);
     }
 
     private void finishDownload(List<AssetDescriptor> files, File targetDirectory) {
+        long generation = mRemoteGeneration;
         List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
         if (conflicts.isEmpty()) {
             submitDownload(files, targetDirectory, false, List.of());
@@ -557,6 +583,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         ConflictResolutionState<AssetDescriptor> resolution =
                 new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.path()));
         new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
+            if (!isRemoteCurrent(generation)) return;
             switch (decision) {
                 case OVERWRITE_CURRENT -> {
                     if (resolution.markCurrentOverwrite()) {
@@ -578,7 +605,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     private void submitDownload(List<AssetDescriptor> files, File targetDirectory,
                                 boolean overwrite, List<String> overwritePaths) {
-        if (files.isEmpty()) return;
+        if (!mRemoteActive || files.isEmpty()) return;
+        long generation = mRemoteGeneration;
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
         Set<String> overwriteSet = new HashSet<>(overwritePaths);
         List<ClientAssetTransferRequest> requests = new ArrayList<>();
@@ -596,7 +624,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             if (error == null) {
                 DocumentManager.INSTANCE.refreshFileReferences();
                 ImageThumbnailView.clearCache();
-                if (mBrowserPanel != null) mBrowserPanel.refreshFileList();
+                // File/cache updates describe the completed download; only the owner UI is fenced.
+                if (isRemoteCurrent(generation) && mBrowserPanel != null) mBrowserPanel.refreshFileList();
             }
         }));
     }
@@ -681,16 +710,37 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         return requestId;
     }
 
-    private void finishRemoteRequest(int requestId) {
-        mRemoteRequestIds.remove(requestId);
+    private boolean isRemoteCurrent(long generation) {
+        return mRemoteActive && generation == mRemoteGeneration;
+    }
+
+    private void postRemote(long generation, Runnable action) {
+        post(() -> {
+            if (isRemoteCurrent(generation)) action.run();
+        });
+    }
+
+    private void postRemoteRequest(int requestId, long generation, Runnable action) {
+        postRemote(generation, () -> {
+            if (mRemoteRequestIds.remove(requestId)) action.run();
+        });
+    }
+
+    private void postTransferPlan(int[] requestHolder, long generation, Runnable action) {
+        // Read the returned ID on the UI thread, after request() assigned it, even for inline responses.
+        postRemote(generation, () -> {
+            if (mTransferPlanRequestIds.remove(requestHolder[0])) action.run();
+        });
     }
 
     private void cancelRemoteRequests() {
-        for (int requestId : mRemoteRequestIds) {
-            RemoteAssetClient.cancel(requestId);
-        }
+        mRemoteActive = false;
+        mRemoteGeneration++;
+        List<Integer> requests = List.copyOf(mRemoteRequestIds);
+        List<Integer> plans = List.copyOf(mTransferPlanRequestIds);
         mRemoteRequestIds.clear();
-        for (int requestId : mTransferPlanRequestIds) ClientAssetTransferPlanState.cancel(requestId);
         mTransferPlanRequestIds.clear();
+        for (int requestId : requests) RemoteAssetClient.cancel(requestId);
+        for (int requestId : plans) ClientAssetTransferPlanState.cancel(requestId);
     }
 }

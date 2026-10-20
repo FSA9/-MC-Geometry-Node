@@ -36,10 +36,12 @@ public class TransferProgressDialog extends AssetDialogBase {
     public void update(String message, int processed, int total) {
         mStatus.setText(message == null || message.isEmpty() ? tr("geometry_node.asset_transfer.status.processing") : message);
         mProgress.setText(total > 0 ? processed + " / " + total : String.valueOf(processed));
-        if (message != null && message.contains("完成")) {
-            mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
-            mCancelButton.setText(tr("geometry_node.common.close")); requestClose();
-        }
+    }
+    /** Terminal success is explicit: progress text/counts may describe work awaiting commit. */
+    public void complete(String message, int processed, int total) {
+        update(message, processed, total);
+        mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
+        mCancelButton.setText(tr("geometry_node.common.close")); requestClose();
     }
     public void enterCommitPhase() { mCommitting = true; mCancelButton.setEnabled(false); mCancelButton.setText(tr("geometry_node.asset_transfer.status.committing")); }
     public void fail(String message) {

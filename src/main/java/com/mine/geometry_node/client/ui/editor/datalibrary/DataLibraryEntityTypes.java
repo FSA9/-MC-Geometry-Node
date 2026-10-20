@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import icyllis.modernui.view.View;
 import net.minecraft.client.Minecraft;
@@ -47,12 +49,12 @@ final class DataLibraryEntityTypes {
         this.resolve = resolve;
     }
 
-    String registryType(DataLibraryUiRepository.Entry entry) {
+    String registryType(DataLibraryRepository.Entry entry) {
         return DataLibraryValuePresentation.registryType(entry,
                 entry.value() instanceof UUID id ? types.getOrDefault(id, "") : "");
     }
 
-    void refresh(Collection<DataLibraryUiRepository.Entry> entries, Runnable changed) {
+    void refresh(Collection<DataLibraryRepository.Entry> entries, Runnable changed) {
         long request = ++generation;
         var ids = new LinkedHashSet<UUID>();
         for (var entry : entries) {

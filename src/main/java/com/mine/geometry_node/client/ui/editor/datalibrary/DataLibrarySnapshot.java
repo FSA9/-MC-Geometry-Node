@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -10,13 +12,13 @@ import java.util.UUID;
 
 /** One repository read and its indexes, shared by a complete UI refresh. */
 final class DataLibrarySnapshot {
-    final Map<UUID, DataLibraryUiRepository.Folder> folders = new LinkedHashMap<>();
-    final Map<UUID, DataLibraryUiRepository.Entry> entries = new LinkedHashMap<>();
-    final Map<UUID, List<DataLibraryUiRepository.Folder>> childFolders = new LinkedHashMap<>();
-    final Map<UUID, List<DataLibraryUiRepository.Entry>> childEntries = new LinkedHashMap<>();
+    final Map<UUID, DataLibraryRepository.Folder> folders = new LinkedHashMap<>();
+    final Map<UUID, DataLibraryRepository.Entry> entries = new LinkedHashMap<>();
+    final Map<UUID, List<DataLibraryRepository.Folder>> childFolders = new LinkedHashMap<>();
+    final Map<UUID, List<DataLibraryRepository.Entry>> childEntries = new LinkedHashMap<>();
     private boolean indexed;
 
-    DataLibrarySnapshot(DataLibraryUiRepository repository) {
+    DataLibrarySnapshot(DataLibraryRepository repository) {
         for (var folder : repository.folders()) {
             if (folder == null || folder.id() == null) continue;
             folders.put(folder.id(), folder);
@@ -38,9 +40,9 @@ final class DataLibrarySnapshot {
             childEntries.computeIfAbsent(entry.parentId(), ignored -> new ArrayList<>()).add(entry);
         }
         childFolders.values().forEach(values -> values.sort(Comparator.comparing(
-                DataLibraryUiRepository.Folder::name, String.CASE_INSENSITIVE_ORDER)));
+                DataLibraryRepository.Folder::name, String.CASE_INSENSITIVE_ORDER)));
         childEntries.values().forEach(values -> values.sort(Comparator.comparing(
-                DataLibraryUiRepository.Entry::key, String.CASE_INSENSITIVE_ORDER)));
+                DataLibraryRepository.Entry::key, String.CASE_INSENSITIVE_ORDER)));
     }
 
     boolean sameStructure(DataLibrarySnapshot other) {

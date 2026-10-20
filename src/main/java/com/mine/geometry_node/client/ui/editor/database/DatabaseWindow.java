@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
+import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
@@ -33,7 +36,7 @@ import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*
 
 /** Two database views inside the existing Area; neither owns an independent workspace header. */
 public final class DatabaseWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware {
-    private final DataLibraryUiRepository repository;
+    private final DataLibraryRepository repository;
     private final DataLibraryWindow library;
     private final WorldObjectsView world;
     private final UiActionButton worldTab, libraryTab;
@@ -55,14 +58,14 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     private UiSurfaceRegistry.Registration registration;
 
     public DatabaseWindow(Context context) { this(context, ClientDataLibraryRepository.INSTANCE); }
-    public DatabaseWindow(Context context, DataLibraryUiRepository repository) {
+    public DatabaseWindow(Context context, DataLibraryRepository repository) {
         this(context, repository, UiStateContext.ephemeral());
     }
     public DatabaseWindow(Context context, UiStateContext state) {
         this(context, ClientDataLibraryRepository.INSTANCE, state);
     }
-    public DatabaseWindow(Context context, DataLibraryUiRepository repository, UiStateContext state) {
-        super(context); uiState = java.util.Objects.requireNonNull(state); this.repository = repository == null ? DataLibraryUiRepository.EMPTY : repository;
+    public DatabaseWindow(Context context, DataLibraryRepository repository, UiStateContext state) {
+        super(context); uiState = java.util.Objects.requireNonNull(state); this.repository = repository == null ? DataLibraryRepository.EMPTY : repository;
         setOrientation(VERTICAL); setBackground(background(UiTheme.Surface.ROOT));
         LinearLayout tabs = new LinearLayout(context);
         tabs.setBackground(background(UiTheme.Surface.PANEL));
@@ -157,7 +160,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
             tabUnderlines.get(tab).setVisibility(active ? VISIBLE : INVISIBLE);
         }
     }
-    private DatabaseSelection librarySelection(List<DataLibraryUiRepository.Entry> entries) {
+    private DatabaseSelection librarySelection(List<DataLibraryRepository.Entry> entries) {
         if (entries.isEmpty()) return null;
         if (entries.size() > 1) return new DatabaseSelection(tr("selected", entries.size()), tr("library"), "", 0,
                 List.of(new DatabaseSelection.Field(tr("folder"), String.join("\n", entries.stream()
@@ -190,7 +193,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         return new DatabaseSelection(entry.key(), type + " · " + tr("shared_entry"),
                 "", entry.type().getColor(), List.of(), List.of(), sections, libraryPreview(entry));
     }
-    private void submitLibraryTagEdit(DataLibraryUiRepository.Entry expected, String scope, String tag, boolean add) {
+    private void submitLibraryTagEdit(DataLibraryRepository.Entry expected, String scope, String tag, boolean add) {
         if (disposed || !shown || worldSelected || !sidebarLayout.isVisible()
                 || !java.util.Objects.equals(scope, stateScope)
                 || !java.util.Objects.equals(scope, UiStateScopes.current()))
@@ -200,7 +203,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
             throw new IllegalStateException("Stale library tag selection");
         if (add) repository.addTag(expected, tag); else repository.removeTag(expected, tag);
     }
-    private static DatabaseSelection.Preview libraryPreview(DataLibraryUiRepository.Entry entry) {
+    private static DatabaseSelection.Preview libraryPreview(DataLibraryRepository.Entry entry) {
         return switch (entry.type()) {
             case ENTITY -> entry.value() instanceof java.util.UUID id
                     ? new DatabaseSelection.EntityPreview(id, "", null) : null;

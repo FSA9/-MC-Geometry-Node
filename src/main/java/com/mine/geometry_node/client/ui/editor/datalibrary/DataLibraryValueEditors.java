@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+import com.mine.geometry_node.client.integration.picker.DataLibraryEntityPickerController;
+
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.google.gson.JsonParser;
@@ -16,8 +19,8 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FilePickerDialog;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
-import com.mine.geometry_node.client.ui.editor.graph.picker.EntityTemplatePickerController;
-import com.mine.geometry_node.client.ui.editor.graph.picker.VanillaInventoryPicker;
+import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -77,7 +80,7 @@ final class DataLibraryValueEditors {
     private static final float EDITOR_TEXT_SIZE_DP = 12.0f;
 
     private final Context context;
-    private final DataLibraryUiRepository repository;
+    private final DataLibraryRepository repository;
     private final Supplier<ViewGroup> overlayHost;
     private final Runnable refresh;
     private final Runnable changed;
@@ -86,7 +89,7 @@ final class DataLibraryValueEditors {
     private static UUID entityReferenceClipboard;
     private static boolean hasEntityReferenceClipboard;
 
-    DataLibraryValueEditors(Context context, DataLibraryUiRepository repository,
+    DataLibraryValueEditors(Context context, DataLibraryRepository repository,
                             Supplier<ViewGroup> overlayHost, Runnable refresh, Runnable changed,
                             BooleanSupplier active) {
         this.context = context;
@@ -106,7 +109,7 @@ final class DataLibraryValueEditors {
         return externalEditors.containsKey(entryId);
     }
 
-    private Runnable beginExternalEdit(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private Runnable beginExternalEdit(AtomicReference<DataLibraryRepository.Entry> current) {
         UUID id = current.get().id();
         synchronized (this) { externalEditors.merge(id, 1, Integer::sum); }
         AtomicBoolean finished = new AtomicBoolean();
@@ -133,7 +136,7 @@ final class DataLibraryValueEditors {
         });
     }
 
-    private void openNativePicker(AtomicReference<DataLibraryUiRepository.Entry> current,
+    private void openNativePicker(AtomicReference<DataLibraryRepository.Entry> current,
                                   BiConsumer<Consumer<Object>, Runnable> open) {
         if (!canUpdate(current) || isEditing(current.get().id())) return;
         NativeValueEdit edit = beginNativeValueEdit(current);
@@ -158,8 +161,8 @@ final class DataLibraryValueEditors {
     }
 
     /** A native screen destroys the MUI host; its one-shot edit belongs to the connection and entry. */
-    private NativeValueEdit beginNativeValueEdit(AtomicReference<DataLibraryUiRepository.Entry> current) {
-        DataLibraryUiRepository.Entry expected = current.get();
+    private NativeValueEdit beginNativeValueEdit(AtomicReference<DataLibraryRepository.Entry> current) {
+        DataLibraryRepository.Entry expected = current.get();
         String scope = UiStateScopes.current();
         AtomicBoolean retired = new AtomicBoolean();
         AtomicBoolean committed = new AtomicBoolean();
@@ -174,9 +177,9 @@ final class DataLibraryValueEditors {
         Consumer<Object> commit = value -> {
             if (retired.get() || !Objects.equals(scope, UiStateScopes.current())
                     || !committed.compareAndSet(false, true) || !repository.hasLoadedSnapshot()) return;
-            DataLibraryUiRepository.Entry existing = repository.findEntry(expected.id());
+            DataLibraryRepository.Entry existing = repository.findEntry(expected.id());
             if (existing == null || existing.type() != expected.type() || DataLibraryValueChanges.equivalent(expected, value)) return;
-            DataLibraryUiRepository.Entry updated = DataLibraryValueChanges.replace(expected, value);
+            DataLibraryRepository.Entry updated = DataLibraryValueChanges.replace(expected, value);
             // Never retarget a newer editor. The repository validates this captured snapshot by CAS.
             if (current.get() == expected) current.set(updated);
             repository.update(expected, updated);
@@ -187,14 +190,14 @@ final class DataLibraryValueEditors {
 
     private record NativeValueEdit(Consumer<Object> commit, Runnable finish) {}
 
-    private boolean canUpdate(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private boolean canUpdate(AtomicReference<DataLibraryRepository.Entry> current) {
         if (!active.getAsBoolean() || current == null || current.get() == null) return false;
-        DataLibraryUiRepository.Entry existing = repository.findEntry(current.get().id());
+        DataLibraryRepository.Entry existing = repository.findEntry(current.get().id());
         return existing != null && existing.type() == current.get().type();
     }
 
-    View createExpandedEditor(DataLibraryUiRepository.Entry entry,
-                                      AtomicReference<DataLibraryUiRepository.Entry> current) {
+    View createExpandedEditor(DataLibraryRepository.Entry entry,
+                                      AtomicReference<DataLibraryRepository.Entry> current) {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
         content.setPadding(px(UiTableStyle.ROW_NUMBER_WIDTH + UiTableStyle.SELECTION_COLUMN_WIDTH + 6),
@@ -220,8 +223,8 @@ final class DataLibraryValueEditors {
         private ExpandedValueEditor(View value) { this(value, null); }
     }
 
-    private ExpandedValueEditor createExpandedValueEditor(DataLibraryUiRepository.Entry entry,
-                                           AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private ExpandedValueEditor createExpandedValueEditor(DataLibraryRepository.Entry entry,
+                                           AtomicReference<DataLibraryRepository.Entry> current) {
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
             if (entry.value() instanceof EntityTemplateValue template) preview.setDisplayTemplate(template);
@@ -279,7 +282,7 @@ final class DataLibraryValueEditors {
         return summary;
     }
 
-    static String compactValueSummary(DataLibraryUiRepository.Entry entry) {
+    static String compactValueSummary(DataLibraryRepository.Entry entry) {
         if (entry.value() == null) return "";
         if (entry.type() == PortType.AREA) return areaSummary(entry.value());
         if (isSummaryType(entry.type())) return valueSummary(entry);
@@ -293,15 +296,15 @@ final class DataLibraryValueEditors {
         return value.length() <= 42 ? value : value.substring(0, 39) + "...";
     }
 
-    private EditText createValueEditor(DataLibraryUiRepository.Entry entry,
-                                       AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private EditText createValueEditor(DataLibraryRepository.Entry entry,
+                                       AtomicReference<DataLibraryRepository.Entry> current) {
         EditText valueEditor = styledValueEditor();
         valueEditor.setText(serializedValue(entry));
         commitEditedTextOnBlur(valueEditor, json -> commitValue(current, json));
         return valueEditor;
     }
 
-    private EditText createPlainTextValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private EditText createPlainTextValueEditor(AtomicReference<DataLibraryRepository.Entry> current) {
         EditText editor = styledValueEditor();
         Object value = current.get().value();
         editor.setText(value == null ? "" : String.valueOf(value));
@@ -309,7 +312,7 @@ final class DataLibraryValueEditors {
         return editor;
     }
 
-    private ExpandedValueEditor createPathValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private ExpandedValueEditor createPathValueEditor(AtomicReference<DataLibraryRepository.Entry> current) {
         String path = current.get().value() instanceof String value ? value : "";
         TextView summary = valueLabel(path);
         UiIconButton button = editButton(tr("geometry_node.data_library.choose_path"));
@@ -331,7 +334,7 @@ final class DataLibraryValueEditors {
         return new ExpandedValueEditor(summary, button);
     }
 
-    private ExpandedValueEditor createRichTextValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private ExpandedValueEditor createRichTextValueEditor(AtomicReference<DataLibraryRepository.Entry> current) {
         TextView summary = valueLabel(RichTextValue.from(current.get().value()).plain());
         UiIconButton button = editButton(tr("geometry_node.graph_properties.quest.edit_rich_text"));
         button.setOnClickListener(v -> {
@@ -352,7 +355,7 @@ final class DataLibraryValueEditors {
     }
 
     private ExpandedValueEditor createRegistryValueEditor(PortType type,
-                                           AtomicReference<DataLibraryUiRepository.Entry> current) {
+                                           AtomicReference<DataLibraryRepository.Entry> current) {
         TextView summary = valueLabel(registryValueLabel(type, current.get().value()));
         UiIconButton button = editButton(tr(type == PortType.ITEM
                 ? "geometry_node.data_library.choose_item"
@@ -365,7 +368,7 @@ final class DataLibraryValueEditors {
     }
 
     private void showRegistryValueMenu(View anchor, TextView summary, PortType type,
-                                       AtomicReference<DataLibraryUiRepository.Entry> current) {
+                                       AtomicReference<DataLibraryRepository.Entry> current) {
         ViewGroup host = overlayHost();
         if (host == null) return;
         List<String> options = type == PortType.ITEM
@@ -415,7 +418,7 @@ final class DataLibraryValueEditors {
         return "";
     }
 
-    private LinearLayout createXyzValueEditor(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private LinearLayout createXyzValueEditor(AtomicReference<DataLibraryRepository.Entry> current) {
         LinearLayout inputs = new LinearLayout(getContext());
         inputs.setOrientation(VERTICAL);
         List<Double> values = xyzComponents(current.get().value());
@@ -466,7 +469,7 @@ final class DataLibraryValueEditors {
         });
     }
 
-    private void commitXyzComponent(AtomicReference<DataLibraryUiRepository.Entry> current,
+    private void commitXyzComponent(AtomicReference<DataLibraryRepository.Entry> current,
                                     int component, String text) {
         if (!canUpdate(current)) return;
         try {
@@ -499,7 +502,7 @@ final class DataLibraryValueEditors {
         return Double.isFinite(value) ? java.math.BigDecimal.valueOf(value).toPlainString() : Double.toString(value);
     }
 
-    private static String valueSummary(DataLibraryUiRepository.Entry entry) {
+    private static String valueSummary(DataLibraryRepository.Entry entry) {
         int size = 0;
         String key;
         if (entry.type() == PortType.LIST) {
@@ -524,8 +527,8 @@ final class DataLibraryValueEditors {
         return area.address().dimension().identifier() + " / " + area.address().id();
     }
 
-    private View createBooleanValueEditor(DataLibraryUiRepository.Entry entry,
-                                          AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private View createBooleanValueEditor(DataLibraryRepository.Entry entry,
+                                          AtomicReference<DataLibraryRepository.Entry> current) {
         UiCheckBox valueCheckBox = new UiCheckBox(getContext());
         valueCheckBox.setContentDescription(tr("geometry_node.data_library.edit_value"));
         valueCheckBox.setChecked(Boolean.TRUE.equals(entry.value()));
@@ -545,8 +548,8 @@ final class DataLibraryValueEditors {
     }
 
     private EntityTemplatePreviewView createEntityPreview(
-            DataLibraryUiRepository.Entry entry,
-            AtomicReference<DataLibraryUiRepository.Entry> current
+            DataLibraryRepository.Entry entry,
+            AtomicReference<DataLibraryRepository.Entry> current
     ) {
         EntityTemplatePreviewView preview;
         if (entry.type() == PortType.ENTITY) {
@@ -567,7 +570,7 @@ final class DataLibraryValueEditors {
 
     private boolean handleEntityReferenceClipboard(
             KeyEvent event,
-            AtomicReference<DataLibraryUiRepository.Entry> current
+            AtomicReference<DataLibraryRepository.Entry> current
     ) {
         KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
         if (copy != null && UiInputBindings.matches(copy, event)) {
@@ -597,7 +600,7 @@ final class DataLibraryValueEditors {
         return host;
     }
 
-    private void editItemStackValue(AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private void editItemStackValue(AtomicReference<DataLibraryRepository.Entry> current) {
         AtomicBoolean picked = new AtomicBoolean();
         openNativePicker(current, (commit, finished) -> {
             boolean opened = VanillaInventoryPicker.openItem(stack -> {
@@ -610,7 +613,7 @@ final class DataLibraryValueEditors {
         });
     }
 
-    private void pasteItemStack(AtomicReference<DataLibraryUiRepository.Entry> current, String json) {
+    private void pasteItemStack(AtomicReference<DataLibraryRepository.Entry> current, String json) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft == null || minecraft.level == null) return;
         try {
@@ -624,18 +627,18 @@ final class DataLibraryValueEditors {
         }
     }
 
-    void updateValue(AtomicReference<DataLibraryUiRepository.Entry> current, Object value) {
+    void updateValue(AtomicReference<DataLibraryRepository.Entry> current, Object value) {
         if (!canUpdate(current)) return;
-        DataLibraryUiRepository.Entry latest = current.get();
+        DataLibraryRepository.Entry latest = current.get();
         if (DataLibraryValueChanges.equivalent(latest, value)) return;
-        DataLibraryUiRepository.Entry updated = DataLibraryValueChanges.replace(latest, value);
+        DataLibraryRepository.Entry updated = DataLibraryValueChanges.replace(latest, value);
         current.set(updated);
         repository.update(latest, updated);
         changed();
     }
 
-    private void editEntityValue(DataLibraryUiRepository.Entry entry,
-                                 AtomicReference<DataLibraryUiRepository.Entry> current) {
+    private void editEntityValue(DataLibraryRepository.Entry entry,
+                                 AtomicReference<DataLibraryRepository.Entry> current) {
         AtomicBoolean picked = new AtomicBoolean();
         openNativePicker(current, (commit, finished) -> {
             Runnable refreshIfCancelled = () -> {
@@ -657,21 +660,21 @@ final class DataLibraryValueEditors {
         });
     }
 
-    private String serializedValue(DataLibraryUiRepository.Entry entry) {
+    private String serializedValue(DataLibraryRepository.Entry entry) {
         return DataLibraryValueChanges.serialize(entry);
     }
 
-    private void commitValue(AtomicReference<DataLibraryUiRepository.Entry> current, String json) {
+    private void commitValue(AtomicReference<DataLibraryRepository.Entry> current, String json) {
         if (!canUpdate(current)) return;
         if (Minecraft.getInstance() == null || Minecraft.getInstance().level == null) return;
         try {
-            DataLibraryUiRepository.Entry entry = current.get();
+            DataLibraryRepository.Entry entry = current.get();
             var registries = Minecraft.getInstance().level.registryAccess();
             Object value = DataLibraryValueCodec.decode(entry.type(), JsonParser.parseString(json),
                     registries);
             if (DataLibraryValueCodec.encode(entry.type(), entry.value(), registries)
                     .equals(DataLibraryValueCodec.encode(entry.type(), value, registries))) return;
-            DataLibraryUiRepository.Entry updated = new DataLibraryUiRepository.Entry(
+            DataLibraryRepository.Entry updated = new DataLibraryRepository.Entry(
                     entry.id(), entry.parentId(), entry.type(), entry.key(), value, entry.tags());
             current.set(updated);
             repository.update(entry, updated);
