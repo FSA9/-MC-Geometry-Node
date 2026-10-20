@@ -51,10 +51,18 @@ public final class SettingsEditorFactory {
         if (provider == null) throw new IllegalStateException("No config editor provider for " + entry.editorType());
         ConfigEntryEditor<?> editor = provider.create(context, draft, entry,
                 environment != null ? environment : SettingsEditorEnvironment.NONE);
-        if (editor == null || editor.getView() == null) {
-            throw new IllegalStateException("Config editor provider returned no view for " + entry.id());
+        if (editor == null) {
+            throw new IllegalStateException("Config editor provider returned no editor for " + entry.id());
         }
-        editor.refresh();
-        return editor;
+        try {
+            if (editor.getView() == null) {
+                throw new IllegalStateException("Config editor provider returned no view for " + entry.id());
+            }
+            editor.refresh();
+            return editor;
+        } catch (RuntimeException exception) {
+            editor.dispose();
+            throw exception;
+        }
     }
 }

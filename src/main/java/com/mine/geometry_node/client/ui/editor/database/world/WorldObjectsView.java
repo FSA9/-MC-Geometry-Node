@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.database.world;
 
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
@@ -29,10 +33,12 @@ import com.mine.geometry_node.core.node.RegistryDataManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
@@ -608,6 +614,21 @@ public final class WorldObjectsView extends FrameLayout {
             if (selected.containsAll(keys)) selected.removeAll(keys); else selected.addAll(keys);
         }
         updateSelection();
+    }
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (!shown || disposed) return false;
+        if (event.isCanceled() || findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
+        KeyBinding binding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SELECT_ALL));
+        if (UiInputBindings.matches(binding, event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0 && canSelect()) {
+                resetDoubleClick();
+                selected.addAll(sortedEntries().stream().map(WorldObjectEntry::key).toList());
+                updateSelection();
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
     }
     private void resetDoubleClick() { lastClickKey=null; lastClickNanos=0; }
     private void rowClicked(String key, boolean modified, long now) {

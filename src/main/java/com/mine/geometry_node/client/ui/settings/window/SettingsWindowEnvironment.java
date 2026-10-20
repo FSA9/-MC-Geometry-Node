@@ -91,7 +91,9 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
                 context,
                 tr("geometry_node.settings.directory.title"),
                 initial,
-                file -> onSelect.accept(AssetBrowserPathPolicy.toConfigPath(file))
+                file -> {
+                    if (!closed) onSelect.accept(AssetBrowserPathPolicy.toConfigPath(file));
+                }
         );
         services.layerManager().showModal(dialog, new ModalOptions(false, true, anchor));
         return true;

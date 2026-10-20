@@ -99,7 +99,7 @@ public class ConfigManager {
         Objects.requireNonNull(draft, "draft");
         ensureLoaded();
         synchronized (this) {
-            AppConfig updated = commit(draft.snapshot());
+            AppConfig updated = commit(draft.mergeOnto(mCurrentConfig));
             draft.acceptAppliedState(updated);
             enqueueNotification(updated);
         }

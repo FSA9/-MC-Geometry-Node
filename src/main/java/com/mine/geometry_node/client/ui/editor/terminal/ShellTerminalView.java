@@ -2,6 +2,10 @@ package com.mine.geometry_node.client.ui.editor.terminal;
 
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 
+import com.mine.geometry_node.client.config.BuiltinConfigEntries;
+import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.terminal.TerminalExit;
@@ -494,10 +498,16 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     private boolean handleKey(int keyCode, KeyEvent event) {
+        KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
+        if (UiInputBindings.matches(paste, event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled())
+                coordinator.paste(Minecraft.getInstance().keyboardHandler.getClipboard());
+            // Keep canceled paste out of both native text editing and terminal control input.
+            return true;
+        }
         if (event.getAction() != KeyEvent.ACTION_DOWN) return isSpecialKey(keyCode) || event.isCtrlPressed();
         if (event.isCtrlPressed()) {
             if (keyCode == KeyEvent.KEY_C) coordinator.interrupt();
-            else if (keyCode == KeyEvent.KEY_V) coordinator.paste(Minecraft.getInstance().keyboardHandler.getClipboard());
             else {
                 Character control = controlCharacter(keyCode);
                 if (control != null) coordinator.sendControl(control);

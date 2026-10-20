@@ -1418,7 +1418,23 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (disposed || suspended) return false;
-        if (findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
+        if (event.isCanceled() || findFocus() instanceof EditText) return super.dispatchKeyEvent(event);
+        KeyBinding selectAllBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_SELECT_ALL));
+        if (UiInputBindings.matches(selectAllBinding, event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0 && !mountWork.isRunning()
+                    && Objects.equals(stateScope, UiStateScopes.current()) && folderSnapshotReady()) {
+                selection.selectRendered(true);
+                updateSelectionViews();
+            }
+            return true;
+        }
+        KeyBinding deleteBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_DELETE));
+        if (UiInputBindings.matches(deleteBinding, event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0 && !mountWork.isRunning()
+                    && Objects.equals(stateScope, UiStateScopes.current()) && folderSnapshotReady()
+                    && deleteButton.isEnabled()) deleteButton.performClick();
+            return true;
+        }
         KeyBinding copy = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_COPY));
         KeyBinding paste = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GLOBAL_PASTE));
         if (copy != null && UiInputBindings.matches(copy, event)) {

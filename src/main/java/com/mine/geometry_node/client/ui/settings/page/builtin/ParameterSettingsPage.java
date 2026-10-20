@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
-import com.mine.geometry_node.client.config.ConfigEntry;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigCategory;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
@@ -8,16 +7,7 @@ import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
 public final class ParameterSettingsPage extends ConfigEntriesSettingsPage {
     public ParameterSettingsPage(SettingsPageContext context) {
         super(context, ParameterSettingsPage::retainCategory,
-                entry -> !isShortcut(entry) && !isPathSetting(entry));
-    }
-
-    private static boolean isShortcut(ConfigEntry<?> entry) {
-        return entry.editorType() == ConfigEntry.EditorType.KEY_BINDING
-                || entry.editorType() == ConfigEntry.EditorType.SHORTCUT;
-    }
-
-    private static boolean isPathSetting(ConfigEntry<?> entry) {
-        return entry.category().id().equals(BuiltinConfigEntries.ASSET_BROWSER.id());
+                BuiltinSettingsProjection::isParameter);
     }
 
     private static boolean retainCategory(ConfigCategory category) {

@@ -19,6 +19,11 @@ public interface SettingsPage extends AutoCloseable {
         return editors().stream().allMatch(ConfigEntryEditor::isValid);
     }
 
+    /** Reveals an editor hidden by page-local folds, then focuses its input. */
+    default void revealEditor(ConfigEntryEditor<?> editor) {
+        editor.focus();
+    }
+
     /** Applies a normalized free-text query and reports whether the page has a match. */
     default boolean applySearch(String query) {
         return query == null || query.isBlank();

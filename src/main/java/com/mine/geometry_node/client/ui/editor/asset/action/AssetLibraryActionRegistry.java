@@ -26,6 +26,8 @@ public final class AssetLibraryActionRegistry {
                 state -> state != null && state.canDeleteSelection());
         register(AssetLibraryActionId.RENAME, "geometry_node.asset_library.action.rename", BuiltinConfigEntries.GLOBAL_RENAME,
                 state -> state != null && state.canRenameSelection());
+        register(AssetLibraryActionId.SELECT_ALL, BuiltinConfigEntries.GLOBAL_SELECT_ALL.labelTranslationKey(),
+                BuiltinConfigEntries.GLOBAL_SELECT_ALL, state -> state != null);
     }
 
     private AssetLibraryActionRegistry() {

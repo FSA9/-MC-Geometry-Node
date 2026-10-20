@@ -88,6 +88,16 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
     }
 
     @Override
+    public final void revealEditor(ConfigEntryEditor<?> editor) {
+        for (GroupBinding group : groupBindings) {
+            if (group.reveal(editor)) {
+                editor.focus();
+                return;
+            }
+        }
+    }
+
+    @Override
     public final void dispose() {
         if (disposed) {
             return;
@@ -252,6 +262,16 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         }
 
         private LinearLayout view() { return view; }
+        private boolean reveal(ConfigEntryEditor<?> editor) {
+            boolean found = entries.stream().anyMatch(entry -> entry.editor() == editor);
+            for (GroupBinding child : children) found |= child.reveal(editor);
+            if (found) {
+                expanded = true;
+                updateExpansion();
+            }
+            return found;
+        }
+
         private boolean applySearch(String query, boolean ancestorMatches) {
             boolean categoryMatch = ancestorMatches || (!query.isEmpty() && searchText.contains(query));
             boolean matches = query.isEmpty() || categoryMatch;

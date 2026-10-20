@@ -10,37 +10,43 @@ public final class UiInputBindings {
     private UiInputBindings() {}
 
     public static InputBinding fromEvent(KeyEvent event) {
-        return event == null ? null : InputBinding.fromKey(event.getKeyCode(), event.isCtrlPressed(),
+        return event == null ? null : InputBinding.fromKey(event.getKeyCode(), event.isControlPressed(),
                 event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
     }
 
     public static InputBinding fromEvent(MotionEvent event) {
-        return event == null ? null : InputBinding.fromMouse(mouseButton(event.getActionButton()),
-                event.isCtrlPressed(), event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
+        if (event == null) return null;
+        int button = event.getActionButton();
+        // Some pointer-down events only supply a button state. Capture it only if unambiguous.
+        if (button == 0 && Integer.bitCount(event.getButtonState()) == 1) button = event.getButtonState();
+        return InputBinding.fromMouse(mouseButton(button), event.isControlPressed(),
+                event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
     }
 
     public static boolean matches(KeyBinding binding, KeyEvent event) {
-        return binding != null && event != null && binding.matches(event.getKeyCode(), event.isCtrlPressed(),
+        return binding != null && event != null && binding.matches(event.getKeyCode(), event.isControlPressed(),
                 event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
     }
 
     public static boolean matches(InputBinding binding, KeyEvent event) {
-        return binding != null && event != null && binding.matchesKey(event.getKeyCode(), event.isCtrlPressed(),
+        return binding != null && event != null && binding.matchesKey(event.getKeyCode(), event.isControlPressed(),
                 event.isShiftPressed(), event.isAltPressed(), event.isSuperPressed());
     }
 
     public static boolean matches(InputBinding binding, MotionEvent event) {
         return binding != null && event != null && binding.matchesMouse(mouseButton(event.getActionButton()),
-                mouseButtons(event.getButtonState()), event.isCtrlPressed(), event.isShiftPressed(),
+                mouseButtons(event.getButtonState()), event.isControlPressed(), event.isShiftPressed(),
                 event.isAltPressed(), event.isSuperPressed());
     }
 
     private static int mouseButton(int button) {
         return switch (button) {
+            case 0 -> 0;
             case MotionEvent.BUTTON_PRIMARY -> InputBinding.BUTTON_PRIMARY;
             case MotionEvent.BUTTON_SECONDARY -> InputBinding.BUTTON_SECONDARY;
             case MotionEvent.BUTTON_TERTIARY -> InputBinding.BUTTON_TERTIARY;
-            default -> 0;
+            // Preserve the difference between no action button and an unsupported action button.
+            default -> -1;
         };
     }
 

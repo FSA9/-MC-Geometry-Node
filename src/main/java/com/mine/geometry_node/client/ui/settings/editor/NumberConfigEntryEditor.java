@@ -52,6 +52,9 @@ final class NumberConfigEntryEditor extends AbstractConfigEntryEditor<Number> {
         showValidity(true);
     }
 
+    @Override public void focus() { mInput.requestFocus(); }
+    @Override public boolean hasUncommittedChanges() { return !isValid(); }
+
     private void commit(String text) {
         try {
             Number value = parseValue(mEntry.editorType(), text);

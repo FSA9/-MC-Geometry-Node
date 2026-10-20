@@ -31,20 +31,20 @@ public final class GameViewportShortcuts {
                     BuiltinConfigEntries.GAME_VIEW_FOCUS, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.ENTITY_MOVE, "geometry_node.game_view.entities.move",
                     BuiltinConfigEntries.GAME_VIEW_ENTITY_MOVE, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.COPY, "geometry_node.game_view.scene.copy",
-                    BuiltinConfigEntries.GAME_VIEW_COPY, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.PASTE, "geometry_node.game_view.scene.paste",
-                    BuiltinConfigEntries.GAME_VIEW_PASTE, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.DELETE, "geometry_node.game_view.scene.delete",
-                    BuiltinConfigEntries.GAME_VIEW_DELETE, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.UNDO, "geometry_node.game_view.scene.undo",
-                    BuiltinConfigEntries.GAME_VIEW_UNDO, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.REDO, "geometry_node.game_view.scene.redo",
-                    BuiltinConfigEntries.GAME_VIEW_REDO, null),
+            new ScopedAction<>(KeyScope.GLOBAL, Action.COPY, "geometry_node.game_view.scene.copy",
+                    BuiltinConfigEntries.GLOBAL_COPY, null),
+            new ScopedAction<>(KeyScope.GLOBAL, Action.PASTE, "geometry_node.game_view.scene.paste",
+                    BuiltinConfigEntries.GLOBAL_PASTE, null),
+            new ScopedAction<>(KeyScope.GLOBAL, Action.DELETE, "geometry_node.game_view.scene.delete",
+                    BuiltinConfigEntries.GLOBAL_DELETE, null),
+            new ScopedAction<>(KeyScope.GLOBAL, Action.UNDO, "geometry_node.game_view.scene.undo",
+                    BuiltinConfigEntries.GLOBAL_UNDO, null),
+            new ScopedAction<>(KeyScope.GLOBAL, Action.REDO, "geometry_node.game_view.scene.redo",
+                    BuiltinConfigEntries.GLOBAL_REDO, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.CANCEL, "geometry_node.game_view.scene.cancel",
                     BuiltinConfigEntries.GAME_VIEW_CANCEL, null),
-            new ScopedAction<>(KeyScope.GAME_VIEW, Action.SELECT_ALL, "geometry_node.game_view.scene.selectAll",
-                    BuiltinConfigEntries.GAME_VIEW_SELECT_ALL, null));
+            new ScopedAction<>(KeyScope.GLOBAL, Action.SELECT_ALL, "geometry_node.game_view.scene.selectAll",
+                    BuiltinConfigEntries.GLOBAL_SELECT_ALL, null));
 
     public static String display(ConfigEntry<String> entry) {
         String binding = ConfigManager.INSTANCE.get(entry);

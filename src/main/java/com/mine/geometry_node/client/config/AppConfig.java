@@ -125,6 +125,7 @@ public class AppConfig {
         public String cut = "CTRL+X";
         public String delete = "DELETE";
         public String rename = "F2";
+        public String selectAll = "CTRL+A";
 
         GlobalKeyBindingsConfig copy() {
             GlobalKeyBindingsConfig copy = new GlobalKeyBindingsConfig();
@@ -136,13 +137,12 @@ public class AppConfig {
             copy.cut = cut;
             copy.delete = delete;
             copy.rename = rename;
+            copy.selectAll = selectAll;
             return copy;
         }
     }
 
     public static class ViewportKeyBindingsConfig {
-        public String selectAll = "A";
-        public String delete = "DELETE";
         public String toggleSnapToGrid = "SHIFT+TAB";
         public String toggleGridAndAxis = "SHIFT+ALT+Z";
         public String groupIntoFrame = "CTRL+J";
@@ -152,8 +152,6 @@ public class AppConfig {
 
         ViewportKeyBindingsConfig copy() {
             ViewportKeyBindingsConfig copy = new ViewportKeyBindingsConfig();
-            copy.selectAll = selectAll;
-            copy.delete = delete;
             copy.toggleSnapToGrid = toggleSnapToGrid;
             copy.toggleGridAndAxis = toggleGridAndAxis;
             copy.groupIntoFrame = groupIntoFrame;
@@ -166,16 +164,11 @@ public class AppConfig {
 
     public static class GameViewKeyBindingsConfig {
         public String entityMove = "CTRL+RIGHT_CLICK";
-        public String copy = "CTRL+C";
-        public String paste = "CTRL+V";
         public String toggleProjection = "KP_5";
         public String toggleSidebar = "N";
         public String viewMenu = "GRAVE_ACCENT";
         public String add = "SHIFT+A";
         public String focus = "F";
-        public String delete = "DELETE";
-        public String undo = "CTRL+Z";
-        public String redo = "CTRL+SHIFT+Z";
         public String cancel = "ESCAPE";
         public String toggleSnap = "SHIFT+TAB";
         public String move = "G";
@@ -185,7 +178,6 @@ public class AppConfig {
         public String axisY = "Y";
         public String axisZ = "Z";
         public String confirm = "ENTER";
-        public String selectAll = "A";
 
 
         public String forward = "W";
@@ -199,16 +191,11 @@ public class AppConfig {
         GameViewKeyBindingsConfig copy() {
             GameViewKeyBindingsConfig copy = new GameViewKeyBindingsConfig();
             copy.entityMove = entityMove;
-            copy.copy = this.copy;
-            copy.paste = paste;
             copy.toggleProjection = toggleProjection;
             copy.toggleSidebar = toggleSidebar;
             copy.viewMenu = viewMenu;
             copy.add = add;
             copy.focus = focus;
-            copy.delete = delete;
-            copy.undo = undo;
-            copy.redo = redo;
             copy.cancel = cancel;
             copy.toggleSnap = toggleSnap;
             copy.move = move;
@@ -218,7 +205,6 @@ public class AppConfig {
             copy.axisY = axisY;
             copy.axisZ = axisZ;
             copy.confirm = confirm;
-            copy.selectAll = selectAll;
 
             copy.forward = forward;
             copy.backward = backward;

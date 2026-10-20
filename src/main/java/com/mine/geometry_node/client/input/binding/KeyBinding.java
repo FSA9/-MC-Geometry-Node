@@ -34,7 +34,7 @@ public final class KeyBinding {
         KeyDef keyDef = null;
         String keyName = null;
 
-        String[] tokens = value.trim().toUpperCase(Locale.ROOT).split("\\+");
+        String[] tokens = value.trim().toUpperCase(Locale.ROOT).split("\\+", -1);
         for (String token : tokens) {
             String part = normalizeToken(token);
             if (part.isEmpty()) return null;

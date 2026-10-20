@@ -51,6 +51,21 @@ public final class ControlKeyBinding {
                 && (!superKey || held.test(GLFW.GLFW_KEY_LEFT_SUPER) || held.test(GLFW.GLFW_KEY_RIGHT_SUPER));
     }
 
+    /**
+     * Whether an exact keyboard chord satisfies this held control. The chord's physical primary
+     * key and modifiers form its held state; extra modifiers and modifier-only controls are allowed.
+     */
+    public boolean isHeldBy(KeyBinding chord) {
+        if (chord == null) return false;
+        return isHeld(code -> code == chord.keyCode || switch (code) {
+            case GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL -> chord.ctrl;
+            case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> chord.shift;
+            case GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT -> chord.alt;
+            case GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> chord.superKey;
+            default -> false;
+        });
+    }
+
     /** A more specific chord with the same primary key takes precedence. */
     public boolean supersedes(ControlKeyBinding other) {
         return key != null && other.key != null && key.keyCode == other.key.keyCode

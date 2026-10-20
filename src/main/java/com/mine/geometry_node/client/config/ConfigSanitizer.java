@@ -1,527 +1,185 @@
 package com.mine.geometry_node.client.config;
 
-import com.mine.geometry_node.client.input.binding.KeyBinding;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+/** Reads registered settings through their declared editor type and validation contract. */
 final class ConfigSanitizer {
+    private static final Gson GSON = new Gson();
     private static final float RIGHT_SIDEBAR_WEIGHT_MIN = 0.08f;
     private static final float RIGHT_SIDEBAR_WEIGHT_MAX = 0.75f;
 
-    private ConfigSanitizer() {
-    }
+    private ConfigSanitizer() {}
 
     static boolean looksLikeConfig(JsonObject root) {
-        return root != null && (root.has("assetBrowser") || root.has("viewport") || root.has("node")
-                || root.has("previewCache") || root.has("terminal") || root.has("gameView")
-                || root.has("keyBindings"));
+        return root != null && (root.has("terminal") || ConfigRegistry.INSTANCE.entries().stream()
+                .anyMatch(entry -> root.has(entry.id().split("\\.", 2)[0])));
     }
 
     static Result fromJson(JsonObject root) {
-        AppConfig defaults = AppConfig.defaults();
-        AppConfig config = new AppConfig();
-        boolean changed = false;
+        if (root == null) return new Result(AppConfig.defaults(), true);
+        AppConfig config = AppConfig.defaults();
+        // Registry IDs identify the same JSON path used by AppConfig's persisted schema.
+        // Adding a registered setting must not require another hand-maintained loader branch.
+        for (ConfigEntry<?> entry : ConfigRegistry.INSTANCE.entries()) readEntry(root, config, entry);
 
-        JsonObject assetBrowser = readObject(root, "assetBrowser");
-        if (assetBrowser == null) {
-            config.assetBrowser = defaults.assetBrowser;
-            changed = true;
-        } else {
-            ReadList paths = readStringList(assetBrowser, "quickAccessPaths");
-            if (paths.valid) {
-                config.assetBrowser.quickAccessPaths = paths.value;
-                changed |= paths.changed;
-            } else {
-                config.assetBrowser.quickAccessPaths = defaults.assetBrowser.quickAccessPaths;
-                changed = true;
-            }
-
-            ReadList favorites = readStringList(assetBrowser, "favoriteAssetPaths");
-            if (favorites.valid) {
-                NormalizeList normalized = normalizeFavoriteAssetPaths(favorites.value);
-                config.assetBrowser.favoriteAssetPaths = normalized.value;
-                changed |= favorites.changed || normalized.changed;
-            } else {
-                config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
-                changed = true;
-            }
-
-            ReadString viewMode = readString(assetBrowser, "viewMode");
-            if (viewMode.valid && BuiltinConfigEntries.ASSET_VIEW_MODE.choices().contains(viewMode.value)) {
-                config.assetBrowser.viewMode = viewMode.value;
-                changed |= viewMode.changed;
-            } else {
-                config.assetBrowser.viewMode = defaults.assetBrowser.viewMode;
-                changed = true;
-            }
-
-            ReadBoolean rightSidebarVisible = readBoolean(assetBrowser, "rightSidebarVisible");
-            if (rightSidebarVisible.valid) {
-                config.assetBrowser.rightSidebarVisible = rightSidebarVisible.value;
-                changed |= rightSidebarVisible.changed;
-            } else {
-                config.assetBrowser.rightSidebarVisible = defaults.assetBrowser.rightSidebarVisible;
-                changed = true;
-            }
-
-            ReadFloat rightSidebarWeight = readFloat(assetBrowser, "rightSidebarWeight");
-            if (rightSidebarWeight.valid && Float.isFinite(rightSidebarWeight.value)
-                    && rightSidebarWeight.value >= RIGHT_SIDEBAR_WEIGHT_MIN
-                    && rightSidebarWeight.value <= RIGHT_SIDEBAR_WEIGHT_MAX) {
-                config.assetBrowser.rightSidebarWeight = rightSidebarWeight.value;
-                changed |= rightSidebarWeight.changed;
-            } else {
-                config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
-                changed = true;
-            }
-
-            ReadString rightSidebarTab = readString(assetBrowser, "rightSidebarTab");
-            if (rightSidebarTab.valid && isSidebarTabId(rightSidebarTab.value)) {
-                config.assetBrowser.rightSidebarTab = rightSidebarTab.value;
-                changed |= rightSidebarTab.changed;
-            } else {
-                config.assetBrowser.rightSidebarTab = defaults.assetBrowser.rightSidebarTab;
-                changed = true;
-            }
-        }
+        JsonObject assets = readObject(root, "assetBrowser");
+        ReadList favorites = readStringList(assets, "favoriteAssetPaths");
+        if (favorites.valid) config.assetBrowser.favoriteAssetPaths = favorites.value;
+        ReadBoolean assetVisible = readBoolean(assets, "rightSidebarVisible");
+        if (assetVisible.valid) config.assetBrowser.rightSidebarVisible = assetVisible.value;
+        ReadFloat assetWeight = readFloat(assets, "rightSidebarWeight");
+        if (assetWeight.valid) config.assetBrowser.rightSidebarWeight = assetWeight.value;
+        ReadString assetTab = readString(assets, "rightSidebarTab");
+        if (assetTab.valid) config.assetBrowser.rightSidebarTab = assetTab.value;
 
         JsonObject viewport = readObject(root, "viewport");
-        if (viewport == null) {
-            config.viewport = defaults.viewport;
-            changed = true;
-        } else {
-            ReadInt gridSize = readInt(viewport, "gridSize");
-            if (gridSize.valid && gridSize.value >= BuiltinConfigEntries.VIEWPORT_GRID_SIZE.min()
-                    && gridSize.value <= BuiltinConfigEntries.VIEWPORT_GRID_SIZE.max()) {
-                config.viewport.gridSize = gridSize.value;
-                changed |= gridSize.changed;
-            } else {
-                config.viewport.gridSize = defaults.viewport.gridSize;
-                changed = true;
-            }
+        ReadBoolean viewportVisible = readBoolean(viewport, "rightSidebarVisible");
+        if (viewportVisible.valid) config.viewport.rightSidebarVisible = viewportVisible.value;
+        ReadFloat viewportWeight = readFloat(viewport, "rightSidebarWeight");
+        if (viewportWeight.valid) config.viewport.rightSidebarWeight = viewportWeight.value;
+        ReadString viewportTab = readString(viewport, "rightSidebarTab");
+        if (viewportTab.valid) config.viewport.rightSidebarTab = viewportTab.value;
 
-            ReadBoolean snapToGrid = readBoolean(viewport, "snapToGrid");
-            if (snapToGrid.valid) {
-                config.viewport.snapToGrid = snapToGrid.value;
-                changed |= snapToGrid.changed;
-            } else {
-                config.viewport.snapToGrid = defaults.viewport.snapToGrid;
-                changed = true;
-            }
+        sanitize(config);
+        // Rewrite coercions, missing fields and removed settings into one canonical schema.
+        return new Result(config, !root.equals(GSON.toJsonTree(config)));
+    }
 
-            ReadBoolean showGridAndAxis = readBoolean(viewport, "showGridAndAxis");
-            if (showGridAndAxis.valid) {
-                config.viewport.showGridAndAxis = showGridAndAxis.value;
-                changed |= showGridAndAxis.changed;
-            } else {
-                config.viewport.showGridAndAxis = defaults.viewport.showGridAndAxis;
-                changed = true;
-            }
-
-            ReadBoolean rightSidebarVisible = readBoolean(viewport, "rightSidebarVisible");
-            if (rightSidebarVisible.valid) {
-                config.viewport.rightSidebarVisible = rightSidebarVisible.value;
-                changed |= rightSidebarVisible.changed;
-            } else {
-                config.viewport.rightSidebarVisible = defaults.viewport.rightSidebarVisible;
-                changed = true;
-            }
-
-            ReadFloat rightSidebarWeight = readFloat(viewport, "rightSidebarWeight");
-            if (rightSidebarWeight.valid && Float.isFinite(rightSidebarWeight.value)
-                    && rightSidebarWeight.value >= RIGHT_SIDEBAR_WEIGHT_MIN
-                    && rightSidebarWeight.value <= RIGHT_SIDEBAR_WEIGHT_MAX) {
-                config.viewport.rightSidebarWeight = rightSidebarWeight.value;
-                changed |= rightSidebarWeight.changed;
-            } else {
-                config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
-                changed = true;
-            }
-
-            ReadString rightSidebarTab = readString(viewport, "rightSidebarTab");
-            if (rightSidebarTab.valid && isSidebarTabId(rightSidebarTab.value)) {
-                config.viewport.rightSidebarTab = rightSidebarTab.value;
-                changed |= rightSidebarTab.changed;
-            } else {
-                config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
-                changed = true;
+    @SuppressWarnings("unchecked")
+    private static <T> void readEntry(JsonObject root, AppConfig config, ConfigEntry<T> entry) {
+        String[] path = entry.id().split("\\.");
+        JsonObject parent = root;
+        for (int i = 0; i < path.length - 1; i++) parent = readObject(parent, path[i]);
+        String key = path[path.length - 1];
+        if (entry.keyScope() != null && useLegacyShortcut(parent, key, entry)) {
+            JsonElement legacy = legacyShortcut(readObject(root, "keyBindings"), entry, key);
+            if (legacy != null) {
+                parent = new JsonObject();
+                parent.add(key, legacy);
             }
         }
-
-        JsonObject node = readObject(root, "node");
-        if (node == null) {
-            config.node = defaults.node;
-            changed = true;
-        } else {
-            ReadFloat cornerRadius = readFloat(node, "cornerRadius");
-            if (cornerRadius.valid && Float.isFinite(cornerRadius.value)
-                    && cornerRadius.value >= BuiltinConfigEntries.NODE_CORNER_RADIUS.min()
-                    && cornerRadius.value <= BuiltinConfigEntries.NODE_CORNER_RADIUS.max()) {
-                config.node.cornerRadius = cornerRadius.value;
-                changed |= cornerRadius.changed;
-            } else {
-                config.node.cornerRadius = defaults.node.cornerRadius;
-                changed = true;
+        Object value = switch (entry.editorType()) {
+            case BOOLEAN -> {
+                ReadBoolean read = readBoolean(parent, key);
+                yield read.valid ? read.value : null;
             }
+            case INTEGER -> {
+                ReadInt read = readInt(parent, key);
+                yield read.valid ? read.value : null;
+            }
+            case FLOAT -> {
+                ReadFloat read = readFloat(parent, key);
+                yield read.valid ? read.value : null;
+            }
+            case PATH_LIST -> {
+                ReadList read = readStringList(parent, key);
+                yield read.valid ? read.value : null;
+            }
+            case CHOICE, PATH, KEY_BINDING, SHORTCUT -> {
+                ReadString read = readString(parent, key);
+                yield read.valid ? read.value : null;
+            }
+        };
+        entry.set(config, (T) value);
+    }
+
+    private static boolean useLegacyShortcut(JsonObject parent, String key, ConfigEntry<?> entry) {
+        if (parent == null || !parent.has(key)) return true;
+        if (!entry.category().isWithin(BuiltinConfigEntries.SHORTCUT_GLOBAL)) return false;
+        ReadString current = readString(parent, key);
+        String value = current.valid ? validLegacyBinding(entry, current.value) : null;
+        return value == null || Objects.equals(value, entry.defaultValue());
+    }
+
+    /** Preserve valid customizations when the shared binding is absent or still its old default. */
+    private static JsonElement legacyShortcut(JsonObject bindings, ConfigEntry<?> entry, String key) {
+        if (bindings == null) return null;
+        if (entry.category().isWithin(BuiltinConfigEntries.SHORTCUT_GLOBAL)) {
+            if (key.equals("delete") || key.equals("selectAll")) {
+                JsonElement value = legacyCommon(readObject(bindings, "viewport"), key, entry);
+                if (value != null) return value;
+            }
+            JsonElement value = legacyCommon(readObject(bindings, "gameView"), key, entry);
+            if (value != null) return value;
+            return legacyCommon(bindings, key, entry);
         }
+        if (entry.category().isWithin(BuiltinConfigEntries.SHORTCUT_VIEWPORT)) return legacyCommon(bindings, key, entry);
+        if (entry == BuiltinConfigEntries.SHOP_CLEAR_SLOT) return legacyCommon(bindings, "shopEditorClearSlot", entry);
+        return null;
+    }
 
-        JsonObject gameView = readObject(root, "gameView");
-        if (gameView == null) {
-            config.gameView = defaults.gameView;
-            changed = true;
-        } else {
-            ReadInt backgroundFps = readInt(gameView, "backgroundFps");
-            config.gameView.backgroundFps = backgroundFps.valid ? backgroundFps.value : defaults.gameView.backgroundFps;
-            changed |= !backgroundFps.valid || backgroundFps.changed;
-        }
+    private static JsonElement legacyCommon(JsonObject bindings, String key, ConfigEntry<?> entry) {
+        if (bindings == null) return null;
+        ReadString read = readString(bindings, key);
+        if (!read.valid) return null;
+        String candidate = validLegacyBinding(entry, read.value);
+        if (candidate == null) return null;
+        // A was the old context default. The new shared default is Ctrl+A;
+        // preserve explicitly customized selections while upgrading that default.
+        if (key.equals("selectAll") && "A".equals(candidate)) return null;
+        if (Objects.equals(candidate, entry.defaultValue())) return null;
+        return new com.google.gson.JsonPrimitive(candidate);
+    }
 
-        JsonObject keyBindings = readObject(root, "keyBindings");
-        changed |= readKeyBindings(keyBindings, config, defaults);
-
-        if (root.has("networkTransfer")) changed = true;
-        JsonObject previewCache = readObject(root, "previewCache");
-        if (previewCache == null) {
-            config.previewCache = defaults.previewCache;
-            changed = true;
-        } else {
-            config.previewCache = new AppConfig.PreviewCacheConfig();
-            changed |= readPreviewCache(previewCache, config.previewCache, defaults.previewCache);
-        }
-
-        // P4 no longer persists CLI launch commands; rewrite legacy terminal settings away.
-        if (root.has("terminal")) changed = true;
-
-        changed |= ConfigRegistry.INSTANCE.normalize(config);
-        return new Result(config, changed);
+    @SuppressWarnings("unchecked")
+    private static String validLegacyBinding(ConfigEntry<?> entry, String value) {
+        ConfigEntry<String> shortcut = (ConfigEntry<String>) entry;
+        return shortcut.accepts(value) ? shortcut.normalize(value) : null;
     }
 
     static Result sanitize(AppConfig config) {
         if (config == null) return new Result(AppConfig.defaults(), true);
-
-        boolean changed = false;
         AppConfig defaults = AppConfig.defaults();
+        boolean changed = false;
+        if (config.assetBrowser == null) { config.assetBrowser = defaults.assetBrowser; changed = true; }
+        if (config.viewport == null) { config.viewport = defaults.viewport; changed = true; }
+        if (config.gameView == null) { config.gameView = defaults.gameView; changed = true; }
+        if (config.node == null) { config.node = defaults.node; changed = true; }
+        if (config.previewCache == null) { config.previewCache = defaults.previewCache; changed = true; }
+        if (config.keyBindings == null) { config.keyBindings = defaults.keyBindings; changed = true; }
+        if (config.keyBindings.global == null) { config.keyBindings.global = defaults.keyBindings.global; changed = true; }
+        if (config.keyBindings.viewport == null) { config.keyBindings.viewport = defaults.keyBindings.viewport; changed = true; }
+        if (config.keyBindings.gameView == null) { config.keyBindings.gameView = defaults.keyBindings.gameView; changed = true; }
+        if (config.keyBindings.shopEditor == null) { config.keyBindings.shopEditor = defaults.keyBindings.shopEditor; changed = true; }
 
-        if (config.assetBrowser == null) {
-            config.assetBrowser = defaults.assetBrowser;
+        if (config.assetBrowser.favoriteAssetPaths == null) {
+            config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
             changed = true;
         } else {
-            if (config.assetBrowser.quickAccessPaths == null) {
-                config.assetBrowser.quickAccessPaths = defaults.assetBrowser.quickAccessPaths;
-                changed = true;
-            }
-
-            if (config.assetBrowser.favoriteAssetPaths == null) {
-                config.assetBrowser.favoriteAssetPaths = defaults.assetBrowser.favoriteAssetPaths;
-                changed = true;
-            } else {
-                NormalizeList normalized = normalizeFavoriteAssetPaths(config.assetBrowser.favoriteAssetPaths);
-                if (normalized.changed) {
-                    config.assetBrowser.favoriteAssetPaths = normalized.value;
-                    changed = true;
-                }
-            }
-
-            if (!BuiltinConfigEntries.ASSET_VIEW_MODE.choices().contains(config.assetBrowser.viewMode)) {
-                config.assetBrowser.viewMode = defaults.assetBrowser.viewMode;
-                changed = true;
-            }
-            if (!Float.isFinite(config.assetBrowser.rightSidebarWeight)
-                    || config.assetBrowser.rightSidebarWeight < RIGHT_SIDEBAR_WEIGHT_MIN
-                    || config.assetBrowser.rightSidebarWeight > RIGHT_SIDEBAR_WEIGHT_MAX) {
-                config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
-                changed = true;
-            }
-            if (!isSidebarTabId(config.assetBrowser.rightSidebarTab)) {
-                config.assetBrowser.rightSidebarTab = defaults.assetBrowser.rightSidebarTab;
-                changed = true;
-            }
+            NormalizeList favorites = normalizeFavoriteAssetPaths(config.assetBrowser.favoriteAssetPaths);
+            config.assetBrowser.favoriteAssetPaths = favorites.value;
+            changed |= favorites.changed;
         }
-
-        if (config.viewport == null) {
-            config.viewport = defaults.viewport;
-            changed = true;
-        } else {
-            if (config.viewport.gridSize < BuiltinConfigEntries.VIEWPORT_GRID_SIZE.min()
-                    || config.viewport.gridSize > BuiltinConfigEntries.VIEWPORT_GRID_SIZE.max()) {
-                config.viewport.gridSize = defaults.viewport.gridSize;
-                changed = true;
-            }
-            if (!Float.isFinite(config.viewport.rightSidebarWeight)
-                    || config.viewport.rightSidebarWeight < RIGHT_SIDEBAR_WEIGHT_MIN
-                    || config.viewport.rightSidebarWeight > RIGHT_SIDEBAR_WEIGHT_MAX) {
-                config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
-                changed = true;
-            }
-            if (!isSidebarTabId(config.viewport.rightSidebarTab)) {
-                config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
-                changed = true;
-            }
-        }
-
-        if (config.gameView == null) {
-            config.gameView = defaults.gameView;
+        if (!validSidebarWeight(config.assetBrowser.rightSidebarWeight)) {
+            config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
             changed = true;
         }
-
-        if (config.node == null) {
-            config.node = defaults.node;
+        if (!validSidebarWeight(config.viewport.rightSidebarWeight)) {
+            config.viewport.rightSidebarWeight = defaults.viewport.rightSidebarWeight;
             changed = true;
-        } else {
-            if (!Float.isFinite(config.node.cornerRadius)
-                    || config.node.cornerRadius < BuiltinConfigEntries.NODE_CORNER_RADIUS.min()
-                    || config.node.cornerRadius > BuiltinConfigEntries.NODE_CORNER_RADIUS.max()) {
-                config.node.cornerRadius = defaults.node.cornerRadius;
-                changed = true;
-            }
         }
-
-        if (config.keyBindings == null) {
-            config.keyBindings = defaults.keyBindings;
+        if (!isSidebarTabId(config.assetBrowser.rightSidebarTab)) {
+            config.assetBrowser.rightSidebarTab = defaults.assetBrowser.rightSidebarTab;
             changed = true;
-        } else {
-            changed |= sanitizeKeyBindings(config.keyBindings, defaults.keyBindings);
         }
-
-        if (config.previewCache == null) {
-            config.previewCache = defaults.previewCache;
+        if (!isSidebarTabId(config.viewport.rightSidebarTab)) {
+            config.viewport.rightSidebarTab = defaults.viewport.rightSidebarTab;
             changed = true;
         }
         changed |= ConfigRegistry.INSTANCE.normalize(config);
         return new Result(config, changed);
     }
 
-    private static boolean readPreviewCache(JsonObject source, AppConfig.PreviewCacheConfig target,
-                                            AppConfig.PreviewCacheConfig defaults) {
-        boolean changed = false;
-        ReadInt maxSize = readInt(source, "maxSizeMiB");
-        target.maxSizeMiB = maxSize.valid ? maxSize.value : defaults.maxSizeMiB;
-        changed |= !maxSize.valid || maxSize.changed;
-        ReadString location = readString(source, "location");
-        target.location = location.valid ? location.value : defaults.location;
-        changed |= !location.valid || location.changed;
-        return changed;
-    }
-
-    private static boolean readKeyBindings(JsonObject keyBindings, AppConfig config, AppConfig defaults) {
-        if (keyBindings == null) {
-            config.keyBindings = defaults.keyBindings;
-            return true;
-        }
-
-        boolean changed = false;
-        config.keyBindings = new AppConfig.KeyBindingsConfig();
-
-        JsonObject global = readObject(keyBindings, "global");
-        JsonObject viewport = readObject(keyBindings, "viewport");
-        JsonObject shopEditor = readObject(keyBindings, "shopEditor");
-        JsonObject gameView = readObject(keyBindings, "gameView");
-        JsonObject legacy = keyBindings;
-
-        changed |= global == null || viewport == null || shopEditor == null;
-        changed |= hasAny(keyBindings,
-                "undo", "redo", "save", "copy", "paste", "delete",
-                "toggleSnapToGrid", "toggleGridAndAxis", "toggleRightSidebar", "groupIntoFrame",
-                "groupIntoNodeGroup", "moveSelection", "shopEditorClearSlot");
-
-        ReadKeyBinding undo = readKeyBindingWithLegacy(global, legacy, "undo", defaults.keyBindings.global.undo);
-        config.keyBindings.global.undo = undo.value;
-        changed |= undo.changed;
-
-        ReadKeyBinding redo = readKeyBindingWithLegacy(global, legacy, "redo", defaults.keyBindings.global.redo);
-        config.keyBindings.global.redo = redo.value;
-        changed |= redo.changed;
-
-        ReadKeyBinding save = readKeyBindingWithLegacy(global, legacy, "save", defaults.keyBindings.global.save);
-        config.keyBindings.global.save = save.value;
-        changed |= save.changed;
-
-        ReadKeyBinding copy = readKeyBindingWithLegacy(global, legacy, "copy", defaults.keyBindings.global.copy);
-        config.keyBindings.global.copy = copy.value;
-        changed |= copy.changed;
-
-        ReadKeyBinding paste = readKeyBindingWithLegacy(global, legacy, "paste", defaults.keyBindings.global.paste);
-        config.keyBindings.global.paste = paste.value;
-        changed |= paste.changed;
-
-        ReadKeyBinding cut = readKeyBindingWithLegacy(global, legacy, "cut", defaults.keyBindings.global.cut);
-        config.keyBindings.global.cut = cut.value;
-        changed |= cut.changed;
-
-        ReadKeyBinding globalDelete = global == null
-                ? ReadKeyBinding.defaulted(defaults.keyBindings.global.delete)
-                : readKeyBinding(global, "delete", defaults.keyBindings.global.delete);
-        config.keyBindings.global.delete = globalDelete.value;
-        changed |= globalDelete.changed;
-
-        ReadKeyBinding rename = readKeyBindingWithLegacy(global, legacy, "rename", defaults.keyBindings.global.rename);
-        config.keyBindings.global.rename = rename.value;
-        changed |= rename.changed;
-
-        ReadKeyBinding delete = readKeyBindingWithLegacy(viewport, legacy, "delete", defaults.keyBindings.viewport.delete);
-        config.keyBindings.viewport.delete = delete.value;
-        changed |= delete.changed;
-
-        ReadKeyBinding toggleSnapToGrid = readKeyBindingWithLegacy(viewport, legacy, "toggleSnapToGrid", defaults.keyBindings.viewport.toggleSnapToGrid);
-        config.keyBindings.viewport.toggleSnapToGrid = toggleSnapToGrid.value;
-        changed |= toggleSnapToGrid.changed;
-
-        ReadKeyBinding toggleGridAndAxis = readKeyBindingWithLegacy(viewport, legacy, "toggleGridAndAxis", defaults.keyBindings.viewport.toggleGridAndAxis);
-        config.keyBindings.viewport.toggleGridAndAxis = toggleGridAndAxis.value;
-        changed |= toggleGridAndAxis.changed;
-
-        ReadKeyBinding groupIntoFrame = readKeyBindingWithLegacy(viewport, legacy, "groupIntoFrame", defaults.keyBindings.viewport.groupIntoFrame);
-        config.keyBindings.viewport.groupIntoFrame = groupIntoFrame.value;
-        changed |= groupIntoFrame.changed;
-
-        ReadKeyBinding groupIntoNodeGroup = readKeyBindingWithLegacy(viewport, legacy, "groupIntoNodeGroup", defaults.keyBindings.viewport.groupIntoNodeGroup);
-        config.keyBindings.viewport.groupIntoNodeGroup = groupIntoNodeGroup.value;
-        changed |= groupIntoNodeGroup.changed;
-
-        ReadKeyBinding moveSelection = readKeyBindingWithLegacy(viewport, legacy, "moveSelection", defaults.keyBindings.viewport.moveSelection);
-        config.keyBindings.viewport.moveSelection = moveSelection.value;
-        changed |= moveSelection.changed;
-
-        ReadKeyBinding toggleRightSidebar = readKeyBindingWithLegacy(viewport, legacy, "toggleRightSidebar", defaults.keyBindings.viewport.toggleRightSidebar);
-        config.keyBindings.viewport.toggleRightSidebar = toggleRightSidebar.value;
-        changed |= toggleRightSidebar.changed;
-
-        changed |= gameView != null && gameView.has("fly");
-
-        ReadKeyBinding toggleProjection = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleProjection)
-                : readKeyBinding(gameView, "toggleProjection", defaults.keyBindings.gameView.toggleProjection);
-        config.keyBindings.gameView.toggleProjection = toggleProjection.value;
-        changed |= toggleProjection.changed;
-
-        ReadKeyBinding toggleSidebar = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleSidebar)
-                : readKeyBinding(gameView, "toggleSidebar", defaults.keyBindings.gameView.toggleSidebar);
-        config.keyBindings.gameView.toggleSidebar = toggleSidebar.value;
-        changed |= toggleSidebar.changed;
-
-        ReadKeyBinding viewMenu = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.viewMenu)
-                : readKeyBinding(gameView, "viewMenu", defaults.keyBindings.gameView.viewMenu);
-        config.keyBindings.gameView.viewMenu = viewMenu.value;
-        changed |= viewMenu.changed;
-        ReadKeyBinding sceneADD = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.add)
-                : readKeyBinding(gameView, "add", defaults.keyBindings.gameView.add);
-        config.keyBindings.gameView.add = sceneADD.value;
-        changed |= sceneADD.changed;
-        ReadKeyBinding sceneFOCUS = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.focus)
-                : readKeyBinding(gameView, "focus", defaults.keyBindings.gameView.focus);
-        config.keyBindings.gameView.focus = sceneFOCUS.value;
-        changed |= sceneFOCUS.changed;
-        ReadString entityMove = gameView == null ? ReadString.valid(defaults.keyBindings.gameView.entityMove, true)
-                : readString(gameView, "entityMove");
-        config.keyBindings.gameView.entityMove = BuiltinConfigEntries.GAME_VIEW_ENTITY_MOVE.normalize(entityMove.value);
-        changed |= entityMove.changed || !java.util.Objects.equals(entityMove.value, config.keyBindings.gameView.entityMove);
-        ReadKeyBinding sceneCopy = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.copy)
-                : readKeyBinding(gameView, "copy", defaults.keyBindings.gameView.copy);
-        config.keyBindings.gameView.copy = sceneCopy.value;
-        changed |= sceneCopy.changed;
-        ReadKeyBinding scenePaste = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.paste)
-                : readKeyBinding(gameView, "paste", defaults.keyBindings.gameView.paste);
-        config.keyBindings.gameView.paste = scenePaste.value;
-        changed |= scenePaste.changed;
-        ReadKeyBinding sceneDELETE = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.delete)
-                : readKeyBinding(gameView, "delete", defaults.keyBindings.gameView.delete);
-        config.keyBindings.gameView.delete = sceneDELETE.value;
-        changed |= sceneDELETE.changed;
-        ReadKeyBinding sceneUNDO = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.undo)
-                : readKeyBinding(gameView, "undo", defaults.keyBindings.gameView.undo);
-        config.keyBindings.gameView.undo = sceneUNDO.value;
-        changed |= sceneUNDO.changed;
-        ReadKeyBinding sceneREDO = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.redo)
-                : readKeyBinding(gameView, "redo", defaults.keyBindings.gameView.redo);
-        config.keyBindings.gameView.redo = sceneREDO.value;
-        changed |= sceneREDO.changed;
-        ReadKeyBinding sceneCANCEL = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.cancel)
-                : readKeyBinding(gameView, "cancel", defaults.keyBindings.gameView.cancel);
-        config.keyBindings.gameView.cancel = sceneCANCEL.value;
-        changed |= sceneCANCEL.changed;
-        ReadKeyBinding toggleSnap = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.toggleSnap)
-                : readKeyBinding(gameView, "toggleSnap", defaults.keyBindings.gameView.toggleSnap);
-        config.keyBindings.gameView.toggleSnap = toggleSnap.value;
-        changed |= toggleSnap.changed;
-        ReadKeyBinding transformmove = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.move)
-                : readKeyBinding(gameView, "move", defaults.keyBindings.gameView.move);
-        config.keyBindings.gameView.move = transformmove.value;
-        changed |= transformmove.changed;
-        ReadKeyBinding transformrotate = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.rotate)
-                : readKeyBinding(gameView, "rotate", defaults.keyBindings.gameView.rotate);
-        config.keyBindings.gameView.rotate = transformrotate.value;
-        changed |= transformrotate.changed;
-        ReadKeyBinding transformscale = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.scale)
-                : readKeyBinding(gameView, "scale", defaults.keyBindings.gameView.scale);
-        config.keyBindings.gameView.scale = transformscale.value;
-        changed |= transformscale.changed;
-        ReadKeyBinding transformaxisX = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisX)
-                : readKeyBinding(gameView, "axisX", defaults.keyBindings.gameView.axisX);
-        config.keyBindings.gameView.axisX = transformaxisX.value;
-        changed |= transformaxisX.changed;
-        ReadKeyBinding transformaxisY = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisY)
-                : readKeyBinding(gameView, "axisY", defaults.keyBindings.gameView.axisY);
-        config.keyBindings.gameView.axisY = transformaxisY.value;
-        changed |= transformaxisY.changed;
-        ReadKeyBinding transformaxisZ = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.axisZ)
-                : readKeyBinding(gameView, "axisZ", defaults.keyBindings.gameView.axisZ);
-        config.keyBindings.gameView.axisZ = transformaxisZ.value;
-        changed |= transformaxisZ.changed;
-        ReadKeyBinding transformconfirm = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.confirm)
-                : readKeyBinding(gameView, "confirm", defaults.keyBindings.gameView.confirm);
-        config.keyBindings.gameView.confirm = transformconfirm.value;
-        changed |= transformconfirm.changed;
-        ReadKeyBinding sceneSELECT_ALL = gameView == null ? ReadKeyBinding.defaulted(defaults.keyBindings.gameView.selectAll)
-                : readKeyBinding(gameView, "selectAll", defaults.keyBindings.gameView.selectAll);
-        config.keyBindings.gameView.selectAll = sceneSELECT_ALL.value;
-        changed |= sceneSELECT_ALL.changed;
-
-
-        // Control bindings include standalone modifiers, so use their registered validator.
-        for (ConfigEntry<String> entry : List.of(
-                BuiltinConfigEntries.GAME_FLIGHT_FORWARD, BuiltinConfigEntries.GAME_FLIGHT_BACKWARD,
-                BuiltinConfigEntries.GAME_FLIGHT_LEFT, BuiltinConfigEntries.GAME_FLIGHT_RIGHT,
-                BuiltinConfigEntries.GAME_FLIGHT_UP, BuiltinConfigEntries.GAME_FLIGHT_DOWN,
-                BuiltinConfigEntries.GAME_FLIGHT_EXIT)) {
-            String field = entry.id().substring(entry.id().lastIndexOf('.') + 1);
-            ReadString raw = gameView != null ? readString(gameView, field) : ReadString.invalid();
-            entry.set(config, raw.valid ? raw.value : null);
-            changed |= !raw.valid || raw.changed || !java.util.Objects.equals(raw.value, entry.get(config));
-        }
-
-        ReadString clearSlot = readShortcutTextWithLegacy(shopEditor, legacy, "clearSlot", "shopEditorClearSlot", defaults.keyBindings.shopEditor.clearSlot);
-        config.keyBindings.shopEditor.clearSlot = clearSlot.value;
-        changed |= clearSlot.changed;
-
-        return changed;
-    }
-
-    private static boolean sanitizeKeyBindings(AppConfig.KeyBindingsConfig keyBindings, AppConfig.KeyBindingsConfig defaults) {
-        boolean changed = false;
-
-        if (keyBindings.global == null) {
-            keyBindings.global = defaults.global;
-            changed = true;
-        }
-
-        if (keyBindings.viewport == null) {
-            keyBindings.viewport = defaults.viewport;
-            changed = true;
-        }
-
-        if (keyBindings.gameView == null) {
-            keyBindings.gameView = defaults.gameView;
-            changed = true;
-        }
-
-        if (keyBindings.shopEditor == null) {
-            keyBindings.shopEditor = defaults.shopEditor;
-            changed = true;
-        }
-
-        return changed;
+    private static boolean validSidebarWeight(float weight) {
+        return Float.isFinite(weight) && weight >= RIGHT_SIDEBAR_WEIGHT_MIN && weight <= RIGHT_SIDEBAR_WEIGHT_MAX;
     }
 
     private static JsonObject readObject(JsonObject parent, String key) {
@@ -531,18 +189,18 @@ final class ConfigSanitizer {
     }
 
     private static ReadString readString(JsonObject parent, String key) {
-        if (!parent.has(key)) return ReadString.invalid();
+        if (parent == null || !parent.has(key)) return ReadString.invalid();
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonPrimitive()) return ReadString.invalid();
         try {
-            return ReadString.valid(element.getAsString(), !element.getAsJsonPrimitive().isString());
+            return ReadString.valid(element.getAsString());
         } catch (Exception ignored) {
             return ReadString.invalid();
         }
     }
 
     private static ReadInt readInt(JsonObject parent, String key) {
-        if (!parent.has(key)) return ReadInt.invalid();
+        if (parent == null || !parent.has(key)) return ReadInt.invalid();
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonPrimitive()) return ReadInt.invalid();
         try {
@@ -550,22 +208,22 @@ final class ConfigSanitizer {
             if (!element.getAsJsonPrimitive().isNumber() && !isString) return ReadInt.invalid();
             String raw = element.getAsString().trim();
             if (!isStrictInteger(raw)) return ReadInt.invalid();
-            return ReadInt.valid(Integer.parseInt(raw), isString);
+            return ReadInt.valid(Integer.parseInt(raw));
         } catch (Exception ignored) {
         }
         return ReadInt.invalid();
     }
 
     private static ReadFloat readFloat(JsonObject parent, String key) {
-        if (!parent.has(key)) return ReadFloat.invalid();
+        if (parent == null || !parent.has(key)) return ReadFloat.invalid();
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonPrimitive()) return ReadFloat.invalid();
         try {
             if (element.getAsJsonPrimitive().isNumber()) {
-                return ReadFloat.valid(element.getAsFloat(), false);
+                return ReadFloat.valid(element.getAsFloat());
             }
             if (element.getAsJsonPrimitive().isString()) {
-                return ReadFloat.valid(Float.parseFloat(element.getAsString().trim()), true);
+                return ReadFloat.valid(Float.parseFloat(element.getAsString().trim()));
             }
         } catch (Exception ignored) {
         }
@@ -592,17 +250,17 @@ final class ConfigSanitizer {
     }
 
     private static ReadBoolean readBoolean(JsonObject parent, String key) {
-        if (!parent.has(key)) return ReadBoolean.invalid();
+        if (parent == null || !parent.has(key)) return ReadBoolean.invalid();
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonPrimitive()) return ReadBoolean.invalid();
         try {
             if (element.getAsJsonPrimitive().isBoolean()) {
-                return ReadBoolean.valid(element.getAsBoolean(), false);
+                return ReadBoolean.valid(element.getAsBoolean());
             }
             if (element.getAsJsonPrimitive().isString()) {
                 String value = element.getAsString().trim();
-                if ("true".equalsIgnoreCase(value)) return ReadBoolean.valid(true, true);
-                if ("false".equalsIgnoreCase(value)) return ReadBoolean.valid(false, true);
+                if ("true".equalsIgnoreCase(value)) return ReadBoolean.valid(true);
+                if ("false".equalsIgnoreCase(value)) return ReadBoolean.valid(false);
             }
         } catch (Exception ignored) {
         }
@@ -610,62 +268,18 @@ final class ConfigSanitizer {
     }
 
     private static ReadList readStringList(JsonObject parent, String key) {
-        if (!parent.has(key)) return ReadList.invalid();
+        if (parent == null || !parent.has(key)) return ReadList.invalid();
         JsonElement element = parent.get(key);
         if (element == null || !element.isJsonArray()) return ReadList.invalid();
 
         JsonArray array = element.getAsJsonArray();
         List<String> values = new ArrayList<>();
-        boolean changed = false;
         for (JsonElement item : array) {
             if (item != null && item.isJsonPrimitive() && item.getAsJsonPrimitive().isString()) {
                 values.add(item.getAsString());
-            } else {
-                changed = true;
             }
         }
-        return ReadList.valid(values, changed);
-    }
-
-    private static ReadKeyBinding readKeyBinding(JsonObject parent, String key, String defaultValue) {
-        ReadString value = readString(parent, key);
-        if (!value.valid) return ReadKeyBinding.defaulted(defaultValue);
-        if (value.value != null && value.value.isBlank()) return new ReadKeyBinding("", value.changed);
-
-        KeyBinding binding = KeyBinding.parse(value.value);
-        if (binding == null) return ReadKeyBinding.defaulted(defaultValue);
-        return new ReadKeyBinding(binding.text, value.changed || !binding.text.equals(value.value));
-    }
-
-    private static ReadKeyBinding readKeyBindingWithLegacy(JsonObject parent, JsonObject legacy, String key, String defaultValue) {
-        if (parent != null && parent.has(key)) {
-            return readKeyBinding(parent, key, defaultValue);
-        }
-        return readKeyBinding(legacy, key, defaultValue);
-    }
-
-    private static ReadString readShortcutTextWithLegacy(JsonObject parent,
-                                                         JsonObject legacy,
-                                                         String key,
-                                                         String legacyKey,
-                                                         String defaultValue) {
-        ReadString value = parent != null && parent.has(key)
-                ? readString(parent, key)
-                : readString(legacy, legacyKey);
-        if (!value.valid || value.value == null) {
-            return ReadString.valid(defaultValue, true);
-        }
-
-        String normalized = value.value.trim();
-        return ReadString.valid(normalized, value.changed || !normalized.equals(value.value));
-    }
-
-    private static boolean hasAny(JsonObject object, String... keys) {
-        if (object == null || keys == null) return false;
-        for (String key : keys) {
-            if (object.has(key)) return true;
-        }
-        return false;
+        return ReadList.valid(values);
     }
 
     private static NormalizeList normalizeFavoriteAssetPaths(List<String> source) {
@@ -707,59 +321,53 @@ final class ConfigSanitizer {
     private record NormalizeList(List<String> value, boolean changed) {
     }
 
-    private record ReadString(boolean valid, String value, boolean changed) {
-        static ReadString valid(String value, boolean changed) {
-            return new ReadString(true, value, changed);
+    private record ReadString(boolean valid, String value) {
+        static ReadString valid(String value) {
+            return new ReadString(true, value);
         }
 
         static ReadString invalid() {
-            return new ReadString(false, null, true);
+            return new ReadString(false, null);
         }
     }
 
-    private record ReadInt(boolean valid, int value, boolean changed) {
-        static ReadInt valid(int value, boolean changed) {
-            return new ReadInt(true, value, changed);
+    private record ReadInt(boolean valid, int value) {
+        static ReadInt valid(int value) {
+            return new ReadInt(true, value);
         }
 
         static ReadInt invalid() {
-            return new ReadInt(false, 0, true);
+            return new ReadInt(false, 0);
         }
     }
 
-    private record ReadFloat(boolean valid, float value, boolean changed) {
-        static ReadFloat valid(float value, boolean changed) {
-            return new ReadFloat(true, value, changed);
+    private record ReadFloat(boolean valid, float value) {
+        static ReadFloat valid(float value) {
+            return new ReadFloat(true, value);
         }
 
         static ReadFloat invalid() {
-            return new ReadFloat(false, 0.0f, true);
+            return new ReadFloat(false, 0.0f);
         }
     }
 
-    private record ReadBoolean(boolean valid, boolean value, boolean changed) {
-        static ReadBoolean valid(boolean value, boolean changed) {
-            return new ReadBoolean(true, value, changed);
+    private record ReadBoolean(boolean valid, boolean value) {
+        static ReadBoolean valid(boolean value) {
+            return new ReadBoolean(true, value);
         }
 
         static ReadBoolean invalid() {
-            return new ReadBoolean(false, false, true);
+            return new ReadBoolean(false, false);
         }
     }
 
-    private record ReadList(boolean valid, List<String> value, boolean changed) {
-        static ReadList valid(List<String> value, boolean changed) {
-            return new ReadList(true, value, changed);
+    private record ReadList(boolean valid, List<String> value) {
+        static ReadList valid(List<String> value) {
+            return new ReadList(true, value);
         }
 
         static ReadList invalid() {
-            return new ReadList(false, List.of(), true);
-        }
-    }
-
-    private record ReadKeyBinding(String value, boolean changed) {
-        static ReadKeyBinding defaulted(String defaultValue) {
-            return new ReadKeyBinding(defaultValue, true);
+            return new ReadList(false, List.of());
         }
     }
 

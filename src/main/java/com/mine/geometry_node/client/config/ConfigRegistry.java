@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.config;
 
 import com.mine.geometry_node.client.input.binding.InputBinding;
 import com.mine.geometry_node.client.input.binding.ControlKeyBinding;
+import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.input.binding.KeyScope;
 
 import java.util.ArrayList;
@@ -77,12 +78,12 @@ public final class ConfigRegistry {
 
         List<ConfigEntry<String>> conflicts = new ArrayList<>();
         for (ConfigEntry<?> raw : mEntries.values()) {
-            if (raw == target || raw.keyScope() == null || !scopesOverlap(target.keyScope(), raw.keyScope())) continue;
+            if (raw == target || raw.keyScope() == null || !scopesOverlap(target, raw)) continue;
             if (raw.editorType() != ConfigEntry.EditorType.KEY_BINDING
                     && raw.editorType() != ConfigEntry.EditorType.SHORTCUT) continue;
             @SuppressWarnings("unchecked") ConfigEntry<String> entry = (ConfigEntry<String>) raw;
             String existing = bindingText(entry, entry.get(config));
-            if (binding.equals(existing)) {
+            if (binding.equals(existing) || flightMenuConflict(target, binding, entry, existing)) {
                 conflicts.add(entry);
             }
         }
@@ -116,7 +117,27 @@ public final class ConfigRegistry {
         return true;
     }
 
-    private static boolean scopesOverlap(KeyScope first, KeyScope second) {
-        return first == second;
+    private static boolean scopesOverlap(ConfigEntry<?> first, ConfigEntry<?> second) {
+        KeyScope left = first.keyScope();
+        KeyScope right = second.keyScope();
+        // Flight capture blocks regular UI commands, but explicitly dispatches the view menu.
+        if (left == KeyScope.GAME_VIEW_FLIGHT || right == KeyScope.GAME_VIEW_FLIGHT) {
+            return left == right || first == BuiltinConfigEntries.GAME_VIEW_MENU
+                    || second == BuiltinConfigEntries.GAME_VIEW_MENU;
+        }
+        return left == right || left == KeyScope.GLOBAL || right == KeyScope.GLOBAL;
+    }
+
+    private static boolean flightMenuConflict(ConfigEntry<String> first, String left,
+                                               ConfigEntry<String> second, String right) {
+        if (first.keyScope() == KeyScope.GAME_VIEW_FLIGHT && second == BuiltinConfigEntries.GAME_VIEW_MENU) {
+            ControlKeyBinding control = ControlKeyBinding.parse(left);
+            return control != null && control.isHeldBy(KeyBinding.parse(right));
+        }
+        if (second.keyScope() == KeyScope.GAME_VIEW_FLIGHT && first == BuiltinConfigEntries.GAME_VIEW_MENU) {
+            ControlKeyBinding control = ControlKeyBinding.parse(right);
+            return control != null && control.isHeldBy(KeyBinding.parse(left));
+        }
+        return false;
     }
 }

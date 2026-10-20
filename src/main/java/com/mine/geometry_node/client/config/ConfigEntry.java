@@ -119,7 +119,7 @@ public final class ConfigEntry<T> {
 
     @SuppressWarnings("unchecked")
     private T copy(T value) {
-        if (value instanceof List<?> list) return (T) List.copyOf(list);
+        if (value instanceof List<?> list) return (T) java.util.Collections.unmodifiableList(new java.util.ArrayList<>(list));
         return value;
     }
 

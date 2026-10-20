@@ -23,7 +23,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
     private final CaptureView mCapture;
     private boolean mCapturing;
     private final ControlKeyRecorder mControlRecorder = new ControlKeyRecorder();
-    private boolean mSuppressClick;
+    private boolean mConsumedMouseGesture;
     private int mConsumedKey = -1;
 
     private ShortcutConfigEntryEditor(Context context, ConfigDraft draft, ConfigEntry<String> entry,
@@ -55,6 +55,8 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
 
     @Override public void refresh() {
         mCapturing = false;
+        mConsumedKey = -1;
+        mConsumedMouseGesture = false;
         mControlRecorder.reset();
         String binding = mDraft.get(mEntry);
         mCapture.setText(binding == null || binding.isBlank()
@@ -67,11 +69,11 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         updateStatus(mDraft.get(mEntry));
     }
 
+    @Override public void focus() { mCapture.requestFocus(); }
+
     private void beginCapture() {
-        if (mSuppressClick) {
-            mSuppressClick = false;
-            return;
-        }
+        mConsumedKey = -1;
+        mConsumedMouseGesture = false;
         mControlRecorder.reset();
         mCapturing = true;
         mCapture.requestFocus();
@@ -116,7 +118,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         setValidationSilently(valid, message);
     }
 
-    private final class CaptureView extends TextView implements com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture {
+    private final class CaptureView extends TextView implements OverlayEscapeCapture {
         CaptureView(Context context) { super(context); }
 
         @Override public boolean captureEscape(KeyEvent event) {
@@ -125,7 +127,13 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
 
         @Override protected void onFocusChanged(boolean focused, int direction, icyllis.modernui.graphics.Rect previouslyFocusedRect) {
             super.onFocusChanged(focused, direction, previouslyFocusedRect);
-            if (!focused && mCapturing) cancelCapture();
+            // The release of a completed capture may be delivered to another view.
+            if (!focused) refresh();
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            refresh();
+            super.onDetachedFromWindow();
         }
 
         @Override public boolean dispatchKeyEvent(KeyEvent event) {
@@ -152,12 +160,24 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
+            int action = event.getAction();
+            if (action == MotionEvent.ACTION_DOWN) {
+                // A new gesture also recovers from a release lost outside this view.
+                mConsumedMouseGesture = false;
+            } else if (mConsumedMouseGesture) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    mConsumedMouseGesture = false;
+                }
+                return true;
+            }
             if (mCapturing && mEntry.editorType() == ConfigEntry.EditorType.SHORTCUT
-                    && event.getAction() == MotionEvent.ACTION_DOWN) {
+                    && action == MotionEvent.ACTION_DOWN) {
                 InputBinding binding = UiInputBindings.fromEvent(event);
                 if (binding != null) {
-                    mSuppressClick = true;
                     setBinding(binding.text());
+                    // Consume the matching release here, so TextView cannot turn it
+                    // into another capture click or leave suppression for a later click.
+                    mConsumedMouseGesture = true;
                     return true;
                 }
             }

@@ -53,16 +53,25 @@ public final class InputBinding {
         boolean superKey = false;
         Integer mouseButton = null;
         String mouseName = null;
-        for (String token : value.trim().toUpperCase(Locale.ROOT).split("\\+")) {
+        for (String token : value.trim().toUpperCase(Locale.ROOT).split("\\+", -1)) {
             String part = token.trim().replace(' ', '_').replace('-', '_');
             switch (part) {
                 case "CTRL", "CONTROL" -> ctrl = true;
                 case "SHIFT" -> shift = true;
                 case "ALT", "OPTION" -> alt = true;
                 case "SUPER", "META", "CMD", "COMMAND" -> superKey = true;
-                case "LEFT_CLICK", "MOUSE_LEFT" -> { mouseButton = BUTTON_PRIMARY; mouseName = "LEFT_CLICK"; }
-                case "RIGHT_CLICK", "MOUSE_RIGHT" -> { mouseButton = BUTTON_SECONDARY; mouseName = "RIGHT_CLICK"; }
-                case "MIDDLE_CLICK", "MOUSE_MIDDLE" -> { mouseButton = BUTTON_TERTIARY; mouseName = "MIDDLE_CLICK"; }
+                case "LEFT_CLICK", "MOUSE_LEFT" -> {
+                    if (mouseButton != null) return null;
+                    mouseButton = BUTTON_PRIMARY; mouseName = "LEFT_CLICK";
+                }
+                case "RIGHT_CLICK", "MOUSE_RIGHT" -> {
+                    if (mouseButton != null) return null;
+                    mouseButton = BUTTON_SECONDARY; mouseName = "RIGHT_CLICK";
+                }
+                case "MIDDLE_CLICK", "MOUSE_MIDDLE" -> {
+                    if (mouseButton != null) return null;
+                    mouseButton = BUTTON_TERTIARY; mouseName = "MIDDLE_CLICK";
+                }
                 default -> { return null; }
             }
         }
@@ -105,10 +114,12 @@ public final class InputBinding {
         return mDevice == Device.KEYBOARD && mKeyBinding.matches(keyCode, ctrl, shift, alt, superKey);
     }
 
+    /** A nonzero action button identifies the event; zero queries the held button state. */
     public boolean matchesMouse(int actionButton, int buttonState,
                                 boolean ctrl, boolean shift, boolean alt, boolean superKey) {
         if (mDevice != Device.MOUSE) return false;
-        boolean buttonMatches = actionButton == mMouseButton || (buttonState & mMouseButton) != 0;
+        boolean buttonMatches = actionButton != 0
+                ? actionButton == mMouseButton : (buttonState & mMouseButton) != 0;
         return buttonMatches && ctrl == mCtrl && shift == mShift && alt == mAlt && superKey == mSuper;
     }
 

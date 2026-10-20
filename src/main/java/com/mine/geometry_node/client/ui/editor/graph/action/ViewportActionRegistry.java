@@ -14,7 +14,7 @@ public final class ViewportActionRegistry {
     private static final Map<ViewportActionId, ViewportAction> ACTIONS = new EnumMap<>(ViewportActionId.class);
 
     static {
-        register(KeyScope.VIEWPORT, ViewportActionId.SELECT_ALL, BuiltinConfigEntries.VIEWPORT_SELECT_ALL,
+        register(KeyScope.GLOBAL, ViewportActionId.SELECT_ALL, BuiltinConfigEntries.GLOBAL_SELECT_ALL,
                 ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.UNDO, BuiltinConfigEntries.GLOBAL_UNDO, ViewportActionState::canUndo);
         register(KeyScope.GLOBAL, ViewportActionId.REDO, BuiltinConfigEntries.GLOBAL_REDO, ViewportActionState::canRedo);
@@ -22,7 +22,7 @@ public final class ViewportActionRegistry {
         register(KeyScope.VIEWPORT, ViewportActionId.EXPORT_IMAGE, "导出为图片", null, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.COPY, BuiltinConfigEntries.GLOBAL_COPY, ViewportActionState::isReady);
         register(KeyScope.GLOBAL, ViewportActionId.PASTE, BuiltinConfigEntries.GLOBAL_PASTE, ViewportActionState::isReady);
-        register(KeyScope.VIEWPORT, ViewportActionId.DELETE, BuiltinConfigEntries.VIEWPORT_DELETE, ViewportActionState::isReady);
+        register(KeyScope.GLOBAL, ViewportActionId.DELETE, BuiltinConfigEntries.GLOBAL_DELETE, ViewportActionState::isReady);
         register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_SNAP_TO_GRID, BuiltinConfigEntries.VIEWPORT_TOGGLE_SNAP, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.TOGGLE_GRID_AND_AXIS, BuiltinConfigEntries.VIEWPORT_TOGGLE_GRID, state -> true);
         register(KeyScope.VIEWPORT, ViewportActionId.MOVE_SELECTION, BuiltinConfigEntries.VIEWPORT_MOVE,

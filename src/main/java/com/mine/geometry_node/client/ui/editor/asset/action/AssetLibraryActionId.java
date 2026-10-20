@@ -5,5 +5,6 @@ public enum AssetLibraryActionId {
     PASTE,
     CUT,
     DELETE,
-    RENAME
+    RENAME,
+    SELECT_ALL
 }

@@ -101,11 +101,9 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.global.delete, (config, value) -> config.keyBindings.global.delete = value);
     public static final ConfigEntry<String> GLOBAL_RENAME = key("keyBindings.global.rename", SHORTCUT_GLOBAL, 800, KeyScope.GLOBAL,
             config -> config.keyBindings.global.rename, (config, value) -> config.keyBindings.global.rename = value);
+    public static final ConfigEntry<String> GLOBAL_SELECT_ALL = key("keyBindings.global.selectAll", SHORTCUT_GLOBAL, 900, KeyScope.GLOBAL,
+            config -> config.keyBindings.global.selectAll, (config, value) -> config.keyBindings.global.selectAll = value);
 
-    public static final ConfigEntry<String> VIEWPORT_DELETE = key("keyBindings.viewport.delete", SHORTCUT_VIEWPORT, 100, KeyScope.VIEWPORT,
-            config -> config.keyBindings.viewport.delete, (config, value) -> config.keyBindings.viewport.delete = value);
-    public static final ConfigEntry<String> VIEWPORT_SELECT_ALL = key("keyBindings.viewport.selectAll", SHORTCUT_VIEWPORT, 50, KeyScope.VIEWPORT,
-            config -> config.keyBindings.viewport.selectAll, (config, value) -> config.keyBindings.viewport.selectAll = value);
     public static final ConfigEntry<String> VIEWPORT_TOGGLE_SNAP = key("keyBindings.viewport.toggleSnapToGrid", SHORTCUT_VIEWPORT, 200, KeyScope.VIEWPORT,
             config -> config.keyBindings.viewport.toggleSnapToGrid, (config, value) -> config.keyBindings.viewport.toggleSnapToGrid = value);
     public static final ConfigEntry<String> VIEWPORT_TOGGLE_GRID = key("keyBindings.viewport.toggleGridAndAxis", SHORTCUT_VIEWPORT, 300, KeyScope.VIEWPORT,
@@ -153,20 +151,8 @@ public final class BuiltinConfigEntries {
             (AppConfig config) -> config.keyBindings.gameView.entityMove, (config, value) -> config.keyBindings.gameView.entityMove = value)
             .label(labelKey("keyBindings.gameView.entityMove")).description(descriptionKey("keyBindings.gameView.entityMove"))
             .order(412).keyScope(KeyScope.GAME_VIEW).normalize(BuiltinConfigEntries::normalizeShortcut).build();
-    public static final ConfigEntry<String> GAME_VIEW_COPY = key("keyBindings.gameView.copy", SHORTCUT_GAME_VIEW_EDIT, 415, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.copy, (config, value) -> config.keyBindings.gameView.copy = value);
-    public static final ConfigEntry<String> GAME_VIEW_PASTE = key("keyBindings.gameView.paste", SHORTCUT_GAME_VIEW_EDIT, 416, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.paste, (config, value) -> config.keyBindings.gameView.paste = value);
-    public static final ConfigEntry<String> GAME_VIEW_DELETE = key("keyBindings.gameView.delete", SHORTCUT_GAME_VIEW_EDIT, 420, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.delete, (config, value) -> config.keyBindings.gameView.delete = value);
-    public static final ConfigEntry<String> GAME_VIEW_UNDO = key("keyBindings.gameView.undo", SHORTCUT_GAME_VIEW_EDIT, 430, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.undo, (config, value) -> config.keyBindings.gameView.undo = value);
-    public static final ConfigEntry<String> GAME_VIEW_REDO = key("keyBindings.gameView.redo", SHORTCUT_GAME_VIEW_EDIT, 440, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.redo, (config, value) -> config.keyBindings.gameView.redo = value);
     public static final ConfigEntry<String> GAME_VIEW_CANCEL = key("keyBindings.gameView.cancel", SHORTCUT_GAME_VIEW_EDIT, 450, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.cancel, (config, value) -> config.keyBindings.gameView.cancel = value);
-    public static final ConfigEntry<String> GAME_VIEW_SELECT_ALL = key("keyBindings.gameView.selectAll", SHORTCUT_GAME_VIEW_EDIT, 460, KeyScope.GAME_VIEW,
-            config -> config.keyBindings.gameView.selectAll, (config, value) -> config.keyBindings.gameView.selectAll = value);
 
     public static final ConfigEntry<String> GAME_FLIGHT_FORWARD = controlKey("keyBindings.gameView.forward", 400, true,
             config -> config.keyBindings.gameView.forward, (config, value) -> config.keyBindings.gameView.forward = value);
@@ -198,12 +184,12 @@ public final class BuiltinConfigEntries {
             VIEWPORT_GRID_SIZE, VIEWPORT_SNAP_TO_GRID, VIEWPORT_SHOW_GRID_AND_AXIS, GAME_VIEW_BACKGROUND_FPS,
             NODE_CORNER_RADIUS, ASSET_QUICK_ACCESS_PATHS, ASSET_VIEW_MODE,
             PREVIEW_MAX_SIZE_MIB, PREVIEW_LOCATION,
-            GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME,
-            VIEWPORT_SELECT_ALL, VIEWPORT_DELETE, VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
+            GLOBAL_UNDO, GLOBAL_REDO, GLOBAL_SAVE, GLOBAL_COPY, GLOBAL_PASTE, GLOBAL_CUT, GLOBAL_DELETE, GLOBAL_RENAME, GLOBAL_SELECT_ALL,
+            VIEWPORT_TOGGLE_SNAP, VIEWPORT_TOGGLE_GRID, VIEWPORT_TOGGLE_SIDEBAR,
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
             GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
             GAME_VIEW_SNAP, GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
-            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_COPY, GAME_VIEW_PASTE, GAME_VIEW_DELETE, GAME_VIEW_UNDO, GAME_VIEW_REDO, GAME_VIEW_CANCEL, GAME_VIEW_SELECT_ALL,
+            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_CANCEL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}

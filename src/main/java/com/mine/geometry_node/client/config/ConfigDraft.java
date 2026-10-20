@@ -2,11 +2,14 @@ package com.mine.geometry_node.client.config;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.HashSet;
+import java.util.Set;
 
-/** Isolated mutable settings transaction used by the future global settings dialog. */
+/** Isolated settings transaction; only edited entries are merged into the live configuration. */
 public final class ConfigDraft {
     private AppConfig mBaseline;
     private AppConfig mConfig;
+    private final Set<String> mResetEntries = new HashSet<>();
 
     ConfigDraft(AppConfig source) {
         mBaseline = Objects.requireNonNull(source, "source").copy();
@@ -48,20 +51,29 @@ public final class ConfigDraft {
         return false;
     }
 
-    AppConfig snapshot() {
-        return mConfig.copy();
+    AppConfig mergeOnto(AppConfig current) {
+        AppConfig merged = Objects.requireNonNull(current, "current").copy();
+        for (ConfigEntry<?> entry : ConfigRegistry.INSTANCE.entries()) mergeEntry(entry, merged);
+        return merged;
+    }
+
+    private <T> void mergeEntry(ConfigEntry<T> entry, AppConfig target) {
+        if (isDirtyTyped(entry)) entry.set(target, entry.get(mConfig));
     }
 
     void acceptAppliedState(AppConfig applied) {
         mConfig = applied.copy();
         mBaseline = applied.copy();
+        mResetEntries.clear();
     }
 
     private <T> void resetTyped(ConfigEntry<T> entry) {
         entry.set(mConfig, entry.defaultValue());
+        // Reset is an explicit write even when the opening snapshot already held the default.
+        mResetEntries.add(entry.id());
     }
 
     private <T> boolean isDirtyTyped(ConfigEntry<T> entry) {
-        return !Objects.equals(entry.get(mBaseline), entry.get(mConfig));
+        return mResetEntries.contains(entry.id()) || !Objects.equals(entry.get(mBaseline), entry.get(mConfig));
     }
 }

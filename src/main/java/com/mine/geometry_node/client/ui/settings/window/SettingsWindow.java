@@ -55,6 +55,7 @@ final class SettingsWindow extends ModalWindowView {
     private boolean allowDiscard;
     private boolean confirmationOpen;
     private boolean disposed;
+    private boolean updatingState;
 
     SettingsWindow(Context context, MainUiServices services, Consumer<SettingsWindow> destroyedCallback) {
         super(context, tr("geometry_node.settings.title"), MovementMode.DRAGGABLE);
@@ -138,7 +139,7 @@ final class SettingsWindow extends ModalWindowView {
 
     @Override
     public boolean canClose(OverlayCloseReason reason) {
-        if (allowDiscard || reason == OverlayCloseReason.HOST_DESTROYED || !draft.isDirty()) {
+        if (allowDiscard || reason == OverlayCloseReason.HOST_DESTROYED || !hasPendingChanges()) {
             return true;
         }
         if (!confirmationOpen) {
@@ -171,6 +172,7 @@ final class SettingsWindow extends ModalWindowView {
             for (SettingsPageDefinition definition : definitions) {
                 SettingsPage page = definition.factory().create(pageContext);
                 if (page == null || page.getView() == null) {
+                    if (page != null) page.dispose();
                     throw new IllegalStateException("Settings page factory returned no view: " + definition.id());
                 }
                 pages.put(definition.id(), page);
@@ -205,21 +207,32 @@ final class SettingsWindow extends ModalWindowView {
                     && page.applySearch(pageTitleMatch ? "" : normalized));
         }
         navigation.applyFilter(id -> matches.getOrDefault(id, false));
-        if (!matches.getOrDefault(selectedPageId, false)) {
-            definitions.stream()
+        if (matches.getOrDefault(selectedPageId, false)) {
+            navigation.setSelected(selectedPageId);
+            contentHost.show(pages.get(selectedPageId));
+        } else {
+            String firstMatch = definitions.stream()
                     .map(SettingsPageDefinition::id)
                     .filter(id -> matches.getOrDefault(id, false))
                     .findFirst()
-                    .ifPresent(this::selectPage);
+                    .orElse(null);
+            if (firstMatch != null) {
+                selectPage(firstMatch);
+            } else {
+                editorEnvironment.closeTransient();
+                navigation.setSelected(null);
+                contentHost.show(null);
+            }
         }
     }
 
     private void applyChanges(boolean closeAfterApply) {
+        revalidateEditors();
         InvalidEditor invalid = firstInvalidEditor();
         if (invalid != null) {
             searchInput.setText("");
             selectPage(invalid.pageId());
-            invalid.editor().getView().requestFocus();
+            pages.get(invalid.pageId()).revealEditor(invalid.editor());
             statusView.setText(invalid.editor().validationMessage());
             statusView.setTextColor(COLOR_DANGER);
             return;
@@ -227,6 +240,7 @@ final class SettingsWindow extends ModalWindowView {
         if (draft.isDirty()) {
             try {
                 ConfigManager.INSTANCE.apply(draft);
+                pages.values().forEach(SettingsPage::refresh);
             } catch (UncheckedIOException failure) {
                 statusView.setText(Component.translatable(
                         "geometry_node.settings.save_failed",
@@ -261,6 +275,7 @@ final class SettingsWindow extends ModalWindowView {
     }
 
     private void resetAll() {
+        editorEnvironment.closeTransient();
         draft.resetAll();
         pages.values().forEach(SettingsPage::refresh);
         statusView.setText("");
@@ -268,9 +283,29 @@ final class SettingsWindow extends ModalWindowView {
     }
 
     private void updateState() {
-        if (applyButton != null) {
-            applyButton.setEnabled(draft.isDirty());
-            applyButton.setAlpha(draft.isDirty() ? 1.0f : 0.55f);
+        if (disposed || updatingState) return;
+        updatingState = true;
+        try {
+            revalidateEditors();
+            if (applyButton != null) {
+                boolean pending = hasPendingChanges();
+                applyButton.setEnabled(pending);
+                applyButton.setAlpha(pending ? 1.0f : 0.55f);
+            }
+        } finally {
+            updatingState = false;
+        }
+    }
+
+    private boolean hasPendingChanges() {
+        return draft.isDirty() || pages.values().stream()
+                .flatMap(page -> page.editors().stream())
+                .anyMatch(ConfigEntryEditor::hasUncommittedChanges);
+    }
+
+    private void revalidateEditors() {
+        for (SettingsPage page : pages.values()) {
+            page.editors().forEach(ConfigEntryEditor::revalidate);
         }
     }
 

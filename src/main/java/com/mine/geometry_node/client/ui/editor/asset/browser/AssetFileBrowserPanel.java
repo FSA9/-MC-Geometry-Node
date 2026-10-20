@@ -408,6 +408,12 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             case CUT -> mActionController.cutSelectionToClipboard();
             case DELETE -> mActionController.deleteSelection();
             case RENAME -> mActionController.renameSelection();
+            case SELECT_ALL -> {
+                mSelectedPaths.clear();
+                for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
+                syncSelectionViews();
+                notifySelectionChanged();
+            }
         }
     }
 
