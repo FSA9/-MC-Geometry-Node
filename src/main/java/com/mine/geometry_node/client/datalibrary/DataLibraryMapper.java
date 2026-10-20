@@ -25,7 +25,7 @@ final class DataLibraryMapper {
         putFolders(document, folders);
         for (DataLibraryRepository.Entry entry : entries) {
             document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(),
-                    entry.tags()));
+                    entry.tags(), entry.data()));
         }
         return document;
     }
@@ -57,7 +57,7 @@ final class DataLibraryMapper {
 
     static List<DataLibraryRepository.Entry> fromDocument(DataLibraryLoadResult loaded) {
         return loaded.document().entries().values().stream().map(entry -> new DataLibraryRepository.Entry(
-                entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(), entry.tags())).toList();
+                entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(), entry.tags(), entry.data())).toList();
     }
 
     static Set<DataLibraryObjectKey> toKeys(Set<DataLibraryRepository.EntryKey> keys) {
@@ -71,7 +71,7 @@ final class DataLibraryMapper {
 
     static DataLibraryEntry toCore(DataLibraryRepository.Entry entry) {
         return new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(), entry.value(),
-                entry.tags());
+                entry.tags(), entry.data());
     }
 
     static DataLibraryFolder toCore(DataLibraryRepository.Folder folder) {

@@ -6,6 +6,9 @@ import com.mine.geometry_node.core.metadata.TagAccess;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 
 import java.util.List;
+import java.util.Map;
+import com.mine.geometry_node.core.metadata.DataDictionary;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import java.util.Set;
 import java.util.UUID;
 
@@ -15,15 +18,90 @@ public interface DataLibraryRepository {
 
     record Folder(UUID id, UUID parentId, String name) {}
 
-    record Entry(UUID id, UUID parentId, PortType type, String key, Object value, List<String> tags) {
+    record Entry(UUID id, UUID parentId, PortType type, String key, Object value, List<String> tags,
+                 Map<String, Object> data) {
         public Entry {
             tags = tags == null ? List.of() : List.copyOf(tags);
+            data = DataDictionary.snapshot(java.util.Objects.requireNonNull(data, "data"), GraphMetadataValuePolicy.of(null));
         }
 
         public Entry(UUID id, UUID parentId, PortType type, String key, Object value) {
-            this(id, parentId, type, key, value, List.of());
+            this(id, parentId, type, key, value, List.of(), Map.of());
+        }
+        public Entry(UUID id, UUID parentId, PortType type, String key, Object value, List<String> tags) {
+            this(id, parentId, type, key, value, tags, Map.of());
+        }
+
+        /** Semantic snapshot comparison: mutable graph leaves need not share Java identity. */
+        public boolean sameContent(Entry other) {
+            var policy = GraphMetadataValuePolicy.of(null);
+            return other != null && java.util.Objects.equals(id, other.id)
+                    && java.util.Objects.equals(parentId, other.parentId) && type == other.type
+                    && java.util.Objects.equals(key, other.key) && tags.equals(other.tags)
+                    && policy.equivalent(value, other.value)
+                    && DataDictionary.equivalent(data, other.data, policy);
+        }
+
+        @Override public Map<String, Object> data() {
+            return DataDictionary.snapshot(data, GraphMetadataValuePolicy.of(null));
         }
     }
+
+    /** Custom dictionary capability, independent of the entry value and vanilla NBT. */
+    default boolean canEditData(Entry entry) {
+        return entry != null && hasLoadedSnapshot() && findEntry(entry.id()) != null;
+    }
+
+    /** A complete dictionary commit through the same CAS/pending lifecycle as value and tag changes. */
+    default void replaceData(Entry expected, Map<String, Object> replacement) {
+        if (!canEditData(expected) || isUpdatePending(expected.id()) || !expected.sameContent(findEntry(expected.id()))) {
+            throw new IllegalStateException("Data Library entry changed, is unavailable, or is still saving");
+        }
+        var policy = GraphMetadataValuePolicy.of(null);
+        Map<String, Object> data = DataDictionary.snapshot(replacement, policy);
+        if (DataDictionary.equivalent(expected.data(), data, policy)) return;
+        update(expected, new Entry(expected.id(), expected.parentId(), expected.type(), expected.key(),
+                expected.value(), expected.tags(), data));
+    }
+
+    /** Completion follows the authoritative save/refresh; empty string means success. */
+    default void replaceData(Entry expected, Map<String, Object> replacement,
+                             java.util.function.Consumer<String> completion) {
+        Map<String, Object> data = DataDictionary.snapshot(replacement, GraphMetadataValuePolicy.of(null));
+        if (!canEditData(expected) || isUpdatePending(expected.id()) || !expected.sameContent(findEntry(expected.id())))
+            throw new IllegalStateException("Data Library entry changed, is unavailable, or is still saving");
+        if (DataDictionary.equivalent(expected.data(), data, GraphMetadataValuePolicy.of(null))) {
+            if (completion != null) completion.accept("");
+            return;
+        }
+        var finished = new java.util.concurrent.atomic.AtomicBoolean();
+        var submitted = new java.util.concurrent.atomic.AtomicBoolean();
+        Runnable listener = new Runnable() {
+            @Override public void run() {
+                if (!submitted.get() || isUpdatePending(expected.id()) || !finished.compareAndSet(false, true)) return;
+                removeChangeListener(this);
+                Entry current = findEntry(expected.id());
+                String message = dataUpdateMessage(expected.id());
+                if (message.isEmpty() && (!hasLoadedSnapshot() || current == null
+                        || !DataDictionary.equivalent(current.data(), data, GraphMetadataValuePolicy.of(null)))) {
+                    message = "database.data_update_failed";
+                }
+                if (completion != null) completion.accept(message);
+            }
+        };
+        addChangeListener(listener);
+        try {
+            replaceData(expected, data);
+            submitted.set(true);
+            listener.run();
+        } catch (RuntimeException failure) {
+            removeChangeListener(listener);
+            throw failure;
+        }
+    }
+
+    /** Unlocalized message key, or empty when no dictionary update failed. */
+    default String dataUpdateMessage(UUID entryId) { return ""; }
 
     List<Folder> folders();
 
@@ -76,7 +154,7 @@ public interface DataLibraryRepository {
     }
 
     private void requireTagEdit(Entry expected) {
-        if (!canEditTags(expected) || isUpdatePending(expected.id()) || !expected.equals(findEntry(expected.id()))) {
+        if (!canEditTags(expected) || isUpdatePending(expected.id()) || !expected.sameContent(findEntry(expected.id()))) {
             throw new IllegalStateException("Data Library entry changed, is unavailable, or is still saving");
         }
     }
@@ -93,7 +171,7 @@ public interface DataLibraryRepository {
                 List<String> tags = transformation.apply(expected.tags());
                 if (expected.tags().equals(tags)) return false;
                 DataLibraryRepository.this.update(expected, new Entry(expected.id(), expected.parentId(),
-                        expected.type(), expected.key(), expected.value(), tags));
+                        expected.type(), expected.key(), expected.value(), tags, expected.data()));
                 return true;
             }
         }, TagPolicy.DATA_LIBRARY_LEGACY);
@@ -120,6 +198,7 @@ public interface DataLibraryRepository {
 
     DataLibraryRepository EMPTY = new DataLibraryRepository() {
         @Override public boolean canEditTags(Entry entry) { return false; }
+        @Override public boolean canEditData(Entry entry) { return false; }
         @Override public List<Folder> folders() { return List.of(); }
         @Override public List<Entry> entries() { return List.of(); }
         @Override public void create(UUID parentId, PortType type) {}

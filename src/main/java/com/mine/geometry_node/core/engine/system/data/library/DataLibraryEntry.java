@@ -4,6 +4,9 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
+import com.mine.geometry_node.core.metadata.DataDictionary;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -14,7 +17,8 @@ public record DataLibraryEntry(
         PortType type,
         String key,
         @Nullable Object value,
-        List<String> tags
+        List<String> tags,
+        Map<String, Object> data
 ) {
     public DataLibraryEntry {
         Objects.requireNonNull(id, "id");
@@ -24,11 +28,21 @@ public record DataLibraryEntry(
         }
         key = DataLibraryDocument.requireName(key, "Entry key");
         tags = DataLibraryTags.normalize(tags);
+        data = DataDictionary.snapshot(Objects.requireNonNull(data, "data"), GraphMetadataValuePolicy.of(null));
     }
 
     public DataLibraryEntry(UUID id, @Nullable UUID parentId, PortType type, String key,
                             @Nullable Object value) {
-        this(id, parentId, type, key, value, List.of());
+        this(id, parentId, type, key, value, List.of(), Map.of());
     }
 
+    public DataLibraryEntry(UUID id, @Nullable UUID parentId, PortType type, String key,
+                            @Nullable Object value, List<String> tags) {
+        this(id, parentId, type, key, value, tags, Map.of());
+    }
+
+    /** Detaches mutable graph leaves as well as dictionary containers. */
+    @Override public Map<String, Object> data() {
+        return DataDictionary.snapshot(data, GraphMetadataValuePolicy.of(null));
+    }
 }

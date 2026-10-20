@@ -116,7 +116,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             UiTableStyle.column("type", 144),
             UiTableStyle.column("registry_type", 180),
             UiTableStyle.column("value", 256),
-            UiTableStyle.column("tags", 128)));
+            UiTableStyle.column("tags", 128),
+            UiTableStyle.column("data", 220)));
     private final LinearLayout breadcrumbTrail;
     private final LinearLayout typeNavigation;
     private final TextView statusView;
@@ -852,6 +853,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         addColumnLabel(header, "registry_type", "geometry_node.database.registry_type");
         addColumnLabel(header, "value", "geometry_node.data_library.column_value");
         addColumnLabel(header, "tags", "geometry_node.data_library.column_tags");
+        header.addView(UiTableStyle.cell(getContext(), tr("geometry_node.database.data.title"), TEXT),
+                new ViewGroup.LayoutParams(-1, -1));
         return header;
     }
 
@@ -1170,12 +1173,26 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             updateSelectionViews();
         });
         TextView name = presentation.nameView();
+        String dataScope = stateScope;
+        presentation.setManageDataAction(() -> {
+            if (disposed || suspended || !Objects.equals(dataScope, stateScope)
+                    || !Objects.equals(dataScope, UiStateScopes.current())) return;
+            DataLibraryRepository.Entry live = repository.findEntry(entry.id());
+            if (live == null) return;
+            selected.clear(); selected.add(key(live)); selection.folders.clear();
+            selection.anchor = live.id(); updateSelectionViews();
+            var binding = com.mine.geometry_node.client.ui.editor.database.metadata.DatabaseDataBindings.library(
+                    repository, live.id(), () -> !disposed && !suspended
+                            && Objects.equals(dataScope, stateScope) && Objects.equals(dataScope, UiStateScopes.current()));
+            com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryEditor.show(
+                    this, live.key() + " · " + tr("shared_entry"), binding);
+        });
         card.contextMenu = event -> showRenameMenu(event, name, updatedName -> {
             if (current.get() == null) return;
             DataLibraryRepository.Entry latest = repository.findEntry(entry.id());
             if (latest != null && latest.type() == entry.type() && !Objects.equals(latest.key(), updatedName)) {
                 repository.update(latest, new DataLibraryRepository.Entry(
-                        latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags()));
+                        latest.id(), latest.parentId(), latest.type(), updatedName, latest.value(), latest.tags(), latest.data()));
             }
         });
         CardBinding binding = new CardBinding(presentation, current, entry);

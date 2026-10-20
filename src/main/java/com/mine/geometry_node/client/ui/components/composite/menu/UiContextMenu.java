@@ -167,6 +167,17 @@ public class UiContextMenu extends UiPopupOverlay {
         }
     }
 
+    /** Anchor placement in the chosen host, including its transforms and scrolling. */
+    public void showBelow(View anchor, ViewGroup host) {
+        if (anchor == null || host == null) return;
+        Matrix transform = new Matrix();
+        anchor.transformMatrixToGlobal(transform);
+        float[] point = {0, anchor.getHeight()};
+        transform.mapPoint(point);
+        if (!UIUtils.rootToLocal(host, point[0], point[1], new Matrix(), point)) return;
+        showAt(point[0], point[1], host);
+    }
+
     public void setOnDismissListener(Runnable listener) {
         mOnDismissListener = listener;
     }

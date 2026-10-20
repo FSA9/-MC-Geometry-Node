@@ -20,7 +20,7 @@ final class DataLibraryValueChanges {
     static DataLibraryRepository.Entry replace(DataLibraryRepository.Entry current, Object value) {
         if (current == null) throw new IllegalArgumentException("current entry is required");
         return new DataLibraryRepository.Entry(current.id(), current.parentId(), current.type(),
-                current.key(), value, current.tags());
+                current.key(), value, current.tags(), current.data());
     }
 
     static boolean equivalent(DataLibraryRepository.Entry current, Object candidate) {

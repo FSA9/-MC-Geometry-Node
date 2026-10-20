@@ -12,6 +12,10 @@ import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplit
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.list.UiListSelection;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataSummaryCell;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryEditor;
+import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
+import com.mine.geometry_node.client.ui.editor.database.metadata.DatabaseDataBindings;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
 import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
@@ -95,7 +99,8 @@ public final class WorldObjectsView extends FrameLayout {
             UiTableStyle.column("dimension", 150),
             UiTableStyle.column("position", 180),
             UiTableStyle.column("lifetime", 100),
-            UiTableStyle.column("tags", 180)));
+            UiTableStyle.column("tags", 180),
+            UiTableStyle.column("data", 220)));
     private final LinearLayout table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
@@ -196,6 +201,8 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setOnCheckedChangeListener((checkbox, checked)->toggleAll());
         tableHeader.addView(UiTableStyle.selectionCell(context, selectAll),new ViewGroup.LayoutParams(-1,-1));
         for(String key:List.of("name","type","registry_type","value","dimension","position","lifetime","tags")) addHeader(key);
+        tableHeader.addView(UiTableStyle.cell(context, tr("data.title"), UiTheme.Text.NORMAL),
+                new ViewGroup.LayoutParams(-1, -1));
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,px(UiTableStyle.HEADER_HEIGHT)));
         UiScrollView scroll=new UiScrollView(context); scroll.setFillViewport(true);
@@ -564,6 +571,10 @@ public final class WorldObjectsView extends FrameLayout {
         cell(line,lifetimeLabel(entry.lifetime()));
         UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
         line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
+        UiDataSummaryCell dataCell = new UiDataSummaryCell(getContext());
+        dataCell.setSummary(dataCount(entry), entry.references().getOrDefault(WorldObjectDataEdits.SUMMARY_REFERENCE, ""),
+                entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE) ? () -> openDataEditor(entry) : null);
+        line.addView(dataCell, new ViewGroup.LayoutParams(-1, -1));
 
         // Cells determine height; background and selection overlays follow without stretching the row.
         FrameLayout host = new UiTableRowFrame(getContext(), line, row);
@@ -677,7 +688,8 @@ public final class WorldObjectsView extends FrameLayout {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
     }
     public DatabaseSelection selection() {
-        if(rowBatch.isRunning() || awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
+        // Visual row mounting does not invalidate the authoritative selected objects.
+        if(awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
         List<WorldObjectEntry> entries = selectedEntries();
         if (entries.isEmpty()) return null;
         if(entries.size()>1)return new DatabaseSelection(tr("selected",entries.size()),tr("world"),"",0,
@@ -694,7 +706,9 @@ public final class WorldObjectsView extends FrameLayout {
         source.add(new DatabaseSelection.Field(tr("source"),entry.source().isEmpty()?"—":entry.source()));
         source.add(new DatabaseSelection.Field(tr("provider"),providerLabel(entry.provider())));
         entry.references().entrySet().stream()
-                .filter(ref -> !ref.getKey().equals(WorldObjectTagEdits.TARGET_REFERENCE))
+                .filter(ref -> !ref.getKey().equals(WorldObjectTagEdits.TARGET_REFERENCE)
+                        && !Set.of(WorldObjectDataEdits.TARGET_REFERENCE, WorldObjectDataEdits.COUNT_REFERENCE,
+                        WorldObjectDataEdits.SUMMARY_REFERENCE).contains(ref.getKey()))
                 .sorted(Map.Entry.comparingByKey()).forEach(ref->
                 source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
         return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
@@ -710,7 +724,31 @@ public final class WorldObjectsView extends FrameLayout {
                                         : Component.translatable("geometry_node." + session.tagUpdateMessage()).getString(),
                                 tag -> submitTagEdit(entry, tag, true),
                                 tag -> submitTagEdit(entry, tag, false)) : null),
-                new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)), entityPreview(entry));
+                new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)), entityPreview(entry),
+                entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
+                        ? new DatabaseSelection.DataEditor(stateScope + ":" + entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
+                        dataCount(entry), dataBinding(entry)) : null);
+    }
+    private static int dataCount(WorldObjectEntry entry) {
+        try { return Math.max(0, Integer.parseInt(entry.references().getOrDefault(WorldObjectDataEdits.COUNT_REFERENCE, "0"))); }
+        catch (NumberFormatException invalid) { return 0; }
+    }
+    private DataDictionaryBinding dataBinding(WorldObjectEntry entry) {
+        var source = session;
+        String scope = stateScope;
+        return DatabaseDataBindings.world(source, entry, () -> !disposed && shown && session == source
+                && Objects.equals(scope, stateScope) && Objects.equals(scope, UiStateScopes.current())
+                && selected.size() == 1 && selected.contains(entry.key()));
+    }
+    private void openDataEditor(WorldObjectEntry expected) {
+        if (!canSelect()) return;
+        var live = snapshot.entries().stream().filter(row -> row.key().equals(expected.key())
+                && Objects.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
+                expected.references().get(WorldObjectDataEdits.TARGET_REFERENCE))).findFirst().orElse(null);
+        if (live == null) return;
+        selected.clear(); selected.add(live.key()); anchorKey = live.key();
+        updateSelection();
+        UiDataDictionaryEditor.show(this, displayName(live) + " · " + tr("world"), dataBinding(live));
     }
     private static DatabaseSelection.EntityPreview entityPreview(WorldObjectEntry entry) {
         if (!entry.provider().equals("native") || entry.type().equals("minecraft:interaction")) return null;

@@ -104,13 +104,15 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                     }
                     if (java.util.Objects.equals(previous.key(), entry.key())
                             && java.util.Objects.equals(previous.value(), entry.value())
-                            && java.util.Objects.equals(previous.tags(), entry.tags())) {
+                            && java.util.Objects.equals(previous.tags(), entry.tags())
+                            && com.mine.geometry_node.core.metadata.DataDictionary.equivalent(previous.data(), entry.data(),
+                            com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(null))) {
                         refreshNow(generation, finished);
                         return;
                     }
                     DataLibraryRepository.Entry moved = new DataLibraryRepository.Entry(
                             previous.id(), entry.parentId(), previous.type(), previous.key(), previous.value(),
-                            previous.tags());
+                            previous.tags(), previous.data());
                     upload(generation, List.of(entry), moved, AssetTransferPurpose.DATA_LIBRARY_UPDATE,
                             finished);
                 });

@@ -43,7 +43,7 @@
 | `runtime/dialogue`、`quest` | 游戏运行时的对话与任务，包括其游戏内 UI。它们不是工作区编辑器，因此不强制迁入 `ui/editor`。 |
 | `model` | 客户端模型加载及生命周期；`resource`、`runtime`、`render`、`compat`、`diagnostic` 按 CPU/GPU 资源和呈现所有权划分。 |
 | `scene` | 场景修改、确认、预览、冲突和历史。 |
-| `worldquery` | 各窗口独立的只读世界对象查询与刷新。查询与修改的超时语义不同，保持独立。 |
+| `worldquery` | 各窗口独立的世界对象查询、刷新，以及按需读取和 CAS 修改自定义 TAG / DATA。查询与修改的超时语义不同，保持独立。 |
 
 `model/render/lod/cluster` 是有 README 和构建排除规则的归档实验，不作为活动扩展入口。
 
@@ -86,3 +86,11 @@
 - 当前 FML 11.0.13 将 `JIJ_CACHEDIR` 固定为 `.cache/jij`，早于本模组初始化解包。保留加载器原生目录（开发环境为 `run/.cache/jij/`），不设置目录联接或修改加载器。仅本模组自身的业务缓存统一放入 `geometry_nodes/caches/`。
 - FML 11.0.13 动态创建游戏模块层，没有原生访问授权入口；仅在 JVM 参数中加入 `--enable-native-access=sodium` 无法授权这个后加载模块。`SodiumChunkMeshBufferMixin` 将 Sodium 0.9.x 区块缓冲中受限的 `MemorySegment.reinterpret` 替换为 LWJGL 直接缓冲的有界 `MemorySegment.ofBuffer` 视图，保持原分配、重分配和释放所有权；不放宽全局原生访问检查。Sodium 缺席时由 `@Pseudo` 跳过。
 - 调试面和线通过 Iris 公开 API 分别注册 BASIC、LINES。调试点保留原版 `debug_point` 着色器与 `POSITION_COLOR_LINE_WIDTH` 格式，不注册为 BASIC，避免丢失 `gl_PointSize`；提交调试点批次期间通过 Iris 1.11 的 `ImmediateState.bypass` 明确使用原版着色器，在 finally 中恢复旧状态，避免 Iris 将这项有意保留的管线报告为缺少映射。反射字段按需缓存，仅作用于同步点批次提交；Iris 缺席时直接执行原绘制。Iris 对成功匹配面、线输出的 `okay` WARN 属于其正常日志。
+
+## 数据库自定义 DATA
+
+世界对象与数据仓库的 DATA 编辑共用 `components/integration/metadata` 的摘要、预览和管理弹窗，具体选用规则见组件列表。`ui/editor/database/metadata/DatabaseDataBindings` 只负责将 repository 状态、异步回执和对象有效期接入组件；组件不访问网络或具体窗口。
+
+表格只显示数量和有界摘要；侧栏数据页或管理弹窗显示后才请求世界对象完整字典。侧栏预览最多八项，管理弹窗按二十项分页，支持键/值搜索、类型筛选、标量编辑及字典/列表 JSON 编辑和有界树预览。整数使用无步进按钮的普通文本输入；未知注册值保留为只读。修改先留在草稿，点击应用后由服务端校验权限和预期版本；失败和冲突保留草稿，关闭及切换对象会隔离旧回调。
+
+DATA 是模组注册能力挂载的自定义字典，独立于原版 NBT / 物品数据组件、TAG 和仓库存储值。仓库条目 DATA 随库文档持久保存；世界对象通过其已有能力适配器保存，生命周期取决于对应对象。仅编辑已有 DATA 能力，不在 UI 中为不支持的对象创建另一套存储。

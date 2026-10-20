@@ -179,7 +179,7 @@ public final class DataLibraryDocument {
         copy.folderIdsByLocation.putAll(folderIdsByLocation);
         entries.values().forEach(entry -> copy.put(new DataLibraryEntry(
                 entry.id(), entry.parentId(), entry.type(), entry.key(), GraphValueSnapshot.snapshot(entry.value()),
-                entry.tags())));
+                entry.tags(), entry.data())));
         return copy;
     }
 

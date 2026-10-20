@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -11,19 +12,24 @@ import java.util.function.Consumer;
 /** Immutable inspector presentation; mutations remain with the owning repository. */
 public record DatabaseSelection(String title, String subtitle, String iconPath, int accent,
                                 List<Field> fields, List<Action> actions, List<Section> sections,
-                                Preview preview) {
+                                Preview preview, DataEditor dataEditor) {
     public DatabaseSelection {
         fields = List.copyOf(fields); actions = List.copyOf(actions); sections = List.copyOf(sections);
     }
     public DatabaseSelection(String title, String subtitle, String iconPath, int accent,
                              List<Field> fields, List<Action> actions, List<Section> sections) {
-        this(title, subtitle, iconPath, accent, fields, actions, sections, null);
+        this(title, subtitle, iconPath, accent, fields, actions, sections, null, null);
+    }
+    public DatabaseSelection(String title, String subtitle, String iconPath, int accent,
+                             List<Field> fields, List<Action> actions, List<Section> sections, Preview preview) {
+        this(title, subtitle, iconPath, accent, fields, actions, sections, preview, null);
     }
     /** Rendering equality excludes callback identity; callers must dispatch actions against the latest model. */
     public boolean hasSamePresentation(DatabaseSelection other) {
         return other != null && Objects.equals(title, other.title) && Objects.equals(subtitle, other.subtitle)
                 && Objects.equals(iconPath, other.iconPath) && accent == other.accent
                 && Objects.equals(preview, other.preview)
+                && (dataEditor == null ? other.dataEditor == null : dataEditor.hasSamePresentation(other.dataEditor))
                 && fields.equals(other.fields) && sameSections(other.sections)
                 && actions.stream().map(Action::label).toList().equals(other.actions.stream().map(Action::label).toList());
     }
@@ -57,6 +63,18 @@ public record DatabaseSelection(String title, String subtitle, String iconPath, 
     }
     public record Field(String label, String value) {}
     public record Action(String label, Runnable run) {}
+
+    /** Async owner capability; the inspector never stores a second authoritative dictionary. */
+    public record DataEditor(String target, int count, DataDictionaryBinding binding) {
+        public DataEditor {
+            Objects.requireNonNull(target);
+            Objects.requireNonNull(binding);
+            if (count < 0) throw new IllegalArgumentException("Negative data count");
+        }
+        boolean hasSamePresentation(DataEditor other) {
+            return other != null && target.equals(other.target) && count == other.count;
+        }
+    }
 
     /** Immutable preview source; rendering and live-world resolution stay in the shared preview component. */
     public sealed interface Preview permits EntityPreview, ItemPreview {}

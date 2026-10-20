@@ -675,7 +675,7 @@ final class DataLibraryValueEditors {
             if (DataLibraryValueCodec.encode(entry.type(), entry.value(), registries)
                     .equals(DataLibraryValueCodec.encode(entry.type(), value, registries))) return;
             DataLibraryRepository.Entry updated = new DataLibraryRepository.Entry(
-                    entry.id(), entry.parentId(), entry.type(), entry.key(), value, entry.tags());
+                    entry.id(), entry.parentId(), entry.type(), entry.key(), value, entry.tags(), entry.data());
             current.set(updated);
             repository.update(entry, updated);
         } catch (RuntimeException ignored) {

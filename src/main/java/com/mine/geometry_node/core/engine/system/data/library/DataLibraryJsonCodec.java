@@ -58,6 +58,7 @@ public final class DataLibraryJsonCodec {
             JsonArray tags = new JsonArray();
             entry.tags().forEach(tags::add);
             value.add("tags", tags);
+            value.add("data", DataLibraryValueCodec.encodeData(entry.data(), registries));
             value.add("value", DataLibraryValueCodec.encode(entry.type(), entry.value(), registries));
             entries.add(entry.id().toString(), value);
         }
@@ -139,7 +140,8 @@ public final class DataLibraryJsonCodec {
                 String key = requireString(value, "key");
                 List<String> tags = readTags(value);
                 Object decoded = DataLibraryValueCodec.decode(type, value.get("value"), registries);
-                document.put(new DataLibraryEntry(id, parentId, type, key, decoded, tags));
+                Map<String, Object> data = DataLibraryValueCodec.decodeData(value.get("data"), registries);
+                document.put(new DataLibraryEntry(id, parentId, type, key, decoded, tags, data));
             } catch (RuntimeException exception) {
                 diagnostics.add(new DataLibraryDiagnostic(path, readableMessage(exception)));
             }

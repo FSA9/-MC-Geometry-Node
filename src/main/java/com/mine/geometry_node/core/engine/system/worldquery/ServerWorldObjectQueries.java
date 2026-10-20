@@ -22,6 +22,7 @@ public final class ServerWorldObjectQueries {
             MAX_PENDING_PER_PLAYER = WorldObjectQueryScheduler.MAX_PENDING_PER_CONNECTION;
     private static final Map<MinecraftServer, WorldObjectQueryScheduler<ServerGamePacketListenerImpl>> QUEUES = new IdentityHashMap<>();
     private static final Map<ServerGamePacketListenerImpl, WorldObjectTagEdits> TAG_EDITS = new IdentityHashMap<>();
+    private static final Map<ServerGamePacketListenerImpl, WorldObjectDataEdits> DATA_EDITS = new IdentityHashMap<>();
     private static boolean initialized;
     private ServerWorldObjectQueries() {}
     public static void init() {
@@ -30,11 +31,13 @@ public final class ServerWorldObjectQueries {
         NeoForge.EVENT_BUS.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
             if (event.getEntity() instanceof ServerPlayer player) {
                 TAG_EDITS.remove(player.connection);
+                DATA_EDITS.remove(player.connection);
                 var queue = QUEUES.get(player.level().getServer());
                 if (queue != null) queue.remove(player.connection);
             }
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {
+            DATA_EDITS.keySet().removeIf(connection -> connection.getPlayer().level().getServer() == event.getServer());
             TAG_EDITS.keySet().removeIf(connection -> connection.getPlayer().level().getServer() == event.getServer());
             var queue = QUEUES.remove(event.getServer());
             if (queue != null) queue.close();
@@ -76,6 +79,25 @@ public final class ServerWorldObjectQueries {
             message = WorldObjectTagEdits.PREFIX + "failed";
         }
         NetworkHandler.sendToPlayer(current, new PacketWorldObjectTagResult(request.requestId(), message));
+    }
+    public static void receive(ServerPlayer player, PacketWorldObjectDataRequest request) {
+        MinecraftServer server = player.level().getServer();
+        if (!server.isSameThread()) throw new IllegalStateException("Data edits require the server thread");
+        ServerPlayer current = currentPlayer(server, player.connection);
+        if (current == null || !server.isRunning()) return;
+        WorldObjectDataEdits.Result result;
+        try {
+            boolean permitted = RemoteAssetPermissions.canManageAssets(current);
+            var edits = DATA_EDITS.get(current.connection);
+            result = !permitted ? WorldObjectDataEdits.Result.error("forbidden")
+                    : edits == null ? WorldObjectDataEdits.Result.error("unavailable")
+                    : request.edit() ? edits.replace(true, request.target(), request.key(), request.expectedRevision(), request.replacement())
+                    : edits.read(true, request.target(), request.key());
+        } catch (RuntimeException failure) {
+            System.getLogger(ServerWorldObjectQueries.class.getName()).log(System.Logger.Level.WARNING, "World custom data request failed", failure);
+            result = WorldObjectDataEdits.Result.error("failed");
+        }
+        NetworkHandler.sendToPlayer(current, new PacketWorldObjectDataResult(request.requestId(), result.values(), result.revision(), result.message()));
     }
     private static ServerPlayer currentPlayer(MinecraftServer server, ServerGamePacketListenerImpl connection) {
         ServerPlayer player = server.getPlayerList().getPlayer(connection.getPlayer().getUUID());
@@ -148,7 +170,14 @@ public final class ServerWorldObjectQueries {
             @Override protected WorldObjectEntry advertise(WorldObjectEntry entry, int remainingBytes) {
                 // A capability lease holds the adapter's live owner guard, not a mutable query mirror.
                 var access = ownerProvider.resolveMetadata(context, entry);
-                return TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
+                WorldObjectEntry advertised = TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
+                try {
+                    return DATA_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectDataEdits(server.registryAccess()))
+                            .advertise(advertised, access);
+                } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException unavailable) {
+                    // A DATA codec/owner failure must not discard otherwise valid query rows or TAG support.
+                    return advertised;
+                }
             }
         };
         List<WorldObjectEntry> entries = collector.entries;

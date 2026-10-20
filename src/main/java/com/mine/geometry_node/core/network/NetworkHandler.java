@@ -59,6 +59,13 @@ public class NetworkHandler {
                     if (context.getPlayer() instanceof ServerPlayer player)
                         com.mine.geometry_node.core.engine.system.worldquery.ServerWorldObjectQueries.receive(player, payload);
                 }));
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S,
+                com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectDataRequest.TYPE,
+                com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectDataRequest.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player)
+                        com.mine.geometry_node.core.engine.system.worldquery.ServerWorldObjectQueries.receive(player, payload);
+                }));
         com.mine.geometry_node.core.engine.system.worldquery.ServerWorldObjectQueries.init();
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectQuery.TYPE,

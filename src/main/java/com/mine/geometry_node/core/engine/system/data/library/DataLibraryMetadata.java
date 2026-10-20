@@ -9,20 +9,23 @@ import net.minecraft.server.MinecraftServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
+import com.mine.geometry_node.core.metadata.DataAccess;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /** Server-authoritative library entry bindings; client mirrors continue to use their async gateway. */
-public final class DataLibraryTagMetadata {
+public final class DataLibraryMetadata {
     public static final String ENTRY = "geometry_node:data_library_entry";
 
-    private DataLibraryTagMetadata() {}
+    private DataLibraryMetadata() {}
 
     public static void register(MetadataCapabilities registry) {
-        registry.register(ENTRY, EntryTarget.class, Set.of(MetadataCapabilities.Capability.TAG),
-                target -> new MetadataCapabilities.Access(target.tags(), null));
+        registry.register(ENTRY, EntryTarget.class, Set.of(MetadataCapabilities.Capability.TAG, MetadataCapabilities.Capability.DATA),
+                target -> new MetadataCapabilities.Access(target.tags(), target.data()));
     }
 
     /**
@@ -48,6 +51,36 @@ public final class DataLibraryTagMetadata {
         }
 
         public TagAccess tags() { return new TagAccess(this, TagPolicy.DATA_LIBRARY_LEGACY); }
+
+        public DataAccess data() {
+            return new DataAccess(new MetadataStore<Map<String, Object>>() {
+                @Override public Map<String, Object> read() { return readData(); }
+                @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
+                    return updateData(transformation);
+                }
+            }, GraphMetadataValuePolicy.of(server.overworld().registryAccess()));
+        }
+
+        private synchronized Map<String, Object> readData() {
+            try { return RemoteDataLibraryService.INSTANCE.readData(server, entryId, requireAccess); }
+            catch (IOException failure) { throw new UncheckedIOException(failure); }
+        }
+
+        private synchronized boolean updateData(UnaryOperator<Map<String, Object>> transformation) {
+            Objects.requireNonNull(transformation, "transformation");
+            if (updating) throw new IllegalStateException("Library entry update is already in progress");
+            updating = true;
+            try {
+                var result = RemoteDataLibraryService.INSTANCE.updateData(
+                        server, entryId, expectedFingerprint, requireAccess, transformation);
+                if (result.changed()) {
+                    expectedFingerprint = DataLibraryObjectFingerprint.entry(
+                            result.loaded().document().find(entryId).orElseThrow(), server.overworld().registryAccess());
+                }
+                return result.changed();
+            } catch (IOException failure) { throw new UncheckedIOException(failure); }
+            finally { updating = false; }
+        }
 
         /** Last accepted CAS token; no new client notification protocol is implied. */
         public synchronized String fingerprint() { return expectedFingerprint; }

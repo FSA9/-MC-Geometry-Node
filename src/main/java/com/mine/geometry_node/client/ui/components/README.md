@@ -110,6 +110,7 @@
 
 | 需求 | 推荐入口 | 组合关系 |
 | --- | --- | --- |
+| 普通文字选项／级联菜单 | [UiContextMenu](composite/menu/UiContextMenu.java) | `addMenuItem()`／`addSubMenuItem()` 组装，`showAt(x,y,host)` 或 `showBelow(anchor,host)` 定位；模态内菜单使用该窗口的 `contentHost()`，避免挂到较低的根层。 |
 | 可搜索文字选项 | [UiSearchableMenu](composite/menu/UiSearchableMenu.java) | `showAt(anchor, host)`；固定搜索区、限高滚动列表、锚点随节点变换跟随。 |
 | 图片／预览卡片选择 | [UiGridMenu](composite/menu/UiGridMenu.java) | 正方形预览＋可选底部文字；`Style` 控制卡片宽度、列数和间距，窄空间自动折行。 |
 | 勾选、输入、多状态选择等任意组合 | [UiPopover](composite/menu/UiPopover.java) | 传入内容 View，调用 `showBelow()` 或 `showAtRoot()`；组合公共弹层底座和滚动面板。 |
@@ -217,3 +218,19 @@ preview.zoom().reset();        // 回到 1，受当前范围约束
 - `SidebarLayoutController(split, sidebar, Consumer<Boolean>)`：固定尺寸侧栏只通知显隐，宽度由 split 管理；旧权重式构造器保持权重语义。
 
 先恢复状态，再订阅用户变更。自动测量、缩放及恢复不会触发用户变更通知；表格 `setOnWidthsChanged` 属于布局刷新通道，不能作为存储通道。保存、作用域选择及订阅生命周期由编辑器管理。
+
+## 自定义 Data 字典（数据库与其他能力面板）
+
+`integration/metadata` 是异步能力与 UI 的桥接层；不读取原版 NBT 或物品数据组件，不能把领域仓库移入此包。
+
+| 用途 | 入口 |
+| --- | --- |
+| 自定义数据异步绑定 | `DataDictionaryBinding`：`snapshot()` 是无 IO 的快照；`refresh()` 按需读取（允许使用已载入缓存），`reload()` 是用户明确要求重新读取权威源；`apply(expected,replacement,completion)` 由业务仓库原子比较并保存 |
+| 表格数据摘要 | `UiDataSummaryCell(Context)` + `setSummary(count,summary,manage)`；零条留空；**不会为每行加载完整字典** |
+| 标量／容器简述 | `UiDataSummaryCell.summaryValue(Object)`：字典／列表只显示长度，标量最多100字符，未知值只显示类型名 |
+| 侧栏八条预览 | `UiDataDictionaryPreview` + `setBinding()`；支持搜索，`setManageAction`／`setManageEntryAction` 接到稳定 owner 的管理入口 |
+| 完整字典编辑 | `UiDataDictionaryEditor.show(anchor,title,binding,initialKey)`；title 为标题“数据”旁的对象说明，可省略 title／initialKey；返回 false 代表没有共享弹层宿主 |
+
+编辑器组合公共 `ModalWindowView`、`UiContextMenu`、`UiTextInput`、`UiSelectButton`、按钮与滚动容器，不再创建独立弹层体系。下拉选择复用 `UiContextMenu.showBelow(anchor, contentHost())`，挂在模态窗口内部，不能加到低于 modal layer 的全局根节点；Esc 先关闭菜单。顶部统一放置搜索、类型筛选和新增；左侧按20条分页并显示条目类型；右侧键与类型并排，布尔值复用复选框，字典与列表切换 JSON 编辑和有上限的结构预览。标题与对象说明在同一文本基线，底栏显示草稿状态和等距操作；还原条目只撤销当前表单，保存条目只更新草稿，应用才写入业务仓库。整数及其他数值使用普通文本输入，无上下微调按钮。编辑保留 Integer／Long／Float／Double 精度；重复键、溢出、非有限数和超限结构不能提交。未知注册类型与包含它们的复杂值保持只读，编辑其他条目不会把原值字符串化。
+
+草稿只在应用时提交；取消与关闭确认不修改仓库。重新加载在存在草稿时先用弹窗内的丢弃确认，确认后重新取得数据并建立新的比较基线，可恢复版本冲突；取消确认会保留当前输入。组件自己的监听在 detach／modal close 时解除；异步通知和完成回调 post 回 UI 线程，并拒绝旧绑定／关闭后的回调。组件**不关闭共享 binding/session**，由业务 owner 负责。侧栏只在挂载且可见时主动请求读取；表格优先使用 summary-only API。管理弹窗的 anchor 应为稳定 editor／面板，避免刷新表格重建行时把弹窗误关掉。

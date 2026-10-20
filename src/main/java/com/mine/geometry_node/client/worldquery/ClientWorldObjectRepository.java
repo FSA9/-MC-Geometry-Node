@@ -23,17 +23,33 @@ public final class ClientWorldObjectRepository {
         public List<String> coverage() { return page.coverage(); }
         public boolean truncated() { return page.truncated(); }
     }
+    public record DataSnapshot(Map<String, Object> values, boolean loading, boolean available,
+                               boolean editable, boolean pending, String message) {
+        public DataSnapshot { values = WorldObjectDataValues.snapshot(values); }
+    }
+    private static final class DataSlot {
+        final String key, token;
+        Map<String, Object> values = Map.of();
+        String revision = "", message = "";
+        long requestId;
+        boolean loading, pending;
+        DataSlot(String key, String token) { this.key = key; this.token = token; }
+    }
+    private record PendingData(Session session, DataSlot slot, long sentAt, long scope, boolean edit,
+                               Consumer<String> completion) {}
+    private final Map<Long, PendingData> pendingData = new HashMap<>();
     private final Map<Long, Session> pending = new HashMap<>();
     private final Map<Long, Session> pendingTags = new HashMap<>();
     private final Set<Session> sessions = Collections.newSetFromMap(new IdentityHashMap<>());
     private final Consumer<PacketWorldObjectQuery> transport;
     private final Consumer<PacketWorldObjectTagEdit> tagTransport;
+    private final Consumer<PacketWorldObjectDataRequest> dataTransport;
     private final Consumer<Runnable> clientQueue;
     private final BooleanSupplier connected;
     private long nextRequest, nextSession, generation;
     private boolean initialized;
     private ClientWorldObjectRepository() {
-        this(NetworkHandler::sendToServer, NetworkHandler::sendToServer, task -> Minecraft.getInstance().execute(task),
+        this(NetworkHandler::sendToServer, NetworkHandler::sendToServer, NetworkHandler::sendToServer, task -> Minecraft.getInstance().execute(task),
                 () -> Minecraft.getInstance().getConnection() != null && Minecraft.getInstance().level != null);
     }
     /** Logical mirror tests use a deterministic queue and transport without initializing Minecraft. */
@@ -43,6 +59,12 @@ public final class ClientWorldObjectRepository {
     }
     ClientWorldObjectRepository(Consumer<PacketWorldObjectQuery> transport, Consumer<PacketWorldObjectTagEdit> tagTransport,
                                 Consumer<Runnable> clientQueue, BooleanSupplier connected) {
+        this(transport, tagTransport, packet -> { throw new IllegalStateException("No data transport"); }, clientQueue, connected);
+    }
+    ClientWorldObjectRepository(Consumer<PacketWorldObjectQuery> transport, Consumer<PacketWorldObjectTagEdit> tagTransport,
+                                Consumer<PacketWorldObjectDataRequest> dataTransport, Consumer<Runnable> clientQueue,
+                                BooleanSupplier connected) {
+        this.dataTransport = Objects.requireNonNull(dataTransport);
         this.tagTransport = Objects.requireNonNull(tagTransport);
         this.transport = Objects.requireNonNull(transport); this.clientQueue = Objects.requireNonNull(clientQueue);
         this.connected = Objects.requireNonNull(connected);
@@ -56,6 +78,11 @@ public final class ClientWorldObjectRepository {
         initialized = true;
         com.mine.geometry_node.core.network.ClientboundPayloadRegistry.registerClientReceiver(
                 PacketWorldObjectTagResult.TYPE, (packet, context) -> {
+                    long expectedGeneration = generation();
+                    context.queue(() -> accept(packet, expectedGeneration));
+                });
+        com.mine.geometry_node.core.network.ClientboundPayloadRegistry.registerClientReceiver(
+                PacketWorldObjectDataResult.TYPE, (packet, context) -> {
                     long expectedGeneration = generation();
                     context.queue(() -> accept(packet, expectedGeneration));
                 });
@@ -111,11 +138,49 @@ public final class ClientWorldObjectRepository {
         if (refresh != null) clientQueue.accept(refresh.dispatch());
         target.notifyListeners();
     }
+    public void accept(PacketWorldObjectDataResult packet, long expectedGeneration) {
+        PendingData request;
+        String message;
+        synchronized (this) {
+            if (generation != expectedGeneration) return;
+            request = pendingData.remove(packet.requestId());
+            if (request == null || request.session().closed || request.scope() != request.session().scopeRevision
+                    || request.slot().requestId != packet.requestId()) return;
+            DataSlot slot = request.slot(); slot.requestId = 0; slot.loading = slot.pending = false;
+            boolean current = request.session().dataSlots.get(slot.key) == slot
+                    && request.session().published.entries().stream().anyMatch(row -> row.key().equals(slot.key)
+                    && slot.token.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE)));
+            message = current ? packet.message() : WorldObjectDataEdits.PREFIX + "unavailable";
+            slot.message = message;
+            if (message.isEmpty()) {
+                slot.values = packet.values(); slot.revision = packet.revision();
+                request.session().updateDataSummary(slot);
+            } else if (message.endsWith("conflict") || message.endsWith("unavailable") || message.endsWith("forbidden")) {
+                slot.revision = "";
+            }
+        }
+        request.session().notifyListeners();
+        complete(request, message);
+    }
+    private void complete(PendingData request, String message) {
+        if (request.completion() == null || request.session().closed) return;
+        synchronized (this) {
+            if (request.session().closed) return;
+            if (request.scope() != request.session().scopeRevision) message = WorldObjectDataEdits.PREFIX + "unavailable";
+        }
+        try { request.completion().accept(message); }
+        catch (RuntimeException failure) {
+            System.getLogger(ClientWorldObjectRepository.class.getName()).log(System.Logger.Level.WARNING, "World data completion failed", failure);
+        }
+    }
     void disconnect() {
         List<Session> changed;
+        List<PendingData> canceled;
         synchronized (this) {
+            canceled = List.copyOf(pendingData.values()); pendingData.clear();
             generation++; pending.clear(); pendingTags.clear(); changed = List.copyOf(sessions);
             for (Session session : changed) {
+                session.dataSlots.clear();
                 session.tagRequestId = 0; session.tagMessage = WorldObjectTagEdits.PREFIX + "unavailable";
                 session.requestId = 0;
                 session.published = new Snapshot(session.published.query(), WorldObjectPage.empty(0, "disconnected"),
@@ -123,11 +188,21 @@ public final class ClientWorldObjectRepository {
             }
         }
         changed.forEach(Session::notifyListeners);
+        canceled.forEach(request -> complete(request, WorldObjectDataEdits.PREFIX + "unavailable"));
     }
     private void expire() { expire(System.nanoTime()); }
     void expire(long now) {
         List<Session> changed = new ArrayList<>();
+        List<PendingData> expiredData = new ArrayList<>();
         synchronized (this) {
+            var data = pendingData.entrySet().iterator();
+            while (data.hasNext()) {
+                var request = data.next().getValue();
+                if (now - request.sentAt() < 15_000_000_000L) continue;
+                data.remove(); request.slot().requestId = 0; request.slot().loading = request.slot().pending = false;
+                request.slot().message = WorldObjectDataEdits.PREFIX + "failed";
+                changed.add(request.session()); expiredData.add(request);
+            }
             var tags = pendingTags.entrySet().iterator();
             while (tags.hasNext()) {
                 Session session = tags.next().getValue();
@@ -149,6 +224,7 @@ public final class ClientWorldObjectRepository {
             }
         }
         changed.forEach(Session::notifyListeners);
+        expiredData.forEach(request -> complete(request, WorldObjectDataEdits.PREFIX + "failed"));
     }
     private record PreparedQuery(long id, Runnable dispatch) {}
 
@@ -163,6 +239,7 @@ public final class ClientWorldObjectRepository {
         private boolean tagAdded, retainingRows;
         private volatile boolean closed;
         private final long sessionId;
+        private final LinkedHashMap<String, DataSlot> dataSlots = new LinkedHashMap<>(16, .75f, true);
         private Session(long sessionId) { this.sessionId = sessionId; }
         public Snapshot snapshot() { return published; }
         public void addChangeListener(Runnable listener) {
@@ -244,6 +321,113 @@ public final class ClientWorldObjectRepository {
             });
             return true;
         }
+        /** Passive cache read: never schedules network IO. */
+        public DataSnapshot dataSnapshot(WorldObjectEntry entry) {
+            synchronized (ClientWorldObjectRepository.this) {
+                boolean available = dataTarget(entry);
+                DataSlot slot = entry == null ? null : dataSlots.get(entry.key());
+                if (slot == null || !Objects.equals(slot.token, entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE)))
+                    return new DataSnapshot(Map.of(), false, available, false, false, "");
+                return new DataSnapshot(slot.values, slot.loading, available, available && !slot.revision.isEmpty()
+                        && !slot.message.endsWith("forbidden") && !slot.message.endsWith("unavailable"), slot.pending, slot.message);
+            }
+        }
+        private boolean dataTarget(WorldObjectEntry entry) {
+            if (closed || entry == null || published.loading()) return false;
+            String token = entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE);
+            if (token == null) return false;
+            try { new PacketWorldObjectDataRequest(0, token, entry.key(), "", Map.of()); }
+            catch (IllegalArgumentException invalid) { return false; }
+            return published.entries().stream().anyMatch(row -> row.key().equals(entry.key())
+                    && token.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE)));
+        }
+        /** Cached successful/in-flight reads are idempotent; failed reads can be explicitly retried. */
+        public boolean requestData(WorldObjectEntry entry) {
+            return prepareData(entry, null, null, null, false);
+        }
+        /** Explicit reload revalidates an already loaded dictionary without changing selection/query scope.
+         * Duplicate in-flight reads and saves remain coalesced; a reload never races an outstanding save. */
+        public boolean refreshData(WorldObjectEntry entry) {
+            return prepareData(entry, null, null, null, true);
+        }
+        public boolean replaceData(WorldObjectEntry entry, Map<String, Object> expected,
+                                   Map<String, Object> replacement, Consumer<String> completion) {
+            Objects.requireNonNull(expected); Objects.requireNonNull(replacement); Objects.requireNonNull(completion);
+            return prepareData(entry, expected, replacement, completion, false);
+        }
+        private boolean prepareData(WorldObjectEntry entry, Map<String, Object> expected,
+                                    Map<String, Object> replacement, Consumer<String> completion, boolean reload) {
+            final PacketWorldObjectDataRequest packet;
+            final PendingData request;
+            final long expectedGeneration;
+            synchronized (ClientWorldObjectRepository.this) {
+                if (!dataTarget(entry)) return false;
+                String token = entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE);
+                DataSlot slot = dataSlots.get(entry.key());
+                if (slot != null && !slot.token.equals(token)) { dataSlots.remove(entry.key()); slot = null; }
+                boolean edit = replacement != null;
+                if (!edit && slot != null && (slot.loading || slot.pending || !reload && !slot.revision.isEmpty())) return true;
+                if (edit && (slot == null || slot.loading || slot.pending || slot.revision.isEmpty()
+                        || !WorldObjectDataValues.equivalent(slot.values, expected))) return false;
+                if (slot == null) {
+                    if (dataSlots.size() >= 16) {
+                        String oldest = dataSlots.entrySet().stream().filter(item -> item.getValue().requestId == 0)
+                                .map(Map.Entry::getKey).findFirst().orElse(null);
+                        if (oldest == null) return false;
+                        dataSlots.remove(oldest);
+                    }
+                    slot = new DataSlot(entry.key(), token); dataSlots.put(entry.key(), slot);
+                }
+                try {
+                    packet = new PacketWorldObjectDataRequest(++nextRequest, token, entry.key(), edit ? slot.revision : "",
+                            edit ? replacement : Map.of());
+                } catch (IllegalArgumentException invalid) { return false; }
+                expectedGeneration = generation;
+                slot.requestId = packet.requestId(); slot.loading = !edit; slot.pending = edit;
+                slot.message = edit ? WorldObjectDataEdits.PREFIX + "pending" : "";
+                request = new PendingData(this, slot, System.nanoTime(), scopeRevision, edit, completion);
+                pendingData.put(packet.requestId(), request);
+            }
+            clientQueue.accept(() -> {
+                synchronized (ClientWorldObjectRepository.this) {
+                    if (closed || generation != expectedGeneration || pendingData.get(packet.requestId()) != request) return;
+                }
+                notifyListeners();
+                try {
+                    synchronized (ClientWorldObjectRepository.this) {
+                        if (closed || generation != expectedGeneration || pendingData.get(packet.requestId()) != request) return;
+                    }
+                    if (!connected.getAsBoolean()) throw new IllegalStateException("Disconnected");
+                    dataTransport.accept(packet);
+                } catch (RuntimeException failure) {
+                    synchronized (ClientWorldObjectRepository.this) {
+                        if (closed || generation != expectedGeneration || pendingData.get(packet.requestId()) != request) return;
+                        pendingData.remove(packet.requestId());
+                        request.slot().requestId = 0; request.slot().loading = request.slot().pending = false;
+                        request.slot().message = WorldObjectDataEdits.PREFIX + "failed";
+                    }
+                    notifyListeners(); complete(request, WorldObjectDataEdits.PREFIX + "failed");
+                }
+            });
+            return true;
+        }
+        private void updateDataSummary(DataSlot slot) {
+            Snapshot before = published; WorldObjectPage page = before.page();
+            List<WorldObjectEntry> rows = page.entries().stream().map(row -> {
+                if (!row.key().equals(slot.key) || !slot.token.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE))) return row;
+                Map<String, String> refs = new LinkedHashMap<>(row.references());
+                refs.put(WorldObjectDataEdits.COUNT_REFERENCE, Integer.toString(slot.values.size()));
+                refs.put(WorldObjectDataEdits.SUMMARY_REFERENCE, WorldObjectDataValues.summary(slot.values));
+                if (refs.equals(row.references())) return row;
+                return new WorldObjectEntry(row.key(), row.provider(), row.type(), row.name(), row.dimension(), row.position(), row.bounds(),
+                        row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs);
+            }).toList();
+            if (rows.equals(page.entries())) return;
+            try {
+                published = new Snapshot(before.query(), new WorldObjectPage(page.requestId(), rows, page.truncated(), page.dimensionIds(),
+                        page.types(), page.coverage(), page.message(), page.counts()), before.loading(), before.sequence() + 1);
+            } catch (IllegalArgumentException pageLimit) { /* On-demand state remains valid even if a full page has no summary byte headroom. */ }
+        }
         public long query(WorldObjectQuery query) {
             PreparedQuery prepared = prepareQuery(query, false);
             clientQueue.accept(prepared.dispatch());
@@ -252,15 +436,25 @@ public final class ClientWorldObjectRepository {
         private PreparedQuery prepareQuery(WorldObjectQuery query, boolean retainRows) {
             Objects.requireNonNull(query);
             final long id, expectedGeneration;
+            final List<PendingData> canceledData = new ArrayList<>();
             synchronized (ClientWorldObjectRepository.this) {
                 if (closed) throw new IllegalStateException("World query session is closed");
                 retainingRows = retainRows;
-                if (!retainRows) { scopeRevision++; tagMessage = ""; }
+                if (!retainRows) {
+                    scopeRevision++; tagMessage = "";
+                    var data = pendingData.entrySet().iterator();
+                    while (data.hasNext()) {
+                        PendingData request = data.next().getValue();
+                        if (request.session() == this) { canceledData.add(request); data.remove(); }
+                    }
+                    dataSlots.clear();
+                }
                 pending.remove(requestId); id = ++nextRequest; requestId = id; expectedGeneration = generation;
                 pending.put(id, this); sentAt = System.nanoTime();
                 published = new Snapshot(query, retainRows ? published.page() : WorldObjectPage.empty(id, ""), !retainRows, published.sequence() + 1);
             }
             return new PreparedQuery(id, () -> {
+                canceledData.forEach(request -> complete(request, WorldObjectDataEdits.PREFIX + "unavailable"));
                 final PacketWorldObjectQuery packet;
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || requestId != id) return;
@@ -301,7 +495,8 @@ public final class ClientWorldObjectRepository {
         @Override public void close() {
             synchronized (ClientWorldObjectRepository.this) {
                 if (closed) return;
-                closed = true; pendingTags.remove(tagRequestId); tagRequestId = 0; pending.remove(requestId); sessions.remove(this); listeners.clear();
+                closed = true; pendingData.values().removeIf(request -> request.session() == this); dataSlots.clear();
+                pendingTags.remove(tagRequestId); tagRequestId = 0; pending.remove(requestId); sessions.remove(this); listeners.clear();
             }
         }
     }

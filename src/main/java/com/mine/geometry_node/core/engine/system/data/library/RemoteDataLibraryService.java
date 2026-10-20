@@ -83,7 +83,7 @@ public final class RemoteDataLibraryService {
             if (cached == null) return null;
             return cached.document().find(entryId)
                     .map(entry -> new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
-                            GraphValueSnapshot.snapshot(entry.value()), entry.tags()))
+                            GraphValueSnapshot.snapshot(entry.value()), entry.tags(), entry.data()))
                     .orElse(null);
         } catch (RuntimeException exception) {
             return null;
@@ -107,6 +107,24 @@ public final class RemoteDataLibraryService {
         DataLibraryFileStore.UpdateResult result = DataLibraryFileStore.updateTagsAtomic(
                 ServerDataLibraryPaths.file(server), server.overworld().registryAccess(), entryId,
                 expectedFingerprint, () -> requireTagOwner(server, requireAccess), transformation);
+        if (result.changed() && !isStopped(server)) caches.put(server, freeze(result.loaded()));
+        return result;
+    }
+
+    synchronized Map<String, Object> readData(MinecraftServer server, UUID entryId, Runnable requireAccess)
+            throws IOException {
+        requireTagOwner(server, requireAccess);
+        return ensureLoaded(server).document().find(entryId).orElseThrow(() -> stale(entryId)).data();
+    }
+
+    synchronized DataLibraryFileStore.UpdateResult updateData(MinecraftServer server, UUID entryId,
+                                                              String expectedFingerprint, Runnable requireAccess,
+                                                              UnaryOperator<Map<String, Object>> transformation)
+            throws IOException {
+        requireTagOwner(server, requireAccess);
+        var result = DataLibraryFileStore.updateDataAtomic(ServerDataLibraryPaths.file(server),
+                server.overworld().registryAccess(), entryId, expectedFingerprint,
+                () -> requireTagOwner(server, requireAccess), transformation);
         if (result.changed() && !isStopped(server)) caches.put(server, freeze(result.loaded()));
         return result;
     }
@@ -177,7 +195,7 @@ public final class RemoteDataLibraryService {
             DataLibraryEntry existing = document.findByLocation(parentId, type, key).orElse(null);
             DataLibraryEntry replacement = new DataLibraryEntry(
                     existing != null ? existing.id() : UUID.randomUUID(), parentId, type, key, storedValue,
-                    existing != null ? existing.tags() : List.of());
+                    existing != null ? existing.tags() : List.of(), existing != null ? existing.data() : Map.of());
             if (existing == null || !valuesEqual(server, type, existing.value(), storedValue)) document.put(replacement);
             resultEntry[0] = replacement;
         });
@@ -210,7 +228,7 @@ public final class RemoteDataLibraryService {
             requireExpected(entryId, Map.of(entryId, expectedFingerprint),
                     DataLibraryObjectFingerprint.entry(existing, server.overworld().registryAccess()));
             document.put(new DataLibraryEntry(existing.id(), parentId, existing.type(), existing.key(),
-                    GraphValueSnapshot.snapshot(existing.value()), existing.tags()));
+                    GraphValueSnapshot.snapshot(existing.value()), existing.tags(), existing.data()));
         });
     }
 
@@ -296,7 +314,7 @@ public final class RemoteDataLibraryService {
 
     private static DataLibraryEntry copyEntry(DataLibraryEntry entry) {
         return new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
-                GraphValueSnapshot.snapshot(entry.value()), entry.tags());
+                GraphValueSnapshot.snapshot(entry.value()), entry.tags(), entry.data());
     }
 
     private static void requireExpected(UUID id, Map<UUID, String> expectedFingerprints, String actual) {

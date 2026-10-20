@@ -86,7 +86,34 @@ public final class DataLibraryFileStore {
             requireAccess.run();
             if (!entry.tags().equals(tags)) {
                 document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
-                        entry.value(), tags));
+                        entry.value(), tags, entry.data()));
+            }
+            return document;
+        });
+    }
+
+    /** Shared dictionary transaction, with the same object CAS and file lock as tag/value writes. */
+    public static UpdateResult updateDataAtomic(Path file, HolderLookup.Provider registries, UUID entryId,
+                                                String expectedFingerprint, Runnable requireAccess,
+                                                UnaryOperator<java.util.Map<String, Object>> transformation) throws IOException {
+        Objects.requireNonNull(entryId, "entryId");
+        Objects.requireNonNull(requireAccess, "requireAccess");
+        Objects.requireNonNull(transformation, "transformation");
+        return updateAtomicResult(file, registries, document -> {
+            requireAccess.run();
+            DataLibraryEntry entry = document.find(entryId)
+                    .orElseThrow(() -> new IllegalStateException("STALE_OBJECT: " + entryId));
+            if (!DataLibraryObjectFingerprint.isValid(expectedFingerprint)
+                    || !DataLibraryObjectFingerprint.entry(entry, registries).equals(expectedFingerprint)) {
+                throw new IllegalStateException("STALE_OBJECT: " + entryId);
+            }
+            var policy = com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(registries);
+            var data = com.mine.geometry_node.core.metadata.DataDictionary.snapshot(
+                    Objects.requireNonNull(transformation.apply(entry.data()), "data"), policy);
+            requireAccess.run();
+            if (!com.mine.geometry_node.core.metadata.DataDictionary.equivalent(entry.data(), data, policy)) {
+                document.put(new DataLibraryEntry(entry.id(), entry.parentId(), entry.type(), entry.key(),
+                        entry.value(), entry.tags(), data));
             }
             return document;
         });

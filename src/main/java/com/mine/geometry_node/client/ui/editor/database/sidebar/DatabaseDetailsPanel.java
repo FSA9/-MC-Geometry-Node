@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.database.sidebar;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryPreview;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryEditor;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
@@ -12,6 +15,7 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.TextView;
 
 import java.util.ArrayList;
@@ -24,7 +28,7 @@ import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.p
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
 
 /** Registered database inspector; the selected source supplies every value and command. */
-public final class DatabaseDetailsPanel extends UiScrollView implements SidebarPanel {
+public final class DatabaseDetailsPanel extends LinearLayout implements SidebarPanel {
     public static final String PANEL_ID = "database_details";
     public static final SidebarPanelDefinition DEFINITION = new SidebarPanelDefinition(
             PANEL_ID, "geometry_node.database.details", 100, Set.of(SidebarPanelScope.DATA_LIBRARY),
@@ -32,6 +36,13 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
             SvgIconView.Icon.PROPERTIES);
     private final DatabaseWindow owner;
     private final LinearLayout content;
+    private final LinearLayout tabs;
+    private final UiActionButton propertiesTab, dataTab;
+    private final UiScrollView propertiesScroll, dataScroll;
+    private final LinearLayout dataContent;
+    private UiDataDictionaryPreview dataPreview;
+    private String dataTarget, dataTitle, dataSubtitle;
+    private boolean dataSelected;
     private DatabaseSelection current;
     private boolean initialized;
     private boolean active;
@@ -41,10 +52,29 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     private DatabaseDetailsPanel(Context context, DatabaseWindow owner) {
         super(context);
         this.owner = owner;
-        setHorizontalScrollBarEnabled(false);
+        setOrientation(VERTICAL);
+        tabs = new LinearLayout(context);
+        propertiesTab = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(context,
+                tr("properties"), () -> selectData(false));
+        dataTab = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(context,
+                tr("data.title"), () -> selectData(true));
+        tabs.addView(propertiesTab, new LayoutParams(0, -1, 1));
+        tabs.addView(dataTab, new LayoutParams(0, -1, 1));
+        addView(tabs, new LayoutParams(-1, px(32)));
+        FrameLayout body = new FrameLayout(context);
+        addView(body, new LayoutParams(-1, 0, 1));
+        propertiesScroll = new UiScrollView(context);
+        propertiesScroll.setHorizontalScrollBarEnabled(false);
         content = DatabaseInspectorViews.vertical(context);
         content.setPadding(px(18), px(17), px(18), px(18));
-        addView(content, new LayoutParams(-1, -2));
+        propertiesScroll.addView(content, new FrameLayout.LayoutParams(-1, -2));
+        body.addView(propertiesScroll, new FrameLayout.LayoutParams(-1, -1));
+        dataScroll = new UiScrollView(context);
+        dataScroll.setHorizontalScrollBarEnabled(false);
+        dataContent = DatabaseInspectorViews.vertical(context);
+        dataContent.setPadding(px(18), px(17), px(18), px(18));
+        dataScroll.addView(dataContent, new FrameLayout.LayoutParams(-1, -2));
+        body.addView(dataScroll, new FrameLayout.LayoutParams(-1, -1));
         refresh();
     }
 
@@ -52,10 +82,11 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
     @Override public void onSelected() {
         active = true;
         refresh();
-        if (previewView != null) previewView.setVisibility(VISIBLE);
+        updateTabVisibility();
     }
     @Override public void onDeselected() {
         active = false;
+        dataScroll.setVisibility(GONE);
         if (previewView != null) previewView.setVisibility(INVISIBLE);
     }
 
@@ -64,6 +95,7 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
         boolean unchanged = initialized && (current == null ? selection == null : current.hasSamePresentation(selection));
         DatabaseSelection previous = current;
         current = selection;
+        updateDataSelection(selection);
         if (unchanged) return;
         initialized = true;
         if (selection == null) {
@@ -87,7 +119,7 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
             params.topMargin = px(12);
             if (previewView == null || previous == null || !Objects.equals(previous.preview(), selection.preview()))
                 previewView = DatabaseInspectorViews.preview(getContext(), selection.preview());
-            previewView.setVisibility(active ? VISIBLE : INVISIBLE);
+            previewView.setVisibility(active && !dataSelected ? VISIBLE : INVISIBLE);
             previewView.setLayoutParams(params);
             children.add(previewView);
         } else previewView = null;
@@ -153,6 +185,19 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
             addSection(children, section);
             nextSections.add(section);
         }
+        if (selection.dataEditor() != null) {
+            String target = selection.dataEditor().target();
+            LinearLayout section = DatabaseInspectorViews.section(getContext(), tr("data.title"),
+                    tr("data.count", selection.dataEditor().count()));
+            UiActionButton manage = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(
+                    getContext(), tr("data.manage"), () -> {
+                        var latest = current == null ? null : current.dataEditor();
+                        if (active && section.getParent() == content && latest != null && target.equals(latest.target()))
+                            UiDataDictionaryEditor.show(this, dataCaption(), latest.binding());
+                    });
+            section.addView(manage, new LayoutParams(-1, px(30)));
+            addSection(children, section);
+        }
         sectionViews = List.copyOf(nextSections);
         // Keep unchanged previews/editors attached: native resources, focus and drafts survive snapshot updates.
         for (int i = content.getChildCount() - 1; i >= 0; i--) {
@@ -164,6 +209,74 @@ public final class DatabaseDetailsPanel extends UiScrollView implements SidebarP
                 if (child.getParent() == content) content.removeView(child);
                 content.addView(child, i);
             }
+        }
+    }
+
+    private void updateDataSelection(DatabaseSelection selection) {
+        var editor = selection == null ? null : selection.dataEditor();
+        tabs.setVisibility(editor == null ? GONE : VISIBLE);
+        if (editor == null) {
+            dataSelected = false;
+            dataTarget = null;
+            dataPreview = null;
+            dataContent.removeAllViews();
+        } else {
+            dataTab.setText(tr("data.title") + " · " + editor.count());
+            if (!Objects.equals(dataTarget, editor.target())) {
+                dataTarget = editor.target();
+                dataContent.removeAllViews();
+                View identity = DatabaseInspectorViews.identity(getContext(), selection.title(),
+                        selection.subtitle(), null, selection.accent());
+                dataContent.addView(identity, new LayoutParams(-1, -2));
+                dataTitle = selection.title(); dataSubtitle = selection.subtitle();
+                dataPreview = new UiDataDictionaryPreview(getContext());
+                dataPreview.setBinding(editor.binding());
+                String target = editor.target();
+                UiDataDictionaryPreview mounted = dataPreview;
+                dataPreview.setManageAction(() -> {
+                    var latest = current == null ? null : current.dataEditor();
+                    if (!active || dataPreview != mounted || latest == null || !target.equals(latest.target())) return;
+                    UiDataDictionaryEditor.show(this, dataCaption(), latest.binding());
+                });
+                dataPreview.setManageEntryAction(key -> {
+                    var latest = current == null ? null : current.dataEditor();
+                    if (!active || dataPreview != mounted || latest == null || !target.equals(latest.target())) return;
+                    UiDataDictionaryEditor.show(this, dataCaption(), latest.binding(), key);
+                });
+                LayoutParams params = new LayoutParams(-1, -2);
+                params.topMargin = px(17);
+                dataContent.addView(dataPreview, params);
+                dataScroll.scrollTo(0, 0);
+            } else if (!Objects.equals(dataTitle, selection.title()) || !Objects.equals(dataSubtitle, selection.subtitle())) {
+                dataContent.removeViewAt(0);
+                dataContent.addView(DatabaseInspectorViews.identity(getContext(), selection.title(), selection.subtitle(),
+                        null, selection.accent()), 0, new LayoutParams(-1, -2));
+                dataTitle = selection.title(); dataSubtitle = selection.subtitle();
+            }
+        }
+        updateTabVisibility();
+    }
+
+    private String dataCaption() {
+        if (current.subtitle() == null || current.subtitle().isBlank()) return current.title();
+        return current.subtitle().startsWith(current.title() + " · ") ? current.subtitle()
+                : current.title() + " · " + current.subtitle();
+    }
+
+    private void selectData(boolean selected) {
+        dataSelected = selected && current != null && current.dataEditor() != null;
+        updateTabVisibility();
+    }
+
+    private void updateTabVisibility() {
+        propertiesScroll.setVisibility(dataSelected ? GONE : VISIBLE);
+        dataScroll.setVisibility(active && dataSelected ? VISIBLE : GONE);
+        if (previewView != null) previewView.setVisibility(active && !dataSelected ? VISIBLE : INVISIBLE);
+        for (UiActionButton tab : List.of(propertiesTab, dataTab)) {
+            boolean selected = tab == dataTab ? dataSelected : !dataSelected;
+            tab.setPalette(new UiActionButton.Palette(selected ? UiTheme.Surface.HEADER : UiTheme.Surface.PANEL,
+                    UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
+                    selected ? UiTheme.Text.STRONG : UiTheme.Text.MUTED));
         }
     }
 

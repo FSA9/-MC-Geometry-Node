@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataSummaryCell;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemPreviewCell;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -37,6 +38,8 @@ final class DataLibraryEntryCard {
     private final ItemPreviewCell itemPreview;
     private final TextView rowNumber;
     private final UiTagStrip tags;
+    private final UiDataSummaryCell data;
+    private Runnable manageData;
     private final UiCheckBox check;
     private final SvgIconView disclosure;
     private boolean selected;
@@ -83,6 +86,8 @@ final class DataLibraryEntryCard {
         header.addView(entity ? entityPreview : item ? itemPreview : value, new ViewGroup.LayoutParams(-1, -1));
         tags = new UiTagStrip(context);
         header.addView(tags, new ViewGroup.LayoutParams(-1, -1));
+        data = new UiDataSummaryCell(context);
+        header.addView(data, new ViewGroup.LayoutParams(-1, -1));
         surface.addView(header, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
         this.selected = selected;
         check.setChecked(selected);
@@ -93,6 +98,7 @@ final class DataLibraryEntryCard {
     TextView nameView() { return name; }
     void setRowNumber(int number) { rowNumber.setText(Integer.toString(number)); }
     boolean isExpanded() { return expanded; }
+    void setManageDataAction(Runnable action) { manageData = action; }
 
     void setAlternate(boolean alternate) {
         this.alternate = alternate;
@@ -125,6 +131,11 @@ final class DataLibraryEntryCard {
             value.setTooltipText(text);
         }
         tags.setTags(entry.tags());
+        var values = entry.data();
+        String summaryText = values.entrySet().stream().limit(2)
+                .map(field -> field.getKey() + ": " + UiDataSummaryCell.summaryValue(field.getValue()))
+                .collect(java.util.stream.Collectors.joining(" · "));
+        data.setSummary(values.size(), summaryText, () -> { if (manageData != null) manageData.run(); });
     }
 
     void setSelected(boolean value) {

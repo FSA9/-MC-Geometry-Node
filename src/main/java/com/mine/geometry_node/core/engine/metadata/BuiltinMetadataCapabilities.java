@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.metadata;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTagMetadata;
+import com.mine.geometry_node.core.engine.system.data.library.DataLibraryMetadata;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 
 /** Common-side bootstrap; client-only document adapters are registered by the client. */
@@ -21,6 +21,6 @@ public final class BuiltinMetadataCapabilities {
         SceneMetadataTargets.register(registry);
         PlacementMetadataTargets.register(registry);
         RuntimeMetadataTargets.register(registry);
-        DataLibraryTagMetadata.register(registry);
+        DataLibraryMetadata.register(registry);
     }
 }

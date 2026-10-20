@@ -46,7 +46,15 @@ final class BuiltinWorldObjectProviders {
                     current.run(); List<String> candidate = change.apply(tags.values()); current.run();
                     return tags.replace(candidate);
                 }
-            }, TagPolicy.EXACT), access.data());
+            }, TagPolicy.EXACT), new DataAccess(new MetadataStore<>() {
+                public Map<String, Object> read() { current.run(); return access.requireData().values(); }
+                public boolean update(UnaryOperator<Map<String, Object>> change) {
+                    current.run();
+                    return access.requireData().update(values -> {
+                        current.run(); Map<String, Object> candidate = change.apply(values); current.run(); return candidate;
+                    });
+                }
+            }, GraphMetadataValuePolicy.scoped(entity.registryAccess())));
         });
         METADATA.put("schematic", (c, e) -> PlacementMetadataTargets.access(level(c, e.dimension()), e.references().get("placementKey")));
         BiFunction<WorldObjectProvider.Context, WorldObjectEntry, MetadataCapabilities.Access> graphMetadata = (c, e) ->
