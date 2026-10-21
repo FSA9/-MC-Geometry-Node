@@ -1,5 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.asset.image;
 
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheClearOutcome;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
+import java.util.concurrent.CompletionStage;
+
 import icyllis.modernui.graphics.Bitmap;
 import icyllis.modernui.graphics.BitmapFactory;
 import icyllis.modernui.view.View;
@@ -13,6 +22,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -26,6 +37,7 @@ final class ImageThumbnailCache {
     private static final long MAX_SOURCE_BYTES = 32L * 1024L * 1024L;
     private static final long MAX_SOURCE_PIXELS = 16_777_216L;
     private static final Map<String, Entry> CACHE = new LinkedHashMap<>(64, 0.75f, true);
+    private static final Set<Entry> RETIRED = new HashSet<>();
     private static final ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(
             2, 2, 30L, TimeUnit.SECONDS,
             new ArrayBlockingQueue<>(MAX_PENDING_JOBS), task -> {
@@ -36,6 +48,26 @@ final class ImageThumbnailCache {
 
     static {
         EXECUTOR.allowCoreThreadTimeOut(true);
+        CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:asset.image.thumbnails", "geometry_node.cache.asset.image_thumbnails",
+                CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.MEMORY,
+                CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            @Override public CompletionStage<CacheStats> stats() {
+                return CacheExecutors.submit(() -> {
+                    synchronized (CACHE) {
+                        reapRetiredLocked();
+                        long retained = RETIRED.size() + CACHE.values().stream().filter(Entry::hasObservers).count();
+                        return new CacheStats(CACHE.size() + RETIRED.size(), -1, 0, retained);
+                    }
+                });
+            }
+            @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                return CacheExecutors.run(ImageThumbnailCache::clear);
+            }
+            @Override public CompletionStage<CacheClearOutcome> clearOutcome(CacheClearRequest request) {
+                return CacheExecutors.submit(ImageThumbnailCache::clearUnused);
+            }
+        });
     }
 
     private ImageThumbnailCache() {
@@ -68,7 +100,7 @@ final class ImageThumbnailCache {
                 Entry entry = iterator.next().getValue();
                 if (!entry.path.equals(path)) continue;
                 iterator.remove();
-                entry.evict();
+                retireLocked(entry);
             }
         }
         EXECUTOR.purge();
@@ -84,23 +116,58 @@ final class ImageThumbnailCache {
                 Entry entry = iterator.next().getValue();
                 if (!entry.path.equals(root) && !entry.path.startsWith(prefix)) continue;
                 iterator.remove();
-                entry.evict();
+                retireLocked(entry);
             }
         }
         EXECUTOR.purge();
     }
 
+    private static void retireLocked(Entry entry) {
+        if (entry.hasObservers()) RETIRED.add(entry);
+        else entry.evict();
+    }
+
+    private static void reapRetiredLocked() {
+        RETIRED.removeIf(entry -> {
+            if (entry.hasObservers()) return false;
+            entry.evict();
+            return true;
+        });
+    }
+
+    static void init() {
+        // Forces registration without creating a thumbnail or a worker thread.
+    }
+
     static void clear() {
+        clearUnused();
+    }
+
+    private static CacheClearOutcome clearUnused() {
+        CacheClearOutcome outcome;
         synchronized (CACHE) {
-            for (Entry entry : CACHE.values()) entry.evict();
-            CACHE.clear();
+            int before = CACHE.size() + RETIRED.size();
+            reapRetiredLocked();
+            Iterator<Entry> iterator = CACHE.values().iterator();
+            while (iterator.hasNext()) {
+                Entry entry = iterator.next();
+                // A mounted view owns the bitmap/data until its subscription closes.
+                if (entry.hasObservers()) continue;
+                iterator.remove();
+                entry.evict();
+            }
+            int retained = CACHE.size() + RETIRED.size();
+            outcome = retained > 0 && retained == before
+                    ? CacheClearOutcome.retained(retained) : CacheClearOutcome.completed(retained);
         }
         EXECUTOR.purge();
+        return outcome;
     }
 
     private static void release(Entry entry, Observer observer) {
         synchronized (CACHE) {
             entry.removeObserver(observer);
+            if (!entry.hasObservers() && RETIRED.remove(entry)) entry.evict();
             if (!entry.hasObservers() && !entry.isResolved()) {
                 CACHE.remove(entry.key, entry);
                 entry.evict();

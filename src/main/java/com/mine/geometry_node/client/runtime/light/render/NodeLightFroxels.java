@@ -30,6 +30,18 @@ public final class NodeLightFroxels {
     private static final String VERTEX = "#version 330 core\nvoid main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);gl_Position=vec4(p*2.0-1.0,0,1);}";
 
     private NodeLightFroxels() {}
+    static int retainedGridCount() { return GRIDS.size(); }
+    static int cachedReceiverCount() {
+        return RECEIVERS.size() + (int) GRIDS.values().stream().filter(grid -> grid.history.valid).count();
+    }
+    static void clearCachedLookups() {
+        RECEIVERS.clear();
+        for (Grid grid : GRIDS.values()) {
+            grid.history.valid = false;
+            grid.history.lights = List.of();
+            grid.history.camera = null;
+        }
+    }
     static boolean rendering() { return rendering; }
 
     static int draw(int receiver, int viewWidth, int viewHeight) {

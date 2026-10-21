@@ -43,8 +43,8 @@ public final class AssetPreviewView extends FrameLayout {
 
     @Override
     protected void onDetachedFromWindow() {
-        releaseSubscription();
         clearResolvedView();
+        releaseSubscription();
         super.onDetachedFromWindow();
     }
 

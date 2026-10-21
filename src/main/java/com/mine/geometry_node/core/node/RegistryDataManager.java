@@ -16,6 +16,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Duration;
+import java.util.function.Supplier;
+import java.util.concurrent.CompletableFuture;
+import com.mine.geometry_node.core.cache.*;
 
 public class RegistryDataManager {
     public static final String DIMENSION_REGISTRY_ID = "minecraft:dimension";
@@ -23,73 +27,74 @@ public class RegistryDataManager {
 
     private RegistryDataManager() {}
 
-    // 静态类型
+    // Only immutable built-in registry names are cached. World/dynamic registries stay live.
+    private static final BoundedCache<String, List<String>> BUILTIN_NAMES =
+            new BoundedCache<>(7, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
 
-    // --- 懒加载缓存 ---
-    private static volatile List<String> BLOCK_CACHE = null;  // 方块
-    private static volatile List<String> ITEM_CACHE = null;  // 物品
-    private static volatile List<String> ENTITY_TYPE_CACHE = null;  // 实体类型
-    private static volatile List<String> EFFECT_CACHE = null;  // 效果
-    private static volatile List<String> SOUND_CACHE = null;  // 音效
-    private static volatile List<String> PARTICLE_CACHE = null;
-    private static volatile List<String> MENU_CACHE = null;
+    static {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:registry_names",
+                "geometry_node.cache.registry_names", CacheDescriptor.Domain.COMMON,
+                CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                return CompletableFuture.completedFuture(CacheStats.memory(BUILTIN_NAMES.size(), -1));
+            }
+            public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                BUILTIN_NAMES.clear();
+                return CompletableFuture.completedFuture(null);
+            }
+            public boolean supports(CacheClearRequest request) {
+                return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+            }
+        });
+    }
+
+    private static List<String> names(String key, Supplier<List<String>> loader) {
+        long generation = BUILTIN_NAMES.generation();
+        List<String> names = BUILTIN_NAMES.get(key);
+        if (names != null) return names;
+        List<String> loaded = loader.get();
+        synchronized (BUILTIN_NAMES) {
+            names = BUILTIN_NAMES.get(key);
+            if (names != null) return names;
+            BUILTIN_NAMES.putIfCurrent(key, loaded, generation);
+        }
+        // A concurrent clear never invalidates the caller's immutable snapshot.
+        return loaded;
+    }
 
     public static List<String> getAllBlocks() {
-        if (BLOCK_CACHE == null) {
-            BLOCK_CACHE = BuiltInRegistries.BLOCK.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return BLOCK_CACHE;
+        return names("blocks", () -> BuiltInRegistries.BLOCK.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllItems() {
-        if (ITEM_CACHE == null) {
-            ITEM_CACHE = BuiltInRegistries.ITEM.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return ITEM_CACHE;
+        return names("items", () -> BuiltInRegistries.ITEM.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllEntityTypes() {
-        if (ENTITY_TYPE_CACHE == null) {
-            ENTITY_TYPE_CACHE = BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return ENTITY_TYPE_CACHE;
+        return names("entities", () -> BuiltInRegistries.ENTITY_TYPE.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllEffects() {
-        if (EFFECT_CACHE == null) {
-            EFFECT_CACHE = BuiltInRegistries.MOB_EFFECT.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return EFFECT_CACHE;
+        return names("effects", () -> BuiltInRegistries.MOB_EFFECT.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllSounds() {
-        if (SOUND_CACHE == null) {
-            SOUND_CACHE = BuiltInRegistries.SOUND_EVENT.keySet().stream()
-                    .map(id -> id.toString())
-                    .sorted()
-                    .toList();
-        }
-        return SOUND_CACHE;
+        return names("sounds", () -> BuiltInRegistries.SOUND_EVENT.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllParticles() {
-        if (PARTICLE_CACHE == null) {
-            PARTICLE_CACHE = BuiltInRegistries.PARTICLE_TYPE.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return PARTICLE_CACHE;
+        return names("particles", () -> BuiltInRegistries.PARTICLE_TYPE.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static List<String> getAllMenus() {
-        if (MENU_CACHE == null) {
-            MENU_CACHE = BuiltInRegistries.MENU.keySet().stream()
-                    .map(id -> id.toString()).sorted().toList();
-        }
-        return MENU_CACHE;
+        return names("menus", () -> BuiltInRegistries.MENU.keySet().stream()
+                .map(Object::toString).sorted().toList());
     }
 
     public static String[] withEmptyOption(List<String> options) {
@@ -127,10 +132,7 @@ public class RegistryDataManager {
     }
 
     public static List<String> getEntityTypes() {
-        return BuiltInRegistries.ENTITY_TYPE.keySet().stream()
-                .map(id -> id.toString())
-                .sorted()
-                .toList();
+        return getAllEntityTypes();
     }
 
     public static List<String> getAttributes(RegistryAccess access) {

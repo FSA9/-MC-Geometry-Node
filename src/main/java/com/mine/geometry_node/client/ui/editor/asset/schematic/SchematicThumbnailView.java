@@ -165,6 +165,11 @@ public final class SchematicThumbnailView extends View {
         SchematicThumbnailCache.invalidateUnder(file);
     }
 
+    public static void registerCache() {
+        SchematicThumbnailCache.init();
+        SchematicThumbnailMaterialResolver.init();
+    }
+
     public static void clearCache() {
         SchematicThumbnailCache.clear();
     }

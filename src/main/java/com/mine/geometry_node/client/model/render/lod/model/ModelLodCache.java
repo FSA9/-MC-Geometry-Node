@@ -19,6 +19,13 @@ public final class ModelLodCache {
     private static final int VERSION = 2;
     private static final long MAX_CACHE_BYTES = 512L * 1024 * 1024;
 
+    private static final com.mine.geometry_node.core.engine.system.model.runtime.ModelDiskCacheAccess DISK =
+            new com.mine.geometry_node.core.engine.system.model.runtime.ModelDiskCacheAccess();
+    private static boolean ownedFile(String name) { return name.matches("[0-9a-f]{64}\\.mlod"); }
+    public static void clearDisk(Path directory) throws IOException { DISK.clear(directory, ModelLodCache::ownedFile); }
+    public static com.mine.geometry_node.core.cache.CacheStats diskStats(Path directory) throws IOException {
+        return DISK.stats(directory, ModelLodCache::ownedFile);
+    }
     private ModelLodCache() {}
 
     public record Result(List<ModelLodMesh.Levels> meshes, long cpuBytes, Map<String, Object> report) {
@@ -31,6 +38,7 @@ public final class ModelLodCache {
         meshes = List.copyOf(meshes);
         if (additionalCpuBudget < 0) throw new IllegalArgumentException("negative LOD budget");
         token.check();
+        long diskGeneration = DISK.generation();
         long started = System.nanoTime();
         String key = key(meshes, token);
         Path target = cacheDirectory.resolve(key + ".mlod");
@@ -74,7 +82,8 @@ public final class ModelLodCache {
         token.check();
         if (fallback.isEmpty()) {
             try {
-                write(target, key, built, token);
+                if (!DISK.publish(diskGeneration, () -> write(target, key, built, token)))
+                    status = "BUILT_NOT_SAVED";
             } catch (IOException | RuntimeException failure) {
                 token.check();
                 cacheFailure = failure.getClass().getSimpleName() + ": " + failure.getMessage();

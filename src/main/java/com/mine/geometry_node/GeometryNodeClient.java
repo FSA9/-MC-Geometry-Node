@@ -166,6 +166,9 @@ public class GeometryNodeClient {
         GeometryNode.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
         com.mine.geometry_node.client.config.ConfigManager.INSTANCE.initOrLoad();
+        com.mine.geometry_node.client.ui.editor.asset.AssetCacheRegistration.init();
+        com.mine.geometry_node.client.runtime.light.shader.NodeLightProgramCache.registerCache(
+                Minecraft.getInstance().gameDirectory.toPath());
         com.mine.geometry_node.core.node.NodeRegistry.INSTANCE.init();
     }
 }

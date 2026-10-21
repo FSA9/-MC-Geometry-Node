@@ -202,6 +202,26 @@ public final class ModelStaticRenderer {
     }
 
     /** Versioned spatial-light invalidation contract; render-thread only and absolute world block coordinates. */
+    /** Reconstructable lookups only; excludes queued draws, live model definitions and shader bindings. */
+    public static void clearLookupCaches() {
+        RenderSystem.assertOnRenderThread();
+        LIGHT_CACHE.invalidateAll("cache_clear");
+        LOD_HISTORY.clear();
+        ModelTransparentRenderer.clear();
+        ModelIrisHeldLight.clear();
+    }
+
+    public static com.mine.geometry_node.core.cache.CacheStats lookupCacheStats() {
+        RenderSystem.assertOnRenderThread();
+        long light = ((Number) LIGHT_CACHE.report().get("cachedSamples")).longValue();
+        long lod = LOD_HISTORY.values().stream().mapToLong(Map::size).sum();
+        var transparent = ModelTransparentRenderer.report();
+        long runs = ((Number) transparent.get("currentDrawRuns")).longValue();
+        // GPU buffers are accounted once by the residency ledger, not again here.
+        long staging = ((Number) transparent.get("cpuStagingBytes")).longValue();
+        return com.mine.geometry_node.core.cache.CacheStats.memory(light + lod + runs, staging + light * 20L);
+    }
+
     public static void invalidateLight(BlockPos position) { RenderSystem.assertOnRenderThread(); LIGHT_CACHE.invalidate(Objects.requireNonNull(position)); }
     public static void invalidateLightRegion(BlockPos center, int radius, String reason) { RenderSystem.assertOnRenderThread(); LIGHT_CACHE.invalidateRegion(Objects.requireNonNull(center), radius, reason); }
     public static void invalidateAllLight(String reason) { RenderSystem.assertOnRenderThread(); LIGHT_CACHE.invalidateAll(reason); }
@@ -626,6 +646,7 @@ public final class ModelStaticRenderer {
     /** Drop queued work and per-scene caches immediately; GPU buffers retire via host fences. */
     public static void clearSceneResources() {
         closeShadowResources();
+        LIGHT_CACHE.beginFrame(null); // Do not retain an unloaded client world through the application adapter.
         LIGHT_CACHE.invalidateAll("scene_cleared");
         shadowCasters = 0; shadowProjectionConsumed = false;
         mainCpuNanos = 0; mainDrawCount = mainPrimitiveCount = 0;

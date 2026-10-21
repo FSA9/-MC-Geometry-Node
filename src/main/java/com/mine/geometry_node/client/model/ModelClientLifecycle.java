@@ -20,6 +20,8 @@ import net.neoforged.neoforge.client.event.lifecycle.ClientStoppingEvent;
 public final class ModelClientLifecycle {
     private ModelClientLifecycle(){}
     public static void register(IEventBus modBus){
+        modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) ->
+                event.enqueueWork(() -> ModelCacheIntegration.register(Minecraft.getInstance().gameDirectory.toPath())));
         ModelStaticRenderer.setInstanceSource(new ModelRenderInstanceSource() {
             public boolean hasVisibleInstances() { return ClientModelService.INSTANCE.hasVisibleInstances(); }
             public ModelLodMetrics.LoadedCounts loadedCounts() { return ClientModelService.INSTANCE.loadedCounts(); }
@@ -92,6 +94,6 @@ public final class ModelClientLifecycle {
         ModelStaticRenderer.drawResolvedTransparent(event.getModelViewMatrix(), event.getLevelRenderState().cameraRenderState.pos,
                 event.getLevelRenderState().cameraRenderState.cullFrustum, ClientModelService.INSTANCE.renderSnapshots());
     }
-    private static void shutdown(ClientStoppingEvent event){LightReports.cancel(); ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.close();}
+    private static void shutdown(ClientStoppingEvent event){ModelCacheIntegration.unregister(); LightReports.cancel(); ClientModelService.INSTANCE.shutdown(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.runtime.light.render.NativeVolumeLights.close();}
     private static void logout(ClientPlayerNetworkEvent.LoggingOut event){Minecraft.getInstance().execute(() -> { LightReports.cancel(); ClientModelService.INSTANCE.clear(); ModelStaticRenderer.closeShadowResources(); com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer.clear(); com.mine.geometry_node.client.model.diagnostic.ModelHud.invalidate(); });}
 }

@@ -44,6 +44,22 @@ class ModelRepositoryTest {
             old.close();assertEquals(List.of("old"),retired);fresh.close();assertEquals(List.of("old","new"),retired);
         }
     }
+    @Test void cacheAccountingIncludesRetiredRevisionsUntilLastLeaseCloses() {
+        ManualExecutor executor = new ManualExecutor();
+        try (var repository = new ModelRepository<String, String>(executor, value -> {})) {
+            var old = repository.acquire("asset", (key, cancel) -> "old"); executor.run();
+            repository.invalidate("asset");
+            assertEquals(0, repository.size());
+            assertEquals(1, repository.retainedSize());
+            var fresh = repository.acquire("asset", (key, cancel) -> "fresh"); executor.run();
+            var stats = repository.cacheStats(String::length);
+            assertEquals(2, stats.entries()); assertEquals(2, stats.retainedEntries());
+            assertEquals(8, stats.memoryBytes());
+            old.close(); assertEquals(1, repository.retainedSize());
+            fresh.close(); assertEquals(0, repository.cacheStats(String::length).entries());
+        }
+    }
+
     @Test void lateCancelledResultIsDisposedAndNeverPublished() throws Exception {
         ExecutorService executor=Executors.newSingleThreadExecutor();CountDownLatch entered=new CountDownLatch(1),finish=new CountDownLatch(1),disposed=new CountDownLatch(1);
         try(var repository=new ModelRepository<String,String>(executor,value->disposed.countDown(),true)) {

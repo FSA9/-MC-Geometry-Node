@@ -10,6 +10,10 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevis
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
 import com.mine.geometry_node.client.config.ConfigManager;
 
+import com.mine.geometry_node.core.cache.*;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,11 +28,35 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     private final ClientAssetPreviewCache cache = new ClientAssetPreviewCache();
     private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ClientIO", 2, 64);
     private final Map<CacheKey, Entry> entries = new LinkedHashMap<>();
+    // A completed preview still owns its on-disk artifact until the view unsubscribes.
+    private final Map<UUID, CacheKey> holders = new LinkedHashMap<>();
+    private final CacheRegistry.Registration registration;
     private final Map<String, CompletableFuture<Void>> serverClearBarriers = new LinkedHashMap<>();
     private CompletableFuture<Void> globalClearBarrier = CompletableFuture.completedFuture(null);
 
     private ClientAssetPreviewService() {
         ConfigManager.INSTANCE.addChangeListener(config -> enforceCacheLimit());
+        registration = CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:asset.client.previews", "geometry_node.cache.asset.client_previews",
+                CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.DISK,
+                CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            @Override public CompletionStage<CacheStats> stats() {
+                return cacheSizeBytes().thenApply(bytes -> {
+                    synchronized (ClientAssetPreviewService.this) {
+                        return new CacheStats(-1, 0, bytes, holders.values().stream().distinct().count());
+                    }
+                });
+            }
+            @Override public boolean supports(CacheClearRequest request) {
+                return request.reason() == CacheClearRequest.Reason.USER;
+            }
+            @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                return clearOutcome(request).thenApply(ignored -> null);
+            }
+            @Override public CompletionStage<CacheClearOutcome> clearOutcome(CacheClearRequest request) {
+                return clearUnusedCachesOutcome(request.namespace());
+            }
+        });
     }
 
     public synchronized Subscription subscribe(AssetPreviewRevision revision, Listener listener) {
@@ -39,6 +67,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
         Entry entry = entries.computeIfAbsent(key,
                 ignored -> new Entry(key, cache.generation(serverIdentity)));
         UUID subscriberId = UUID.randomUUID();
+        holders.put(subscriberId, key);
         entry.listeners.put(subscriberId, listener);
         if (!entry.started) {
             entry.started = true;
@@ -49,27 +78,44 @@ public final class ClientAssetPreviewService implements AutoCloseable {
 
     public synchronized void resetConnection() {
         entries.clear();
+        holders.clear();
         ClientAssetPreviewProtocol.reset();
     }
 
+    public void registerCache() {
+        // Initialization registers this application-owned service exactly once.
+    }
+
     public CompletableFuture<Void> clearCurrentServerCache() {
-        String serverIdentity = ClientServerIdentity.current();
-        synchronized (this) {
-            cache.invalidate(serverIdentity);
-            cancelServerEntries(serverIdentity);
-            return appendServerCacheClear(serverIdentity, () -> cache.clear(serverIdentity));
-        }
+        return clearUnusedCaches(ClientServerIdentity.current());
     }
 
     public CompletableFuture<Void> clearAllCaches() {
-        synchronized (this) {
-            cache.invalidateAll();
-            for (Entry entry : entries.values()) {
-                if (entry.requestId != null) ClientAssetPreviewProtocol.cancel(entry.requestId);
+        return clearUnusedCaches(null);
+    }
+
+    private CompletableFuture<Void> clearUnusedCaches(String namespace) {
+        return clearUnusedCachesOutcome(namespace).thenApply(ignored -> null);
+    }
+
+    private synchronized CompletableFuture<CacheClearOutcome> clearUnusedCachesOutcome(String namespace) {
+        Set<String> retained = new HashSet<>();
+        for (CacheKey key : holders.values()) retained.add(key.serverIdentity);
+        if (namespace != null) {
+            if (retained.contains(namespace)) {
+                long count = holders.values().stream().filter(key -> key.serverIdentity.equals(namespace)).distinct().count();
+                return CompletableFuture.completedFuture(CacheClearOutcome.retained(count));
             }
-            entries.clear();
-            return appendGlobalCacheClear(cache::clearAll);
+            cache.invalidate(namespace);
+            return appendServerCacheClear(namespace, () -> cache.clear(namespace))
+                    .thenApply(ignored -> CacheClearOutcome.completed(0));
         }
+        cache.invalidateUnused(retained);
+        long count = holders.values().stream().distinct().count();
+        var cleared = new java.util.concurrent.atomic.AtomicBoolean();
+        return appendGlobalCacheClear(() -> cleared.set(cache.clearUnused(retained)))
+                .thenApply(ignored -> !cleared.get() && count > 0
+                        ? CacheClearOutcome.retained(count) : CacheClearOutcome.completed(count));
     }
 
     public CompletableFuture<Long> cacheSizeBytes() {
@@ -81,7 +127,11 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     public CompletableFuture<Void> enforceCacheLimit() {
-        return io.run(cache::enforceConfiguredLimit);
+        // Existing previews own paths, not byte copies. Do not evict their artifacts.
+        synchronized (this) {
+            if (!holders.isEmpty()) return CompletableFuture.completedFuture(null);
+            return appendGlobalCacheClear(cache::enforceConfiguredLimit);
+        }
     }
 
     private void resolveCached(Entry entry) {
@@ -163,7 +213,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     private synchronized void complete(Entry entry, ClientAssetPreviewCache.CachedPreview cached) {
-        if (entries.remove(entry.key) != entry) return;
+        if (!entries.remove(entry.key, entry)) return;
         for (Listener listener : entry.listeners.values()) {
             listener.available(cached.descriptor(), cached.path());
         }
@@ -171,29 +221,22 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     }
 
     private synchronized void fail(Entry entry, AssetPreviewResultCode code, String detail) {
-        if (entries.remove(entry.key) != entry) return;
+        if (!entries.remove(entry.key, entry)) return;
+        for (UUID subscriberId : entry.listeners.keySet()) holders.remove(subscriberId);
         for (Listener listener : entry.listeners.values()) listener.unavailable(code, detail);
         entry.listeners.clear();
+        if (holders.isEmpty()) enforceCacheLimit();
     }
 
     private synchronized void unsubscribe(CacheKey key, UUID subscriberId) {
+        holders.remove(subscriberId);
+        if (holders.isEmpty()) enforceCacheLimit();
         Entry entry = entries.get(key);
         if (entry == null) return;
         entry.listeners.remove(subscriberId);
         if (!entry.listeners.isEmpty()) return;
         entries.remove(key, entry);
         if (entry.requestId != null) ClientAssetPreviewProtocol.cancel(entry.requestId);
-    }
-
-    private synchronized void cancelServerEntries(String serverIdentity) {
-        var iterator = entries.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Entry entry = iterator.next().getValue();
-            if (!entry.key.serverIdentity.equals(serverIdentity)) continue;
-            iterator.remove();
-            if (entry.requestId != null) ClientAssetPreviewProtocol.cancel(entry.requestId);
-            entry.listeners.clear();
-        }
     }
 
     private static void post(Runnable task) {
@@ -203,6 +246,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     @Override
     public void close() {
         resetConnection();
+        registration.close();
         io.close();
     }
 

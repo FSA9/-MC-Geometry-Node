@@ -29,7 +29,7 @@ final class PathConfigEntryEditor extends AbstractConfigEntryEditor<String> {
                 SettingsEditorStyle.CONTROL, 3.0f, SettingsEditorStyle.BORDER));
         row.addView(mValue, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
         UiActionButton choose = UiActionButton.create(context,
-                tr("geometry_node.settings.preview_cache.choose_location"), UiActionButton.Role.SECONDARY,
+                tr("geometry_node.settings.directory.choose"), UiActionButton.Role.SECONDARY,
                 view -> mEnvironment.requestDirectory(view, mDraft.get(mEntry), this::select));
         LinearLayout.LayoutParams chooseParams = new LinearLayout.LayoutParams(
                 UIUtils.dp2pxInt(96), UIUtils.dp2pxInt(28));

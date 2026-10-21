@@ -1,6 +1,12 @@
 package com.mine.geometry_node.client.runtime.light.shader;
 
 import net.minecraft.client.Minecraft;
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL20C;
@@ -9,12 +15,9 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Map;
@@ -24,12 +27,29 @@ import java.util.concurrent.CompletableFuture;
 public final class NodeLightProgramCache {
     private static final int MAGIC=0x4e4c5031, MAX_BYTES=16*1024*1024;
     private static long hits, misses, loadNanos, saveNanos;
-    private static volatile long saves;
+    private static final java.util.concurrent.atomic.AtomicLong saves = new java.util.concurrent.atomic.AtomicLong();
     private static volatile int lastBinaryBytes;
     private static volatile String status="IDLE";
     private static String loadStatus="IDLE", loadFailure="";
     private static volatile String saveStatus="IDLE";
+    private static volatile ShaderBinaryCacheStore store;
     private NodeLightProgramCache() {}
+
+    /** Called by client initialization; also lazy-initialized before the first shader compilation. */
+    public static synchronized void registerCache(Path gameDirectory) {
+        if (store != null) return;
+        ShaderBinaryCacheStore owner = new ShaderBinaryCacheStore(gameDirectory.resolve("geometry_nodes/caches/light/shaders"));
+        store = owner;
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:runtime.shader_binaries", "geometry_node.cache.runtime.shader_binaries",
+                CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.DISK, CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            @Override public java.util.concurrent.CompletionStage<CacheStats> stats() { return CacheExecutors.submit(owner::stats); }
+            @Override public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                if (!supports(request)) return CompletableFuture.failedFuture(
+                        new IllegalArgumentException("Shader cache does not support scoped clearing"));
+                return CacheExecutors.run(owner::clear);
+            }
+        });
+    }
 
     static boolean supported() {
         var caps=GL.getCapabilities();
@@ -42,6 +62,7 @@ public final class NodeLightProgramCache {
     }
 
     static Path path(String namespace, String... sources) {
+        registerCache(Minecraft.getInstance().gameDirectory.toPath());
         if(!supported()) {status="UNSUPPORTED";return null;}
         try {
             String key=namespace+"\n"+GL11C.glGetString(GL11C.GL_VENDOR)+"\n"
@@ -110,6 +131,9 @@ public final class NodeLightProgramCache {
     }
 
     private static void extract(Path path,int program) {
+        ShaderBinaryCacheStore owner = store;
+        if (owner == null) { saveStatus="UNAVAILABLE"; return; }
+        long generation = owner.generation();
         saveStatus="EXTRACTING";
         int capacity=GL20C.glGetProgrami(program,GL41C.GL_PROGRAM_BINARY_LENGTH);
         lastBinaryBytes=capacity;
@@ -123,42 +147,14 @@ public final class NodeLightProgramCache {
             if(actual<=0||actual>capacity) {saveStatus="INVALID_BINARY_LENGTH";return;}
             byte[] bytes=new byte[actual];buffer.get(bytes);
             saveStatus="QUEUED";
-            CompletableFuture.runAsync(()->write(path,binaryFormat,bytes));
+            CacheExecutors.run(() -> {
+                if (owner.write(generation, path, binaryFormat, bytes)) {
+                    saves.incrementAndGet();
+                    saveStatus="SAVED";
+                } else saveStatus="INVALIDATED";
+            }).whenComplete((ignored, error) -> { if (error != null) saveStatus="WRITE_FAILED"; });
         } catch(RuntimeException error) {saveStatus="EXTRACTION_FAILED";}
         finally {MemoryUtil.memFree(buffer);}
-    }
-
-    private static synchronized void write(Path path,int format,byte[] binary) {
-        Path temporary=null;
-        try {
-            Files.createDirectories(path.getParent());
-            temporary=Files.createTempFile(path.getParent(),"native-volume-",".tmp");
-            try(var output=new DataOutputStream(Files.newOutputStream(temporary))) {
-                output.writeInt(MAGIC);output.writeInt(format);output.writeInt(binary.length);
-                output.write(digest(binary));output.write(binary);
-            }
-            try {Files.move(temporary,path,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}
-            catch(AtomicMoveNotSupportedException error) {Files.move(temporary,path,StandardCopyOption.REPLACE_EXISTING);}
-            saves++;
-            saveStatus="SAVED";
-            // Shader updates and driver changes should not accumulate binary files indefinitely.
-            try(var entries=Files.list(path.getParent())) {
-                var previous=entries.filter(p->!p.equals(path)&&p.getFileName().toString().matches("[0-9a-f]{64}\\.bin"))
-                        .sorted(java.util.Comparator.comparingLong(NodeLightProgramCache::modified).reversed()).toList();
-                long retained=binary.length+44L;
-                for(int i=0;i<previous.size();i++) {
-                    Path entry=previous.get(i);
-                    retained+=Files.size(entry);
-                    if(i>=23 || retained>128L*1024*1024)Files.deleteIfExists(entry);
-                }
-            }
-        } catch(Exception error) {saveStatus="WRITE_FAILED";}
-        finally {if(temporary!=null)try {Files.deleteIfExists(temporary);}catch(Exception ignored) {}}
-    }
-
-    private static long modified(Path path) {
-        try {return Files.getLastModifiedTime(path).toMillis();}
-        catch(java.io.IOException error) {return 0;}
     }
 
     private static byte[] digest(byte[] value) throws java.security.NoSuchAlgorithmException {
@@ -170,7 +166,7 @@ public final class NodeLightProgramCache {
 
     public static Map<String,Object> report() {
         return Map.ofEntries(Map.entry("status",status),Map.entry("hits",hits),Map.entry("misses",misses),
-                Map.entry("saved",saves),Map.entry("lastBinaryBytes",lastBinaryBytes),Map.entry("loadMs",loadNanos/1_000_000.0),
+                Map.entry("saved",saves.get()),Map.entry("lastBinaryBytes",lastBinaryBytes),Map.entry("loadMs",loadNanos/1_000_000.0),
                 Map.entry("loadStatus",loadStatus),Map.entry("loadFailure",loadFailure),
                 Map.entry("saveStatus",saveStatus),Map.entry("binaryExtractionMs",saveNanos/1_000_000.0));
     }

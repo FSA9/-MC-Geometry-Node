@@ -66,6 +66,32 @@ public final class ViewportDebugService {
     private static boolean allowed(ServerPlayer player) {
         return player.isAlive(); // Same read access as the existing debug commands; writes use scene permissions.
     }
+    static boolean hasSubscriptions(MinecraftServer server) {
+        return LEASES.keySet().stream().anyMatch(player -> player.level().getServer() == server);
+    }
+
+    static long cachedEntries(MinecraftServer server) {
+        long count = 0;
+        for (var entry : LEASES.entrySet()) {
+            if (entry.getKey().level().getServer() != server) continue;
+            Lease lease = entry.getValue();
+            count += lease.observations.cachedEntries() + lease.nodeCollision.cachedMeshCount()
+                    + lease.modelCollision.cachedMeshCount();
+        }
+        return count;
+    }
+
+    static void clearCachedObservations(MinecraftServer server) {
+        for (var entry : LEASES.entrySet()) {
+            if (entry.getKey().level().getServer() != server) continue;
+            Lease lease = entry.getValue();
+            lease.observations.clear();
+            lease.nodeCollision.clear();
+            lease.modelCollision.clear();
+            lease.signature = Long.MIN_VALUE;
+        }
+    }
+
     static boolean wants(MinecraftServer server, ViewportDebugLayer layer) {
         return LEASES.entrySet().stream().anyMatch(e -> e.getKey().level().getServer()==server && (e.getValue().mask & layer.bit())!=0);
     }

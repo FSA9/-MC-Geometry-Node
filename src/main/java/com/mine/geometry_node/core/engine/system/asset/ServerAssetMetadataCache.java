@@ -4,6 +4,8 @@ import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.server.MinecraftServer;
 
+import com.mine.geometry_node.core.cache.*;
+import java.util.concurrent.CompletionStage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -55,8 +57,9 @@ public final class ServerAssetMetadataCache implements ServerEngine {
             AssetMetadata cached = cache.get(key, revision);
             if (cached != null) return new Inspection(cached, revision.size(), revision.lastModified().toMillis());
 
+            long generation = cache.generation();
             AssetMetadata inspected = AssetTypeCatalog.inspect(normalized, normalizedLogicalPath);
-            if (!isStopped(server)) cache.put(key, revision, inspected);
+            if (!isStopped(server)) cache.put(key, revision, inspected, generation);
             return new Inspection(inspected, revision.size(), revision.lastModified().toMillis());
         } catch (IOException | RuntimeException ignored) {
             return Inspection.UNKNOWN;
@@ -71,7 +74,8 @@ public final class ServerAssetMetadataCache implements ServerEngine {
     @Override
     public synchronized void shutdown(MinecraftServer server) {
         stoppedServers.add(server);
-        caches.remove(server);
+        ServerCache cache = caches.remove(server);
+        if (cache != null) cache.close();
     }
 
     private synchronized ServerCache cacheFor(MinecraftServer server) {
@@ -93,6 +97,24 @@ public final class ServerAssetMetadataCache implements ServerEngine {
 
     private static final class ServerCache {
         private final LinkedHashMap<CacheKey, CachedMetadata> entries = new LinkedHashMap<>(16, 0.75f, true);
+        private long generation;
+        private final CacheRegistry.Registration registration = CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:asset.server.metadata", "geometry_node.cache.asset.server_metadata",
+                CacheDescriptor.Domain.SERVER, CacheDescriptor.Storage.MEMORY,
+                CacheDescriptor.Lifetime.WORLD), new ManagedCache() {
+            @Override public CompletionStage<CacheStats> stats() {
+                return CacheExecutors.submit(() -> {
+                    synchronized (ServerCache.this) { return CacheStats.memory(entries.size(), -1); }
+                });
+            }
+            @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                return CacheExecutors.run(ServerCache.this::clear);
+            }
+        });
+
+        private synchronized long generation() { return generation; }
+        private synchronized void clear() { generation++; entries.clear(); }
+        private void close() { registration.close(); clear(); }
 
         private synchronized AssetMetadata get(CacheKey key, FileRevision revision) {
             CachedMetadata cached = entries.get(key);
@@ -102,7 +124,8 @@ public final class ServerAssetMetadataCache implements ServerEngine {
             return null;
         }
 
-        private synchronized void put(CacheKey key, FileRevision revision, AssetMetadata metadata) {
+        private synchronized void put(CacheKey key, FileRevision revision, AssetMetadata metadata, long expectedGeneration) {
+            if (generation != expectedGeneration) return;
             entries.put(key, new CachedMetadata(revision, metadata));
             while (entries.size() > MAX_ENTRIES_PER_SERVER) {
                 entries.remove(entries.keySet().iterator().next());
@@ -110,6 +133,7 @@ public final class ServerAssetMetadataCache implements ServerEngine {
         }
 
         private synchronized void removePath(Path path) {
+            generation++;
             entries.keySet().removeIf(key -> key.path().equals(path));
         }
     }

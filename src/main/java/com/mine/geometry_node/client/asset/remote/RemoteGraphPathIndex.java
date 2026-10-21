@@ -1,5 +1,13 @@
 package com.mine.geometry_node.client.asset.remote;
 
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
+import java.util.concurrent.CompletionStage;
+
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
 import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
@@ -25,6 +33,25 @@ public final class RemoteGraphPathIndex {
     private final Map<String, DirectorySnapshot> directories = new HashMap<>();
 
     private RemoteGraphPathIndex() {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:asset.remote.graph_paths", "geometry_node.cache.asset.graph_paths",
+                CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.MEMORY,
+                CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            @Override public CompletionStage<CacheStats> stats() {
+                return CacheExecutors.submit(() -> {
+                    synchronized (RemoteGraphPathIndex.this) {
+                        return CacheStats.memory(directories.size(), -1);
+                    }
+                });
+            }
+            @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                return CacheExecutors.run(RemoteGraphPathIndex.this::clear);
+            }
+        });
+    }
+
+    public void registerCache() {
+        // Registration belongs to this process-wide index, contents reset with the connection.
     }
 
     public synchronized List<String> paths() {

@@ -54,6 +54,30 @@ public final class ClientModelCollisions {
 
     private ClientModelCollisions() { worker.allowCoreThreadTimeOut(true); }
 
+    /** Pure weak lookup: dropping it does not remove installed client/server colliders. */
+    public CompletionStage<com.mine.geometry_node.core.cache.CacheStats> preparedCacheStats() {
+        return onWorker(() -> {
+            preparedCache.values().removeIf(reference -> reference.get() == null);
+            return com.mine.geometry_node.core.cache.CacheStats.memory(preparedCache.size(), -1);
+        });
+    }
+
+    public CompletionStage<Void> clearPreparedCache() {
+        return onWorker(() -> { preparedCache.clear(); return null; });
+    }
+
+    private <T> CompletionStage<T> onWorker(java.util.concurrent.Callable<T> action) {
+        var result = new CompletableFuture<T>();
+        try {
+            worker.execute(() -> {
+                if (result.isCancelled()) return;
+                try { result.complete(action.call()); }
+                catch (Exception error) { result.completeExceptionally(error); }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException error) { result.completeExceptionally(error); }
+        return result;
+    }
+
     public static void requireAuthority() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null || mc.getSingleplayerServer() == null)

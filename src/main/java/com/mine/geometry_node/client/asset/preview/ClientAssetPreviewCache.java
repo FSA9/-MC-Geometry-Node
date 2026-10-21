@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -40,6 +42,29 @@ public final class ClientAssetPreviewCache {
     void invalidateAll() {
         globalGeneration.incrementAndGet();
         serverGenerations.clear();
+    }
+
+    void invalidateUnused(Set<String> retainedIdentities) {
+        serverGenerations.forEach((identity, generation) -> {
+            if (!retainedIdentities.contains(identity)) generation.incrementAndGet();
+        });
+    }
+
+    synchronized boolean clearUnused(Set<String> retainedIdentities) throws IOException {
+        Set<Path> retainedRoots = retainedIdentities.stream().map(ClientAssetPreviewPaths::serverRoot)
+                .collect(Collectors.toSet());
+        Path root = ClientAssetPreviewPaths.root();
+        if (!Files.isDirectory(root) || Files.isSymbolicLink(root)) return false;
+        boolean cleared = false;
+        try (var children = Files.list(root)) {
+            for (Path child : children.filter(ClientAssetPreviewCache::isServerNamespace).toList()) {
+                if (!retainedRoots.contains(child.toAbsolutePath().normalize())) {
+                    deleteOwnedRoot(child);
+                    cleared = true;
+                }
+            }
+        }
+        return cleared;
     }
 
     synchronized Optional<CachedPreview> find(String serverIdentity,
@@ -80,8 +105,7 @@ public final class ClientAssetPreviewCache {
         Files.createDirectories(artifact.getParent());
         writeAtomically(artifact, content);
         writeMetadata(metadataPath(root, descriptor.revision().cacheKey()), descriptor);
-        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), artifact,
-                METADATA_MAGIC);
+
         return Optional.of(new CachedPreview(descriptor, artifact));
     }
 

@@ -4,18 +4,34 @@ import com.mine.geometry_node.core.utils.expression.ASTNode;
 import com.mine.geometry_node.core.utils.expression.ExpressionCompiler;
 import com.mine.geometry_node.core.utils.expression.VariableRegistry;
 
-import java.util.LinkedHashMap;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import com.mine.geometry_node.core.cache.*;
 import java.util.Map;
 
 /** Immutable compiled expression. Mutable evaluation memory belongs to each live-value state. */
 final class ExpressionProgram {
     private static final int COMPILED_FORMULA_CACHE_LIMIT = 1024;
-    private static final Map<String, CompiledFormula> COMPILED_FORMULAS = new LinkedHashMap<>(64, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, CompiledFormula> eldest) {
-            return size() > COMPILED_FORMULA_CACHE_LIMIT;
-        }
-    };
+    private static final BoundedCache<String, CompiledFormula> COMPILED_FORMULAS =
+            new BoundedCache<>(COMPILED_FORMULA_CACHE_LIMIT, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
+
+    static {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:expression_programs",
+                "geometry_node.cache.expression_programs", CacheDescriptor.Domain.COMMON,
+                CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                return CompletableFuture.completedFuture(CacheStats.memory(COMPILED_FORMULAS.size(), -1));
+            }
+            public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                // Compiled programs already captured by live values retain their immutable AST.
+                COMPILED_FORMULAS.clear();
+                return CompletableFuture.completedFuture(null);
+            }
+            public boolean supports(CacheClearRequest request) {
+                return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+            }
+        });
+    }
 
     private final ASTNode root;
     private final VariableSource[] sources;
@@ -72,7 +88,9 @@ final class ExpressionProgram {
     }
 
     private static CompiledFormula compiledFormula(String formula) {
+        long generation;
         synchronized (COMPILED_FORMULAS) {
+            generation = COMPILED_FORMULAS.generation();
             CompiledFormula cached = COMPILED_FORMULAS.get(formula);
             if (cached != null) {
                 return cached;
@@ -88,7 +106,7 @@ final class ExpressionProgram {
             if (existing != null) {
                 return existing;
             }
-            COMPILED_FORMULAS.put(formula, compiled);
+            COMPILED_FORMULAS.putIfCurrent(formula, compiled, generation);
         }
         return compiled;
     }

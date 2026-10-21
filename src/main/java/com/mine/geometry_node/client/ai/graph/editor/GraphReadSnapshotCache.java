@@ -1,5 +1,11 @@
 package com.mine.geometry_node.client.ai.graph.editor;
 
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Core;
 
@@ -35,6 +41,25 @@ public final class GraphReadSnapshotCache implements AutoCloseable {
 
     private final Map<Key, Entry> entries = new LinkedHashMap<>(16, 0.75f, true);
     private boolean closed;
+    private final CacheRegistry.Registration cacheRegistration = CacheRegistry.GLOBAL.register(
+            new CacheDescriptor("geometry_node:ai.graph_read_snapshots", "geometry_node.cache.ai.graph_read_snapshots",
+                    CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.OPERATION),
+            new ManagedCache() {
+                @Override public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                    return CacheExecutors.submit(GraphReadSnapshotCache.this::cacheStats);
+                }
+                @Override public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                    if (!supports(request)) return CompletableFuture.failedFuture(
+                            new IllegalArgumentException("Graph snapshot cache does not support scoped clearing"));
+                    return CacheExecutors.run(GraphReadSnapshotCache.this::clearCachedSnapshots);
+                }
+            });
+
+    private synchronized CacheStats cacheStats() { return CacheStats.memory(entries.size(), -1); }
+
+    /** Existing query handles retain immutable captured documents; only future lookup reuse is evicted. */
+    synchronized void clearCachedSnapshots() { entries.clear(); }
+
 
     /** Must be called while the editor model is owned by the UI thread. */
     synchronized Handle capture(Key key, NodeGraph graph) {
@@ -55,6 +80,7 @@ public final class GraphReadSnapshotCache implements AutoCloseable {
     public synchronized void close() {
         closed = true;
         entries.clear();
+        cacheRegistration.close();
     }
 
     private void trim() {

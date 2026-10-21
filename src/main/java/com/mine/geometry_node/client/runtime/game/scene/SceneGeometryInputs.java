@@ -31,6 +31,18 @@ public final class SceneGeometryInputs {
     private record WorldKey(Key shape, Vec3 position) {}
     private static final SnapCache<Key> SNAP_LOCAL = new SnapCache<>();
     private static final SnapCache<WorldKey> SNAP_WORLD = new SnapCache<>();
+    static {
+        com.mine.geometry_node.client.runtime.cache.ClientRuntimeCacheRegistration.register("runtime.scene_geometry", com.mine.geometry_node.core.cache.CacheDescriptor.Storage.MEMORY,
+                () -> com.mine.geometry_node.core.cache.CacheStats.memory(CACHE.size() + SNAP_LOCAL.meshes.size() + SNAP_WORLD.meshes.size(), -1),
+                SceneGeometryInputs::clearCachedGeometry);
+    }
+
+    private static void clearCachedGeometry() {
+        CACHE.clear();
+        SNAP_LOCAL.clear();
+        SNAP_WORLD.clear();
+    }
+
     private static long generation = Long.MIN_VALUE;
     private SceneGeometryInputs() {}
 

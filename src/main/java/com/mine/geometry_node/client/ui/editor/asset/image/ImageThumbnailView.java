@@ -34,11 +34,11 @@ public final class ImageThumbnailView extends View {
 
     @Override
     protected void onDetachedFromWindow() {
+        closeImage();
         if (mSubscription != null) {
             mSubscription.close();
             mSubscription = null;
         }
-        closeImage();
         super.onDetachedFromWindow();
     }
 
@@ -97,6 +97,10 @@ public final class ImageThumbnailView extends View {
 
     public static void invalidateUnder(File file) {
         ImageThumbnailCache.invalidateUnder(file);
+    }
+
+    public static void registerCache() {
+        ImageThumbnailCache.init();
     }
 
     public static void clearCache() {

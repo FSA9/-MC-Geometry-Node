@@ -16,6 +16,13 @@ public final class ModelCollisionCache {
     private static final int MAGIC = 0x4D434F4C, VERSION = 7;
     private static final long MAX_BYTES = 256L * 1024 * 1024;
 
+    private static final com.mine.geometry_node.core.engine.system.model.runtime.ModelDiskCacheAccess DISK =
+            new com.mine.geometry_node.core.engine.system.model.runtime.ModelDiskCacheAccess();
+    private static boolean ownedFile(String name) { return name.matches("[0-9a-f]{64}\\.(mcol|json)"); }
+    public static void clearDisk(Path directory) throws IOException { DISK.clear(directory, ModelCollisionCache::ownedFile); }
+    public static com.mine.geometry_node.core.cache.CacheStats diskStats(Path directory) throws IOException {
+        return DISK.stats(directory, ModelCollisionCache::ownedFile);
+    }
     private ModelCollisionCache() {}
 
     public record Result(
@@ -47,6 +54,7 @@ public final class ModelCollisionCache {
             ModelCollisionSettings settings,
             ModelCancellation token)
             throws IOException {
+        long diskGeneration = DISK.generation();
         long started = System.nanoTime();
         token.check();
         String key = key(asset, sceneIndex, bakedTransform, settings, token);
@@ -59,7 +67,7 @@ public final class ModelCollisionCache {
                 String metadataFailure = "";
                 try {
                     if (!Files.isRegularFile(directory.resolve(key + ".json")))
-                        writeMetadata(path, key, cached, settings, sceneIndex, bakedTransform);
+                        DISK.publish(diskGeneration, () -> writeMetadata(path, key, cached, settings, sceneIndex, bakedTransform));
                 } catch (IOException unavailable) {
                     metadataFailure = "cache metadata not saved: " + unavailable.getMessage();
                 }
@@ -85,8 +93,10 @@ public final class ModelCollisionCache {
                         built.mesh(), new org.joml.Matrix4d(bakedTransform).invert(), token);
         long generated = System.nanoTime();
         try {
-            write(path, key, mesh, token);
-            writeMetadata(path, key, mesh, settings, sceneIndex, bakedTransform);
+            DISK.publish(diskGeneration, () -> {
+                write(path, key, mesh, token);
+                writeMetadata(path, key, mesh, settings, sceneIndex, bakedTransform);
+            });
         } catch (IOException | RuntimeException unavailable) {
             token.check();
             failure = "cache or metadata not saved: " + unavailable.getMessage();

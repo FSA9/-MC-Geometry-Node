@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.model.runtime;
 
+import com.mine.geometry_node.core.cache.*;
+import java.util.concurrent.CompletableFuture;
+
 import java.lang.ref.WeakReference;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -14,6 +17,7 @@ final class ModelServerResidency<G> implements AutoCloseable {
     record Build<G>(CompletionStage<G> completion, Runnable cancel) {}
     record RetryStatus(int failedAttempts,long retryInTicks,boolean exhausted) {}
     private final Executor owner;
+    private final CacheRegistry.Registration cacheRegistration;
     private final BooleanSupplier available;
     private final Supplier<Build<G>> build;
     private final Predicate<G> publish;
@@ -30,6 +34,48 @@ final class ModelServerResidency<G> implements AutoCloseable {
                          Predicate<G> publish, Runnable withdraw, Consumer<Throwable> failed) {
         this.owner=owner;this.available=available;this.build=build;
         this.publish=publish;this.withdraw=withdraw;this.failed=failed;
+        cacheRegistration = CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:model_server_collision_reuse", "geometry_node.cache.model_server_collision_reuse",
+                CacheDescriptor.Domain.SERVER, CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.WORLD),
+                new ManagedCache() {
+                    @Override public CompletionStage<CacheStats> stats() {
+                        return onOwner(() -> {
+                            long entries = !closed && (active != null || cached.get() != null) ? 1 : 0;
+                            return new CacheStats(entries, -1, 0, active == null ? 0 : 1);
+                        });
+                    }
+                    @Override public boolean supports(CacheClearRequest request) {
+                        return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+                    }
+                    @Override public CompletionStage<CacheClearOutcome> clearOutcome(CacheClearRequest request) {
+                        if (!supports(request)) return CompletableFuture.completedFuture(CacheClearOutcome.skipped());
+                        return onOwner(() -> {
+                            long retained = active == null ? 0 : 1;
+                            boolean reusable = cached.get() != null;
+                            clearCachedGeometry();
+                            return reusable ? CacheClearOutcome.completed(retained) : CacheClearOutcome.retained(retained);
+                        });
+                    }
+                    @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                        if (!supports(request)) return CompletableFuture.failedFuture(new IllegalArgumentException("Unsupported model cache scope"));
+                        return onOwner(() -> { clearCachedGeometry(); return null; });
+                    }
+                });
+    }
+
+    /** Clearing the reusable reference never withdraws active physics or cancels an in-flight build. */
+    void clearCachedGeometry() { cached.clear(); }
+
+    private <T> CompletionStage<T> onOwner(Supplier<T> action) {
+        var result = new CompletableFuture<T>();
+        try {
+            owner.execute(() -> {
+                if (result.isCancelled()) return;
+                try { result.complete(action.get()); }
+                catch (Exception error) { result.completeExceptionally(error); }
+            });
+        } catch (RuntimeException error) { result.completeExceptionally(error); }
+        return result;
     }
 
     void reconcile() {
@@ -100,7 +146,7 @@ final class ModelServerResidency<G> implements AutoCloseable {
 
     @Override public void close() {
         if(closed)return;
-        closed=true;suspend();cached.clear();
+        closed=true;cacheRegistration.close();suspend();cached.clear();
     }
 
     private static final class Attempt<G> { Build<G> work; }

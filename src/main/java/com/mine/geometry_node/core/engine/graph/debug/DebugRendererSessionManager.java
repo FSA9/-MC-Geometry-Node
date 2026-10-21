@@ -1,5 +1,13 @@
 package com.mine.geometry_node.core.engine.graph.debug;
 
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
 import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
 import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
@@ -88,7 +96,9 @@ public final class DebugRendererSessionManager {
 
     /** Releases state owned by the stopping server while retaining registered hydrators. */
     public static void shutdown(MinecraftServer server) {
-        if (server != null) SERVERS.remove(server);
+        if (server == null) return;
+        DebugServerState removed = SERVERS.remove(server);
+        if (removed != null) removed.cacheRegistration.close();
     }
 
     public static void levelUnloaded(ServerLevel level) {
@@ -783,7 +793,7 @@ public final class DebugRendererSessionManager {
     }
 
     private static DebugServerState state(MinecraftServer server) {
-        return SERVERS.computeIfAbsent(server, ignored -> new DebugServerState());
+        return SERVERS.computeIfAbsent(server, DebugServerState::new);
     }
 
     private static DebugServerState getState(MinecraftServer server) {
@@ -795,7 +805,8 @@ public final class DebugRendererSessionManager {
     }
 
     private static void discardStateIfEmpty(MinecraftServer server, DebugServerState state) {
-        if (state.isEmpty()) SERVERS.remove(server, state);
+        if (state.isEmpty() && !ViewportDebugService.hasSubscriptions(server) && SERVERS.remove(server, state))
+            state.cacheRegistration.close();
     }
 
     private static long sourceSignature(List<GeometryDebugElement> meshes) {
@@ -847,6 +858,51 @@ public final class DebugRendererSessionManager {
         private final DebugSourceStore sources = new DebugSourceStore(IDLE_CHECK_INTERVAL_TICKS);
         private final Map<ServerLevel, DebugLevelObservationCache> observations = new IdentityHashMap<>();
         private long dirtyVersion;
+        private final CacheRegistry.Registration cacheRegistration;
+
+        private DebugServerState(MinecraftServer server) {
+            cacheRegistration = CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:graph.debug_observations",
+                    "geometry_node.cache.graph.debug_observations", CacheDescriptor.Domain.SERVER,
+                    CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.CONNECTION), new ManagedCache() {
+                @Override public CompletionStage<CacheStats> stats() {
+                    return onServer(server, () -> {
+                        if (SERVERS.get(server) != DebugServerState.this) return CacheStats.memory(0, 0);
+                        long count = observations.values().stream().mapToLong(DebugLevelObservationCache::cachedEntries).sum();
+                        for (Session session : sessions.values())
+                            count += session.collision.cachedMeshCount() + session.modelCollision.cachedMeshCount();
+                        return CacheStats.memory(count + ViewportDebugService.cachedEntries(server), -1);
+                    });
+                }
+                @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                    if (!supports(request)) return CompletableFuture.failedFuture(
+                            new IllegalArgumentException("Debug caches do not support scoped clearing"));
+                    return onServer(server, () -> {
+                        if (SERVERS.get(server) != DebugServerState.this) return null;
+                        observations.values().forEach(DebugLevelObservationCache::clear);
+                        for (Session session : sessions.values()) {
+                            session.collision.clear();
+                            session.modelCollision.clear();
+                            session.forceRefresh();
+                        }
+                        ViewportDebugService.clearCachedObservations(server);
+                        markDirty(DebugServerState.this);
+                        return null;
+                    });
+                }
+            });
+        }
+
+        private static <T> CompletableFuture<T> onServer(MinecraftServer server, Supplier<T> task) {
+            var result = new CompletableFuture<T>();
+            try {
+                server.schedule(server.wrapRunnable(() -> {
+                    if (result.isCancelled()) return;
+                    try { result.complete(task.get()); }
+                    catch (Exception failure) { result.completeExceptionally(failure); }
+                }));
+            } catch (Exception failure) { result.completeExceptionally(failure); }
+            return result;
+        }
 
         private boolean isEmpty() {
             return sessions.isEmpty() && pathState.isEmpty() && sources.isEmpty();

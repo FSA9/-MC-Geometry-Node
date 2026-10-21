@@ -41,6 +41,11 @@ final class DebugLevelObservationCache {
         }
     }
 
+    long cachedEntries() { return (long) interactions.size() + pathfinding.size(); }
+
+    /** Recomputable observations only; path targets, subscriptions, and debug definitions live in owners. */
+    void clear() { clearInteractions(); clearPathfinding(); }
+
     List<GeometryDebugElement> interactions() {
         return interactions;
     }

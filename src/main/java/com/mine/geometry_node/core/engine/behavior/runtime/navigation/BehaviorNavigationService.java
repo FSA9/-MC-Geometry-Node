@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.behavior.runtime.navigation;
 
+import com.mine.geometry_node.core.cache.*;
+import java.util.concurrent.CompletionStage;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.mixin.behavior.GroundPathNavigationAccessor;
 import com.mine.geometry_node.mixin.behavior.MobNavigationInvoker;
@@ -43,6 +46,34 @@ public final class BehaviorNavigationService {
             new CopyOnWriteArrayList<>();
 
     private BehaviorNavigationService() {
+        CacheRegistry.GLOBAL.register(
+                new CacheDescriptor("geometry_node:behavior.navigation_probes",
+                        "geometry_node.cache.behavior.navigation_probes",
+                        CacheDescriptor.Domain.SERVER,
+                        CacheDescriptor.Storage.MEMORY,
+                        CacheDescriptor.Lifetime.APPLICATION),
+                new ManagedCache() {
+                    public CompletionStage<CacheStats> stats() {
+                        return CacheExecutors.submit(() -> {
+                            synchronized (BehaviorNavigationService.this) {
+                                long results = owners.values().stream().mapToLong(state -> state.entries.size()).sum();
+                                long probes = owners.values().stream().filter(state -> state.probe != null).count();
+                                return new CacheStats(results + probes, -1, 0, probes);
+                            }
+                        });
+                    }
+                    public boolean supports(CacheClearRequest request) {
+                        return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+                    }
+                    public CompletionStage<Void> clear(CacheClearRequest request) {
+                        return CacheExecutors.run(() -> {
+                            synchronized (BehaviorNavigationService.this) {
+                                // Keep custom probe/navigation resources on their owner lifecycle/thread.
+                                owners.values().forEach(state -> state.entries.clear());
+                            }
+                        });
+                    }
+                });
     }
 
     public synchronized void registerProbeFactory(NavigationProbeFactory factory) {

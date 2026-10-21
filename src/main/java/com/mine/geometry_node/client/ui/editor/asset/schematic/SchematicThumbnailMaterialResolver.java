@@ -1,5 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.asset.schematic;
 
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
+import java.util.concurrent.CompletionStage;
+
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
@@ -38,6 +46,32 @@ final class SchematicThumbnailMaterialResolver {
         }
     };
 
+    static {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor(
+                "geometry_node:asset.schematic.material_colors", "geometry_node.cache.asset.material_colors",
+                CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.MEMORY,
+                CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            @Override public CompletionStage<CacheStats> stats() {
+                synchronized (CACHE) {
+                    return java.util.concurrent.CompletableFuture.completedFuture(CacheStats.memory(CACHE.size(), -1));
+                }
+            }
+            @Override public CompletionStage<Void> clear(CacheClearRequest request) {
+                return CacheExecutors.run(() -> {
+                    synchronized (CACHE) {
+                        generation++;
+                        CACHE.clear();
+                        sResolveBudgetWindowNanos = 0;
+                        sUncachedResolveCount = 0;
+                    }
+                });
+            }
+        });
+    }
+
+    static void init() {}
+
+    private static long generation;
     private static Method sGetPixelRgbaMethod;
     private static boolean sGetPixelRgbaChecked;
     private static Method sGetOriginalImageMethod;
@@ -52,7 +86,9 @@ final class SchematicThumbnailMaterialResolver {
 
     static MaterialColors resolve(String stateText, int fallbackColor) {
         String key = (stateText == null ? "" : stateText) + "|" + fallbackColor;
+        long startedGeneration;
         synchronized (CACHE) {
+            startedGeneration = generation;
             MaterialColors cached = CACHE.get(key);
             if (cached != null) {
                 return cached;
@@ -61,14 +97,16 @@ final class SchematicThumbnailMaterialResolver {
 
         MaterialColors resolved = resolveUncached(stateText, fallbackColor);
         synchronized (CACHE) {
-            CACHE.put(key, resolved);
+            if (startedGeneration == generation) CACHE.put(key, resolved);
         }
         return resolved;
     }
 
     static MaterialColors resolveBudgeted(String stateText, int fallbackColor, boolean[] deferred) {
         String key = (stateText == null ? "" : stateText) + "|" + fallbackColor;
+        long startedGeneration;
         synchronized (CACHE) {
+            startedGeneration = generation;
             MaterialColors cached = CACHE.get(key);
             if (cached != null) {
                 return cached;
@@ -83,7 +121,7 @@ final class SchematicThumbnailMaterialResolver {
 
         MaterialColors resolved = resolveUncached(stateText, fallbackColor);
         synchronized (CACHE) {
-            CACHE.put(key, resolved);
+            if (startedGeneration == generation) CACHE.put(key, resolved);
         }
         return resolved;
     }

@@ -443,6 +443,13 @@ public final class ClientModelService {
         if(instances.size()==0)ModelStaticRenderer.clearSceneResources();
         return removed||definition!=null;
     }
+    /** Imported/prepared geometry, LOD and decoded images are pinned by their repository leases. */
+    public com.mine.geometry_node.core.cache.CacheStats assetCacheStats() {
+        RenderSystem.assertOnRenderThread();
+        return repository.cacheStats(asset -> asset.preparedBytes + asset.cpu.report().encodedBytes()
+                + asset.statistics.sourceCpuGeometryBytes());
+    }
+
     public void clear() { clear(null); }
     private static RepositoryKey repositoryKey(Source source) { return new RepositoryKey(source,IMPORT_PROFILE,IMPORTER_REVISION); }
     public void clearTemporary() { clear(ModelInstanceLifetime.TEMPORARY); }

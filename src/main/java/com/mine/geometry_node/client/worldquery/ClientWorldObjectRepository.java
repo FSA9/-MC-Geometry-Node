@@ -12,7 +12,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-/** Cross-thread immutable mirrors. Transport and callbacks run exclusively on the Minecraft client thread. */
+/**
+ * Cross-thread immutable mirrors. Transport and callbacks run exclusively on the Minecraft client thread.
+ * Session snapshots, subscriptions and pending writes are live query state, not disposable cache entries.
+ * Their owners refresh/close them; global cache clearing must not disconnect listeners or drop edit replies.
+ */
 public final class ClientWorldObjectRepository {
     public static final ClientWorldObjectRepository INSTANCE = new ClientWorldObjectRepository();
     public record Snapshot(WorldObjectQuery query, WorldObjectPage page, boolean loading, long sequence) {

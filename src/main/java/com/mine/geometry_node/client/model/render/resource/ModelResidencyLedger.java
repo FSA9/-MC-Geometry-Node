@@ -194,6 +194,17 @@ public final class ModelResidencyLedger {
             victim.asset.evictGpu();
         }
     }
+    /** Called between frames on the render thread; fenced retirement preserves outstanding GPU use. */
+    public synchronized void clearInactive() {
+        com.mojang.blaze3d.systems.RenderSystem.assertOnRenderThread();
+        for (Entry entry : List.copyOf(entries.values())) {
+            if (entry.active || entry.retiring) continue;
+            entry.retiring = true;
+            evictions++;
+            entry.asset.evictGpu();
+        }
+    }
+
     public synchronized void release(ModelRenderAsset asset) {
         Entry entry = entries.remove(asset);
         if (entry == null) return;

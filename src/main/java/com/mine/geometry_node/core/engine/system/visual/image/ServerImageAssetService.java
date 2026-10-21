@@ -1,6 +1,13 @@
 package com.mine.geometry_node.core.engine.system.visual.image;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.cache.CacheClearRequest;
+import com.mine.geometry_node.core.cache.CacheClearOutcome;
+import com.mine.geometry_node.core.cache.CacheDescriptor;
+import com.mine.geometry_node.core.cache.CacheExecutors;
+import com.mine.geometry_node.core.cache.CacheRegistry;
+import com.mine.geometry_node.core.cache.CacheStats;
+import com.mine.geometry_node.core.cache.ManagedCache;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
@@ -67,13 +74,16 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
     public CompletableFuture<GraphEngineServices.VisualAsset> loadAsync(
             MinecraftServer server, String relativePath) {
         if (server == null) return CompletableFuture.failedFuture(new IOException("Missing server"));
+        ServerState state;
         synchronized (stoppedServers) {
             if (stoppedServers.contains(server)) {
                 return CompletableFuture.failedFuture(new IOException("Server is stopping"));
             }
+            // State creation and shutdown admission share one lock: no owner can register after stop.
+            state = states.computeIfAbsent(server, ServerState::new);
         }
-        ServerState state = states.computeIfAbsent(server, ServerState::new);
         long generation = state.generation;
+        long cacheEpoch = state.cacheEpoch();
         String key = relativePath == null ? "" : relativePath.trim();
         CompletableFuture<GraphEngineServices.VisualAsset> existing = state.inFlight.get(key);
         if (existing != null) return existing;
@@ -82,7 +92,7 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
         if (existing != null) return existing;
 
         CompletableFuture<GraphEngineServices.VisualAsset> worker = state.io.submit(() ->
-                loadAndCache(state, generation, key));
+                loadAndCache(state, generation, cacheEpoch, key));
         worker.whenComplete((asset, error) -> {
             if (error != null) promise.completeExceptionally(error);
             else promise.complete(asset);
@@ -164,7 +174,7 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
     }
 
     private static GraphEngineServices.VisualAsset loadAndCache(
-            ServerState state, long generation, String relativePath) throws IOException {
+            ServerState state, long generation, long cacheEpoch, String relativePath) throws IOException {
         if (state.generation != generation) throw new IOException("Server image load was cancelled");
         Path root = ServerAssetPaths.root(state.server);
         Path path = ServerAssetPaths.resolveUnderRoot(root, relativePath, false);
@@ -176,23 +186,28 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
         if (!realPath.startsWith(realRoot)) {
             throw new IOException("Server image escapes geometry_nodes: " + relativePath);
         }
+        int maxEncodedBytes = RuntimeImageServerConfig.maxEncodedBytes();
         long size = Files.size(realPath);
-        if (size <= 0 || size > RuntimeImageServerConfig.maxEncodedBytes()) {
+        if (size <= 0 || size > maxEncodedBytes) {
             throw new IOException("Server image has an unsupported file size: " + size);
         }
         FileTime modified = Files.getLastModifiedTime(realPath);
         GraphEngineServices.VisualAsset cached = state.cached(realPath, size, modified);
         if (cached != null) return cached;
 
-        byte[] data = Files.readAllBytes(realPath);
+        byte[] data;
+        // A file can grow after metadata inspection; bound the read itself, not only the earlier size.
+        try (var stream = Files.newInputStream(realPath)) {
+            data = stream.readNBytes(Math.addExact(maxEncodedBytes, 1));
+        }
         ImageAssetValidator.validateImage(data,
-                RuntimeImageServerConfig.maxEncodedBytes(),
+                maxEncodedBytes,
                 RuntimeImageServerConfig.maxDimension(),
                 RuntimeImageServerConfig.maxPixels());
         GraphEngineServices.VisualAsset asset = new GraphEngineServices.VisualAsset(
                 ImageAssetValidator.contentId(data), data);
         if (state.generation != generation) throw new IOException("Server image load was cancelled");
-        state.cache(realPath, new CachedAsset(size, modified, asset));
+        state.cache(realPath, new CachedAsset(size, modified, asset), generation, cacheEpoch);
         return asset;
     }
 
@@ -225,10 +240,29 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
         private final LinkedHashMap<String, Long> failureLogs = new LinkedHashMap<>(16, 0.75f, true);
         private volatile long generation;
         private long cachedBytes;
+        private long cacheEpoch;
+        private final CacheRegistry.Registration cacheRegistration;
 
         private ServerState(MinecraftServer server) {
             this.server = server;
             this.io = new AssetTransferIoExecutor("GeometryNode-ServerImage-IO", 1, IO_QUEUE_CAPACITY);
+            this.cacheRegistration = CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:runtime.server_images",
+                    "geometry_node.cache.runtime.server_images", CacheDescriptor.Domain.SERVER,
+                    CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.CONNECTION), new ManagedCache() {
+                @Override public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                    return CacheExecutors.submit(ServerState.this::cacheStats);
+                }
+                @Override public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                    if (!supports(request)) return CompletableFuture.failedFuture(
+                            new IllegalArgumentException("Server image cache does not support scoped clearing"));
+                    return clearOutcome(request).thenApply(ignored -> null);
+                }
+                @Override public java.util.concurrent.CompletionStage<CacheClearOutcome> clearOutcome(CacheClearRequest request) {
+                    if (!supports(request)) return CompletableFuture.failedFuture(
+                            new IllegalArgumentException("Server image cache does not support scoped clearing"));
+                    return CacheExecutors.submit(ServerState.this::clearCachedAssets);
+                }
+            });
         }
 
         @Nullable
@@ -242,7 +276,27 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
             return null;
         }
 
-        private synchronized void cache(Path path, CachedAsset value) {
+        private synchronized long cacheEpoch() { return cacheEpoch; }
+
+        private synchronized CacheStats cacheStats() {
+            int pending = inFlight.size();
+            return new CacheStats(cache.size() + pending, cachedBytes, 0, pending);
+        }
+
+        /** Evict reusable validated bytes only. In-flight requests and blueprint continuations stay alive. */
+        private synchronized CacheClearOutcome clearCachedAssets() {
+            boolean hadCachedData = !cache.isEmpty() || !failureLogs.isEmpty();
+            cacheEpoch++;
+            cache.clear();
+            failureLogs.clear();
+            cachedBytes = 0;
+            long retained = inFlight.size();
+            return !hadCachedData && retained > 0 ? CacheClearOutcome.retained(retained)
+                    : CacheClearOutcome.completed(retained);
+        }
+
+        private synchronized void cache(Path path, CachedAsset value, long expectedGeneration, long expectedCacheEpoch) {
+            if (generation != expectedGeneration || cacheEpoch != expectedCacheEpoch) return;
             CachedAsset previous = cache.put(path, value);
             if (previous != null) cachedBytes -= previous.bytes();
             cachedBytes += value.bytes();
@@ -267,15 +321,11 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
         }
 
         private void close() {
-            generation++;
+            cacheRegistration.close();
+            synchronized (this) { generation++; clearCachedAssets(); }
             inFlight.values().forEach(future -> future.cancel(false));
             inFlight.clear();
             io.close();
-            synchronized (this) {
-                cache.clear();
-                failureLogs.clear();
-                cachedBytes = 0L;
-            }
         }
     }
 }

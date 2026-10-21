@@ -25,6 +25,12 @@ final class NodeLightCookies {
     private static int cookieTexture, cookieFramebuffer, copyFramebuffer;
 
     private NodeLightCookies() {}
+    static void clearCachedLookups() {
+        failedImages.clear();
+        Arrays.fill(uploadedSources, null);
+        Arrays.fill(imageKeys, null);
+        cookieRetryAfter = 0;
+    }
 
     static int texture() { return cookieTexture; }
     static long bytes() { return cookieBytes; }

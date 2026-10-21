@@ -62,6 +62,12 @@ public final class NodeLightEntityShadows {
     private static final SubmitNodeStorage UNUSED_SUBMITS = new SubmitNodeStorage();
 
     private NodeLightEntityShadows() {}
+    static int cachedGeometryCount() { return cachedSoup.length == 0 ? 0 : 1; }
+    static void clearCachedGeometry() {
+        // Current BVH texture is referenced by receiver bindings until the owner prepares a replacement.
+        cachedSoup = new float[0];
+        cachedMasks = new int[0];
+    }
 
     public static void prepare(Vec3 camera, List<ClientLightStore.ResolvedLight> lights, float partialTick) {
         long started = System.nanoTime();

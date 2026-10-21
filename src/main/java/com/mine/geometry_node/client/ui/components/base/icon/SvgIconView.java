@@ -22,11 +22,11 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.lang.ref.Reference;
+import java.time.Duration;
+import com.mine.geometry_node.core.cache.*;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -89,17 +89,35 @@ public class SvgIconView extends View {
 
     private static final int DEFAULT_COLOR = 0xFFB8C0CC;
     private static final int MAX_CACHED_IMAGES = 64;
-    private static final Map<String, SvgDocument> DOCUMENTS = new HashMap<>();
-    private static final Map<RenderKey, Image> IMAGES = new LinkedHashMap<>(16, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<RenderKey, Image> eldest) {
-            if (size() <= MAX_CACHED_IMAGES) {
-                return false;
+    private static final BoundedCache<String, SvgDocument> DOCUMENTS =
+            new BoundedCache<>(128, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
+    private static final BoundedCache<RenderKey, Image> IMAGES =
+            new BoundedCache<>(MAX_CACHED_IMAGES, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
+
+    static {
+        registerCache("svg_documents", CacheDescriptor.Storage.MEMORY, DOCUMENTS);
+        registerCache("svg_images", CacheDescriptor.Storage.GPU, IMAGES);
+    }
+
+    private static void registerCache(String name, CacheDescriptor.Storage storage, BoundedCache<?, ?> cache) {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:" + name,
+                "geometry_node.cache." + name, CacheDescriptor.Domain.CLIENT, storage,
+                CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                return CacheExecutors.submit(() -> CacheStats.memory(cache.size(), -1));
             }
-            eldest.getValue().close();
-            return true;
-        }
-    };
+            public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                // Drop cache ownership only. MUI Image owns a native Cleaner, while Arc3D's
+                // BigRecord.DrawImageRect retains its own ref-counted native image. Calling
+                // Image.close() here would invalidate a wrapper concurrently used by onDraw.
+                return CacheExecutors.run(cache::clear);
+            }
+            public boolean supports(CacheClearRequest request) {
+                return request.namespace() == null && (request.reason() == CacheClearRequest.Reason.USER
+                        || request.reason() == CacheClearRequest.Reason.RESOURCE_RELOAD);
+            }
+        });
+    }
 
     private final Paint mPaint = new Paint();
     private String mResourcePath;
@@ -146,7 +164,12 @@ public class SvgIconView extends View {
         Image image = getImage(mResourcePath, size, mColor);
         float left = (getWidth() - size) * 0.5f;
         float top = (getHeight() - size) * 0.5f;
-        canvas.drawImage(image, left, top, mPaint);
+        try {
+            canvas.drawImage(image, left, top, mPaint);
+        } finally {
+            // Keep the wrapper/cleaner alive until the canvas has acquired its native reference.
+            Reference.reachabilityFence(image);
+        }
     }
 
     private static int resolveColor(int color) {
@@ -155,14 +178,21 @@ public class SvgIconView extends View {
 
     private static synchronized Image getImage(String resourcePath, int size, int color) {
         RenderKey key = new RenderKey(resourcePath, size, color);
+        long imageGeneration = IMAGES.generation();
         Image cached = IMAGES.get(key);
         if (cached != null && !cached.isClosed()) {
             return cached;
         }
 
-        SvgDocument document = DOCUMENTS.computeIfAbsent(resourcePath, SvgIconView::loadDocument);
+        long documentGeneration = DOCUMENTS.generation();
+        SvgDocument document = DOCUMENTS.get(resourcePath);
+        if (document == null) {
+            document = loadDocument(resourcePath);
+            DOCUMENTS.putIfCurrent(resourcePath, document, documentGeneration);
+        }
         Image image = rasterize(document, size, color);
-        IMAGES.put(key, image);
+        // MUI may return null during device loss/shutdown. Do not cache failure; retry next draw.
+        if (image != null) IMAGES.putIfCurrent(key, image, imageGeneration);
         return image;
     }
 

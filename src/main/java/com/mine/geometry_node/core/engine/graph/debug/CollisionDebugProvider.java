@@ -125,6 +125,8 @@ final class CollisionDebugProvider {
         }
     }
 
+    int cachedMeshCount() { return meshes.size(); }
+
     void clear() {
         meshes = List.of();
         lastLevel = null;

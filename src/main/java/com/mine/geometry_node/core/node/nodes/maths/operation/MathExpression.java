@@ -22,7 +22,9 @@ import com.mine.geometry_node.core.utils.RateLimitedLog;
 import net.minecraft.network.chat.Component;
 
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import com.mine.geometry_node.core.cache.*;
 import java.util.Map;
 
 public class MathExpression extends BaseNode {
@@ -32,12 +34,26 @@ public class MathExpression extends BaseNode {
 
     private record CachedAST(ASTNode node, VariableRegistry registry) {}
 
-    private static final Map<String, CachedAST> AST_CACHE = new LinkedHashMap<>(32, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, CachedAST> eldest) {
-            return size() > AST_CACHE_CAPACITY;
-        }
-    };
+    private static final BoundedCache<String, CachedAST> AST_CACHE =
+            new BoundedCache<>(AST_CACHE_CAPACITY, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
+
+    static {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:math_ast",
+                "geometry_node.cache.math_ast", CacheDescriptor.Domain.COMMON,
+                CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.APPLICATION), new ManagedCache() {
+            public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                return CompletableFuture.completedFuture(CacheStats.memory(AST_CACHE.size(), -1));
+            }
+            public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                // Compiled programs already captured by live values retain their immutable AST.
+                AST_CACHE.clear();
+                return CompletableFuture.completedFuture(null);
+            }
+            public boolean supports(CacheClearRequest request) {
+                return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+            }
+        });
+    }
 
     // ==========================================
     // 缓存池 (A-Z, 1-26)
@@ -181,14 +197,19 @@ public class MathExpression extends BaseNode {
     }
 
     private static CachedAST compiledAst(String expression) {
-        synchronized (AST_CACHE) {
-            CachedAST cached = AST_CACHE.get(expression);
-            if (cached != null) return cached;
+        long generation = AST_CACHE.generation();
+        CachedAST cached = AST_CACHE.get(expression);
+        if (cached != null) return cached;
 
-            VariableRegistry registry = new VariableRegistry();
-            CachedAST compiled = new CachedAST(ExpressionCompiler.compile(expression, registry), registry);
-            AST_CACHE.put(expression, compiled);
-            return compiled;
+        // Parsing never holds the cache lock: settings clear remains responsive even when
+        // a graph is compiling a large formula on another thread.
+        VariableRegistry registry = new VariableRegistry();
+        CachedAST compiled = new CachedAST(ExpressionCompiler.compile(expression, registry), registry);
+        synchronized (AST_CACHE) {
+            cached = AST_CACHE.get(expression);
+            if (cached != null) return cached;
+            AST_CACHE.putIfCurrent(expression, compiled, generation);
         }
+        return compiled;
     }
 }

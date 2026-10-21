@@ -12,6 +12,12 @@ public final class ViewportSurfaceGrid {
     private static final Map<Integer, Locations> PROGRAMS = new HashMap<>();
     private static final Binding NONE = new Binding(0, -1, 0);
 
+    static {
+        com.mine.geometry_node.client.runtime.cache.ClientRuntimeCacheRegistration.register(
+                "runtime.surface_grid_locations", com.mine.geometry_node.core.cache.CacheDescriptor.Storage.MEMORY,
+                () -> com.mine.geometry_node.core.cache.CacheStats.memory(PROGRAMS.size(), -1), PROGRAMS::clear);
+    }
+
     private ViewportSurfaceGrid() {}
 
     /** Terrain positions are camera relative in both vanilla and Sodium. Only the

@@ -5,6 +5,11 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 import java.util.Arrays;
 
+/**
+ * Epoch-owned evaluation memoization and cycle state, not an independently evictable global cache.
+ * Clearing during evaluation can repeat node effects or defeat recursion protection; the owning
+ * GraphDataEvaluationSession exclusively advances/invalidates this bounded execution state.
+ */
 final class GraphValueCache {
     private static final Object CACHE_MISS = new Object();
     private static final Object CACHED_NULL = new Object();

@@ -10,9 +10,33 @@ import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import java.util.function.BiPredicate;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
 import java.util.*;
+import java.time.Duration;
+import com.mine.geometry_node.core.cache.*;
 
 /** Shared by the authoritative server and client prediction; never consumes UI previews. */
 public final class SceneCollisionRuntime {
+    // One aggregate registration, with weak cache keys. Never retain runtimes or worlds globally.
+    private static final Map<BoundedCache<?, ?>, Boolean> SHAPE_CACHES = new WeakHashMap<>();
+    static {
+        CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:scene_collision_shapes",
+                "geometry_node.cache.scene_collision_shapes", CacheDescriptor.Domain.COMMON,
+                CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.WORLD), new ManagedCache() {
+            public java.util.concurrent.CompletionStage<CacheStats> stats() {
+                return CacheExecutors.submit(() -> CacheStats.memory(
+                        cacheSnapshot().stream().mapToLong(BoundedCache::size).sum(), -1));
+            }
+            public java.util.concurrent.CompletionStage<Void> clear(CacheClearRequest request) {
+                // Active colliders own their Prepared value independently; never clear applied here.
+                return CacheExecutors.run(() -> cacheSnapshot().forEach(BoundedCache::clear));
+            }
+            public boolean supports(CacheClearRequest request) {
+                return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+            }
+        });
+    }
+    private static List<BoundedCache<?, ?>> cacheSnapshot() {
+        synchronized (SHAPE_CACHES) { return List.copyOf(SHAPE_CACHES.keySet()); }
+    }
     private final BiPredicate<Level, AABB> residency;
     public SceneCollisionRuntime() {
         this((level, bounds) -> ResourceResidency.isResident(level, bounds, null));
@@ -20,12 +44,14 @@ public final class SceneCollisionRuntime {
     /** Explicit availability injection for isolated physics tests. */
     public SceneCollisionRuntime(BiPredicate<Level, AABB> residency) {
         this.residency = Objects.requireNonNull(residency);
+        synchronized (SHAPE_CACHES) { SHAPE_CACHES.put(shapes, Boolean.TRUE); }
     }
     public record Key(UUID id) {}
     private record Applied(SceneObject object, ModelCollisionScene.Prepared prepared) {}
     private final Map<UUID, Applied> applied = new LinkedHashMap<>();
     private record Shape(String type, Map<String,String> parameters, Vec3 rotation, Vec3 scale) {}
-    private final Map<Shape, ModelCollisionScene.Prepared> shapes = new LinkedHashMap<>(32,.75f,true);
+    private final BoundedCache<Shape, ModelCollisionScene.Prepared> shapes = new BoundedCache<>(
+            SceneDocument.MAX_OBJECTS, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
     /** Same local mesh for physics, bounds checks, and editor helpers; position stays in the scene index. */
     public static ModelCollisionMesh mesh(SceneObject object) {
         return SceneCollisionTransforms.mesh(object);
@@ -39,12 +65,12 @@ public final class SceneCollisionRuntime {
     }
     private ModelCollisionScene.Prepared prepare(SceneObject object) {
         Shape key = new Shape(object.typeId(), object.parameters(), object.rotation(), object.scale());
+        long generation = shapes.generation();
         var cached = shapes.get(key);
         if (cached != null) return cached;
         try {
             var prepared = ModelCollisionScene.prepare(mesh(object));
-            shapes.put(key, prepared);
-            while (shapes.size() > SceneDocument.MAX_OBJECTS) shapes.remove(shapes.keySet().iterator().next());
+            shapes.putIfCurrent(key, prepared, generation);
             return prepared;
         } catch (ModelProblem failure) {
             throw new IllegalArgumentException("Invalid authored collider: " + failure.getMessage(), failure);

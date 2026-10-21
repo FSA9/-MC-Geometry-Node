@@ -17,6 +17,8 @@ public final class NativeTerrainLights {
     private static final java.util.Map<Integer,Locations> programs = new java.util.HashMap<>();
 
     private NativeTerrainLights() {}
+    static int cachedProgramCount() { return programs.size(); }
+    static void clearCachedLocations() { programs.clear(); loggedPrograms.clear(); }
 
     public static void setEnabled(boolean value) { enabled=value; }
     public static boolean enabled() { return enabled; }

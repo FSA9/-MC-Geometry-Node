@@ -26,6 +26,24 @@ public final class ClientImageAssetManager {
     private static final Map<String, ServerContent> RETAINED_SERVER_ASSETS = new HashMap<>();
     private static final java.util.Set<String> REPORTED_FAILURES = new java.util.HashSet<>();
 
+    static {
+        com.mine.geometry_node.client.runtime.cache.ClientRuntimeCacheRegistration.register("runtime.image_assets",
+                com.mine.geometry_node.core.cache.CacheDescriptor.Storage.MIXED,
+                ClientImageAssetManager::cacheStats, ClientImageAssetManager::clearCachedLookups);
+    }
+
+    private static synchronized com.mine.geometry_node.core.cache.CacheStats cacheStats() {
+        long retained = TEXTURES.size() + PENDING_SERVER_ASSETS.size() + RETAINED_SERVER_ASSETS.size();
+        return new com.mine.geometry_node.core.cache.CacheStats(retained + LOCAL_TEXTURES.size() + RESOURCE_TEXTURES.size(), -1, 0, retained);
+    }
+
+    /** Lookup reuse is disposable. Texture/source leases and unclaimed network transfers are not. */
+    static synchronized void clearCachedLookups() {
+        LOCAL_TEXTURES.clear();
+        RESOURCE_TEXTURES.clear();
+        REPORTED_FAILURES.clear();
+    }
+
     private ClientImageAssetManager() {
     }
 

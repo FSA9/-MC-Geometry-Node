@@ -8,7 +8,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Sparse overflow slots for vanilla's player-centered ring. Negative IDs cannot
- * alias its nonnegative array indices. Native load/unload/light callbacks still run. */
+ * alias its nonnegative array indices. Native load/unload/light callbacks still run.
+ * Despite its name this is authoritative received chunk storage, not reconstructable memoization:
+ * only native packet/world lifecycle may remove populated slots. It must not join user cache clears.
+ */
 public final class EditChunkCache<T> {
     private final ConcurrentHashMap<Long, Slot<T>> byPosition = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, Slot<T>> byIndex = new ConcurrentHashMap<>();

@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.system.scene.property;
 
+import com.mine.geometry_node.core.cache.*;
+import java.util.concurrent.CompletionStage;
+
 import com.mine.geometry_node.core.engine.system.scene.*;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionTransforms;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.*;
@@ -27,6 +30,31 @@ public final class SceneNodeInputs {
     public record Input(String nodeType, String port, Use use, String reason) {}
     private record Model(List<SceneProperty> parameters, Schema schema, List<Input> inputs) {}
     private static final Map<String, Model> MODELS = new HashMap<>();
+    static {
+        CacheRegistry.GLOBAL.register(
+                new CacheDescriptor("geometry_node:scene.node_schemas",
+                        "geometry_node.cache.scene.node_schemas",
+                        CacheDescriptor.Domain.COMMON,
+                        CacheDescriptor.Storage.MEMORY,
+                        CacheDescriptor.Lifetime.APPLICATION),
+                new ManagedCache() {
+                    public CompletionStage<CacheStats> stats() {
+                        return CacheExecutors.submit(() -> {
+                            synchronized (SceneNodeInputs.class) {
+                                return CacheStats.memory(MODELS.size(), -1);
+                            }
+                        });
+                    }
+                    public boolean supports(CacheClearRequest request) {
+                        return request.namespace() == null && request.reason() == CacheClearRequest.Reason.USER;
+                    }
+                    public CompletionStage<Void> clear(CacheClearRequest request) {
+                        return CacheExecutors.run(() -> {
+                            synchronized (SceneNodeInputs.class) { MODELS.clear(); }
+                        });
+                    }
+                });
+    }
     private SceneNodeInputs() {}
 
     public static List<SceneProperty> properties(String typeId) { return model(typeId).parameters(); }

@@ -24,6 +24,9 @@ public final class ScenePresentations {
     private static final Map<String, Function<SceneObject, PacketGeometryDebugSnapshot.Mesh>> DIAGNOSTICS = new LinkedHashMap<>();
     private static final Map<SceneObject, PacketGeometryDebugSnapshot.Mesh> DIAGNOSTIC_CACHE = new LinkedHashMap<>(16, .75f, true);
     static {
+        com.mine.geometry_node.client.runtime.cache.ClientRuntimeCacheRegistration.register("runtime.scene_diagnostics", com.mine.geometry_node.core.cache.CacheDescriptor.Storage.MEMORY,
+                ScenePresentations::cacheStats, ScenePresentations::clearCachedDiagnostics);
+
         registerCategory("geometry", new Presentation(ViewportVisualization.Layer.GEOMETRY, false));
         registerCategory("area", new Presentation(ViewportVisualization.Layer.AREA, false));
         registerCategory("collision", new Presentation(ViewportVisualization.Layer.COLLISION, false));
@@ -45,6 +48,12 @@ public final class ScenePresentations {
         });
     }
     private ScenePresentations() {}
+
+    private static synchronized com.mine.geometry_node.core.cache.CacheStats cacheStats() {
+        return com.mine.geometry_node.core.cache.CacheStats.memory(DIAGNOSTIC_CACHE.size(), -1);
+    }
+
+    private static synchronized void clearCachedDiagnostics() { DIAGNOSTIC_CACHE.clear(); }
 
     /** Builds a cached local mesh, including scale/rotation but excluding world translation. */
     @FunctionalInterface

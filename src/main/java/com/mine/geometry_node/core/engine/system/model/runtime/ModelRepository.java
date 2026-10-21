@@ -15,6 +15,8 @@ public final class ModelRepository<K, A> implements AutoCloseable {
     private final boolean ownsExecutor;
     private final Consumer<A> disposer;
     private final Map<K, Entry> entries = new HashMap<>();
+    // Invalidated revisions can still be leased; account for them until the last owner releases.
+    private final Set<Entry> leasedEntries = Collections.newSetFromMap(new IdentityHashMap<>());
     private long nextGeneration, nextSubscriber;
     private boolean closed;
 
@@ -31,7 +33,7 @@ public final class ModelRepository<K, A> implements AutoCloseable {
         synchronized (this) {
             if (closed) throw new IllegalStateException("model repository is closed");
             entry=entries.get(key); start=entry==null;
-            if (start) { entry=new Entry(key,++nextGeneration,loader); entries.put(key,entry); }
+            if (start) { entry=new Entry(key,++nextGeneration,loader); entries.put(key,entry); leasedEntries.add(entry); }
             subscriber=++nextSubscriber; entry.subscribers.put(subscriber,future);
             ready=entry.value; failure=entry.failure;
         }
@@ -47,6 +49,14 @@ public final class ModelRepository<K, A> implements AutoCloseable {
     }
     public synchronized int size() { return entries.size(); }
     public synchronized long generation() { return nextGeneration; }
+    public synchronized int retainedSize() { return leasedEntries.size(); }
+
+    /** All retained entries have subscribers; user cache cleanup must not cancel their work. */
+    public synchronized com.mine.geometry_node.core.cache.CacheStats cacheStats(java.util.function.ToLongFunction<A> bytes) {
+        long total = 0;
+        for (Entry entry : leasedEntries) if (entry.value != null) total = Math.addExact(total, bytes.applyAsLong(entry.value));
+        return new com.mine.geometry_node.core.cache.CacheStats(leasedEntries.size(), total, 0, leasedEntries.size());
+    }
 
     /** Prevents reuse; existing completed leases retain their value until their last close. */
     public void invalidate(K key) {
@@ -93,6 +103,7 @@ public final class ModelRepository<K, A> implements AutoCloseable {
         synchronized (this) {
             if(entry.subscribers.remove(subscriber)==null)return;
             if(entry.subscribers.isEmpty()) {
+                leasedEntries.remove(entry);
                 entries.remove(entry.key,entry); entry.invalidated=true; entry.cancellation.cancel();
                 retired=entry.value; entry.value=null; entry.state=ModelLoadState.DISPOSED;
             }

@@ -32,6 +32,30 @@ public final class NodeLightRenderer {
     private static boolean drawing;
     private static Object world;
 
+    static {
+        com.mine.geometry_node.client.runtime.cache.ClientRuntimeCacheRegistration.register(
+                "runtime.light_derived", com.mine.geometry_node.core.cache.CacheDescriptor.Storage.MIXED,
+                () -> {
+                    long retained = PROGRAMS.size() + NodeLightFroxels.retainedGridCount()
+                            + (NodeLightEntityShadows.texture() == 0 ? 0 : 1)
+                            + (NodeLightCookies.texture() == 0 ? 0 : 1);
+                    long derived = NATIVE.size() + NativeTerrainLights.cachedProgramCount()
+                            + NodeLightFroxels.cachedReceiverCount() + NodeLightCookies.failures()
+                            + NodeLightEntityShadows.cachedGeometryCount();
+                    return new com.mine.geometry_node.core.cache.CacheStats(retained + derived, -1, 0, retained);
+                }, NodeLightRenderer::clearDerivedCaches);
+    }
+
+    /** Registered pack samplers, current light definitions and in-use GPU resources remain owned. */
+    private static void clearDerivedCaches() {
+        NATIVE.clear();
+        NativeTerrainLights.clearCachedLocations();
+        NodeLightFroxels.clearCachedLookups();
+        NodeLightEntityShadows.clearCachedGeometry();
+        NodeLightCookies.clearCachedLookups();
+        cookieGeneration = Long.MIN_VALUE;
+    }
+
     private NodeLightRenderer() {}
     public static void prepare(Vec3 eye) {
         com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.poll();
