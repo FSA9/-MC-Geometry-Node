@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.schematic;
 import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
 import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
 import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
@@ -12,9 +13,14 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+import java.lang.ref.WeakReference;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -25,12 +31,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 
-/** Tracks graph-owned client projections so lifecycle cleanup can remove them immediately. */
+/** Retains bounded graph-owned definitions independently of spatially resident client runtimes. */
 public final class SchematicProjectionService {
     public static final SchematicProjectionService INSTANCE = new SchematicProjectionService();
 
-    private static final int MAX_ACTIVE_PER_SERVER = 128;
-    private static final int MAX_ACTIVE_PER_PLAYER = 32;
+    private static final int MAX_RETAINED_PER_SERVER = 128;
+    private static final int MAX_RETAINED_PER_PLAYER = 32;
     private static final long MAX_GEOMETRY_PER_SERVER = 1_048_576L;
     private static final long MAX_GEOMETRY_PER_PLAYER = 349_525L;
     private static final long MAX_ESTIMATED_BYTES_PER_SERVER = 64L * 1024L * 1024L;
@@ -48,11 +54,8 @@ public final class SchematicProjectionService {
         if (initialized) return;
         initialized = true;
         GraphResourceLifecycleManager.INSTANCE.registerStore("schematic_projection", this::removeResources);
-        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> {
-            if ((event.getServer().getTickCount() % 20) == 0) {
-                cleanupExpired(event.getServer(), event.getServer().overworld().getGameTime());
-            }
-        });
+        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) ->
+                tick(event.getServer(), event.getServer().overworld().getGameTime()));
     }
 
     public synchronized boolean upsert(MinecraftServer server, GraphResourceId resourceId,
@@ -82,25 +85,21 @@ public final class SchematicProjectionService {
 
         ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
         ProjectionLease previous = state.resources.get(resourceId);
-        long serverTick = server.getTickCount();
-        long sendBytes = saturatingMultiply(estimatedBytes, viewers.size());
-        if (!reserveSendBudget(state, serverTick, sendBytes)) return false;
         while (!fits(state, resourceId, viewers, geometry, estimatedBytes)) {
             if (!evictOldestOther(server, state, resourceId)) return false;
         }
 
-        if (previous != null && !previous.viewers().equals(viewers)) {
-            Set<UUID> removedViewers = new LinkedHashSet<>(previous.viewers());
-            removedViewers.removeAll(viewers);
-            if (!removedViewers.isEmpty()) sendRemoval(server, resourceId, removedViewers);
-        }
-        NetworkHandler.sendToPlayers(targetsById.values(), packet);
-        state.resources.put(resourceId, new ProjectionLease(previous == null ? new RuntimeMetadata() : previous.metadata(), Set.copyOf(viewers),
-                expiresAt(currentTick, packet.durationTicks()), geometry, estimatedBytes,
+        SchematicProjectionDefinition definition = new SchematicProjectionDefinition(packet, currentTick);
+        Map<UUID, ViewerSession<ServerGamePacketListenerImpl>> sessions = new LinkedHashMap<>();
+        targetsById.forEach((id, player) -> sessions.put(id, new ViewerSession<>(player.connection)));
+        if (previous != null) sendRemoval(server, resourceId, previous);
+        ProjectionLease replacement = new ProjectionLease(previous == null ? new RuntimeMetadata() : previous.metadata(),
+                Set.copyOf(viewers), Map.copyOf(sessions), new LinkedHashSet<>(), definition, geometry, estimatedBytes,
                 new QuerySnapshot(resourceId, packet.dimension(),
                         new net.minecraft.world.phys.Vec3(packet.originX(), packet.originY(), packet.originZ()),
-                        new net.minecraft.world.phys.AABB(packet.originX(), packet.originY(), packet.originZ(),
-                                packet.originX() + packet.width(), packet.originY() + packet.height(), packet.originZ() + packet.length()))));
+                        definition.bounds()));
+        state.resources.put(resourceId, replacement);
+        reconcile(server, state, resourceId, replacement, currentTick);
         return true;
     }
 
@@ -109,7 +108,7 @@ public final class SchematicProjectionService {
         ProjectionLease lease = state != null ? state.resources.remove(resourceId) : null;
         if (state != null && state.resources.isEmpty()) servers.remove(server);
         if (lease == null) return false;
-        sendRemoval(server, resourceId, lease.viewers());
+        sendRemoval(server, resourceId, lease);
         return true;
     }
 
@@ -120,7 +119,7 @@ public final class SchematicProjectionService {
         while (iterator.hasNext()) {
             Map.Entry<GraphResourceId, ProjectionLease> entry = iterator.next();
             if (!release.matches(entry.getKey())) continue;
-            sendRemoval(server, entry.getKey(), entry.getValue().viewers());
+            sendRemoval(server, entry.getKey(), entry.getValue());
             iterator.remove();
         }
         if (state.resources.isEmpty()) servers.remove(server);
@@ -129,8 +128,48 @@ public final class SchematicProjectionService {
     private synchronized void cleanupExpired(MinecraftServer server, long currentTick) {
         ServerState state = servers.get(server);
         if (state == null) return;
-        state.resources.entrySet().removeIf(entry -> entry.getValue().expiresAt() <= currentTick);
+        state.resources.entrySet().removeIf(entry -> {
+            if (!entry.getValue().definition().expired(currentTick)) return false;
+            sendRemoval(server, entry.getKey(), entry.getValue());
+            return true;
+        });
         if (state.resources.isEmpty()) servers.remove(server);
+    }
+
+    private synchronized void tick(MinecraftServer server, long currentTick) {
+        cleanupExpired(server, currentTick);
+        ServerState state = servers.get(server);
+        if (state == null) return;
+        for (var entry : state.resources.entrySet()) {
+            reconcile(server, state, entry.getKey(), entry.getValue(), currentTick);
+        }
+    }
+
+    private static void reconcile(MinecraftServer server, ServerState state, GraphResourceId id,
+                                  ProjectionLease lease, long currentTick) {
+        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION,
+                Identifier.parse(lease.snapshot().dimension())));
+        // Graph ownership is not an entity attachment; projections have no explicit anchor.
+        if (level == null || !ResourceResidency.isResident(level, lease.snapshot().bounds(), null)) {
+            sendRemoval(server, id, lease);
+            return;
+        }
+        lease.activeViewers().removeIf(viewer -> !isOriginalSession(server, lease, viewer));
+        PacketSchematicProjection packet = null;
+        for (UUID viewer : lease.viewers()) {
+            if (lease.activeViewers().contains(viewer) || !isOriginalSession(server, lease, viewer)) continue;
+            // Retry budget-deferred wakeups next tick, one original recipient at a time.
+            if (!reserveSendBudget(state, server.getTickCount(), lease.estimatedBytes())) break;
+            if (packet == null) packet = lease.definition().packetAt(currentTick);
+            if (packet == null) return;
+            NetworkHandler.sendToPlayer(server.getPlayerList().getPlayer(viewer), packet);
+            lease.activeViewers().add(viewer);
+        }
+    }
+
+    private static boolean isOriginalSession(MinecraftServer server, ProjectionLease lease, UUID viewer) {
+        ServerPlayer player = server.getPlayerList().getPlayer(viewer);
+        return player != null && lease.sessions().get(viewer).matches(player.connection);
     }
 
     private static boolean fits(ServerState state, GraphResourceId replacedId, Set<UUID> viewers,
@@ -148,11 +187,11 @@ public final class SchematicProjectionService {
             addPlayerBudget(players, lease.viewers(), lease.geometry(), lease.estimatedBytes());
         }
         addPlayerBudget(players, viewers, geometry, estimatedBytes);
-        if (serverEntries > MAX_ACTIVE_PER_SERVER || serverGeometry > MAX_GEOMETRY_PER_SERVER
+        if (serverEntries > MAX_RETAINED_PER_SERVER || serverGeometry > MAX_GEOMETRY_PER_SERVER
                 || serverBytes > MAX_ESTIMATED_BYTES_PER_SERVER) return false;
         for (UUID viewer : viewers) {
             PlayerBudget budget = players.get(viewer);
-            if (budget != null && (budget.entries > MAX_ACTIVE_PER_PLAYER
+            if (budget != null && (budget.entries > MAX_RETAINED_PER_PLAYER
                     || budget.geometry > MAX_GEOMETRY_PER_PLAYER
                     || budget.estimatedBytes > MAX_ESTIMATED_BYTES_PER_PLAYER)) return false;
         }
@@ -176,7 +215,7 @@ public final class SchematicProjectionService {
             Map.Entry<GraphResourceId, ProjectionLease> entry = iterator.next();
             if (entry.getKey().equals(protectedId)) continue;
             iterator.remove();
-            sendRemoval(server, entry.getKey(), entry.getValue().viewers());
+            sendRemoval(server, entry.getKey(), entry.getValue());
             return true;
         }
         return false;
@@ -218,42 +257,34 @@ public final class SchematicProjectionService {
         return bytes;
     }
 
-    private static long expiresAt(long currentTick, int durationTicks) {
-        long duration = Math.max(1, durationTicks);
-        return currentTick > Long.MAX_VALUE - duration ? Long.MAX_VALUE : currentTick + duration;
-    }
-
     private static long saturatingAdd(long left, long right) {
         return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
-    private static long saturatingMultiply(long value, int multiplier) {
-        return multiplier > 0 && value > Long.MAX_VALUE / multiplier
-                ? Long.MAX_VALUE : value * multiplier;
-    }
-
-    private static void sendRemoval(MinecraftServer server, GraphResourceId resourceId, Set<UUID> viewers) {
+    private static void sendRemoval(MinecraftServer server, GraphResourceId resourceId, ProjectionLease lease) {
+        if (lease.activeViewers().isEmpty()) return;
         PacketSchematicProjection packet = PacketSchematicProjection.removal(
                 GraphResourceIdCodec.encode(resourceId), resourceId.binding().graphId(),
-                resourceId.scope().dimension().identifier().toString());
-        for (UUID viewerId : viewers) {
+                lease.snapshot().dimension());
+        for (UUID viewerId : lease.activeViewers()) {
             ServerPlayer player = server.getPlayerList().getPlayer(viewerId);
-            if (player != null) NetworkHandler.sendToPlayer(player, packet);
+            if (isOriginalSession(server, lease, viewerId)) NetworkHandler.sendToPlayer(player, packet);
         }
+        lease.activeViewers().clear();
     }
 
     public synchronized MetadataCapabilities.Access metadata(MinecraftServer server, GraphResourceId id) {
         RuntimeMetadataTargets.requireThread(server);
         ServerState state = servers.get(server);
         ProjectionLease lease = state == null ? null : state.resources.get(id);
-        if (lease == null || lease.expiresAt() <= server.overworld().getGameTime())
+        if (lease == null || lease.definition().expired(server.overworld().getGameTime()))
             throw new IllegalStateException("Projection no longer exists");
         RuntimeMetadata metadata = lease.metadata();
         return metadata.access(GraphMetadataValuePolicy.of(server.registryAccess()), () -> {
             RuntimeMetadataTargets.requireThread(server);
             ServerState currentState = servers.get(server);
             ProjectionLease current = currentState == null ? null : currentState.resources.get(id);
-            if (current == null || current.metadata() != metadata || current.expiresAt() <= server.overworld().getGameTime())
+            if (current == null || current.metadata() != metadata || current.definition().expired(server.overworld().getGameTime()))
                 throw new IllegalStateException("Projection metadata handle is stale");
         });
     }
@@ -265,16 +296,29 @@ public final class SchematicProjectionService {
 
     public record QuerySnapshot(GraphResourceId id, String dimension, net.minecraft.world.phys.Vec3 position,
                                 net.minecraft.world.phys.AABB bounds) {}
-    /** Existing leases only, with spatial metadata retained independently of heavy projection packets. */
+    /** Includes dormant definitions until expiry or explicit lifecycle deletion. */
     public synchronized void visitWorldQuery(MinecraftServer server, java.util.function.Predicate<QuerySnapshot> visitor) {
         var state = servers.get(server);
         if (state == null) return;
         long now = server.overworld().getGameTime();
         for (var lease : state.resources.values())
-            if (lease.expiresAt() > now && !visitor.test(lease.snapshot())) return;
+            if (!lease.definition().expired(now) && !visitor.test(lease.snapshot())) return;
     }
-    private record ProjectionLease(RuntimeMetadata metadata, Set<UUID> viewers, long expiresAt, long geometry,
+    private record ProjectionLease(RuntimeMetadata metadata, Set<UUID> viewers,
+                                   Map<UUID, ViewerSession<ServerGamePacketListenerImpl>> sessions, Set<UUID> activeViewers,
+                                   SchematicProjectionDefinition definition, long geometry,
                                    long estimatedBytes, QuerySnapshot snapshot) {
+    }
+
+    /** Connection identity survives respawn but never grants a reconnect the old recipient's lease. */
+    static final class ViewerSession<T> {
+        private final WeakReference<T> original;
+
+        ViewerSession(T connection) { original = new WeakReference<>(connection); }
+
+        boolean matches(T connection) {
+            return connection != null && original.get() == connection;
+        }
     }
 
     private static final class ServerState {

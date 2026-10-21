@@ -309,7 +309,8 @@ public final class AreaTriggerDispatcher {
 
     private static boolean isSourceAlive(MinecraftServer server, ServerLevel areaLevel,
                                          ResolvedAreaSource source) {
-        if (AreaResourceStore.INSTANCE.get(server, source.areaResource().reference()) == null) return false;
+        AreaResource currentArea = AreaResourceStore.INSTANCE.get(server, source.areaResource().reference());
+        if (currentArea == null || currentArea.resolveActive(areaLevel) == null) return false;
         if (source.forceFieldId().isBlank()) return true;
         ForceFieldAddress address = ForceFieldAddress.tryCreate(
                 areaLevel.dimension(), source.forceFieldId());
@@ -340,7 +341,7 @@ public final class AreaTriggerDispatcher {
             List<ResolvedAreaSource> result = new ArrayList<>();
             for (ForceFieldResource forceField : ForceFieldResourceStore.INSTANCE.snapshot(areaLevel)) {
                 AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, forceField.area());
-                AreaResource.Resolved area = areaResource != null ? areaResource.resolve(areaLevel) : null;
+                AreaResource.Resolved area = areaResource != null ? areaResource.resolveActive(areaLevel) : null;
                 if (areaResource != null && area != null) {
                     result.add(new ResolvedAreaSource(areaResource, area,
                             forceField.address().id(), forceField.generation(),
@@ -351,7 +352,7 @@ public final class AreaTriggerDispatcher {
         }
         List<ResolvedAreaSource> result = new ArrayList<>();
         for (AreaResource resource : AreaResourceStore.INSTANCE.snapshot(areaLevel)) {
-            AreaResource.Resolved area = resource.resolve(areaLevel);
+            AreaResource.Resolved area = resource.resolveActive(areaLevel);
             if (area != null) {
                 result.add(new ResolvedAreaSource(resource, area, "", Long.MIN_VALUE, null));
             }

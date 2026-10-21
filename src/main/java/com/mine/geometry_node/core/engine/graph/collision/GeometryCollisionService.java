@@ -6,6 +6,12 @@ import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.metadata.MetadataCapabilities;
+import net.minecraft.world.phys.AABB;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.engine.system.model.diagnostic.ModelProblem;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -60,16 +66,24 @@ public final class GeometryCollisionService implements ServerEngine {
         Resource resource = new Resource(id, geometry, anchor == null ? null : anchor.getUUID(), level.getGameTime(),
                 List.of(position.newState(), worldRotation.newState(), pivot.newState(), translation.newState(),
                         rotation.newState(), scale.newState()));
-        update(level, resource);
+        resolve(level, resource);
+        if (resource.prepared == null) throw new IllegalArgumentException("collision anchor is not available");
+        Resource previous = resources.get(id);
+        if (previous != null) {
+            resource.metadata = previous.metadata;
+            resource.enabled = previous.enabled;
+            retire(level, previous);
+        }
         resources.put(id, resource);
+        refreshResidency(level, resource);
     }
 
     public boolean remove(ServerLevel level, GraphResourceId id) {
         requireType(id);
         Map<GraphResourceId, Resource> resources = levels.get(level);
-        if (resources == null || resources.remove(id) == null) return false;
-        ModelCollisionScene.remove(level, id);
-        NetworkHandler.sendToPlayers(level.players(), packet(level, id, PacketGeometryCollision.REMOVE, Vec3.ZERO, null));
+        Resource resource = resources == null ? null : resources.remove(id);
+        if (resource == null) return false;
+        retire(level, resource);
         if (resources.isEmpty()) levels.remove(level);
         return true;
     }
@@ -78,10 +92,6 @@ public final class GeometryCollisionService implements ServerEngine {
         Map<GraphResourceId, Resource> resources = levels.get(level);
         if (resources == null) return;
         for (Resource resource : List.copyOf(resources.values())) {
-            if (resource.anchor != null && level.getEntity(resource.anchor) == null) {
-                remove(level, resource.id);
-                continue;
-            }
             try {
                 update(level, resource);
             } catch (ModelProblem | RuntimeException exception) {
@@ -92,44 +102,155 @@ public final class GeometryCollisionService implements ServerEngine {
         }
     }
 
-    private void update(ServerLevel level, Resource resource) throws ModelProblem {
+    /** Manual disable retains the definition, live inputs and metadata. */
+    public boolean setEnabled(ServerLevel level, GraphResourceId id, boolean enabled) {
+        var resources = levels.get(level);
+        Resource resource = resources == null ? null : resources.get(id);
+        if (resource == null) return false;
+        resource.enabled = enabled;
+        if (!enabled) {
+            reconcile(level, resource, false);
+            return true;
+        }
+        try {
+            update(level, resource);
+            return true;
+        } catch (ModelProblem | RuntimeException failure) {
+            remove(level, id);
+            GeometryNode.LOGGER.warn("Removed invalid geometry collision {}: {}", id, failure.getMessage());
+            return false;
+        }
+    }
+
+    private static void retire(ServerLevel level, Resource resource) {
+        resource.closed = true;
+        if (resource.registration != null) resource.registration.close();
+        reconcile(level, resource, false);
+    }
+
+    void update(ServerLevel level, Resource resource) throws ModelProblem {
+        // Disable suspends evaluation too: transient invalid live inputs must not destroy the definition.
+        if (resource.closed || !resource.enabled) {
+            reconcile(level, resource, false);
+            return;
+        }
+        // Missing anchors suspend the resource; evaluating them must not delete the retained definition.
+        if (resource.anchor != null && !ResourceResidency.isEntityResident(level, resource.anchor)) {
+            reconcile(level, resource, false);
+            return;
+        }
+        resource.updating = true;
+        try {
+            resolve(level, resource);
+            refreshResidency(level, resource);
+        } finally {
+            resource.updating = false;
+        }
+    }
+
+    static void resolve(ServerLevel level, Resource resource) throws ModelProblem {
+        if (resource.closed || !resource.enabled) return;
         long time = level.getGameTime();
         var context = new ExpressionEvaluationContext(time, Math.max(0, time - resource.created),
                 new ServerExpressionBindingResolver(level.getServer()));
+        Vec3 anchorPosition = null;
+        if (resource.anchor != null) {
+            Entity entity = level.getEntity(resource.anchor);
+            if (entity == null || entity.isRemoved()) return;
+            anchorPosition = entity.position();
+        }
+        resolve(resource, context, anchorPosition);
+    }
+
+    static void resolve(Resource resource, ExpressionEvaluationContext context, Vec3 anchorPosition) throws ModelProblem {
+        if (resource.closed || !resource.enabled) return;
         List<Vec3> values = resource.values.stream().map(value -> value.evaluate(context)).toList();
         for (Vec3 value : values) {
             if (value == null || !Double.isFinite(value.x) || !Double.isFinite(value.y) || !Double.isFinite(value.z))
                 throw new IllegalArgumentException("nonfinite geometry collision transform");
         }
-        Vec3 position = values.getFirst();
-        if (resource.anchor != null) {
-            Entity entity = level.getEntity(resource.anchor);
-            if (entity == null || entity.isRemoved()) throw new IllegalArgumentException("missing collision anchor");
-            position = entity.position().add(position);
-        }
+        Vec3 position = anchorPosition == null ? values.getFirst() : anchorPosition.add(values.getFirst());
         boolean shapeChanged = resource.resolved == null || !values.subList(1, 6).equals(resource.resolved.subList(1, 6));
-        if (!shapeChanged && position.equals(resource.position)) return;
-        ModelCollisionScene.Prepared prepared = resource.prepared;
         if (shapeChanged) {
             var mesh = GeometryCollisionMeshBuilder.build(resource.geometry, values.get(1), values.get(2),
                     values.get(3), values.get(4), values.get(5));
             PacketGeometryCollision.validateMesh(mesh);
-            prepared = ModelCollisionScene.prepare(mesh);
+            resource.prepared = ModelCollisionScene.prepare(mesh);
         }
-        ModelCollisionScene.publish(level, resource.id, prepared, position.x, position.y, position.z, resource.anchor);
+        resource.shapeDirty |= shapeChanged;
+        resource.positionDirty |= !position.equals(resource.position);
         resource.position = position;
         resource.resolved = values;
-        resource.prepared = prepared;
+    }
+
+    private void refreshResidency(ServerLevel level, Resource resource) {
+        if (resource.registration == null) {
+            resource.registration = ResourceResidency.watch(level, resource.bounds(), resource.anchor, resident -> {
+                if (resource.closed) return;
+                if (!resident || resource.updating) { reconcile(level, resource, resident); return; }
+                try {
+                    // Entity reloads must publish the new pose, not the last dormant pose.
+                    update(level, resource);
+                } catch (ModelProblem | RuntimeException failure) {
+                    remove(level, resource.id);
+                    GeometryNode.LOGGER.warn("Removed invalid geometry collision {}: {}", resource.id, failure.getMessage());
+                }
+            });
+        } else {
+            resource.registration.update(resource.bounds(), resource.anchor);
+        }
+        reconcile(level, resource, resource.registration.isResident());
+    }
+
+    private static void reconcile(ServerLevel level, Resource resource, boolean resident) {
+        int operation = resource.publicationOperation(resident);
+        if (operation < 0) return;
+        if (operation == PacketGeometryCollision.REMOVE) {
+            ModelCollisionScene.remove(level, resource.id);
+            NetworkHandler.sendToPlayers(level.players(), packet(level, resource.id, operation, Vec3.ZERO, null));
+            return;
+        }
+        Vec3 position = resource.position;
+        ModelCollisionScene.publish(level, resource.id, resource.prepared, position.x, position.y, position.z, resource.anchor);
         NetworkHandler.sendToPlayers(level.players(), new PacketGeometryCollision(level.dimension().identifier(),
-                GraphResourceIdCodec.encode(resource.id),
-                shapeChanged ? PacketGeometryCollision.UPSERT : PacketGeometryCollision.MOVE, position,
-                shapeChanged ? prepared.mesh() : null, shapeChanged ? resource.anchor : null));
+                GraphResourceIdCodec.encode(resource.id), operation, position,
+                operation == PacketGeometryCollision.UPSERT ? resource.prepared.mesh() : null,
+                operation == PacketGeometryCollision.UPSERT ? resource.anchor : null));
+    }
+
+    public MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
+        RuntimeMetadataTargets.requireThread(level.getServer());
+        var resources = levels.get(level);
+        Resource resource = resources == null ? null : resources.get(id);
+        if (resource == null || resource.closed) throw new IllegalStateException("Collision no longer exists");
+        return resource.metadataAccess(GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
+            var currentResources = levels.get(level);
+            return currentResources == null ? null : currentResources.get(id);
+        }, () -> RuntimeMetadataTargets.requireThread(level.getServer()));
+    }
+
+    public record QuerySnapshot(GraphResourceId id, Vec3 position, AABB bounds, RuntimeMetadata metadata,
+                                boolean enabled, boolean active) {
+        public List<String> tags() { return metadata.tagSnapshot(); }
+    }
+
+    /** Owner-thread visitor includes dormant and disabled resources, with their last resolved anchor pose. */
+    public void visitWorldQuery(ServerLevel level, java.util.function.Predicate<QuerySnapshot> visitor) {
+        var resources = levels.get(level);
+        if (resources == null) return;
+        for (Resource resource : resources.values()) {
+            if (!resource.closed && !visitor.test(new QuerySnapshot(resource.id, resource.position,
+                    resource.bounds(), resource.metadata, resource.enabled, resource.active))) return;
+        }
     }
 
     private void synchronize(ServerPlayer player) {
         Map<GraphResourceId, Resource> resources = levels.get(player.level());
         if (resources == null) return;
         for (Resource resource : resources.values()) {
+            // A queued activation will broadcast; every sent copy must be covered by active teardown.
+            if (!resource.active || resource.closed || !resource.enabled || resource.prepared == null
+                    || !ResourceResidency.isResident(player.level(), resource.bounds(), resource.anchor)) continue;
             NetworkHandler.sendToPlayer(player, new PacketGeometryCollision(player.level().dimension().identifier(),
                     GraphResourceIdCodec.encode(resource.id), PacketGeometryCollision.UPSERT,
                     resource.position, resource.prepared.mesh(), resource.anchor));
@@ -160,7 +281,7 @@ public final class GeometryCollisionService implements ServerEngine {
         if (!GraphResourceTypeRegistry.GEOMETRY_COLLISION.equals(id.type()))
             throw new IllegalArgumentException("resource is not a geometry collision");
     }
-    private static final class Resource {
+    static final class Resource {
         final GraphResourceId id;
         final GeometryValue geometry;
         final UUID anchor;
@@ -169,6 +290,40 @@ public final class GeometryCollisionService implements ServerEngine {
         List<Vec3> resolved;
         Vec3 position;
         ModelCollisionScene.Prepared prepared;
+        RuntimeMetadata metadata = new RuntimeMetadata();
+        ResourceResidency.Registration registration;
+        boolean enabled = true;
+        boolean active, closed, shapeDirty, positionDirty, updating;
+
+        MetadataCapabilities.Access metadataAccess(com.mine.geometry_node.core.metadata.DataValuePolicy policy,
+                java.util.function.Supplier<Resource> current, Runnable requireThread) {
+            RuntimeMetadata captured = metadata;
+            return captured.access(policy, () -> {
+                requireThread.run();
+                Resource value = current.get();
+                if (value == null || value.closed || value.metadata != captured)
+                    throw new IllegalStateException("Collision metadata handle is stale");
+            });
+        }
+
+        AABB bounds() {
+            return prepared.bounds().move(position);
+        }
+
+        int publicationOperation(boolean resident) {
+            if (closed || !enabled || !resident || prepared == null) {
+                if (!active) return -1;
+                active = false;
+                return PacketGeometryCollision.REMOVE;
+            }
+            int operation = !active || shapeDirty ? PacketGeometryCollision.UPSERT
+                    : positionDirty ? PacketGeometryCollision.MOVE : -1;
+            active = true;
+            shapeDirty = false;
+            positionDirty = false;
+            return operation;
+        }
+
         Resource(GraphResourceId id, GeometryValue geometry, UUID anchor, long created, List<LiveValue.State<Vec3>> values) {
             this.id = id; this.geometry = geometry; this.anchor = anchor; this.created = created; this.values = values;
         }

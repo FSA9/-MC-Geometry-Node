@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMesh
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
@@ -23,7 +24,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.level.ChunkEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -82,16 +82,6 @@ public final class DebugRendererSessionManager {
                     hydrateSchematicChannel(player, session);
                     refreshPlayer(player, session);
                 }
-            }
-        });
-        bus.addListener((ChunkEvent.Load event) -> {
-            if (event.getLevel() instanceof ServerLevel level) {
-                markDirty(level.getServer());
-            }
-        });
-        bus.addListener((ChunkEvent.Unload event) -> {
-            if (event.getLevel() instanceof ServerLevel level) {
-                markDirty(level.getServer());
             }
         });
     }
@@ -409,13 +399,21 @@ public final class DebugRendererSessionManager {
 
     public static void tickLevel(ServerLevel level) {
         DebugServerState state = getState(level.getServer());
-        if (state == null || state.sessions.isEmpty()) return;
+        if (state == null) return;
 
         long tick = level.getGameTime();
+        // Definitions expire on their original clock, even while dormant or unobserved.
+        boolean hasExpiredSources = state.sources.pruneExpired(level, tick);
+        if (hasExpiredSources) markDirty(state);
+        state.sources.refreshAnchors(level);
+        if (state.sessions.isEmpty()) {
+            discardStateIfEmpty(level.getServer(), state);
+            return;
+        }
         boolean cadence = Math.floorMod(tick, IDLE_CHECK_INTERVAL_TICKS) == 0;
         boolean liveCadence = Math.floorMod(tick, LIVE_REFRESH_INTERVAL_TICKS) == 0;
-        boolean hasExpiredSources = state.sources.hasTransientExpired(level, tick);
-        if (hasExpiredSources && state.sources.pruneExpired(level, tick)) markDirty(state);
+        long residencyRevision = ResourceResidency.revision(level);
+        long anchorSignature = SNAPSHOT_ASSEMBLER.anchorSignature(level, state.sources);
 
         boolean hasInteractionObservers = hasObservers(state, level, true);
         boolean hasPathObservers = hasObservers(state, level, false);
@@ -439,9 +437,11 @@ public final class DebugRendererSessionManager {
             // Collision changes do not mutate the debug source store; observe their own revision.
             boolean collisionChanged = (session.collisionEnabled || session.modelCollisionEnabled)
                     && session.lastCollisionRevision != ModelCollisionScene.revision(level);
+            boolean residencyChanged = session.lastResidencyRevision != residencyRevision
+                    || session.lastAnchorSignature != anchorSignature;
             boolean refresh = cadence || dimensionChanged || moved || dirty || hasExpiredSources
-                    || collisionChanged
-                    || (session.pathfindingEnabled || session.forceFieldEnabled) && liveCadence;
+                    || collisionChanged || residencyChanged
+                    || (session.geometryEnabled || session.pathfindingEnabled || session.forceFieldEnabled) && liveCadence;
             if (!session.interactionEnabled && !refresh) continue;
 
             DebugSnapshotAssembler.Snapshot snapshot = collectSnapshot(state, player, session);
@@ -508,7 +508,7 @@ public final class DebugRendererSessionManager {
     public static void visitWorldQuery(ServerLevel level,
             java.util.function.Predicate<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> visitor) {
         var state = getState(level.getServer());
-        if (state != null) state.sources.visitWorldQuery(level, visitor);
+        if (state != null) state.sources.visitWorldQuery(level, level.getGameTime(), visitor);
     }
 
     public static void replaceSourceGeometry(ServerLevel level,
@@ -711,6 +711,8 @@ public final class DebugRendererSessionManager {
         session.lastDimension = player.level().dimension();
         session.lastDirtyVersion = state.dirtyVersion;
         session.lastCollisionRevision = ModelCollisionScene.revision(player.level());
+        session.lastResidencyRevision = ResourceResidency.revision(player.level());
+        session.lastAnchorSignature = SNAPSHOT_ASSEMBLER.anchorSignature(player.level(), state.sources);
         session.lastSignature = snapshot.signature();
     }
 
@@ -867,6 +869,8 @@ public final class DebugRendererSessionManager {
         private ResourceKey<Level> lastDimension;
         private long lastDirtyVersion = Long.MIN_VALUE;
         private long lastCollisionRevision = Long.MIN_VALUE;
+        private long lastResidencyRevision = Long.MIN_VALUE;
+        private long lastAnchorSignature = Long.MIN_VALUE;
         private long lastSignature = Long.MIN_VALUE;
 
         private boolean hasAnyChannel() {
@@ -889,6 +893,8 @@ public final class DebugRendererSessionManager {
             lastDimension = null;
             lastDirtyVersion = Long.MIN_VALUE;
             lastCollisionRevision = Long.MIN_VALUE;
+            lastResidencyRevision = Long.MIN_VALUE;
+            lastAnchorSignature = Long.MIN_VALUE;
             lastSignature = Long.MIN_VALUE;
         }
     }

@@ -2,16 +2,35 @@ package com.mine.geometry_node.core.engine.graph.debug;
 
 import com.mine.geometry_node.core.engine.graph.debug.PathfindingDebugProvider.Subject;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.BiFunction;
 
 final class DebugSnapshotAssembler {
+    private final Residency residency;
+    private final BiFunction<ServerLevel, UUID, Anchor> anchors;
+
+    DebugSnapshotAssembler() {
+        this(ResourceResidency::isResident, (level, uuid) -> {
+            if (!ResourceResidency.isEntityResident(level, uuid)) return null;
+            var entity = level.getEntity(uuid);
+            return entity == null ? null : new Anchor(entity.position(), entity.getId());
+        });
+    }
+
+    DebugSnapshotAssembler(Residency residency, BiFunction<ServerLevel, UUID, Anchor> anchors) {
+        this.residency = residency;
+        this.anchors = anchors;
+    }
+
     Snapshot assemble(ServerLevel level,
                       Vec3 origin,
                       double radius,
@@ -41,8 +60,8 @@ final class DebugSnapshotAssembler {
         }
         for (DebugSourceStore.VisibleSource source : sources.sources(level)) {
             if (!isEnabled(channelMask, source.id().channel())) continue;
-            for (GeometryDebugElement mesh : source.meshes()) {
-                addBoundedCandidate(level, origin, radiusSqr, mesh, candidates);
+            for (int i = 0; i < source.meshes().size(); i++) {
+                addBoundedCandidate(level, origin, radiusSqr, source.meshes().get(i), source.bounds().get(i), candidates);
             }
         }
 
@@ -102,17 +121,45 @@ final class DebugSnapshotAssembler {
         return (mask & channelBit(channel)) != 0;
     }
 
-    private static void addBoundedCandidate(ServerLevel level, Vec3 origin, double radiusSqr,
-                                            GeometryDebugElement mesh, List<Candidate> candidates) {
-        Vec3 center = mesh.center();
+    private void addBoundedCandidate(ServerLevel level, Vec3 origin, double radiusSqr,
+                                    GeometryDebugElement mesh, AABB bounds, List<Candidate> candidates) {
+        // An explicit anchor strictly overrides spatial residency, including when it is absent.
+        if (!residency.isResident(level, bounds, mesh.anchorUuid())) return;
         if (mesh.anchorUuid() != null) {
-            var anchor = level.getEntity(mesh.anchorUuid());
-            if (anchor == null || !anchor.isAlive()) return;
-            center = center.add(anchor.position());
+            Anchor anchor = anchors.apply(level, mesh.anchorUuid());
+            if (anchor == null) return;
+            bounds = bounds.move(anchor.position());
+            // UUIDs survive unloading, but client entity IDs do not.
+            mesh = mesh.withAnchor(mesh.anchorUuid(), anchor.entityId());
         }
-        if (!level.isLoaded(BlockPos.containing(center))) return;
-        double distanceSqr = center.distanceToSqr(origin);
+        double x = Math.max(0, Math.max(bounds.minX - origin.x, origin.x - bounds.maxX));
+        double y = Math.max(0, Math.max(bounds.minY - origin.y, origin.y - bounds.maxY));
+        double z = Math.max(0, Math.max(bounds.minZ - origin.z, origin.z - bounds.maxZ));
+        double distanceSqr = x * x + y * y + z * z;
         if (distanceSqr <= radiusSqr) candidates.add(new Candidate(mesh, distanceSqr));
+    }
+
+    /** Detect ID replacement even if no chunk revision or authored definition changes. */
+    long anchorSignature(ServerLevel level, DebugSourceStore sources) {
+        long signature = 1469598103934665603L;
+        for (DebugSourceStore.VisibleSource source : sources.sources(level)) {
+            for (GeometryDebugElement mesh : source.meshes()) {
+                if (mesh.anchorUuid() == null) continue;
+                Anchor anchor = anchors.apply(level, mesh.anchorUuid());
+                signature = mix(signature, mesh.anchorUuid().getMostSignificantBits());
+                signature = mix(signature, mesh.anchorUuid().getLeastSignificantBits());
+                signature = mix(signature, anchor == null ? -1 : anchor.entityId());
+            }
+        }
+        return signature;
+    }
+
+    @FunctionalInterface
+    interface Residency {
+        boolean isResident(ServerLevel level, AABB bounds, UUID anchor);
+    }
+
+    record Anchor(Vec3 position, int entityId) {
     }
 
     private static PacketGeometryDebugSnapshot.Mesh toPacketMesh(GeometryDebugElement mesh) {

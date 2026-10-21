@@ -10,6 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,9 +33,20 @@ public final class GraphResourceLifecycleManager implements ServerEngine {
         return 900;
     }
 
-    @Override
-    public void entityLeft(ServerLevel level, Entity entity) {
-        releaseEntity(level.getServer(), level.dimension(), entity.getUUID());
+    /** Authoritative removal hook, independent of tracking end. Temporary unload does not release. */
+    public void entityRemoved(ServerLevel level, Entity entity, Entity.RemovalReason reason) {
+        for (GraphResourceRelease release : entityDeparture(level.dimension(), entity.getUUID(), reason)) {
+            release(level.getServer(), release);
+        }
+    }
+
+    /** Tracking end and chunk/player unload suspend residency; fixed-dimension resources cannot migrate. */
+    static List<GraphResourceRelease> entityDeparture(ResourceKey<Level> dimension, UUID entityId,
+                                                       Entity.RemovalReason reason) {
+        if (reason == null || !(reason.shouldDestroy() || reason == Entity.RemovalReason.CHANGED_DIMENSION))
+            return List.of();
+        return List.of(new GraphResourceRelease.Entity(dimension, entityId),
+                new GraphResourceRelease.Owner(new GraphResourceScope.EntityScope(dimension, entityId)));
     }
 
     @Override

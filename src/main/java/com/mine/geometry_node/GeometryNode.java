@@ -178,6 +178,7 @@ public class GeometryNode {
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
         // 初始化图运行时注册表
+        com.mine.geometry_node.core.engine.resource.residency.ResourceResidency.init();
         ServerEngineDriver.init();
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GeometryCollisionService.INSTANCE);

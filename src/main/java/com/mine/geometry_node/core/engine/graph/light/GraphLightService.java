@@ -6,6 +6,8 @@ import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import net.minecraft.world.phys.AABB;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
@@ -51,6 +53,10 @@ public final class GraphLightService implements ServerEngine {
     }
 
     public boolean create(ServerLevel level, GraphResourceId id, LightDefinition definition) {
+        return create(level, id, definition, null);
+    }
+
+    private boolean create(ServerLevel level, GraphResourceId id, LightDefinition definition, Long retainedCreated) {
         validate(level, id, definition);
         String path = definition.config().projection().path();
         if (path.toLowerCase(Locale.ROOT).startsWith("server:")) throw new IllegalArgumentException("Use remote:/ for server images");
@@ -76,26 +82,26 @@ public final class GraphLightService implements ServerEngine {
                 "range", definition.range(), "volume", definition.config().volume().mode());
         if (unchanged) {
             unchangedCreates++;
-            old.created = level.getGameTime();
+            old.created = retainedCreated == null ? level.getGameTime() : retainedCreated;
+            refreshResidency(level, old);
             return true;
         }
         // Keep a pending image request (or its resolved asset) while other properties change.
         if (old != null && remote != null && "spot".equals(old.definition.type())
                 && old.definition.config().projection().path().equals(path)) {
-            old.definition = definition;
-            old.created = level.getGameTime();
-            if (old.asset != null) {
-                old.wire = withAsset(definition, old.asset);
-                broadcast(level, old, false);
-            }
+            old.updatePendingDefinition(definition, retainedCreated == null ? level.getGameTime() : retainedCreated);
+            refreshResidency(level, old);
             return true;
         }
-        Resource value = new Resource(id, definition, level.getGameTime());
+        Resource value = new Resource(id, definition, retainedCreated == null ? level.getGameTime() : retainedCreated);
         if (old != null && isLive(level, old)) value.metadata = old.metadata;
+        if (old != null) {
+            value.inheritPosition(old);
+            retire(level, old);
+        }
         resources.put(id, value);
         if (remote != null) {
-            if (old != null) NetworkHandler.sendToPlayers(level.players(), new PacketGraphLight(level.dimension().identifier(),
-                    GraphResourceIdCodec.encode(id), PacketGraphLight.REMOVE, -1, null));
+            refreshResidency(level, value);
             ServerImageAssetService.INSTANCE.loadAsync(level.getServer(), remote.path()).whenComplete((asset, error) ->
                     level.getServer().execute(() -> {
                         Map<GraphResourceId, Resource> current = levels.get(level);
@@ -106,13 +112,12 @@ public final class GraphLightService implements ServerEngine {
                             com.mine.geometry_node.GeometryNode.LOGGER.warn("Unable to load light projection {}: {}", path, error.getMessage());
                             return;
                         }
-                        value.asset = asset;
-                        value.wire = withAsset(value.definition, asset);
-                        broadcast(level, value);
+                        if (value.acceptAsset(current.get(id), asset, level.getGameTime())) refreshResidency(level, value);
+                        else remove(level, id);
                     }));
         } else {
             value.wire = definition;
-            broadcast(level, value);
+            refreshResidency(level, value);
         }
         return true;
     }
@@ -129,39 +134,86 @@ public final class GraphLightService implements ServerEngine {
         Map<GraphResourceId, Resource> resources = levels.get(level);
         Resource current = resources == null ? null : resources.get(id);
         if (current == null) return false;
+        if (!isLive(level, current)) { remove(level, id); return false; }
         LightDefinition next = Objects.requireNonNull(change.apply(current.definition));
         if (next.equals(current.definition) && !restartLifetime) return true;
-        long created = current.created;
-        boolean success = create(level, id, next);
-        if (success && !restartLifetime) resources.get(id).created = created;
-        return success;
+        return create(level, id, next, restartLifetime ? null : current.created);
     }
 
     public boolean remove(ServerLevel level, GraphResourceId id) {
         Map<GraphResourceId, Resource> resources = levels.get(level);
-        if (resources == null || resources.remove(id) == null) return false;
-        broadcastRemoval(level, id);
+        Resource resource = resources == null ? null : resources.remove(id);
+        if (resource == null) return false;
+        retire(level, resource);
         if (resources.isEmpty()) levels.remove(level);
         return true;
+    }
+
+    private static void retire(ServerLevel level, Resource resource) {
+        resource.closed = true;
+        if (resource.registration != null) resource.registration.close();
+        if (resource.active) broadcastRemoval(level, resource.id);
+        resource.active = false;
     }
 
     @Override public void tickLevel(ServerLevel level) {
         Map<GraphResourceId, Resource> resources = levels.get(level);
         if (resources == null) return;
-        long now = level.getGameTime();
-        for (Iterator<Resource> iterator = resources.values().iterator(); iterator.hasNext();) {
-            Resource resource = iterator.next();
-            var config = resource.definition.config();
-            UUID anchor = config.transform().entityId();
-            var entity = anchor == null ? null : level.getEntity(anchor);
-            int duration = config.lifecycle().durationTicks();
-            if ((anchor != null && (entity == null || entity.isRemoved()))
-                    || (duration > 0 && now - resource.created >= duration)) {
-                iterator.remove();
-                broadcastRemoval(level, resource.id);
-            }
+        for (Resource resource : List.copyOf(resources.values())) {
+            if (!isLive(level, resource)) remove(level, resource.id);
+            else refreshResidency(level, resource);
         }
-        if (resources.isEmpty()) levels.remove(level);
+    }
+
+    private static void refreshResidency(ServerLevel level, Resource resource) {
+        resource.position = resolvePosition(level, resource);
+        AABB bounds = resource.residencyBounds();
+        UUID anchor = resource.definition.config().transform().entityId();
+        var entity = anchor == null ? null : level.getEntity(anchor);
+        int entityId = entity == null ? -1 : entity.getId();
+        if (resource.entityId != entityId) { resource.entityId = entityId; resource.dirty = true; }
+        if (resource.registration == null) {
+            resource.registration = ResourceResidency.watch(level, bounds, anchor,
+                    resident -> reconcile(level, resource, resident));
+        } else {
+            resource.registration.update(bounds, anchor);
+        }
+        reconcile(level, resource, resource.registration.isResident());
+    }
+
+    private static void reconcile(ServerLevel level, Resource resource, boolean resident) {
+        boolean wasActive = resource.active;
+        int operation = resource.publicationOperation(resident, level.getGameTime());
+        if (operation == PacketGraphLight.REMOVE) broadcastRemoval(level, resource.id);
+        else if (operation == PacketGraphLight.UPSERT) broadcast(level, resource, !wasActive);
+    }
+
+    /** Conservative influence coverage, including the emitting surface and local transform offset. */
+    public static AABB worldBounds(LightDefinition definition, Vec3 position) {
+        return new AABB(position, position).inflate(definition.range() + definition.emitterRadius());
+    }
+
+    public static Vec3 localPosition(LightDefinition definition) {
+        var local = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-definition.rotation().y),
+                (float)Math.toRadians(definition.rotation().x), (float)Math.toRadians(definition.rotation().z))
+                .transform(new org.joml.Vector3f((float)definition.config().transform().position().x,
+                        (float)definition.config().transform().position().y, (float)definition.config().transform().position().z));
+        return definition.position().add(local.x, local.y, local.z);
+    }
+
+    private static Vec3 resolvePosition(ServerLevel level, Resource resource) {
+        var transform = resource.definition.config().transform();
+        Vec3 position = localPosition(resource.definition);
+        if (transform.entityId() == null) return resource.recordPosition(null, position);
+        var anchor = level.getEntity(transform.entityId());
+        if (anchor == null || anchor.isRemoved()) return resource.recordPosition(transform.entityId(), null);
+        float yaw = !transform.followView() && anchor instanceof net.minecraft.world.entity.LivingEntity living
+                ? living.yBodyRot : anchor.getYRot();
+        var rotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-yaw),
+                transform.followView() ? (float)Math.toRadians(anchor.getXRot()) : 0, 0);
+        var offset = rotation.transform(new org.joml.Vector3f((float)position.x, (float)position.y, (float)position.z));
+        return resource.recordPosition(transform.entityId(),
+                (transform.eyeAnchor() ? anchor.getEyePosition() : anchor.position()).add(offset.x, offset.y, offset.z));
     }
 
     private static void broadcastRemoval(ServerLevel level, GraphResourceId id) {
@@ -190,41 +242,19 @@ public final class GraphLightService implements ServerEngine {
     }
 
     private static boolean isLive(ServerLevel level, Resource resource) {
-        var config = resource.definition.config();
-        UUID anchor = config.transform().entityId();
-        var entity = anchor == null ? null : level.getEntity(anchor);
-        int duration = config.lifecycle().durationTicks();
-        return (anchor == null || entity != null && !entity.isRemoved())
-                && (duration <= 0 || level.getGameTime() - resource.created < duration);
+        return resource.exists(level.getGameTime());
     }
 
     public record QuerySnapshot(GraphResourceId id, LightDefinition definition, Vec3 position) {}
-    /** Server-thread immutable metadata; no asset bytes or client state. */
+    /** Includes disabled/dormant lights with a known world pose; never-resolved attachments have no spatial row. */
     public void visitWorldQuery(ServerLevel level, java.util.function.Predicate<QuerySnapshot> visitor) {
         var resources = levels.get(level);
         if (resources == null) return;
         for (Resource resource : resources.values()) {
-            var definition = resource.definition;
-            var anchorId = definition.config().transform().entityId();
-            var anchor = anchorId == null ? null : level.getEntity(anchorId);
-            if (anchorId != null && (anchor == null || anchor.isRemoved())) continue;
-            int duration = definition.config().lifecycle().durationTicks();
-            if (duration > 0 && level.getGameTime() - resource.created >= duration) continue;
-            var transform = definition.config().transform();
-            var baseRotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-definition.rotation().y),
-                    (float)Math.toRadians(definition.rotation().x), (float)Math.toRadians(definition.rotation().z));
-            var local = baseRotation.transform(new org.joml.Vector3f((float)transform.position().x,
-                    (float)transform.position().y, (float)transform.position().z));
-            Vec3 position = definition.position().add(local.x, local.y, local.z);
-            if (anchor != null) {
-                float yaw = !transform.followView() && anchor instanceof net.minecraft.world.entity.LivingEntity living
-                        ? living.yBodyRot : anchor.getYRot();
-                var anchorRotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-yaw),
-                        transform.followView() ? (float)Math.toRadians(anchor.getXRot()) : 0, 0);
-                var offset = anchorRotation.transform(new org.joml.Vector3f((float)position.x, (float)position.y, (float)position.z));
-                position = (transform.eyeAnchor() ? anchor.getEyePosition() : anchor.position()).add(offset.x, offset.y, offset.z);
-            }
-            if (!visitor.test(new QuerySnapshot(resource.id, definition, position))) return;
+            if (!isLive(level, resource)) continue;
+            resource.position = resolvePosition(level, resource);
+            QuerySnapshot snapshot = resource.snapshot(level.getGameTime());
+            if (snapshot != null && !visitor.test(snapshot)) return;
         }
     }
 
@@ -239,10 +269,8 @@ public final class GraphLightService implements ServerEngine {
         Objects.requireNonNull(definition);
         if (!GraphResourceTypeRegistry.LIGHT.equals(id.type()) || !level.dimension().equals(id.scope().dimension()))
             throw new IllegalArgumentException("Invalid light resource scope");
-        UUID anchor = definition.config().transform().entityId();
-        var entity = anchor == null ? null : level.getEntity(anchor);
-        if (anchor != null && (entity == null || entity.isRemoved()))
-            throw new IllegalArgumentException("Light anchor is not in this level");
+        // UUID attachments may be authored or mutated while their entity is unloaded.
+        // Residency, not existence, follows the entity in this resource's fixed dimension.
     }
 
     private static PacketGraphLight packet(ServerLevel level, Resource resource) {
@@ -250,9 +278,6 @@ public final class GraphLightService implements ServerEngine {
         var entity = anchor == null ? null : level.getEntity(anchor);
         return new PacketGraphLight(level.dimension().identifier(), GraphResourceIdCodec.encode(resource.id),
                 PacketGraphLight.UPSERT, entity == null ? -1 : entity.getId(), resource.wire);
-    }
-    private static void broadcast(ServerLevel level, Resource resource) {
-        broadcast(level, resource, true);
     }
     private static void broadcast(ServerLevel level, Resource resource, boolean includeAsset) {
         var players = level.players();
@@ -267,7 +292,10 @@ public final class GraphLightService implements ServerEngine {
         }
     }
     private static void send(ServerPlayer player, ServerLevel level, Resource resource) {
-        if (resource.wire == null) return;
+        // A queued activation will broadcast to all players. Do not publish an untracked client copy here.
+        if (!resource.active || !resource.exists(level.getGameTime()) || !resource.definition.config().lifecycle().enabled()
+                || resource.wire == null || !ResourceResidency.isResident(level,
+                resource.residencyBounds(), resource.definition.config().transform().entityId())) return;
         if (resource.asset != null) NetworkHandler.sendToPlayer(player,
                 new PacketVisualAssetData(resource.asset.assetId(), resource.asset.data()));
         NetworkHandler.sendToPlayer(player, packet(level, resource));
@@ -305,15 +333,94 @@ public final class GraphLightService implements ServerEngine {
                 "unchangedCreates", unchangedCreates, "sentUpserts", sentUpserts,
                 "failedActions", failedActions, "lastFailure", lastFailure, "lastLight", lastLight);
     }
-    private static final class Resource {
+    static final class Resource {
         final GraphResourceId id;
         RuntimeMetadata metadata = new RuntimeMetadata();
         LightDefinition definition;
         long created;
         LightDefinition wire;
         GraphEngineServices.VisualAsset asset;
+        ResourceResidency.Registration registration;
+        Vec3 position;
+        UUID positionAnchor;
+        boolean hasResolvedWorldPosition;
+        int entityId = -1;
+        boolean active, closed;
+        boolean dirty = true;
+
+        /** A null pose means the current anchor has never resolved in this dimension. */
+        Vec3 recordPosition(UUID anchor, Vec3 resolvedWorldPosition) {
+            if (!Objects.equals(positionAnchor, anchor)) {
+                position = null;
+                hasResolvedWorldPosition = false;
+            }
+            positionAnchor = anchor;
+            if (resolvedWorldPosition != null) {
+                position = resolvedWorldPosition;
+                hasResolvedWorldPosition = true;
+            }
+            return position;
+        }
+
+        void inheritPosition(Resource previous) {
+            UUID anchor = definition.config().transform().entityId();
+            if (anchor != null && anchor.equals(previous.positionAnchor) && previous.hasResolvedWorldPosition) {
+                position = previous.position;
+                hasResolvedWorldPosition = true;
+            }
+        }
+
+        AABB residencyBounds() {
+            // Anchored residency ignores spatial coverage; the placeholder is never a query position.
+            return worldBounds(definition, hasResolvedWorldPosition ? position : Vec3.ZERO);
+        }
+
+        QuerySnapshot snapshot(long now) {
+            return !exists(now) || !hasResolvedWorldPosition
+                    || !Objects.equals(positionAnchor, definition.config().transform().entityId())
+                    ? null : new QuerySnapshot(id, definition, position);
+        }
+
+        void updatePendingDefinition(LightDefinition next, long created) {
+            definition = next;
+            this.created = created;
+            UUID anchor = next.config().transform().entityId();
+            recordPosition(anchor, anchor == null ? localPosition(next) : null);
+            wire = asset == null ? null : withAsset(next, asset);
+            dirty = true;
+        }
+
+        boolean acceptAsset(Resource current, GraphEngineServices.VisualAsset resolved, long now) {
+            if (current != this || !exists(now)) return false;
+            asset = resolved;
+            wire = withAsset(definition, resolved);
+            dirty = true;
+            return true;
+        }
+
+        boolean exists(long now) {
+            int duration = definition.config().lifecycle().durationTicks();
+            return !closed && (duration <= 0 || now - created < duration);
+        }
+
+        int publicationOperation(boolean resident, long now) {
+            boolean desired = exists(now) && definition.config().lifecycle().enabled() && wire != null && resident;
+            if (!desired) {
+                if (!active) return -1;
+                active = false;
+                return PacketGraphLight.REMOVE;
+            }
+            if (active && !dirty) return -1;
+            active = true;
+            dirty = false;
+            return PacketGraphLight.UPSERT;
+        }
+
         Resource(GraphResourceId id, LightDefinition definition, long created) {
             this.id = id; this.definition = definition; this.created = created;
+            this.positionAnchor = definition.config().transform().entityId();
+            this.hasResolvedWorldPosition = positionAnchor == null;
+            this.position = hasResolvedWorldPosition ? localPosition(definition) : null;
         }
     }
 }

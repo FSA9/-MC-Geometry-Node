@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionSe
 import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementStorage;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.graph.light.GraphLightService;
+import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionService;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
@@ -63,13 +64,8 @@ final class BuiltinWorldObjectProviders {
         METADATA.put("collision", (c, e) -> {
             if (e.references().containsKey("resourceId")) return graphMetadata.apply(c, e);
             ServerLevel level = level(c, e.dimension());
-            String id = e.references().get("collisionInstanceId");
-            try { return MetadataCapabilities.GLOBAL.resolve(RuntimeMetadataTargets.MODEL_COLLISION,
-                    new RuntimeMetadataTargets.ModelCollisionTarget(level, id)); }
-            catch (IllegalStateException unavailable) {
-                return MetadataCapabilities.GLOBAL.resolve(RuntimeMetadataTargets.MODEL_COLLISION,
-                        new RuntimeMetadataTargets.ModelCollisionTarget(level, UUID.fromString(id)));
-            }
+            return MetadataCapabilities.GLOBAL.resolve(RuntimeMetadataTargets.MODEL_COLLISION,
+                    new RuntimeMetadataTargets.ModelCollisionTarget(level, WorldObjectEntries.modelCollisionId(e.references())));
         });
         register("scene", "persisted_all_dimensions", () -> SceneObjectTypes.all().stream()
                 .filter(t -> t.storage() == SceneObjectTypes.Storage.AUTHORED)
@@ -79,38 +75,35 @@ final class BuiltinWorldObjectProviders {
                 if (!c.acceptsDimension().test(dim)) return true;
                 return sink.emit(new WorldObjectEntry(WorldObjectEntry.key("scene", dim, object.id().toString()),
                         "scene", object.typeId(), object.name(), dim, object.position(),
-                        SceneObjectTypes.require(object.typeId()).bounds().apply(object), object.tags(), "scene", "persistent",
+                        WorldObjectEntries.sceneBounds(object), object.tags(), "scene", "persistent",
                         object.id(), null, Map.of("enabled", Boolean.toString(object.enabled()))));
             }));
         register("collision", "server_collision_instances", () -> types("collision", "geometry_collision", "model_collision"), (c, sink) -> {
-            for (ServerLevel level : c.levels()) ModelCollisionScene.visitWorldQuery(level, entry -> {
-                if (!sink.scan()) return false;
-                // Authored colliders already have a canonical scene identity and richer persisted metadata.
-                if (entry.instanceId() instanceof SceneCollisionRuntime.Key) return true;
-                var local = entry.geometry().bounds(); if (local == null) return true;
-                Vec3 pos = new Vec3(entry.x(), entry.y(), entry.z()); AABB bounds = local.move(pos);
-                if (entry.instanceId() instanceof GraphResourceId graph) {
-                    if (entry.excludedEntity() != null && level.getEntity(entry.excludedEntity()) == null) return true;
-                    return sink.emit(WorldObjectEntries.withTags(WorldObjectEntries.graph("collision", "geometry_collision", graph, pos, bounds,
-                            GraphResourceIdCodec.encode(graph), Map.of()), entry.metadata().tagSnapshot()));
-                }
-                // The model bridge publishes stable String instance IDs; never invent an ID via Object.toString().
-                if (!(entry.instanceId() instanceof String) && !(entry.instanceId() instanceof UUID)) return true;
-                String id = entry.instanceId().toString(), dim = dimension(level);
-                return sink.emit(new WorldObjectEntry(WorldObjectEntry.key("collision", dim, id), "collision", "model_collision",
-                        "", dim, pos, bounds, entry.metadata().tagSnapshot(), "", "runtime", null, null, Map.of("collisionInstanceId", id)));
-            });
+            for (ServerLevel level : c.levels()) {
+                boolean[] continuing = {true};
+                GeometryCollisionService.INSTANCE.visitWorldQuery(level, snapshot -> {
+                    if (!sink.scan()) return continuing[0] = false;
+                    return continuing[0] = sink.emit(WorldObjectEntries.withTags(WorldObjectEntries.graph("collision",
+                            "geometry_collision", snapshot.id(), snapshot.position(), snapshot.bounds(),
+                            GraphResourceIdCodec.encode(snapshot.id()), Map.of("enabled", Boolean.toString(snapshot.enabled()))),
+                            snapshot.metadata().tagSnapshot()));
+                });
+                if (!continuing[0]) return;
+                ModelCollisionScene.visitDefinitions(level, entry -> {
+                    if (!sink.scan()) return continuing[0] = false;
+                    // Authored and graph colliders have retained authoritative definitions above.
+                    if (entry.instanceId() instanceof SceneCollisionRuntime.Key || entry.instanceId() instanceof GraphResourceId) return true;
+                    if (!(entry.instanceId() instanceof String) && !(entry.instanceId() instanceof UUID)) return true;
+                    return continuing[0] = sink.emit(WorldObjectEntries.modelCollision(dimension(level), entry));
+                });
+                if (!continuing[0]) return;
+            }
         });
         register("geometry", "retained_server_geometry", () -> types("geometry", "geometry/mesh", "geometry/perfect_sphere", "geometry/perfect_cylinder"), (c, sink) -> {
             for (ServerLevel level : c.levels()) DebugRendererSessionManager.visitWorldQuery(level, entry -> {
                 if (!sink.scan()) return false;
-                String anchorId = entry.references().get("anchorEntityUuid");
-                if (anchorId == null) return sink.emit(entry);
-                var anchor = level.getEntity(UUID.fromString(anchorId));
-                if (anchor == null || anchor.isRemoved()) return true;
-                return sink.emit(new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
-                        entry.position().add(anchor.position()), entry.bounds().move(anchor.position()), entry.tags(), entry.source(),
-                        entry.lifetime(), null, null, entry.references()));
+                // Debug owner resolves both live and last-known anchor poses into world coordinates.
+                return sink.emit(entry);
             });
         });
         register("light", "server_graph_lights", () -> types("light", "light/point", "light/spot", "light/area"), (c, sink) -> {
@@ -147,7 +140,7 @@ final class BuiltinWorldObjectProviders {
             AreaResourceStore.INSTANCE.visitWorldQuery(c.server(), area -> {
                 if (!sink.scan()) return false;
                 ServerLevel level = findLevel(c, area.address().dimension()); if (level == null) return true;
-                var resolved = area.resolve(level); if (resolved == null) return true;
+                var resolved = area.resolveForQuery(level); if (resolved == null) return true;
                 return sink.emit(WorldObjectEntries.withTags(WorldObjectEntries.graph("area", "area/" + resolved.shape().id(), area.owner(), resolved.center(),
                         WorldObjectEntries.rotatedBounds(resolved.center(), resolved.size(), resolved.rotation()), area.address().id(),
                         Map.of("areaId", area.address().id(), "incarnation", area.reference().incarnation().toString())),
@@ -158,7 +151,7 @@ final class BuiltinWorldObjectProviders {
                 if (!sink.scan()) return false;
                 ServerLevel level = findLevel(c, field.address().dimension()); if (level == null) return true;
                 var area = AreaResourceStore.INSTANCE.get(c.server(), field.area()); if (area == null) return true;
-                var resolved = area.resolve(level); if (resolved == null) return true;
+                var resolved = area.resolveForQuery(level); if (resolved == null) return true;
                 return sink.emit(WorldObjectEntries.withTags(WorldObjectEntries.graph("force_field", "force_field", field.owner(), resolved.center(),
                         WorldObjectEntries.rotatedBounds(resolved.center(), resolved.size(), resolved.rotation()), field.address().id(),
                         Map.of("forceFieldId", field.address().id(), "areaId", field.area().id())),

@@ -23,11 +23,15 @@ public final class SceneVolumeRuntime {
         SceneDocument document = SceneSavedData.get(level.getServer()).document(level.dimension().identifier().toString());
         Set<UUID> removed = new HashSet<>(areas.keySet());
         for (SceneObject object : objects) {
-            if (!object.enabled() || !object.typeId().startsWith("area/")) continue;
+            if (!object.typeId().startsWith("area/")) continue;
             removed.remove(object.id());
             SceneObject previous = areas.get(object.id());
             UUID incarnation = Objects.requireNonNull(document.incarnation(object.id()), "Authored area no longer exists");
             boolean sameIncarnation = incarnation.equals(areaIncarnations.get(object.id()));
+            if (sameIncarnation) {
+                var resource = AreaResourceStore.INSTANCE.get(level.getServer(), address(level, object.id()));
+                if (resource != null) resource.setAuthoredEnabled(object.enabled());
+            }
             if (sameIncarnation && object.equals(previous)) continue;
             if (sameIncarnation && previous != null && resolved(previous).equals(resolved(object))) {
                 areas.put(object.id(), object);continue; // Names/colors must not restart area enter/exit state.
@@ -45,7 +49,9 @@ public final class SceneVolumeRuntime {
     /** Scene object identity selects metadata; the document token selects the live area lifetime. */
     public static AreaResource authoredResource(AreaAddress address, SceneDocument document, SceneObject object, long gameTime) {
         UUID incarnation = Objects.requireNonNull(document.incarnation(object.id()), "Authored area no longer exists");
-        return AreaResource.authored(address, object.id(), incarnation, object.revision(), gameTime, resolved(object));
+        var resource = AreaResource.authored(address, object.id(), incarnation, object.revision(), gameTime, resolved(object));
+        resource.setAuthoredEnabled(object.enabled());
+        return resource;
     }
     public static AreaResource.Resolved resolved(SceneObject object) {
         AreaShape shape = switch (object.typeId()) {

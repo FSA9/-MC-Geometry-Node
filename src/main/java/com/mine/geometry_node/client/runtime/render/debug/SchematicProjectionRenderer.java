@@ -1,6 +1,10 @@
 package com.mine.geometry_node.client.runtime.render.debug;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionDefinition;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
 import com.mojang.blaze3d.buffers.GpuBuffer;
@@ -97,6 +101,13 @@ public final class SchematicProjectionRenderer {
     private static final float EDGE_WIDTH = 1.2f;
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
     private static final Map<String, Projection> PROJECTIONS = new LinkedHashMap<>();
+    private static final Map<String, RetainedProjection> DEFINITIONS = new LinkedHashMap<>();
+    private static ClientLevel runtimeLevel;
+
+    static {
+        // Expiry/dormancy must run even when schematic rendering or the editor layer is hidden.
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> refreshRuntime());
+    }
     private static ModelBlockRenderer modelRenderer;
     private static FluidRenderer fluidRenderer;
     private static Object fluidModelSet;
@@ -110,6 +121,7 @@ public final class SchematicProjectionRenderer {
         }
         String cacheKey = packet.resourceId();
         if (packet.blocks().isEmpty() && packet.blockEntities().isEmpty() && packet.entities().isEmpty()) {
+            DEFINITIONS.remove(cacheKey);
             Projection removed = PROJECTIONS.remove(cacheKey);
             if (removed != null) {
                 removed.close();
@@ -129,9 +141,10 @@ public final class SchematicProjectionRenderer {
         if (previous != null) {
             previous.close();
         }
-        Projection replacement = new Projection(packet, Minecraft.getInstance().level,
-                geometry, nbtBytes, estimatedBytes);
-        PROJECTIONS.put(cacheKey, replacement);
+        DEFINITIONS.put(cacheKey, new RetainedProjection(
+                new SchematicProjectionDefinition(packet, Projection.currentGameTime()),
+                geometry, nbtBytes, estimatedBytes));
+        refreshRuntime();
     }
 
     private static boolean fitsProjectionBudget(String replacedKey, long geometry, long nbtBytes,
@@ -140,7 +153,7 @@ public final class SchematicProjectionRenderer {
         long totalGeometry = geometry;
         long totalNbtBytes = nbtBytes;
         long totalEstimatedBytes = estimatedBytes;
-        for (Map.Entry<String, Projection> entry : PROJECTIONS.entrySet()) {
+        for (Map.Entry<String, RetainedProjection> entry : DEFINITIONS.entrySet()) {
             if (entry.getKey().equals(replacedKey)) continue;
             count++;
             totalGeometry = saturatingAdd(totalGeometry, entry.getValue().budgetGeometry);
@@ -154,12 +167,13 @@ public final class SchematicProjectionRenderer {
     }
 
     private static boolean evictOldestProjectionOtherThan(String protectedKey) {
-        Iterator<Map.Entry<String, Projection>> iterator = PROJECTIONS.entrySet().iterator();
+        Iterator<Map.Entry<String, RetainedProjection>> iterator = DEFINITIONS.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<String, Projection> entry = iterator.next();
+            Map.Entry<String, RetainedProjection> entry = iterator.next();
             if (entry.getKey().equals(protectedKey)) continue;
             iterator.remove();
-            entry.getValue().close();
+            Projection runtime = PROJECTIONS.remove(entry.getKey());
+            if (runtime != null) runtime.close();
             return true;
         }
         return false;
@@ -204,26 +218,55 @@ public final class SchematicProjectionRenderer {
     }
 
     public static void clear() {
-        for (Projection projection : PROJECTIONS.values()) {
-            projection.close();
-        }
+        releaseRuntime();
+        DEFINITIONS.clear();
+        runtimeLevel = null;
+    }
+
+    private static void releaseRuntime() {
+        for (Projection projection : PROJECTIONS.values()) projection.close();
         PROJECTIONS.clear();
     }
+
+    private static void refreshRuntime() {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (runtimeLevel != level) {
+            releaseRuntime();
+            runtimeLevel = level;
+        }
+        if (level == null) return;
+        long now = level.getGameTime();
+        String dimension = level.dimension().identifier().toString();
+        Iterator<Map.Entry<String, RetainedProjection>> iterator = DEFINITIONS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            SchematicProjectionDefinition definition = entry.getValue().definition();
+            boolean expired = definition.expired(now);
+            boolean resident = !expired && dimension.equals(definition.dimension())
+                    && ResourceResidency.isResident(level, definition.bounds(), null);
+            if (!resident) {
+                Projection runtime = PROJECTIONS.remove(entry.getKey());
+                if (runtime != null) runtime.close();
+                if (expired) iterator.remove();
+            } else if (!PROJECTIONS.containsKey(entry.getKey())) {
+                PacketSchematicProjection packet = definition.packetAt(now);
+                if (packet != null) PROJECTIONS.put(entry.getKey(), new Projection(packet, level));
+            }
+        }
+    }
+
+    private record RetainedProjection(SchematicProjectionDefinition definition, long budgetGeometry,
+                                      long budgetNbtBytes, long budgetEstimatedBytes) {}
 
     public static void render(PoseStack poseStack, Camera camera) {
         if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()
                 && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
                 com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.SCHEMATIC)) return;
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) {
-            clear();
-            return;
-        }
+        refreshRuntime();
+        if (level == null) return;
 
         String dimension = level.dimension().identifier().toString();
-        if (PROJECTIONS.isEmpty()) return;
-
-        removeExpired(level.getGameTime());
         if (PROJECTIONS.isEmpty()) return;
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -280,15 +323,10 @@ public final class SchematicProjectionRenderer {
                 && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
                 com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.SCHEMATIC)) return;
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) {
-            clear();
-            return;
-        }
+        refreshRuntime();
+        if (level == null) return;
 
         if (PROJECTIONS.isEmpty() || submitNodeCollector == null || levelRenderState == null) return;
-
-        removeExpired(level.getGameTime());
-        if (PROJECTIONS.isEmpty()) return;
 
         CameraRenderState cameraRenderState = levelRenderState.cameraRenderState;
         if (cameraRenderState == null) return;
@@ -317,16 +355,6 @@ public final class SchematicProjectionRenderer {
         return dimension.equals(projection.dimension)
                 && projection.closeEnoughTo(camPos, maxRenderDistanceSqr)
                 && projection.visibleIn(frustum);
-    }
-
-    private static void removeExpired(long gameTime) {
-        PROJECTIONS.entrySet().removeIf(entry -> {
-            if (!entry.getValue().expired(gameTime)) {
-                return false;
-            }
-            entry.getValue().close();
-            return true;
-        });
     }
 
     private static double maxProjectionRenderDistanceSqr(Minecraft minecraft) {
@@ -1338,13 +1366,7 @@ public final class SchematicProjectionRenderer {
         private final LongOpenHashSet occupied;
         private final Long2ObjectOpenHashMap<BlockState> statesByPosition;
         private final Long2ObjectOpenHashMap<BlockEntity> blockEntitiesByPosition;
-        private final long expiresAt;
-        private final long budgetGeometry;
-        private final long budgetNbtBytes;
-        private final long budgetEstimatedBytes;
-
-        private Projection(PacketSchematicProjection packet, ClientLevel level,
-                           long budgetGeometry, long budgetNbtBytes, long budgetEstimatedBytes) {
+        private Projection(PacketSchematicProjection packet, ClientLevel level) {
             this.dimension = packet.dimension();
             this.originX = packet.originX();
             this.originY = packet.originY();
@@ -1357,9 +1379,6 @@ public final class SchematicProjectionRenderer {
             this.length = packet.length();
             this.bounds = new AABB(originX, originY, originZ, originX + width, originY + height, originZ + length);
             this.alpha = packet.alpha();
-            this.budgetGeometry = budgetGeometry;
-            this.budgetNbtBytes = budgetNbtBytes;
-            this.budgetEstimatedBytes = budgetEstimatedBytes;
             this.occupied = new LongOpenHashSet(Math.max(16, packet.blocks().size() * 2));
             this.statesByPosition = new Long2ObjectOpenHashMap<>(Math.max(16, packet.blocks().size() * 2));
             this.blockEntitiesByPosition = new Long2ObjectOpenHashMap<>(Math.max(16, packet.blockEntities().size() * 2));
@@ -1432,9 +1451,6 @@ public final class SchematicProjectionRenderer {
             this.entities = List.copyOf(loadedEntities);
             this.fallbackFaces = List.copyOf(visibleFallbackFaces);
             this.bakedGeometry = bakeStaticGeometry(Minecraft.getInstance(), level, this);
-
-            long currentTick = currentGameTime();
-            this.expiresAt = currentTick + Math.max(1, packet.durationTicks());
         }
 
         private void renderBaked(Minecraft minecraft, Vec3 camPos) {
@@ -1451,10 +1467,6 @@ public final class SchematicProjectionRenderer {
 
         private boolean contains(int x, int y, int z) {
             return occupied.contains(pack(x, y, z));
-        }
-
-        private boolean expired(long tick) {
-            return tick >= expiresAt;
         }
 
         private boolean closeEnoughTo(Vec3 camPos, double maxDistanceSqr) {

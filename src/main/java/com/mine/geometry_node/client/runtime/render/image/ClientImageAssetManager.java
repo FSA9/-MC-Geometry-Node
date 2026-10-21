@@ -23,6 +23,7 @@ public final class ClientImageAssetManager {
     private static final Map<String, String> RESOURCE_TEXTURES = new HashMap<>();
     private static final Map<String, TextureEntry> TEXTURES = new HashMap<>();
     private static final Map<String, PendingContent> PENDING_SERVER_ASSETS = new HashMap<>();
+    private static final Map<String, ServerContent> RETAINED_SERVER_ASSETS = new HashMap<>();
     private static final java.util.Set<String> REPORTED_FAILURES = new java.util.HashSet<>();
 
     private ClientImageAssetManager() {
@@ -35,12 +36,31 @@ public final class ClientImageAssetManager {
                 throw new IOException("content hash does not match the asset ID");
             }
             String cacheKey = cacheKey("server", actualId);
+            ServerContent retained = RETAINED_SERVER_ASSETS.get(cacheKey);
+            if (retained != null && retained.data == null) {
+                // A definition arrived before its bytes. One transfer satisfies its waiting owners.
+                retained.data = data;
+                return;
+            }
             PendingContent pending = PENDING_SERVER_ASSETS.get(cacheKey);
             if (pending == null) PENDING_SERVER_ASSETS.put(cacheKey, new PendingContent(data));
             else pending.references++;
         } catch (IOException | RuntimeException exception) {
             reportOnce("server:" + assetId, exception);
         }
+    }
+
+    /** Retains server bytes for a definition without allocating a texture; survives local dormancy. */
+    public static synchronized ServerAssetLease retainServerAsset(String assetId) {
+        String key = cacheKey("server", assetId);
+        ServerContent content = RETAINED_SERVER_ASSETS.computeIfAbsent(key, ignored -> new ServerContent());
+        PendingContent pending = PENDING_SERVER_ASSETS.get(key);
+        if (pending != null) {
+            content.data = pending.data;
+            if (--pending.references == 0) PENDING_SERVER_ASSETS.remove(key);
+        }
+        content.references++;
+        return new ServerAssetLease(key, assetId, content);
     }
 
     @Nullable
@@ -50,7 +70,7 @@ public final class ClientImageAssetManager {
             TextureEntry cached = TEXTURES.get(key);
             if (cached != null) {
                 cached.references++;
-                return new TextureLease(key, cached.texture);
+                return new TextureLease(key, cached);
             }
             try {
                 var resource = Minecraft.getInstance().getResourceManager().getResource(Identifier.parse(reference))
@@ -62,7 +82,7 @@ public final class ClientImageAssetManager {
                 key = cacheKey(source, contentId);
                 TextureEntry entry = retainTexture(key, source, contentId, data);
                 RESOURCE_TEXTURES.put(reference, key);
-                return new TextureLease(key, entry.texture);
+                return new TextureLease(key, entry);
             } catch (IOException | RuntimeException exception) {
                 reportOnce("resource:" + reference, exception);
                 return null;
@@ -71,11 +91,13 @@ public final class ClientImageAssetManager {
         if ("server".equals(source)) {
             String cacheKey = cacheKey("server", reference);
             PendingContent pending = PENDING_SERVER_ASSETS.get(cacheKey);
-            if (pending == null) return null;
-            if (--pending.references == 0) PENDING_SERVER_ASSETS.remove(cacheKey);
+            ServerContent retained = RETAINED_SERVER_ASSETS.get(cacheKey);
+            byte[] data = pending != null ? pending.data : retained == null ? null : retained.data;
+            if (data == null) return null;
+            if (pending != null && --pending.references == 0) PENDING_SERVER_ASSETS.remove(cacheKey);
             try {
-                TextureEntry entry = retainTexture(cacheKey, "server", reference, pending.data);
-                return new TextureLease(cacheKey, entry.texture);
+                TextureEntry entry = retainTexture(cacheKey, "server", reference, data);
+                return new TextureLease(cacheKey, entry);
             } catch (IOException | RuntimeException exception) {
                 reportOnce("server:" + reference, exception);
                 return null;
@@ -103,7 +125,7 @@ public final class ClientImageAssetManager {
                 TextureEntry entry = TEXTURES.get(cached.cacheKey);
                 if (entry != null) {
                     entry.references++;
-                    return new TextureLease(cached.cacheKey, entry.texture);
+                    return new TextureLease(cached.cacheKey, entry);
                 }
             }
 
@@ -114,7 +136,7 @@ public final class ClientImageAssetManager {
             String cacheKey = cacheKey("local", contentId);
             TextureEntry entry = retainTexture(cacheKey, "local", contentId, data);
             LOCAL_TEXTURES.put(path, new LocalAsset(size, modified, cacheKey));
-            return new TextureLease(cacheKey, entry.texture);
+            return new TextureLease(cacheKey, entry);
         } catch (IOException | RuntimeException exception) {
             reportOnce("local:" + reference, exception);
             return null;
@@ -130,6 +152,8 @@ public final class ClientImageAssetManager {
         RESOURCE_TEXTURES.clear();
         TEXTURES.clear();
         PENDING_SERVER_ASSETS.clear();
+        RETAINED_SERVER_ASSETS.values().forEach(content -> content.data = null);
+        RETAINED_SERVER_ASSETS.clear();
         REPORTED_FAILURES.clear();
     }
 
@@ -163,9 +187,9 @@ public final class ClientImageAssetManager {
         return entry;
     }
 
-    private static synchronized void release(String cacheKey) {
+    private static synchronized void release(String cacheKey, TextureEntry expected) {
         TextureEntry entry = TEXTURES.get(cacheKey);
-        if (entry == null || --entry.references > 0) return;
+        if (entry != expected || --entry.references > 0) return;
         TEXTURES.remove(cacheKey);
         RESOURCE_TEXTURES.values().removeIf(cacheKey::equals);
         Minecraft.getInstance().getTextureManager().release(entry.texture);
@@ -187,16 +211,16 @@ public final class ClientImageAssetManager {
 
     public static final class TextureLease implements AutoCloseable {
         private final String cacheKey;
-        private final Identifier texture;
+        private final TextureEntry entry;
         private boolean closed;
 
-        private TextureLease(String cacheKey, Identifier texture) {
+        private TextureLease(String cacheKey, TextureEntry entry) {
             this.cacheKey = cacheKey;
-            this.texture = texture;
+            this.entry = entry;
         }
 
         public Identifier texture() {
-            return texture;
+            return entry.texture;
         }
 
         @Override
@@ -204,9 +228,56 @@ public final class ClientImageAssetManager {
             synchronized (ClientImageAssetManager.class) {
                 if (closed) return;
                 closed = true;
-                release(cacheKey);
+                release(cacheKey, entry);
             }
         }
+    }
+
+    public static final class ServerAssetLease implements AutoCloseable {
+        private final String cacheKey, assetId;
+        private final ServerContent content;
+        private boolean closed;
+
+        private ServerAssetLease(String cacheKey, String assetId, ServerContent content) {
+            this.cacheKey = cacheKey;
+            this.assetId = assetId;
+            this.content = content;
+        }
+
+        public boolean ready() {
+            synchronized (ClientImageAssetManager.class) {
+                return !closed && RETAINED_SERVER_ASSETS.get(cacheKey) == content && content.data != null;
+            }
+        }
+
+        @Nullable
+        public TextureLease acquireTexture() {
+            synchronized (ClientImageAssetManager.class) {
+                if (!ready()) return null;
+                try {
+                    return new TextureLease(cacheKey, retainTexture(cacheKey, "server", assetId, content.data));
+                } catch (IOException | RuntimeException exception) {
+                    reportOnce(cacheKey, exception);
+                    return null;
+                }
+            }
+        }
+
+        @Override public void close() {
+            synchronized (ClientImageAssetManager.class) {
+                if (closed) return;
+                closed = true;
+                if (RETAINED_SERVER_ASSETS.get(cacheKey) == content && --content.references == 0) {
+                    RETAINED_SERVER_ASSETS.remove(cacheKey);
+                    content.data = null;
+                }
+            }
+        }
+    }
+
+    private static final class ServerContent {
+        private byte[] data;
+        private int references;
     }
 
     private static final class TextureEntry {

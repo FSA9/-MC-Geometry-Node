@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.model.render.resource.ModelUploadQueue;
 
 import com.mine.geometry_node.client.model.resource.ResourcePackModelProvider;
 import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionSettings;
 import com.mine.geometry_node.core.engine.system.model.io.*;
 import com.mine.geometry_node.core.engine.system.model.math.ModelTransform;
@@ -66,6 +67,7 @@ public final class ClientModelService {
         Thread thread=new Thread(task,"GeometryNode-ModelImport");thread.setDaemon(true);return thread;});
     private final ModelRepository<RepositoryKey,LoadedAsset> repository=new ModelRepository<>(workers,this::dispose);
     private final ModelInstanceStore<LoadedAsset> instances=new ModelInstanceStore<>();
+    private final Map<String,ModelDefinition> definitions=new LinkedHashMap<>();
     private long loadedCountsRevision = -1;
     private ModelLodMetrics.LoadedCounts loadedCounts = new ModelLodMetrics.LoadedCounts(0, 0);
     private final Map<String,Pending> pending=new LinkedHashMap<>();
@@ -83,51 +85,132 @@ public final class ClientModelService {
     private ClientLevel level;
     private ClientModelService(){workers.allowCoreThreadTimeOut(true);}
 
-    /** Replaces an instance only after its complete CPU import and renderer preparation succeed. Main thread only. */
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> create(String id,Source source,ModelTransform transform,int scene,boolean visible) {
+    /** Completes with the retained definition when ready or dormant. Main thread only. */
+    public CompletionStage<DefinitionSnapshot> create(String id,Source source,ModelTransform transform,int scene,boolean visible) {
         return create(id,source,transform,scene,visible,ModelInstanceLifetime.TEMPORARY);
     }
     /** Creates a client-local instance; persistent lifetime is reserved for P3-N. */
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> create(String id,Source source,ModelTransform transform,int scene,
+    public CompletionStage<DefinitionSnapshot> create(String id,Source source,ModelTransform transform,int scene,
                                                                             boolean visible,ModelInstanceLifetime lifetime) {
-        return create(id, source, transform, scene, visible, lifetime, ClientModelCollisions.INSTANCE.settings(id));
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        ModelDefinition definition=definitions.get(id);
+        return create(id, source, transform, scene, visible, lifetime, definition==null?null:definition.collision);
     }
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> create(String id,Source source,ModelTransform transform,int scene,
+    public CompletionStage<DefinitionSnapshot> create(String id,Source source,ModelTransform transform,int scene,
             boolean visible,ModelInstanceLifetime lifetime,ModelCollisionSettings collision) {
         RenderSystem.assertOnRenderThread();ModelInstanceStore.validateId(id);
         Objects.requireNonNull(source);Objects.requireNonNull(transform);Objects.requireNonNull(lifetime);
+        if(scene < -1)throw new IllegalArgumentException("scene index outside asset: "+scene);
         if(lifetime==ModelInstanceLifetime.PERSISTENT)
             throw new UnsupportedOperationException("persistent model instances are provided by P3-N");
         Minecraft minecraft=Minecraft.getInstance();
         if(minecraft.level==null)throw new IllegalStateException("enter a world before creating a model");
         if(collision!=null)ClientModelCollisions.requireAuthority();
         ensureWorld();level=minecraft.level;
-        ClientModelCollisions.INSTANCE.cancel(id);
-        Pending previous=pending.remove(id);if(previous!=null)previous.close();
-        RepositoryKey repositoryKey=repositoryKey(source);
-        ModelLease<LoadedAsset> lease=repository.acquire(repositoryKey,(key,cancel)->importAsset(key.source(),cancel));
-        Pending request=new Pending(++requestSequence,epoch,lease,transform,scene,visible,lifetime,collision);
-        pending.put(id,request);failures.remove(id);
-        lease.completion().whenComplete((asset,error)->minecraft.execute(()->publish(id,request,asset,error)));
+        Map<Integer,Map<String,Float>> overrides=definitions.values().stream()
+                .filter(definition->definition.source.equals(source)).map(definition->definition.materialOverrides)
+                .findFirst().orElseGet(LinkedHashMap::new);
+        ModelDefinition definition=new ModelDefinition(id,source,transform,scene,visible,lifetime,collision,overrides);
+        ModelDefinition previous=definitions.put(id,definition);
+        if(previous!=null)previous.activation.invalidate();
+        cancelPending(id);
+        return activate(definition);
+    }
+
+    private CompletionStage<DefinitionSnapshot> activate(ModelDefinition definition) {
+        ModelLease<LoadedAsset> lease=repository.acquire(repositoryKey(definition.source),(key,cancel)->importAsset(key.source(),cancel));
+        Pending request=new Pending(++requestSequence,epoch,lease,definition,definition.beginActivation());
+        pending.put(definition.id,request);failures.remove(definition.id);
+        lease.completion().whenComplete((asset,error)->Minecraft.getInstance().execute(()->publish(definition.id,request,asset,error)));
         return request.completion.minimalCompletionStage();
     }
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> load(Path path) {
+
+    private boolean current(String id,Pending request) {
+        return pending.get(id)==request && request.epoch==epoch && level==Minecraft.getInstance().level
+                && definitions.get(id)==request.definition && request.definition.activation.current(request.ticket);
+    }
+
+    private boolean resident(ModelDefinition definition) {
+        var bounds=definition.worldBounds();
+        // A first CPU import discovers the actual scene extent. Never approximate it with the origin chunk.
+        return bounds==null || ResourceResidency.isResident(level,bounds,null);
+    }
+
+    private void cancelPending(String id) {
+        Pending request=pending.remove(id);
+        uploads.removeIf(upload->upload.id().equals(id));
+        ClientModelCollisions.INSTANCE.cancel(id);
+        if(request!=null)request.close();
+    }
+
+    private void suspend(ModelDefinition definition) {
+        // Invalidate before lease/collision cancellation can synchronously run completion callbacks.
+        definition.suspend();
+        Pending request=pending.remove(definition.id);
+        uploads.removeIf(upload->upload.id().equals(definition.id));
+        instances.remove(definition.id);
+        renderDeferrals.remove(definition.id);
+        if(instances.size()==0)ModelStaticRenderer.clearSceneResources();
+        ClientModelCollisions.INSTANCE.suspend(definition.id);
+        if(request!=null)request.suspend();
+    }
+
+    /** Called even when no world frame is rendered. The shared decision sees unloads immediately. */
+    public void tickResidency() {
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        if(level==null)return;
+        for(ModelDefinition definition:List.copyOf(definitions.values())) {
+            if(definition.worldBounds()==null) {
+                // A replacement may still be discovering its bounds. The old runtime must obey
+                // its own known coverage while that bounded CPU work finishes.
+                var old=instances.get(definition.id);
+                if(old.isPresent()) {
+                    var instance=old.orElseThrow();
+                    var bounds=ModelResidencyBounds.transform(instance.asset().prepared.sceneBounds().get(instance.scene()),instance.transform());
+                    if(!ResourceResidency.isResident(level,bounds,null)) {
+                        instances.remove(definition.id);
+                        ClientModelCollisions.INSTANCE.suspend(definition.id);
+                        if(instances.size()==0)ModelStaticRenderer.clearSceneResources();
+                    }
+                }
+            }
+            if(!resident(definition)) {
+                if(!definition.dormant)suspend(definition);
+            } else if(definition.dormant) activate(definition);
+        }
+    }
+
+    /** World identity matters even when two sessions use the same dimension key. */
+    public void unload(net.minecraft.world.level.Level unloaded) {
+        RenderSystem.assertOnRenderThread();
+        if(unloaded==level)clear();
+    }
+
+    public CompletionStage<DefinitionSnapshot> load(Path path) {
         return create("preview",Source.local(path),previewTransform(),-1,true);
     }
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> loadResource(Identifier identifier) {
+    public CompletionStage<DefinitionSnapshot> loadResource(Identifier identifier) {
         return create("preview",Source.resource(identifier),previewTransform(),-1,true);
     }
     /** Reimports an existing instance while retaining its old asset until the new revision is ready. */
-    public CompletionStage<ModelInstanceStore.Snapshot<LoadedAsset>> reload(String id) {
+    public CompletionStage<DefinitionSnapshot> reload(String id) {
         RenderSystem.assertOnRenderThread();
-        var current=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        LoadedAsset asset=current.asset();
-        repository.invalidate(repositoryKey(asset.source));
-        return create(id,asset.source,current.transform(),current.scene(),current.visible(),current.lifetime());
+        ensureWorld();
+        ModelDefinition definition=requireDefinition(id);
+        definition.activation.invalidate();cancelPending(id);
+        repository.invalidate(repositoryKey(definition.source));
+        // Re-discover bounds even while dormant; changed source geometry can overlap a loaded chunk.
+        definition.sceneBounds=List.of();definition.revision++;
+        return activate(definition);
     }
     /** Retires the cached source revision without removing current instance leases. */
     public void invalidate(Source source) {
         RenderSystem.assertOnRenderThread();repository.invalidate(repositoryKey(Objects.requireNonNull(source)));
+    }
+    /** Server collision reconstruction borrows CPU data without activating a client instance or GPU asset. */
+    ModelLease<LoadedAsset> acquireCollisionAsset(Source source) {
+        RenderSystem.assertOnRenderThread();
+        return repository.acquire(repositoryKey(source),(key,cancel)->importAsset(key.source(),cancel));
     }
     private LoadedAsset importAsset(Source source,ModelCancellation cancellation)throws Exception {
         GltfAsset asset;
@@ -159,42 +242,57 @@ public final class ClientModelService {
     }
     private void publish(String id,Pending request,LoadedAsset asset,Throwable error) {
         RenderSystem.assertOnRenderThread();
-        if(pending.get(id)!=request||request.epoch!=epoch||level!=Minecraft.getInstance().level) {request.close();return;}
-        if(error!=null) {pending.remove(id);rememberFailure(id,error);request.fail(error);return;}
+        if(!current(id,request)) {request.close();return;}
+        if(error!=null) {failRequest(id,request,error);return;}
         try {
-            int scene=request.scene<0?asset.cpu.defaultScene():request.scene;
+            int scene=request.definition.scene<0?asset.cpu.defaultScene():request.definition.scene;
             validateScene(asset.cpu,scene);
+            request.definition.scene=scene;
+            request.definition.sceneBounds=asset.prepared.sceneBounds();
+            syncCollisionDefinition(request.definition);
+            if(!resident(request.definition)){suspend(request.definition);return;}
+            asset.materialOverrides=request.definition.materialOverrides;
             long uploadBytes=asset.prepared.initialTextureUploadBytes();
-            uploads.enqueue(new PendingUpload(id,request,asset,scene),uploadBytes,request.visible?1:0);
-        } catch(Throwable failure) {pending.remove(id);rememberFailure(id,failure);request.fail(failure);}
+            uploads.enqueue(new PendingUpload(id,request,asset,scene),uploadBytes,request.definition.visible?1:0);
+        } catch(Throwable failure) {failRequest(id,request,failure);}
     }
     /** Runs the bounded render-thread upload queue once per frame before model submission. */
     public void processRenderUploads() {
-        RenderSystem.assertOnRenderThread();
+        RenderSystem.assertOnRenderThread();tickResidency();
         ModelUploadQueue.FrameResult result=uploads.process(ModelStaticRenderer.budget().maxUploadBytesPerFrame(),ModelStaticRenderer.budget().maxUploadNanosPerFrame(),this::completeUpload);
         ModelStaticRenderer.metrics().upload(result.bytes(),result.nanos());
     }
     private void completeUpload(PendingUpload upload) {
         String id=upload.id(); Pending request=upload.request();
-        if(pending.get(id)!=request||request.epoch!=epoch||level!=Minecraft.getInstance().level) {request.close();return;}
+        if(!current(id,request)) {request.close();return;}
+        if(!resident(request.definition)){suspend(request.definition);return;}
         try {
             upload.asset().render();
             Runnable commit=()->{
-                if(pending.get(id)!=request||request.epoch!=epoch)throw new CancellationException("model request superseded");
-                instances.put(id,upload.asset(),upload.scene(),request.transform,request.visible,request.lifetime,request.lease::close);
+                if(!current(id,request)||!resident(request.definition))throw new CancellationException("model request superseded or dormant");
+                ModelDefinition definition=request.definition;
+                instances.put(id,upload.asset(),upload.scene(),definition.transform,definition.visible,definition.lifetime,request.lease::close);
             };
-            if(request.collision==null) {
+            if(request.definition.collision==null) {
                 ClientModelCollisions.INSTANCE.remove(id);commit.run();
-                pending.remove(id);request.completion.complete(instances.get(id).orElseThrow());
+                pending.remove(id);request.completion.complete(request.definition.snapshot());
             }
-            else ClientModelCollisions.INSTANCE.replace(id,upload.asset().cpu,upload.scene(),request.transform,request.collision,commit)
+            else ClientModelCollisions.INSTANCE.replace(id,upload.asset().cpu,upload.scene(),request.definition.transform,request.definition.collision,
+                    request.ticket,()->current(id,request)&&resident(request.definition),commit)
                     .whenComplete((ignored,error)->{
                         if(pending.get(id)!=request)return;
-                        pending.remove(id);
-                        if(error!=null){rememberFailure(id,error);request.fail(error);}
-                        else request.completion.complete(instances.get(id).orElseThrow());
+                        if(error!=null)failRequest(id,request,error);
+                        else {pending.remove(id);request.completion.complete(request.definition.snapshot());}
                     });
-        } catch(Throwable failure) {pending.remove(id);rememberFailure(id,failure);request.fail(failure);}
+        } catch(Throwable failure) {failRequest(id,request,failure);}
+    }
+    private void failRequest(String id,Pending request,Throwable error) {
+        if(!current(id,request)){request.close();return;}
+        if(!resident(request.definition)){suspend(request.definition);return;}
+        pending.remove(id);uploads.removeIf(upload->upload.request()==request);
+        request.definition.activation.invalidate();
+        if(!(error instanceof CancellationException))rememberFailure(id,error);
+        request.fail(error);
     }
     private static void validateScene(GltfAsset asset,int scene) {
         if(scene<0||scene>=asset.scenes().size())throw new IllegalArgumentException("scene index outside asset: "+scene);
@@ -203,31 +301,78 @@ public final class ClientModelService {
         transformAsync(id,transform).whenComplete((ignored,error)->{if(error!=null)collisionFailure(id,error);});
     }
     public CompletionStage<Void> transformAsync(String id,ModelTransform transform) {
-        RenderSystem.assertOnRenderThread();requireNotLoading(id);
-        var current=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        var settings=ClientModelCollisions.INSTANCE.settings(id);
-        if(settings==null){instances.transform(id,transform);return CompletableFuture.completedFuture(null);}
-        return ClientModelCollisions.INSTANCE.replace(id,current.asset().cpu,current.scene(),transform,settings,
-                ()->instances.transform(id,transform));
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        ModelDefinition definition=requireDefinition(id);
+        Objects.requireNonNull(transform);
+        return edit(definition,transform,definition.scene,definition.collision);
     }
-    public void visible(String id,boolean visible) {RenderSystem.assertOnRenderThread();instances.visible(id,visible);}
+    /**
+     * Render visibility only, preserving the original hide-versus-collision contract. Hiding does
+     * not disable collision, cancel imports, release leases, or override spatial residency. A
+     * hidden dormant definition can reactivate its collision while remaining hidden. There is no
+     * separate model enablement flag; collision(null) disables collision and remove deletes the model.
+     */
+    public void visible(String id,boolean visible) {
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        ModelDefinition definition=requireDefinition(id);
+        definition.visible=visible;definition.revision++;
+        if(instances.get(id).isPresent())instances.visible(id,visible);
+    }
     public void scene(String id,int scene) {
-        RenderSystem.assertOnRenderThread();requireNotLoading(id);
-        var instance=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        validateScene(instance.asset().cpu,scene);
-        var settings=ClientModelCollisions.INSTANCE.settings(id);
-        if(settings==null)instances.scene(id,scene);
-        else ClientModelCollisions.INSTANCE.replace(id,instance.asset().cpu,scene,instance.transform(),settings,
-                ()->instances.scene(id,scene)).whenComplete((ignored,error)->{if(error!=null)collisionFailure(id,error);});
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        ModelDefinition definition=requireDefinition(id);
+        if(scene<0||(!definition.sceneBounds.isEmpty()&&scene>=definition.sceneBounds.size()))
+            throw new IllegalArgumentException("scene index outside asset: "+scene);
+        edit(definition,definition.transform,scene,definition.collision)
+                .whenComplete((ignored,error)->{if(error!=null)collisionFailure(id,error);});
     }
     public CompletionStage<Void> collision(String id,ModelCollisionSettings settings) {
-        RenderSystem.assertOnRenderThread();ensureWorld();requireNotLoading(id);
-        var instance=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id));
-        if(settings==null){ClientModelCollisions.INSTANCE.remove(id);return CompletableFuture.completedFuture(null);}
-        return ClientModelCollisions.INSTANCE.replace(id,instance.asset().cpu,instance.scene(),instance.transform(),settings,()->{});
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        ModelDefinition definition=requireDefinition(id);
+        if(settings!=null)ClientModelCollisions.requireAuthority();
+        return edit(definition,definition.transform,definition.scene,settings);
     }
-    private void requireNotLoading(String id) {
-        if(pending.containsKey(id))throw new IllegalStateException("model import pending: "+id);
+    private CompletionStage<Void> edit(ModelDefinition definition,ModelTransform transform,int scene,ModelCollisionSettings collision) {
+        ModelTransform oldTransform=definition.transform;
+        int oldScene=definition.scene;
+        ModelCollisionSettings oldCollision=definition.collision;
+        definition.activation.invalidate();cancelPending(definition.id);
+        definition.transform=transform;definition.scene=scene;definition.collision=collision;definition.revision++;
+        syncCollisionDefinition(definition);
+        if(!resident(definition)){suspend(definition);return CompletableFuture.completedFuture(null);}
+        var current=instances.get(definition.id);
+        if(current.isEmpty()||definition.sceneBounds.isEmpty()||!current.orElseThrow().asset().source.equals(definition.source))
+            return activate(definition).thenApply(ignored->null);
+        definition.dormant=false;
+        var ticket=definition.activation.begin();
+        Runnable commit=()->{
+            if(definitions.get(definition.id)!=definition||!definition.activation.current(ticket)
+                    ||level!=Minecraft.getInstance().level||!resident(definition))
+                throw new CancellationException("model edit superseded or dormant");
+            instances.transform(definition.id,definition.transform);
+            instances.scene(definition.id,definition.scene);
+        };
+        if(collision==null){ClientModelCollisions.INSTANCE.remove(definition.id);commit.run();return CompletableFuture.completedFuture(null);}
+        return ClientModelCollisions.INSTANCE.replace(definition.id,current.orElseThrow().asset().cpu,scene,transform,collision,
+                ticket,()->definitions.get(definition.id)==definition&&definition.activation.current(ticket)
+                        &&level==Minecraft.getInstance().level&&resident(definition),commit)
+                .whenComplete((ignored,error)->{
+                    if(error!=null&&definitions.get(definition.id)==definition&&definition.activation.current(ticket)) {
+                        if(!resident(definition)){suspend(definition);return;}
+                        definition.transform=oldTransform;definition.scene=oldScene;definition.collision=oldCollision;definition.revision++;
+                        syncCollisionDefinition(definition);
+                    }
+                });
+    }
+    private void syncCollisionDefinition(ModelDefinition definition) {
+        if(definition.collision==null)ClientModelCollisions.INSTANCE.remove(definition.id);
+        else if(definition.worldBounds()!=null)
+            ClientModelCollisions.INSTANCE.define(definition);
+    }
+    private ModelDefinition requireDefinition(String id) {
+        ModelDefinition definition=definitions.get(id);
+        if(definition==null)throw new IllegalArgumentException("unknown model instance: "+id);
+        return definition;
     }
     private static void collisionFailure(String id,Throwable error) {
         if(Minecraft.getInstance().player!=null)Minecraft.getInstance().player.sendSystemMessage(
@@ -244,25 +389,39 @@ public final class ClientModelService {
             case "normalScale" -> {}
             default -> throw new IllegalArgumentException("unknown material property: "+property);
         }
-        LoadedAsset asset=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id)).asset();
-        asset.render().overrideMaterial(materialIndex,property,value);
-        asset.materialOverrides.computeIfAbsent(materialIndex,key->new LinkedHashMap<>()).put(property,value);
-        return (int)instances.snapshots().stream().filter(instance->instance.asset()==asset).count();
+        ModelDefinition definition=requireDefinition(id);
+        definition.materialOverrides.computeIfAbsent(materialIndex,key->new LinkedHashMap<>()).put(property,value);
+        Set<LoadedAsset> updated=Collections.newSetFromMap(new IdentityHashMap<>());
+        for(var instance:instances.snapshots())if(instance.asset().materialOverrides==definition.materialOverrides&&updated.add(instance.asset()))
+            instance.asset().render().overrideMaterial(materialIndex,property,value);
+        return (int)definitions.values().stream().filter(other->other.materialOverrides==definition.materialOverrides).count();
     }
-    /** Queues restoration of imported values; inspect material pending/failure diagnostics for completion. */
+    /** Restores imported values on the shared definition, including dormant instances. */
     public int resetMaterial(String id,int materialIndex) {
         RenderSystem.assertOnRenderThread();ensureWorld();
-        LoadedAsset asset=instances.get(id).orElseThrow(()->new IllegalArgumentException("unknown model instance: "+id)).asset();
-        asset.render().resetMaterial(materialIndex);
-        asset.materialOverrides.remove(materialIndex);
-        return (int)instances.snapshots().stream().filter(instance->instance.asset()==asset).count();
+        ModelDefinition definition=requireDefinition(id);
+        definition.materialOverrides.remove(materialIndex);
+        Set<LoadedAsset> updated=Collections.newSetFromMap(new IdentityHashMap<>());
+        for(var instance:instances.snapshots())if(instance.asset().materialOverrides==definition.materialOverrides&&updated.add(instance.asset()))
+            instance.asset().render().resetMaterial(materialIndex);
+        return (int)definitions.values().stream().filter(other->other.materialOverrides==definition.materialOverrides).count();
     }
-    public Optional<ModelInstanceStore.Snapshot<LoadedAsset>> query(String id) {RenderSystem.assertOnRenderThread();return instances.get(id);}
+    /** Logical query remains available after all runtime leases have been released. */
+    public Optional<DefinitionSnapshot> query(String id) {
+        RenderSystem.assertOnRenderThread();ensureWorld();
+        return Optional.ofNullable(definitions.get(id)).map(ModelDefinition::snapshot);
+    }
+    public record DefinitionSnapshot(String id,Source source,int scene,ModelTransform transform,boolean visible,
+            ModelInstanceLifetime lifetime,ModelCollisionSettings collision,long revision,boolean dormant,
+            Map<Integer,Map<String,Float>> materialOverrides) {}
     public Map<String,Object> queryReport(String id) {
         RenderSystem.assertOnRenderThread();ensureWorld();Map<String,Object> result=new LinkedHashMap<>();result.put("id",id);
         Pending request=pending.get(id);var ready=instances.get(id);
+        ModelDefinition definition=definitions.get(id);
+        if(definition!=null)result.put("definition",definition.snapshot());
         if(request!=null){result.put("state","LOADING");result.put("request",request.request);result.put("generation",request.epoch);}
         else if(failures.containsKey(id)){result.put("state","FAILED");result.put("failure",failures.get(id));}
+        else if(definition!=null&&definition.dormant)result.put("state","DORMANT");
         else if(ready.isPresent())result.put("state","READY");else result.put("state","ABSENT");
         ready.ifPresent(snapshot->result.put("instance",describe(snapshot)));return result;
     }
@@ -273,51 +432,30 @@ public final class ClientModelService {
     }
     public void shutdown(){RenderSystem.assertOnRenderThread();clear();ClientModelCollisions.INSTANCE.shutdown();repository.close();workers.shutdownNow();}
     public boolean remove(String id) {
-        ClientModelCollisions.INSTANCE.remove(id);
-        RenderSystem.assertOnRenderThread();Pending request=pending.remove(id);if(request!=null)request.close();failures.remove(id);
-        boolean removed = instances.remove(id);
+        RenderSystem.assertOnRenderThread();
+        ModelDefinition definition=definitions.remove(id);
+        if(definition!=null)definition.activation.invalidate();
+        cancelPending(id);ClientModelCollisions.INSTANCE.remove(id);
+        failures.remove(id);renderDeferrals.remove(id);
+        boolean removed=instances.remove(id);
         com.mine.geometry_node.client.model.render.bvh.ModelLightingSettings.removeInstance(id);
         com.mine.geometry_node.client.model.render.bvh.ModelLocalLightProviders.detachInstance(id);
-        if (instances.size() == 0) ModelStaticRenderer.clearSceneResources();
-        return removed||request!=null;
+        if(instances.size()==0)ModelStaticRenderer.clearSceneResources();
+        return removed||definition!=null;
     }
-    public void clear() {
-        clear(null);
-    }
-
-    private static RepositoryKey repositoryKey(Source source) {
-        return new RepositoryKey(source, IMPORT_PROFILE, IMPORTER_REVISION);
-    }
-    public void clearTemporary() {
-        clear(ModelInstanceLifetime.TEMPORARY);
-    }
-    /** Clears only instances of the requested lifetime; null clears the whole client session. */
+    public void clear() { clear(null); }
+    private static RepositoryKey repositoryKey(Source source) { return new RepositoryKey(source,IMPORT_PROFILE,IMPORTER_REVISION); }
+    public void clearTemporary() { clear(ModelInstanceLifetime.TEMPORARY); }
+    /** Includes dormant definitions; a partial clear must not invalidate unrelated requests. */
     public void clear(ModelInstanceLifetime lifetime) {
-        RenderSystem.assertOnRenderThread();epoch++;
-        if(lifetime==null)ClientModelCollisions.INSTANCE.clear();
-        else {
-            for(var instance:instances.snapshots(lifetime))ClientModelCollisions.INSTANCE.remove(instance.id());
-            for(var entry:List.copyOf(pending.entrySet()))if(entry.getValue().lifetime==lifetime)ClientModelCollisions.INSTANCE.remove(entry.getKey());
-        }
-        uploads.clear();
-        List<Pending> requests=pending.values().stream()
-                .filter(request->lifetime==null||request.lifetime==lifetime).toList();
-        requests.forEach(request->pending.values().remove(request));
-        requests.forEach(Pending::close);
-        if (lifetime == null) com.mine.geometry_node.client.model.render.bvh.ModelLightingSettings.clearInstances();
-        else for (var instance : instances.snapshots()) {
-            if (instance.lifetime() == lifetime)
-                com.mine.geometry_node.client.model.render.bvh.ModelLightingSettings.removeInstance(instance.id());
-        }
-        instances.clear(lifetime);
-        if (instances.size() == 0) com.mine.geometry_node.client.model.render.bvh.ModelLocalLightProviders.clearAttached();
-        renderDeferrals.clear();
-        if (instances.size() == 0) ModelStaticRenderer.clearSceneResources();
+        RenderSystem.assertOnRenderThread();
+        if(lifetime==null)epoch++;
+        for(ModelDefinition definition:List.copyOf(definitions.values()))
+            if(lifetime==null||definition.lifetime==lifetime)remove(definition.id);
         if(lifetime==null) {
-            repository.clear();failures.clear();level=null;
-        } else if(lifetime==ModelInstanceLifetime.TEMPORARY) {
-            // P3-L exposes only temporary client instances, so their failures share this session scope.
-            failures.clear();
+            uploads.clear();ClientModelCollisions.INSTANCE.clear();repository.clear();failures.clear();level=null;
+            com.mine.geometry_node.client.model.render.bvh.ModelLightingSettings.clearInstances();
+            com.mine.geometry_node.client.model.render.bvh.ModelLocalLightProviders.clearAttached();
         }
     }
     /** Keep instance IDs, transforms, leases and imported data; only GPU resources need rebuilding. */
@@ -333,7 +471,7 @@ public final class ClientModelService {
 
     /** Cheap idle gate; pending imports still progress through processRenderUploads. */
     public boolean hasVisibleInstances() {
-        RenderSystem.assertOnRenderThread(); ensureWorld();
+        RenderSystem.assertOnRenderThread(); tickResidency();
         return instances.hasVisibleInstances();
     }
 
@@ -357,7 +495,7 @@ public final class ClientModelService {
         if (com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.inEditorPass()
                 && !com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.current().visible(
                 com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization.Layer.MODEL)) return List.of();
-        RenderSystem.assertOnRenderThread();ensureWorld();
+        RenderSystem.assertOnRenderThread();tickResidency();
         if (!instances.hasVisibleInstances()) { renderDeferrals.clear(); return List.of(); }
         List<ModelRenderInstance> ready = new ArrayList<>();
         renderDeferrals.clear();
@@ -394,6 +532,7 @@ public final class ClientModelService {
             instanced=instanced.plus(asset.statistics.scene(instance.scene()));
         }
         report.put("instances",instanceReports);
+        report.put("definitions",definitions.values().stream().map(ModelDefinition::snapshot).toList());
         report.put("assets",unique.stream().map(asset->describePerformanceAsset(asset,assetIds.get(asset))).toList());
         report.put("renderer",ModelStaticRenderer.report());
         var collisionReport = new LinkedHashMap<String,Object>(ClientModelCollisions.INSTANCE.report());
@@ -503,7 +642,7 @@ public final class ClientModelService {
         if(!asset.materialOverrides.isEmpty()) {
             Map<Integer,Map<String,Float>> overrides=new LinkedHashMap<>();
             asset.materialOverrides.forEach((index,values)->overrides.put(index,Map.copyOf(values)));
-            result.put("materialOverrides",Map.of("scope","shared asset; preserved across GPU/resource rebuilds; source reload creates a fresh asset","values",overrides));
+            result.put("materialOverrides",Map.of("scope","shared source definition; preserved across dormancy, source reload and GPU rebuilds","values",overrides));
         }
         result.put("transparentPreparation",asset.render==null?List.of():asset.render.transparentPreparationReport());
         result.put("import",asset.cpu.report());result.put("scenes",asset.cpu.scenes().stream().map(GltfAsset.Scene::name).toList());
@@ -540,11 +679,16 @@ public final class ClientModelService {
             throw new IllegalStateException("SHA-256 is unavailable",impossible);
         }
     }
+    /**
+     * Heavy imported CPU/prepared data plus lazily created GPU resources. Pending or active runtime
+     * leases own this object; dormant definitions retain only source/settings/bounds, never this
+     * CPU template. The repository disposes it after the last consumer releases its lease.
+     */
     public static final class LoadedAsset implements AutoCloseable {
         private final Source source;private final GltfAsset cpu;private final ModelRenderAsset.Prepared prepared;private final String contentHash;private final long preparedBytes;
         private final ModelGeometryStatistics statistics;
         private ModelRenderAsset render;private boolean closed;
-        private final Map<Integer,Map<String,Float>> materialOverrides=new LinkedHashMap<>();
+        private Map<Integer,Map<String,Float>> materialOverrides=new LinkedHashMap<>();
         private LoadedAsset(Source source,GltfAsset cpu,ModelRenderAsset.Prepared prepared,String contentHash,long preparedBytes,ModelCancellation cancellation) throws IOException {this.source=source;this.cpu=cpu;this.prepared=prepared;this.contentHash=contentHash;this.preparedBytes=preparedBytes;this.statistics=ModelGeometryStatistics.prepare(cpu,cancellation);}
         public GltfAsset cpu(){return cpu;}
         public Source source(){return source;}
@@ -576,11 +720,16 @@ public final class ClientModelService {
     private record PendingUpload(String id, Pending request, LoadedAsset asset, int scene) {}
 
     private static final class Pending {
-        final long request,epoch;final ModelLease<LoadedAsset> lease;final ModelTransform transform;final int scene;final boolean visible;final ModelInstanceLifetime lifetime;
-        final ModelCollisionSettings collision;
-        final CompletableFuture<ModelInstanceStore.Snapshot<LoadedAsset>> completion=new CompletableFuture<>();
-        Pending(long request,long epoch,ModelLease<LoadedAsset> lease,ModelTransform transform,int scene,boolean visible,ModelInstanceLifetime lifetime,ModelCollisionSettings collision){this.request=request;this.epoch=epoch;this.lease=lease;this.transform=transform;this.scene=scene;this.visible=visible;this.lifetime=lifetime;this.collision=collision;}
-        void close(){lease.close();completion.completeExceptionally(new CancellationException("model request cancelled"));}
+        final long request,epoch;
+        final ModelLease<LoadedAsset> lease;
+        final ModelDefinition definition;
+        final ModelActivation.Ticket ticket;
+        final CompletableFuture<DefinitionSnapshot> completion=new CompletableFuture<>();
+        Pending(long request,long epoch,ModelLease<LoadedAsset> lease,ModelDefinition definition,ModelActivation.Ticket ticket){
+            this.request=request;this.epoch=epoch;this.lease=lease;this.definition=definition;this.ticket=ticket;
+        }
+        void suspend(){lease.close();completion.complete(definition.snapshot());}
+        void close(){lease.close();completion.completeExceptionally(new CancellationException("model activation cancelled; query definition for residency"));}
         void fail(Throwable error){lease.close();completion.completeExceptionally(error);}
     }
 

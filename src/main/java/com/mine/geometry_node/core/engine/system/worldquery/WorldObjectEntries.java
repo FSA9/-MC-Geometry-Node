@@ -26,6 +26,36 @@ public final class WorldObjectEntries {
         return entry.type().equals("minecraft:item") ? entry.references().getOrDefault("itemId", "") : entry.type();
     }
 
+    /** Query bounds use the same transformed extent as the runtime and editor. */
+    public static AABB sceneBounds(com.mine.geometry_node.core.engine.system.scene.SceneObject object) {
+        if (Set.of("area/cube", "area/cylinder", "area/uv_sphere").contains(object.typeId()))
+            return com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime.resolved(object).bounds();
+        return com.mine.geometry_node.core.engine.system.scene.SceneTransforms.bounds(object,
+                com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(object.typeId()).bounds().apply(object));
+    }
+
+    public static WorldObjectEntry modelCollision(String dimension,
+            com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene.Definition definition) {
+        Object identity = definition.instanceId();
+        String kind = identity instanceof UUID ? "uuid" : identity instanceof String ? "string" : null;
+        if (kind == null) throw new IllegalArgumentException("Unsupported model collision identity");
+        String id = identity.toString();
+        return new WorldObjectEntry(WorldObjectEntry.key("collision", dimension, kind + ":" + id),
+                "collision", "model_collision", "", dimension,
+                new Vec3(definition.x(), definition.y(), definition.z()), definition.bounds(),
+                definition.metadata().tagSnapshot(), "", "runtime", null, null,
+                Map.of("collisionInstanceId", id, "collisionInstanceKind", kind));
+    }
+
+    public static Object modelCollisionId(Map<String, String> references) {
+        String id = Objects.requireNonNull(references.get("collisionInstanceId"));
+        return switch (Objects.requireNonNull(references.get("collisionInstanceKind"))) {
+            case "string" -> id;
+            case "uuid" -> UUID.fromString(id);
+            default -> throw new IllegalArgumentException("Unsupported model collision identity kind");
+        };
+    }
+
     public static WorldObjectEntry graph(String provider, String type, GraphResourceId id, Vec3 position,
                                           AABB bounds, String identity, Map<String, String> extra) {
         Map<String, String> refs = new LinkedHashMap<>(extra);

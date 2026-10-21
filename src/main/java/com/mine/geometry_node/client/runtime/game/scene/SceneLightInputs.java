@@ -8,6 +8,9 @@ import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.node.value.light.LightConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import java.util.function.Predicate;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -20,12 +23,14 @@ public final class SceneLightInputs {
         var snapshot=EditViewportRuntime.renderedScene();
         if(snapshot==null) snapshot=ClientSceneService.INSTANCE.confirmedSnapshot();
         if(!level.dimension().identifier().toString().equals(snapshot.dimension())) return List.of();
-        return resolve(snapshot.objects());
+        return resolve(snapshot.objects(), bounds -> ResourceResidency.isResident(level, bounds, null));
     }
-    public static List<ClientLightStore.ResolvedLight> resolve(List<SceneObject> objects) {
+    public static List<ClientLightStore.ResolvedLight> resolve(List<SceneObject> objects, Predicate<AABB> residency) {
         List<ClientLightStore.ResolvedLight> result=new ArrayList<>();
         for(var object:objects) {
             if(!SceneObject.POINT_LIGHT.equals(object.typeId()) || !object.enabled() || object.intensity()<=0) continue;
+            double diameter = object.range() * 2.0;
+            if (!residency.test(AABB.ofSize(object.position(), diameter, diameter, diameter))) continue;
             var config=LightConfig.DEFAULT.withShadow(new LightConfig.Shadow(LightConfig.DEFAULT.shadow().enabled(),
                     (float)object.number("source_size"))).withSourceVisible(Boolean.parseBoolean(object.parameters().get("source_visible")));
             var definition=new LightDefinition("point",object.color(),object.intensity(),object.range(),60,0.25f,

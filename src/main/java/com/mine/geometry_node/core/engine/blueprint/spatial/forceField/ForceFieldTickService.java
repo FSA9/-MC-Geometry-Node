@@ -33,10 +33,11 @@ public final class ForceFieldTickService {
     }
 
     private void apply(ServerLevel level, ForceFieldResource field, ExpressionEvaluationContext context) {
-        double strength = field.evaluateStrength(context);
         AreaResource areaResource = AreaResourceStore.INSTANCE.get(level.getServer(), field.area());
-        AreaResource.Resolved area = areaResource != null ? areaResource.resolve(level) : null;
-        if (area == null || strength == 0.0D) return;
+        AreaResource.Resolved area = areaResource != null ? areaResource.resolveActive(level) : null;
+        if (area == null) return;
+        double strength = field.evaluateStrength(context);
+        if (strength == 0.0D) return;
 
         UUID anchorId = areaResource.anchorEntityId();
         List<Entity> entities = AreaEntityQuery.find(level, area.shape(), area.center(), area.size(),

@@ -42,25 +42,59 @@ public final class ModelCollisionScene {
     public static synchronized void publish(Level level, Object instanceId, Prepared geometry, double x, double y, double z,
                                             UUID excludedEntity) {
         State state = LEVELS.computeIfAbsent(level, ignored -> new State());
-        Entry previous = state.entries.get(instanceId);
-        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z, excludedEntity,
-                previous == null ? new RuntimeMetadata() : previous.metadata()));
+        Definition previous = state.definitions.get(instanceId);
+        RuntimeMetadata metadata = previous == null ? new RuntimeMetadata() : previous.metadata();
+        AABB localBounds = geometry == null ? null : geometry.bounds();
+        AABB worldBounds = localBounds == null ? new AABB(x, y, z, x, y, z) : localBounds.move(x, y, z);
+        state.definitions.put(instanceId, new Definition(instanceId, worldBounds, x, y, z, excludedEntity, metadata));
+        state.entries.put(instanceId, new Entry(instanceId, geometry, x, y, z, excludedEntity, metadata));
         state.snapshotDirty = true;
         state.revision++;
     }
 
-    public static synchronized void remove(Level level, Object instanceId) {
+    /** Retained query information owns metadata even when the heavyweight runtime is suspended. */
+    public static synchronized void retainDefinition(Level level, Object instanceId, AABB worldBounds,
+            double x, double y, double z, UUID excludedEntity) {
+        com.mine.geometry_node.core.engine.resource.residency.ChunkCoverage.of(worldBounds);
+        State state = LEVELS.computeIfAbsent(level, ignored -> new State());
+        Definition previous = state.definitions.get(instanceId);
+        state.definitions.put(instanceId, new Definition(instanceId, worldBounds, x, y, z, excludedEntity,
+                previous == null ? new RuntimeMetadata() : previous.metadata()));
+        state.revision++;
+    }
+
+    /** Temporary deactivation retains no prepared geometry but preserves definition and metadata. */
+    public static synchronized void suspend(Level level, Object instanceId) {
         State state = LEVELS.get(level);
         if (state != null && state.entries.remove(instanceId) != null) {
-            state.snapshotDirty = true; state.revision++;
+            state.snapshot = List.of(); state.snapshotDirty = true; state.revision++;
         }
+    }
+
+    public static synchronized void remove(Level level, Object instanceId) {
+        State state = LEVELS.get(level);
+        if (state == null) return;
+        boolean changed = state.definitions.remove(instanceId) != null;
+        if (state.entries.remove(instanceId) != null) { state.snapshot = List.of(); state.snapshotDirty = true; changed = true; }
+        if (changed) state.revision++;
     }
 
     public static synchronized void clear(Level level) {
         State state = LEVELS.get(level);
-        if (state != null && !state.entries.isEmpty()) {
-            state.entries.clear(); state.snapshot = List.of(); state.snapshotDirty = false; state.revision++;
+        if (state != null && (!state.entries.isEmpty() || !state.definitions.isEmpty())) {
+            state.entries.clear(); state.definitions.clear();
+            state.snapshot = List.of(); state.snapshotDirty = false; state.revision++;
         }
+    }
+
+    public static synchronized void visitDefinitions(Level level, java.util.function.Predicate<Definition> visitor) {
+        State state = LEVELS.get(level);
+        if (state != null) for (Definition entry : state.definitions.values()) if (!visitor.test(entry)) return;
+    }
+
+    private static synchronized Definition definition(Level level, Object instanceId) {
+        State state = LEVELS.get(level);
+        return state == null ? null : state.definitions.get(instanceId);
     }
 
     public static synchronized long revision(Level level) {
@@ -113,25 +147,26 @@ public final class ModelCollisionScene {
         RuntimeMetadataTargets.requireThread(level.getServer());
         return metadata(level, instanceId, GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
             RuntimeMetadataTargets.requireThread(level.getServer());
-            Entry current = lookup(level, instanceId);
-            if (current != null && current.excludedEntity() != null && level.getEntity(current.excludedEntity()) == null)
-                throw new IllegalStateException("Collision anchor no longer exists");
+            // Absence of the runtime anchor is dormancy, not destruction of metadata.
         });
     }
 
     static synchronized MetadataCapabilities.Access metadata(Level level, Object instanceId,
             com.mine.geometry_node.core.metadata.DataValuePolicy policy, Runnable requireThread) {
         requireThread.run();
-        Entry entry = lookup(level, instanceId);
+        Definition entry = definition(level, instanceId);
         if (entry == null) throw new IllegalStateException("Collision no longer exists");
         RuntimeMetadata metadata = entry.metadata();
         return metadata.access(policy, () -> {
             requireThread.run();
-            Entry current = lookup(level, instanceId);
+            Definition current = definition(level, instanceId);
             if (current == null || current.metadata() != metadata)
                 throw new IllegalStateException("Collision metadata handle is stale");
         });
     }
+
+    public record Definition(Object instanceId, AABB bounds, double x, double y, double z,
+                             UUID excludedEntity, RuntimeMetadata metadata) {}
 
     public record Entry(Object instanceId, Prepared geometry, double x, double y, double z,
                         UUID excludedEntity, RuntimeMetadata metadata) {
@@ -223,6 +258,7 @@ public final class ModelCollisionScene {
     private record Node(AABB bounds, int start, int end, Node left, Node right) {}
     private static final class State {
         private final Map<Object, Entry> entries = new LinkedHashMap<>();
+        private final Map<Object, Definition> definitions = new LinkedHashMap<>();
         private List<Entry> snapshot = List.of();
         private boolean snapshotDirty;
         private long revision;

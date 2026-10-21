@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.runtime.light.store;
 
 import com.mine.geometry_node.core.engine.graph.light.GraphLightService;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.graph.light.LightDefinition;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import java.util.*;
@@ -34,6 +36,11 @@ public final class ClientLightStore {
         initialized = true;
         NeoForge.EVENT_BUS.addListener((LevelEvent.Unload event) -> {
             if (event.getLevel() == world) clear();
+        });
+        NeoForge.EVENT_BUS.addListener((LevelTickEvent.Pre event) -> {
+            if (event.getLevel() != world) return;
+            // Also retries late asset bytes; no render call is required to suspend/reacquire leases.
+            for (Entry entry : LIGHTS.values()) entry.reconcile(entry.registration.isResident());
         });
     }
 
@@ -57,25 +64,25 @@ public final class ClientLightStore {
                 definition.position().y, definition.position().z), "rotation", List.of(definition.rotation().x,
                 definition.rotation().y, definition.rotation().z), "intensity", definition.intensity(),
                 "volume", definition.config().volume().mode());
-        String path = packet.definition().config().projection().path();
-        if (!"spot".equals(definition.type())) {
-            discard(packet);
-            close(LIGHTS.put(packet.resourceId(), new Entry(packet.resourceId(), packet.entityId(), definition, null)));
-            return;
-        }
+        String path = definition.config().projection().path();
         Entry old = LIGHTS.get(packet.resourceId());
-        if (old != null && old.projection != null && old.definition.config().projection().path().equals(path)) {
+        Projection projection = null;
+        if ("spot".equals(definition.type()) && !path.isBlank()) {
+            if (old != null && old.projection != null && old.definition.config().projection().path().equals(path)) {
+                projection = old.projection;
+                old.projection = null; // Transfer ownership before closing the obsolete subscription.
+                discard(packet);
+            } else {
+                projection = new ManagedProjection(path);
+            }
+        } else {
             discard(packet);
-            LIGHTS.put(packet.resourceId(), new Entry(packet.resourceId(), packet.entityId(), packet.definition(), old.projection));
-            return;
         }
-        ClientImageAssetManager.TextureLease lease = null;
-        if (!path.isBlank()) {
-            if (path.startsWith("server:")) lease = ClientImageAssetManager.acquire("server", path.substring(7));
-            else if (path.startsWith("resource:")) lease = ClientImageAssetManager.acquire("resource", path.substring(9));
-            else lease = ClientImageAssetManager.acquire("local", path);
-        }
-        close(LIGHTS.put(packet.resourceId(), new Entry(packet.resourceId(), packet.entityId(), packet.definition(), lease)));
+        Entry entry = new Entry(packet.resourceId(), packet.entityId(), definition, projection);
+        close(LIGHTS.put(packet.resourceId(), entry));
+        entry.registration = ResourceResidency.watch(level, GraphLightService.worldBounds(definition, entry.offset),
+                definition.config().transform().entityId(), entry::reconcile);
+        entry.reconcile(entry.registration.isResident());
     }
 
     public static List<ResolvedLight> resolved(float partialTick) {
@@ -88,8 +95,11 @@ public final class ClientLightStore {
         for (var pair : LIGHTS.entrySet()) {
             Entry entry = pair.getValue();
             LightDefinition d = entry.definition;
-            if (!d.config().lifecycle().enabled() || d.intensity() <= 0) continue;
-            if ("spot".equals(d.type()) && !d.config().projection().path().isBlank() && entry.projection == null) continue;
+            // Direct decision catches unload immediately, before queued watch callbacks drain.
+            entry.reconcile(ResourceResidency.isResident(level, GraphLightService.worldBounds(d, entry.offset),
+                    d.config().transform().entityId()));
+            if (!entry.active) continue;
+            if (entry.projection != null && entry.projection.texture() == null) continue;
             if (entry.stationary != null) {
                 result.add(entry.stationary);
                 continue;
@@ -100,6 +110,7 @@ public final class ClientLightStore {
             Quaternionf anchorRotation = new Quaternionf();
             if (t.entityId() != null) {
                 Entity entity = level.getEntity(entry.entityId);
+                if (entity == null || !t.entityId().equals(entity.getUUID())) entity = level.getEntity(t.entityId());
                 if (entity == null || entity.isRemoved() || !t.entityId().equals(entity.getUUID())) continue;
                 float entityAlpha = level.tickRateManager().isEntityFrozen(entity)
                         ? Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false) : alpha;
@@ -148,32 +159,98 @@ public final class ClientLightStore {
                 "receivedPackets", receivedPackets, "acceptedUpserts", acceptedUpserts,
                 "rejectedPackets", rejectedPackets, "lastRejection", lastRejection, "lastLight", lastLight);
     }
-    private static void close(Entry entry) { if (entry != null && entry.projection != null) entry.projection.close(); }
+    private static void close(Entry entry) { if (entry != null) entry.close(); }
     private static void clearEntries() { LIGHTS.values().forEach(ClientLightStore::close); LIGHTS.clear(); }
     public static void clear() { clearEntries(); world = null; }
     public static int size() { selectWorld(Minecraft.getInstance().level); return LIGHTS.size(); }
-    private static final class Entry {
+    interface Projection extends AutoCloseable {
+        void activate();
+        void suspend();
+        Identifier texture();
+        @Override void close();
+    }
+
+    private static final class ManagedProjection implements Projection {
+        private final String source, reference;
+        private final ClientImageAssetManager.ServerAssetLease content;
+        private ClientImageAssetManager.TextureLease lease;
+        private boolean closed, acquisitionAttempted;
+
+        ManagedProjection(String path) {
+            source = path.startsWith("server:") ? "server" : path.startsWith("resource:") ? "resource" : "local";
+            reference = "local".equals(source) ? path : path.substring(source.length() + 1);
+            content = "server".equals(source) ? ClientImageAssetManager.retainServerAsset(reference) : null;
+        }
+
+        @Override public void activate() {
+            if (closed || lease != null || acquisitionAttempted || content != null && !content.ready()) return;
+            acquisitionAttempted = true;
+            lease = content == null ? ClientImageAssetManager.acquire(source, reference) : content.acquireTexture();
+        }
+
+        @Override public void suspend() {
+            if (lease != null) { lease.close(); lease = null; }
+            acquisitionAttempted = false;
+        }
+
+        @Override public Identifier texture() { return lease == null ? null : lease.texture(); }
+
+        @Override public void close() {
+            if (closed) return;
+            closed = true;
+            suspend();
+            if (content != null) content.close();
+        }
+    }
+
+    static final class Entry {
+        final String id;
         final int entityId;
         final LightDefinition definition;
-        final ClientImageAssetManager.TextureLease projection;
+        Projection projection;
+        ResourceResidency.Registration registration;
         final Quaternionf baseRotation, localRotation;
         final Vec3 offset;
-        final ResolvedLight stationary;
+        ResolvedLight stationary;
+        boolean active, closed;
 
-        Entry(String id, int entityId, LightDefinition definition, ClientImageAssetManager.TextureLease projection) {
+        Entry(String id, int entityId, LightDefinition definition, Projection projection) {
+            this.id = id;
             this.entityId = entityId;
             this.definition = definition;
             this.projection = projection;
             baseRotation = localRotation(definition.rotation());
             localRotation = localRotation(definition.config().transform().rotation());
             offset = definition.position().add(rotate(baseRotation, definition.config().transform().position()));
-            // Configuration changes replace the entry; only an entity anchor needs a per-frame pose.
-            if (definition.config().transform().entityId() == null) {
+        }
+
+        void reconcile(boolean resident) {
+            if (closed) return;
+            active = resident && definition.config().lifecycle().enabled() && definition.intensity() > 0;
+            if (!active) {
+                if (projection != null) projection.suspend();
+                stationary = null;
+                return;
+            }
+            if (projection != null) projection.activate();
+            Identifier texture = projection == null ? null : projection.texture();
+            // Never cache a released identifier or a missing texture from before late byte arrival.
+            if (definition.config().transform().entityId() == null
+                    && (stationary == null || !Objects.equals(stationary.projectionTexture(), texture))) {
                 Quaternionf orientation = new Quaternionf().mul(baseRotation).mul(localRotation);
                 stationary = new ResolvedLight(id, definition, offset,
                         rotate(orientation, new Vec3(0, 0, 1)), rotate(orientation, new Vec3(1, 0, 0)),
-                        rotate(orientation, new Vec3(0, 1, 0)), projection == null ? null : projection.texture());
-            } else stationary = null;
+                        rotate(orientation, new Vec3(0, 1, 0)), texture);
+            }
+        }
+
+        void close() {
+            if (closed) return;
+            closed = true;
+            active = false;
+            stationary = null;
+            if (registration != null) registration.close();
+            if (projection != null) { projection.close(); projection = null; }
         }
     }
     public record ResolvedLight(String id, LightDefinition definition, Vec3 position, Vec3 direction, Vec3 right, Vec3 up,

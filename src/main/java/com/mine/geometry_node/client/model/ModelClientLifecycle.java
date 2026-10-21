@@ -34,7 +34,20 @@ public final class ModelClientLifecycle {
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::drawResolvedTransparent);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::logout);
         NeoForge.EVENT_BUS.addListener(ModelClientLifecycle::shutdown);
-        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> LightReports.tick());
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
+            ClientModelService.INSTANCE.tickResidency();
+            LightReports.tick();
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Post event) -> {
+            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)
+                com.mine.geometry_node.client.model.runtime.ClientModelCollisions.INSTANCE.tickServer(level);
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Unload event) -> {
+            if(event.getLevel() instanceof net.minecraft.client.multiplayer.ClientLevel level)
+                Minecraft.getInstance().execute(() -> ClientModelService.INSTANCE.unload(level));
+            else if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)
+                com.mine.geometry_node.client.model.runtime.ClientModelCollisions.INSTANCE.unloadServer(level);
+        });
     }
     private static void guiLayers(RegisterGuiLayersEvent event) {
         event.registerAboveAll(Identifier.fromNamespaceAndPath("geometry_node", "model_hud"),

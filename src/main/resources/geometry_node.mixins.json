@@ -3,6 +3,7 @@
   "package": "com.mine.geometry_node.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "resource.EntityResourceLifecycleMixin",
     "viewport.CameraChunkMapAccess",
     "viewport.CameraChunkMapMixin",
     "viewport.CameraChunkSenderMixin",

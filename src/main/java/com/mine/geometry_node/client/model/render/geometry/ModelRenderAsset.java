@@ -258,6 +258,8 @@ public final class ModelRenderAsset implements AutoCloseable {
             this.cpuGeometryBytes = cpuGeometryBytes; this.gpuGeometryBytes = gpuGeometryBytes; this.primitiveCount = primitiveCount; this.occurrenceCount = occurrenceCount;
         }
         public GltfAsset source() { return source; }
+        /** Small immutable metadata may outlive the prepared asset and its decoded textures. */
+        public List<GltfAsset.Bounds> sceneBounds() { return sceneBounds; }
         public long sourceDecodedTextureBytes() { return ModelTextureDecodeCache.bytes(images.values(),linearImages.values()); }
         public long translatedTextureBytes() { return pbr.values().stream().mapToLong(ModelLabPbrBaker.Baked::bytes).sum(); }
         public long decodedTextureBytes() { return ModelTextureDecodeCache.bytes(images.values(),opaqueImages.values(),linearImages.values()) + translatedTextureBytes(); }

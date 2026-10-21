@@ -4,6 +4,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManager;
 import com.mine.geometry_node.core.engine.graph.light.GraphLightService;
+import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionService;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
@@ -63,7 +64,7 @@ public final class RuntimeMetadataTargets {
         registry.register(GraphResourceTypeRegistry.GEOMETRY_DEBUG.id().toString(), GraphTarget.class, BOTH,
                 t -> DebugRendererSessionManager.metadata(t.level(), t.id()));
         registry.register(GraphResourceTypeRegistry.GEOMETRY_COLLISION.id().toString(), GraphTarget.class, BOTH,
-                t -> ModelCollisionScene.metadata(t.level(), t.id()));
+                t -> GeometryCollisionService.INSTANCE.metadata(t.level(), t.id()));
         registry.register(GraphResourceTypeRegistry.LIGHT.id().toString(), GraphTarget.class, BOTH,
                 t -> GraphLightService.INSTANCE.metadata(t.level(), t.id()));
         registry.register(GraphResourceTypeRegistry.SCHEMATIC_PROJECTION.id().toString(), GraphTarget.class, BOTH,

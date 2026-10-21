@@ -35,6 +35,16 @@ public final class ModelUploadQueue<T> {
         peakQueueItems = Math.max(peakQueueItems, queue.size());
     }
     public synchronized void clear() { queue.clear(); enqueuedBytes = 0; }
+    /** Discards obsolete requests immediately, without consuming a later frame's upload budget. */
+    public synchronized void removeIf(java.util.function.Predicate<T> predicate) {
+        for (var iterator = queue.iterator(); iterator.hasNext();) {
+            Item<T> item = iterator.next();
+            if (predicate.test(item.value())) {
+                iterator.remove();
+                enqueuedBytes -= item.estimatedBytes();
+            }
+        }
+    }
     public synchronized int size() { return queue.size(); }
     public synchronized long enqueuedBytes() { return enqueuedBytes; }
     public synchronized long processedItems() { return processedItems; }

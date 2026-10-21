@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.core.engine.system.scene.*;
 import com.mine.geometry_node.core.engine.system.scene.geometry.ScenePrimitiveTypes;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime;
+import com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime;
+import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.graph.debug.CollisionDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.*;
@@ -15,8 +17,10 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapsho
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.AABB;
 import org.joml.Vector3d;
 import java.util.*;
+import java.util.function.Predicate;
 
 /** Authored objects use the existing debug world renderer and presentation-owned mesh styles.
  * The cache bakes rotation/scale only; translation and object color never rebake vertices. */
@@ -83,13 +87,25 @@ public final class SceneGeometryInputs {
         if (snapshot == null) snapshot = ClientSceneService.INSTANCE.confirmedSnapshot();
         beginWorld(snapshot.worldGeneration());
         if (!level.dimension().identifier().toString().equals(snapshot.dimension())) return List.of();
+        return visibleMeshes(snapshot.objects(), ViewportVisualization.inEditorPass(), ViewportVisualization.current(),
+                bounds -> ResourceResidency.isResident(level, bounds, null));
+    }
+
+    /** Residency gates world draw inputs only; selection and snap geometry still use retained definitions. */
+    static List<PacketGeometryDebugSnapshot.Mesh> visibleMeshes(List<SceneObject> objects, boolean editorPass,
+            ViewportVisualization.Snapshot visualization, Predicate<AABB> residency) {
         List<PacketGeometryDebugSnapshot.Mesh> result = new ArrayList<>();
-        for (var object : snapshot.objects()) {
+        for (var object : objects) {
             if (!object.enabled()) continue;
             var presentation = ScenePresentations.presentation(object);
             if (presentation == null) continue;
-            if (!ViewportVisualization.inEditorPass() && presentation.layer() != ViewportVisualization.Layer.GEOMETRY) continue;
-            if (ViewportVisualization.inEditorPass() && !ViewportVisualization.current().visible(presentation.layer())) continue;
+            if (!editorPass && presentation.layer() != ViewportVisualization.Layer.GEOMETRY) continue;
+            if (editorPass && !visualization.visible(presentation.layer())) continue;
+            AABB bounds = switch (object.typeId()) {
+                case "area/cube", "area/cylinder", "area/uv_sphere" -> SceneVolumeRuntime.resolved(object).bounds();
+                default -> ViewportSceneMath.focusBounds(object);
+            };
+            if (!residency.test(bounds)) continue;
             var mesh = mesh(object);
             if (mesh != null) result.add(mesh);
         }

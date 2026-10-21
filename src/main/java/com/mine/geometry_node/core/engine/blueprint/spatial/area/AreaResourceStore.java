@@ -55,6 +55,10 @@ public final class AreaResourceStore {
             state.entries.put(address, resource);
             state.snapshotsByDimension.remove(address.dimension());
         }
+        if (server != null) {
+            ServerLevel level = server.getLevel(address.dimension());
+            if (level != null) resource.resolve(level); // Capture initial world geometry before an anchor unloads.
+        }
         ForceFieldResourceStore.INSTANCE.updateAreaAnchor(server, address, anchorEntityId);
         return resource;
     }
@@ -64,6 +68,7 @@ public final class AreaResourceStore {
         if (!area.isAuthored() || !area.address().id().startsWith("scene/")) throw new IllegalArgumentException("Expected authored scene region");
         ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
         if (state.entries.containsKey(area.address())) throw new IllegalArgumentException("Area address already exists");
+        area.retainAuthoredScopedState(state.authored.get(area.address()));
         state.authored.put(area.address(), area);
         state.snapshotsByDimension.remove(area.address().dimension());
     }
@@ -166,7 +171,7 @@ public final class AreaResourceStore {
         if (state != null && DebugRendererSessionManager.hasAreaSessions(level.getServer())) {
             for (AreaResource resource : snapshot(level)) {
                 if (resource.isAuthored()) continue; // Scene visualization uses the synchronized authored object.
-                AreaResource.Resolved resolved = resource.resolve(level);
+                AreaResource.Resolved resolved = resource.resolveActive(level);
                 if (resolved == null) continue;
                 DebugSourceId source = DebugSourceId.graph(DebugRenderChannel.AREA, resource.owner());
                 DebugRenderShape shape = new DebugRenderShape(
