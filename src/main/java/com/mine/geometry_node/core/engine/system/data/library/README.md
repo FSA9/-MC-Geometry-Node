@@ -1,5 +1,12 @@
 # Data Library metadata
 
+The server database lives at `<world>/data/geometry_node/data_library.json`, resolved
+only by `ServerDataLibraryPaths`. Reads, edits, and transfers share this location.
+`<world>/geometry_nodes/` remains the world asset library. The previous
+`<world>/geometry_node/data_library.json` path is no longer read or created; existing
+files must be moved to the new location while the world is closed, without overwriting
+an existing destination.
+
 `DataLibraryEntry` stores independent `value`, `tags`, and `data` fields. `data` is the
 custom metadata dictionary, not vanilla NBT, item components, or the stored entry value.
 Old files without `data` read as an empty dictionary. New data uses the registered graph

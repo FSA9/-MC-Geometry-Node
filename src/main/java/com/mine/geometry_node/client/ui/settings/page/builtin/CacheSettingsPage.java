@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
@@ -16,7 +17,6 @@ import com.mine.geometry_node.core.cache.CacheStats;
 import net.minecraft.client.Minecraft;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.settings.editor.ConfigEntryEditor;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPageContext;
@@ -27,6 +27,7 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
@@ -45,7 +46,8 @@ import java.util.function.Supplier;
 public final class CacheSettingsPage implements SettingsPage {
     interface CacheOperations {
         CompletionStage<List<CacheReport>> inspect();
-        CompletionStage<List<CacheClearResult>> clear(CacheClearRequest request);
+        /** A null ID selects the client/common bulk scope; an ID selects one locally registered category. */
+        CompletionStage<List<CacheClearResult>> clear(String id, CacheClearRequest request);
         CompletionStage<String> currentNamespace();
     }
 
@@ -61,9 +63,6 @@ public final class CacheSettingsPage implements SettingsPage {
     private final ScrollView root;
     private final CacheOperations cache;
     private final Executor uiExecutor;
-    private final LinearLayout group;
-    private final LinearLayout entriesHost;
-    private final SvgIconView disclosure;
     private final SettingsPageContext context;
     private final LinearLayout registryHost;
     private final TextView totalsValue;
@@ -74,7 +73,9 @@ public final class CacheSettingsPage implements SettingsPage {
     private final UiTableColumns columns = new UiTableColumns(List.of(
             new UiTableColumns.Column("name", 260, 150, true),
             new UiTableColumns.Column("domain", 110, 85, true),
-            new UiTableColumns.Column("size", 160, 120, true)));
+            new UiTableColumns.Column("size", 160, 120, true),
+            new UiTableColumns.Column("clear", 40, 40, false)));
+    private final List<UiIconButton> rowClearButtons = new ArrayList<>();
     private final UiActionButton sizeHeader;
     private boolean detailsExpanded;
     private boolean detailsSearchExpanded;
@@ -84,9 +85,6 @@ public final class CacheSettingsPage implements SettingsPage {
     private final TextView statusValue;
     private final UiActionButton clearCurrent;
     private final UiActionButton clearAll;
-    private final List<ConfigEntryEditor<?>> editors = new ArrayList<>();
-    private boolean expanded;
-    private boolean searchExpanded;
     private boolean clearing;
     private long usageRequest;
     private boolean disposed;
@@ -96,8 +94,9 @@ public final class CacheSettingsPage implements SettingsPage {
             @Override public CompletionStage<List<CacheReport>> inspect() {
                 return CacheRegistry.GLOBAL.inspect(descriptor -> true);
             }
-            @Override public CompletionStage<List<CacheClearResult>> clear(CacheClearRequest request) {
-                return CacheRegistry.GLOBAL.clear(CLEARABLE_CACHES, request);
+            @Override public CompletionStage<List<CacheClearResult>> clear(String id, CacheClearRequest request) {
+                return CacheRegistry.GLOBAL.clear(id == null ? CLEARABLE_CACHES
+                        : descriptor -> descriptor.id().equals(id), request);
             }
             @Override public CompletionStage<String> currentNamespace() {
                 var result = new CompletableFuture<String>();
@@ -130,35 +129,6 @@ public final class CacheSettingsPage implements SettingsPage {
         root.addView(content, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        group = new LinearLayout(context.uiContext());
-        group.setOrientation(LinearLayout.VERTICAL);
-        group.setBackground(rect(COLOR_GROUP, COLOR_BORDER));
-        LinearLayout header = new LinearLayout(context.uiContext());
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        header.setBackground(rect(COLOR_HEADER, 0));
-        disclosure = new SvgIconView(context.uiContext(),
-                SvgIconView.Icon.forExpandedState(false), COLOR_MUTED);
-        header.addView(disclosure, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20),
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        TextView title = text(context, tr("geometry_node.settings.category.preview_cache"), 10.5f, COLOR_TEXT);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
-        titleParams.leftMargin = UIUtils.dp2pxInt(3);
-        header.addView(title, titleParams);
-        header.setOnClickListener(view -> setExpanded(!expanded));
-        group.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(30)));
-
-        entriesHost = new LinearLayout(context.uiContext());
-        entriesHost.setOrientation(LinearLayout.VERTICAL);
-        entriesHost.setPadding(UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(3),
-                UIUtils.dp2pxInt(10), UIUtils.dp2pxInt(8));
-        entriesHost.setVisibility(View.GONE);
-        group.addView(entriesHost, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-
         LinearLayout actions = new LinearLayout(context.uiContext());
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -170,10 +140,10 @@ public final class CacheSettingsPage implements SettingsPage {
                     if (namespace == null || namespace.isBlank()) {
                         return CompletableFuture.failedFuture(new IllegalStateException("No active server identity"));
                     }
-                    return cache.clear(CacheClearRequest.user(namespace));
+                    return cache.clear(null, CacheClearRequest.user(namespace));
                 }, uiExecutor)));
         clearAll = UiActionButton.create(context.uiContext(), tr(KEY + "clear_all"),
-                UiActionButton.Role.DANGER, view -> runClear(() -> cache.clear(CacheClearRequest.user())));
+                UiActionButton.Role.DANGER, view -> runClear(() -> cache.clear(null, CacheClearRequest.user())));
         for (UiActionButton button : List.of(refreshButton, clearCurrent, clearAll)) {
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
             params.leftMargin = button == refreshButton ? 0 : UIUtils.dp2pxInt(6);
@@ -187,10 +157,6 @@ public final class CacheSettingsPage implements SettingsPage {
         content.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(34)));
         content.addView(totalsValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
         content.addView(statusValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout.LayoutParams groupParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        groupParams.topMargin = UIUtils.dp2pxInt(12);
-        content.addView(group, groupParams);
-
         detailsGroup = new LinearLayout(context.uiContext());
         detailsGroup.setOrientation(LinearLayout.VERTICAL);
         detailsGroup.setBackground(rect(COLOR_GROUP, COLOR_BORDER));
@@ -220,6 +186,7 @@ public final class CacheSettingsPage implements SettingsPage {
         });
         sizeHeader.setContentDescription(tr(KEY + "sort_ascending"));
         tableHeader.addView(sizeHeader);
+        tableHeader.addView(UiTableStyle.cell(context.uiContext(), "", COLOR_TEXT));
         table.addView(tableHeader, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
         table.addView(registryHost, new LinearLayout.LayoutParams(-1, -2));
         detailsBody = new UiTableViewport(context.uiContext(), columns, table);
@@ -229,30 +196,10 @@ public final class CacheSettingsPage implements SettingsPage {
         LinearLayout.LayoutParams detailsParams = new LinearLayout.LayoutParams(-1, -2);
         detailsParams.topMargin = UIUtils.dp2pxInt(12);
         content.addView(detailsGroup, detailsParams);
-        try {
-            context.configRegistry().entries().stream()
-                    .filter(ConfigEntry::isVisibleInSettings)
-                    .filter(BuiltinSettingsProjection::isPreviewCache)
-                    .sorted(Comparator.comparingInt((ConfigEntry<?> entry) -> entry.order()).thenComparing(ConfigEntry::id))
-                    .forEach(entry -> addEditor(context, entry));
-            refreshUsage();
-        } catch (RuntimeException exception) {
-            dispose();
-            throw exception;
-        }
+        refreshUsage();
     }
 
     private static final String KEY = "geometry_node.settings.cache.";
-
-    private void addEditor(SettingsPageContext context,
-                           ConfigEntry<?> entry) {
-        ConfigEntryEditor<?> editor = context.editorFactory().create(context.uiContext(), context.draft(), entry,
-                context.editorEnvironment());
-        editor.setOnStateChangedListener(context.onStateChanged());
-        editors.add(editor);
-        entriesHost.addView(editor.getView(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-    }
 
     private void runClear(Supplier<CompletionStage<List<CacheClearResult>>> operation) {
         if (disposed || clearing) return;
@@ -271,6 +218,9 @@ public final class CacheSettingsPage implements SettingsPage {
         clearCurrent.setEnabled(enabled);
         clearAll.setEnabled(enabled);
         refreshButton.setEnabled(enabled);
+        for (UiIconButton button : rowClearButtons) {
+            button.setEnabled(enabled && Boolean.TRUE.equals(button.getTag()));
+        }
     }
 
     private void finishClear(List<CacheClearResult> results, Throwable error) {
@@ -319,6 +269,7 @@ public final class CacheSettingsPage implements SettingsPage {
 
     private void rebuildReports() {
         registryHost.removeAllViews();
+        rowClearButtons.clear();
         reports = reports.stream().sorted(usageOrder(sizeDescending)).toList();
         sizeHeader.setText(tr(KEY + "size") + (sizeDescending ? " ↓" : " ↑"));
         sizeHeader.setContentDescription(tr(KEY + (sizeDescending ? "sort_ascending" : "sort_descending")));
@@ -341,6 +292,20 @@ public final class CacheSettingsPage implements SettingsPage {
                     : Component.translatable(KEY + "size_breakdown", formatBytes(stats.memoryBytes()),
                             formatBytes(stats.diskBytes())).getString());
             row.addView(size);
+            UiIconButton clear = new UiIconButton(context.uiContext(),
+                    new SvgIconView(context.uiContext(), SvgIconView.Icon.CLEAR, COLOR_MUTED))
+                    .tooltip(tr(KEY + "clear"));
+            clear.setTag(report.clearable());
+            clear.setEnabled(!clearing && report.clearable());
+            clear.setOnClickListener(view -> runClear(() ->
+                    cache.clear(report.descriptor().id(), CacheClearRequest.user())));
+            rowClearButtons.add(clear);
+            FrameLayout action = new FrameLayout(context.uiContext());
+            FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
+                    UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24));
+            buttonParams.gravity = Gravity.CENTER;
+            action.addView(clear, buttonParams);
+            row.addView(action);
             registryHost.addView(row, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(32)));
         }
         totalsValue.setText(Component.translatable(KEY + "total", reports.size(), partialBytes(memory, memoryUnknown),
@@ -399,19 +364,8 @@ public final class CacheSettingsPage implements SettingsPage {
         return name.equals(descriptor.translationKey()) ? descriptor.id() : name;
     }
 
-    private void setExpanded(boolean value) {
-        expanded = value;
-        updateExpansion();
-    }
-
-    private void updateExpansion() {
-        boolean visible = expanded || searchExpanded;
-        entriesHost.setVisibility(visible ? View.VISIBLE : View.GONE);
-        disclosure.setIcon(SvgIconView.Icon.forExpandedState(visible));
-    }
-
     @Override public View getView() { return root; }
-    @Override public List<ConfigEntryEditor<?>> editors() { return List.copyOf(editors); }
+    @Override public List<ConfigEntryEditor<?>> editors() { return List.of(); }
 
     @Override
     public void refresh() {
@@ -423,17 +377,6 @@ public final class CacheSettingsPage implements SettingsPage {
     public boolean applySearch(String query) {
         String value = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         searchQuery = value;
-        StringBuilder searchText = new StringBuilder(tr("geometry_node.settings.category.preview_cache"));
-        for (ConfigEntryEditor<?> editor : editors) {
-            ConfigEntry<?> entry = editor.entry();
-            searchText.append('\n').append(entry.id())
-                    .append('\n').append(tr(entry.labelTranslationKey()))
-                    .append('\n').append(tr(entry.descriptionTranslationKey()));
-        }
-        boolean matches = value.isEmpty() || searchText.toString().toLowerCase(Locale.ROOT).contains(value);
-        group.setVisibility(matches ? View.VISIBLE : View.GONE);
-        searchExpanded = !value.isEmpty() && matches;
-        updateExpansion();
         boolean registryMatches = value.isEmpty() || (tr("geometry_node.settings.page.cache") + " " + tr(KEY + "details"))
                 .toLowerCase(Locale.ROOT).contains(value);
         boolean anyRowMatches = false;
@@ -448,15 +391,7 @@ public final class CacheSettingsPage implements SettingsPage {
         detailsGroup.setVisibility(registryMatches || anyRowMatches ? View.VISIBLE : View.GONE);
         detailsSearchExpanded = !value.isEmpty() && (registryMatches || anyRowMatches);
         updateDetailsExpansion();
-        return matches || registryMatches || anyRowMatches;
-    }
-
-    @Override
-    public void revealEditor(ConfigEntryEditor<?> editor) {
-        if (editors.contains(editor)) {
-            setExpanded(true);
-            editor.focus();
-        }
+        return registryMatches || anyRowMatches;
     }
 
     @Override
@@ -465,8 +400,7 @@ public final class CacheSettingsPage implements SettingsPage {
         disposed = true;
         ++usageRequest;
         reports = List.of();
-        for (ConfigEntryEditor<?> editor : editors) editor.dispose();
-        editors.clear();
+        rowClearButtons.clear();
         root.removeAllViews();
     }
 

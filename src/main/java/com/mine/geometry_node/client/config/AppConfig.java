@@ -8,7 +8,6 @@ public class AppConfig {
     public ViewportConfig viewport = new ViewportConfig();
     public GameViewConfig gameView = new GameViewConfig();
     public NodeConfig node = new NodeConfig();
-    public PreviewCacheConfig previewCache = new PreviewCacheConfig();
     public KeyBindingsConfig keyBindings = new KeyBindingsConfig();
 
     public static AppConfig defaults() {
@@ -21,7 +20,6 @@ public class AppConfig {
         copy.viewport = viewport != null ? viewport.copy() : null;
         copy.gameView = gameView != null ? gameView.copy() : null;
         copy.node = node != null ? node.copy() : null;
-        copy.previewCache = previewCache != null ? previewCache.copy() : null;
         copy.keyBindings = keyBindings != null ? keyBindings.copy() : null;
         return copy;
     }
@@ -82,20 +80,6 @@ public class AppConfig {
         NodeConfig copy() {
             NodeConfig copy = new NodeConfig();
             copy.cornerRadius = cornerRadius;
-            return copy;
-        }
-    }
-
-    public static class PreviewCacheConfig {
-        public static final String DEFAULT_LOCATION = "geometry_nodes/caches/asset_previews";
-
-        public int maxSizeMiB = 64;
-        public String location = DEFAULT_LOCATION;
-
-        PreviewCacheConfig copy() {
-            PreviewCacheConfig copy = new PreviewCacheConfig();
-            copy.maxSizeMiB = maxSizeMiB;
-            copy.location = location;
             return copy;
         }
     }

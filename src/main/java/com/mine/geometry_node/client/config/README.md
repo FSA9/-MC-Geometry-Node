@@ -17,7 +17,7 @@
 ## 新增设置
 
 1. 在 `AppConfig` 中增加字段、默认值和 `copy()` 支持。
-2. 注册 `ConfigEntry`，ID 必须与 JSON 路径一致，例如 `previewCache.location`；提供类型、规范化规则和翻译键。普通注册项不需要修改 JSON 加载分支。
+2. 注册 `ConfigEntry`，ID 必须与 JSON 路径一致，例如 `gameView.backgroundFps`；提供类型、规范化规则和翻译键。普通注册项不需要修改 JSON 加载分支。
 3. 补齐中英文标签、描述及枚举选项翻译。可见设置通过页面投影确定唯一归属；隐藏项仍参加持久化及校验。
 4. 使用 `ConfigManager.get/set` 或草稿 API 读写；UI 编辑过程不直接修改发布中的模型。运行时变更通过 `update` 提交完整候选快照。
 5. 验证非默认值和未绑定值能往返保存；新增数据类型时同步扩展编辑器与 JSON 读取契约。

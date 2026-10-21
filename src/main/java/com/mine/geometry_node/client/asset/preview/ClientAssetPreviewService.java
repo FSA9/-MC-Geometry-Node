@@ -8,7 +8,6 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescr
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
-import com.mine.geometry_node.client.config.ConfigManager;
 
 import com.mine.geometry_node.core.cache.*;
 import java.util.HashSet;
@@ -35,7 +34,6 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     private CompletableFuture<Void> globalClearBarrier = CompletableFuture.completedFuture(null);
 
     private ClientAssetPreviewService() {
-        ConfigManager.INSTANCE.addChangeListener(config -> enforceCacheLimit());
         registration = CacheRegistry.GLOBAL.register(new CacheDescriptor(
                 "geometry_node:asset.client.previews", "geometry_node.cache.asset.client_previews",
                 CacheDescriptor.Domain.CLIENT, CacheDescriptor.Storage.DISK,
@@ -124,14 +122,6 @@ public final class ClientAssetPreviewService implements AutoCloseable {
 
     public Path cacheLocation() {
         return cache.location();
-    }
-
-    public CompletableFuture<Void> enforceCacheLimit() {
-        // Existing previews own paths, not byte copies. Do not evict their artifacts.
-        synchronized (this) {
-            if (!holders.isEmpty()) return CompletableFuture.completedFuture(null);
-            return appendGlobalCacheClear(cache::enforceConfiguredLimit);
-        }
     }
 
     private void resolveCached(Entry entry) {
@@ -225,12 +215,10 @@ public final class ClientAssetPreviewService implements AutoCloseable {
         for (UUID subscriberId : entry.listeners.keySet()) holders.remove(subscriberId);
         for (Listener listener : entry.listeners.values()) listener.unavailable(code, detail);
         entry.listeners.clear();
-        if (holders.isEmpty()) enforceCacheLimit();
     }
 
     private synchronized void unsubscribe(CacheKey key, UUID subscriberId) {
         holders.remove(subscriberId);
-        if (holders.isEmpty()) enforceCacheLimit();
         Entry entry = entries.get(key);
         if (entry == null) return;
         entry.listeners.remove(subscriberId);

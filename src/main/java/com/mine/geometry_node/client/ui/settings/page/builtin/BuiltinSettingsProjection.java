@@ -10,17 +10,13 @@ final class BuiltinSettingsProjection {
                 || entry.editorType() == ConfigEntry.EditorType.SHORTCUT;
     }
 
-    static boolean isPreviewCache(ConfigEntry<?> entry) {
-        return !isShortcut(entry) && entry.category().isWithin(BuiltinConfigEntries.PREVIEW_CACHE);
-    }
-
     static boolean isPath(ConfigEntry<?> entry) {
-        return !isShortcut(entry) && !isPreviewCache(entry)
+        return !isShortcut(entry)
                 && entry.category().isWithin(BuiltinConfigEntries.ASSET_BROWSER);
     }
 
     static boolean isParameter(ConfigEntry<?> entry) {
-        return !isShortcut(entry) && !isPath(entry) && !isPreviewCache(entry);
+        return !isShortcut(entry) && !isPath(entry);
     }
 
     private BuiltinSettingsProjection() {}

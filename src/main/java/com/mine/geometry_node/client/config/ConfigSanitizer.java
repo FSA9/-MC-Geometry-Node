@@ -143,7 +143,6 @@ final class ConfigSanitizer {
         if (config.viewport == null) { config.viewport = defaults.viewport; changed = true; }
         if (config.gameView == null) { config.gameView = defaults.gameView; changed = true; }
         if (config.node == null) { config.node = defaults.node; changed = true; }
-        if (config.previewCache == null) { config.previewCache = defaults.previewCache; changed = true; }
         if (config.keyBindings == null) { config.keyBindings = defaults.keyBindings; changed = true; }
         if (config.keyBindings.global == null) { config.keyBindings.global = defaults.keyBindings.global; changed = true; }
         if (config.keyBindings.viewport == null) { config.keyBindings.viewport = defaults.keyBindings.viewport; changed = true; }

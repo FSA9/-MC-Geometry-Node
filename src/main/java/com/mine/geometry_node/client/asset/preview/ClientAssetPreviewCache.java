@@ -6,7 +6,6 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewMetad
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.AssetPreviewCacheMaintenance;
-import com.mine.geometry_node.client.config.ConfigManager;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -129,15 +128,6 @@ public final class ClientAssetPreviewCache {
 
     public synchronized Path location() {
         return ClientAssetPreviewPaths.root();
-    }
-
-    public synchronized void enforceConfiguredLimit() throws IOException {
-        AssetPreviewCacheMaintenance.enforceLimit(ClientAssetPreviewPaths.root(), maximumBytes(), null,
-                METADATA_MAGIC);
-    }
-
-    private static long maximumBytes() {
-        return ConfigManager.INSTANCE.getConfig().previewCache.maxSizeMiB * 1024L * 1024L;
     }
 
     private boolean isCurrent(String serverIdentity, Generation generation) {
