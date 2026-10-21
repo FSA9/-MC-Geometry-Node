@@ -88,9 +88,7 @@ public final class UiFixedSplitLayout extends LinearLayout {
         if (fixedPane != null) {
             boolean visible = fixedPane.getVisibility() != GONE;
             divider.setVisibility(visible && !collapsed ? VISIBLE : GONE);
-            int gutter = divider.getVisibility() == GONE ? 0 : UIUtils.dp2pxInt(8);
-            LayoutParams dividerParams = (LayoutParams) divider.getLayoutParams();
-            if (horizontal) dividerParams.width = gutter; else dividerParams.height = gutter;
+            int gutter = dividerLayoutExtent();
             int spec = horizontal ? widthSpec : heightSpec;
             int padding = horizontal ? getPaddingLeft() + getPaddingRight() : getPaddingTop() + getPaddingBottom();
             int available = MeasureSpec.getMode(spec) == MeasureSpec.UNSPECIFIED
@@ -113,8 +111,8 @@ public final class UiFixedSplitLayout extends LinearLayout {
 
     private void resizePane(float delta) {
         if (!Float.isFinite(delta) || fixedPane == null || collapsed || fixedPane.getVisibility() == GONE) return;
-        int available = horizontal ? getWidth() - getPaddingLeft() - getPaddingRight() - divider.getWidth()
-                : getHeight() - getPaddingTop() - getPaddingBottom() - divider.getHeight();
+        int available = horizontal ? getWidth() - getPaddingLeft() - getPaddingRight() - dividerLayoutExtent()
+                : getHeight() - getPaddingTop() - getPaddingBottom() - dividerLayoutExtent();
         int requested = clampExtent(Math.round(pendingExtentPx + (edge == Edge.FIRST ? delta : -delta)), Math.max(0, available));
         if (requested == Math.round(pendingExtentPx)) return;
         pendingExtentPx = requested;
@@ -126,5 +124,12 @@ public final class UiFixedSplitLayout extends LinearLayout {
     private LayoutParams paneParams(boolean flexible) {
         return new LayoutParams(horizontal ? 0 : LayoutParams.MATCH_PARENT,
                 horizontal ? LayoutParams.MATCH_PARENT : 0, flexible ? 1 : 0);
+    }
+
+    private int dividerLayoutExtent() {
+        if (divider.getVisibility() == GONE) return 0;
+        LayoutParams params = (LayoutParams) divider.getLayoutParams();
+        return Math.max(0, horizontal ? params.width + params.leftMargin + params.rightMargin
+                : params.height + params.topMargin + params.bottomMargin);
     }
 }

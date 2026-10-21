@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.graph;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 
 import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
@@ -68,8 +68,8 @@ public class GraphEditorWindow extends LinearLayout
         workspace.addView(mGraphViewportPanel, createWeightParams(
                 UIConstants.MainUI.WEIGHT_CENTER + UIConstants.MainUI.WEIGHT_RIGHT - sidebarWeight));
 
-        View sidebarDivider = ResizableDivider.weighted(
-                context, ResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
+        View sidebarDivider = ThinResizableDivider.weighted(
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         workspace.addView(sidebarDivider);
 
         mRightSidebar = new EditorSidebar(context);

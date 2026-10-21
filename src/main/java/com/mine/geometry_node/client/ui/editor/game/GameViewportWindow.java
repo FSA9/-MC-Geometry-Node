@@ -19,7 +19,7 @@ import com.mine.geometry_node.client.ui.components.composite.menu.UiRadialMenu;
 import com.mine.geometry_node.client.ui.components.composite.menu.RadialMenuLayout.Slot;
 import com.mine.geometry_node.client.ui.components.composite.menu.HeldMenuKey;
 import java.util.List;
-import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
@@ -147,7 +147,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(HORIZONTAL);
         workspace.addView(content, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.75f));
-        View divider = ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL);
+        View divider = ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL);
         workspace.addView(divider);
         sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.GAME_VIEWPORT, this));

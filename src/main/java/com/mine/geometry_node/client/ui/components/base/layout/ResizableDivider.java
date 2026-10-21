@@ -214,21 +214,21 @@ public class ResizableDivider extends FrameLayout {
 
     private void updateVisual(boolean dragging) {
         boolean highlighted = dragging || (mHighlightOnHover && mHovered);
-        setBackground(dragging ? rect(COLOR_DIVIDER_DRAG_FILL) : null);
+        setBackground(dragging && !mHighlightOnHover ? rect(COLOR_DIVIDER_DRAG_FILL) : null);
         if (mVisualLine != null) {
             mVisualLine.setBackground(rounded(
                     highlighted ? UIConstants.ViewPort.Selection.CLR_BORDER
                             : mHighlightOnHover ? UiTheme.Control.INPUT_BORDER : COLOR_DIVIDER,
-                    highlighted ? 3.0f : 0.0f
+                    highlighted && !mHighlightOnHover ? 3.0f : 0.0f
             ));
             mVisualLine.setLayoutParams(visualParams(highlighted));
         }
     }
 
     private FrameLayout.LayoutParams visualParams(boolean dragging) {
-        int normal = UIUtils.dp2pxInt(NORMAL_DP);
+        int normal = Math.max(1, UIUtils.dp2pxInt(NORMAL_DP));
         int drag = UIUtils.dp2pxInt(DRAG_DP);
-        int thickness = dragging ? drag : normal;
+        int thickness = dragging && !mHighlightOnHover ? drag : normal;
         FrameLayout.LayoutParams params = mOrientation == Orientation.HORIZONTAL
                 ? new FrameLayout.LayoutParams(thickness, ViewGroup.LayoutParams.MATCH_PARENT)
                 : new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, thickness);

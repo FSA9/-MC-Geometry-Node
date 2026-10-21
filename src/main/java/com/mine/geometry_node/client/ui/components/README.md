@@ -94,9 +94,9 @@
 | 名称＋数量导航行 | [UiNavigationRow](composite/list/UiNavigationRow.java) | 组合一个按钮及被动文字层；通过 `button()` 绑定操作，`setPalette()` 更新状态。 |
 | 单选、Ctrl／Shift 多选 | [UiListSelection](base/list/UiListSelection.java) | 基于稳定键与当前显示顺序计算选择；复选框独立增减集合，不当作普通行单选。 |
 | 标签＋值＋末端操作 | [UiPropertyRow](composite/layout/UiPropertyRow.java) | 只负责对齐和窄布局；调用方传入值控件、复制按钮和 `Layout` 尺寸。不会自动读写对象。固定尺寸值（例如勾选框）使用带 `valueParams` 的构造方法，尾部自动补足空白；不要用弹性键列将值推到右端。 |
-| 固定尺寸边栏／上下分栏 | [UiFixedSplitLayout](composite/layout/UiFixedSplitLayout.java) | 保存独立逻辑尺寸，剩余区域伸缩；适合数据库目录和属性栏，避免多分割线比例联动。 |
+| 固定尺寸边栏／上下分栏 | [UiFixedSplitLayout](composite/layout/UiFixedSplitLayout.java) | 保存独立逻辑尺寸，剩余区域伸缩；适合数据库目录和属性栏，避免多分割线比例联动。测量及拖拽限位使用分割条含边距的布局占用量，保留完整透明命中区。 |
 | 分割线输入与比例分栏 | [ResizableDivider](base/layout/ResizableDivider.java) | 通用拖动处理；`weighted()` 用于按比例分配的兄弟面板。`Orientation` 表示拖动轴。 |
-| 细线外观分割线 | [ThinResizableDivider](base/layout/ThinResizableDivider.java) | 继承同一输入逻辑；细线常态、宽命中区、悬停蓝条。 |
+| 细线外观分割线 | [ThinResizableDivider](base/layout/ThinResizableDivider.java) | 继承同一输入逻辑；始终只绘制 1dp 细线，悬停／拖动变蓝，背景透明。保留 8dp 命中区，通过负边距覆盖两侧面板，布局只占细线宽度，不露出父容器底色。 |
 | 自动换行布局 | [TagFlowLayout](base/layout/TagFlowLayout.java) | 只排列已有子控件，不负责标签数据或点击。 |
 | 表格里的只读文字 | [UiDisplayText](base/display/UiDisplayText.java) | 保留完整值提示并向外层行透传点击，防止文字提示独占选择手势。 |
 | 单个 Tag 显示块 | [UiTagChip](composite/display/UiTagChip.java) | 统一主题、24dp 高度和省略文字；默认只读透传行点击。`setPrefix()` 仅设置视觉前缀，`setOnRemove(description, action)` 可配置删除，普通点击可用 `setOnClickListener()`；不修改标签数据。 |

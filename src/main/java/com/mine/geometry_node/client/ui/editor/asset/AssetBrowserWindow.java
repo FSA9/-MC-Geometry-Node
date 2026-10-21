@@ -17,7 +17,7 @@ import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropert
 import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
-import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
@@ -119,8 +119,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mMainLayout.addView(mNavigationPanel, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, navigationWeight));
 
-        mMainLayout.addView(ResizableDivider.weighted(
-                context, ResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
+        mMainLayout.addView(ThinResizableDivider.weighted(
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
 
         if (!mUiStateContext.contains(EditorSidebarState.ASSETS, EditorSidebarState.SCOPE)) {
             AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
@@ -147,8 +147,8 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0.8f - sidebarWeight));
 
-        View propertiesDivider = ResizableDivider.weighted(
-                context, ResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
+        View propertiesDivider = ThinResizableDivider.weighted(
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         browserWorkspace.addView(propertiesDivider);
 
         mPropertiesSidebar = new EditorSidebar(context);
