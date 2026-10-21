@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
-import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
@@ -10,7 +11,6 @@ import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import net.minecraft.network.chat.Component;
-
 import java.util.UUID;
 
 /** Read-only square preview cell. Pointer selection and ordinary scrolling belong to its row. */
@@ -28,11 +28,16 @@ public final class EntityPreviewCell extends ViewGroup {
 
     /** Preferred square size for non-table hosts; ordinary table cells keep their 64dp default. */
     public EntityPreviewCell(Context context, int preferredSizeDp) {
+        this(context, preferredSizeDp, UiThemes.EDITOR);
+    }
+
+    public EntityPreviewCell(Context context, int preferredSizeDp, UiTheme theme) {
         super(context);
         if (preferredSizeDp <= 0) throw new IllegalArgumentException("Preview size must be positive");
         this.preferredSizeDp = preferredSizeDp;
-        preview = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.FIXED);
-        placeholder = new UiDisplayText(context, "", 11, UiTheme.Text.MUTED);
+        preview = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.FIXED,
+                ValuePreviewStyle.forTheme(theme));
+        placeholder = new UiDisplayText(context, "", 11, theme.text().muted());
         placeholder.setGravity(Gravity.CENTER);
         placeholder.setPadding(px(3), 0, px(3), 0);
         addView(preview, new LayoutParams(-2, -2));

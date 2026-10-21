@@ -1,7 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.asset;
 
-import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
@@ -34,7 +36,6 @@ import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
@@ -50,7 +51,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
-
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Files;
@@ -110,7 +110,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
         mMainLayout = new LinearLayout(context);
         mMainLayout.setOrientation(LinearLayout.HORIZONTAL);
-        mMainLayout.setBackground(createColorDrawable(UIConstants.MainUI.BG_TIMELINE));
+        mMainLayout.setBackground(createColorDrawable(UiThemes.EDITOR.surface().panel()));
         addView(mMainLayout, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -120,7 +120,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 0, ViewGroup.LayoutParams.MATCH_PARENT, navigationWeight));
 
         mMainLayout.addView(ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
+                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> captureNavigationWeight()));
 
         if (!mUiStateContext.contains(EditorSidebarState.ASSETS, EditorSidebarState.SCOPE)) {
             AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
@@ -148,7 +148,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 0.8f - sidebarWeight));
 
         View propertiesDivider = ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
+                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> persistSidebarState());
         browserWorkspace.addView(propertiesDivider);
 
         mPropertiesSidebar = new EditorSidebar(context);
@@ -170,6 +170,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 propertiesDivider,
                 mPropertiesSidebar,
                 sidebarWeight,
+                EditorLayoutPolicy.MIN_PANEL_WEIGHT,
                 (visible, weight) -> mUiStateContext.write(
                         EditorSidebarState.ASSETS, EditorSidebarState.SCOPE,
                         new EditorSidebarState(visible, weight, mPropertiesSidebar.getSelectedPanelId())));

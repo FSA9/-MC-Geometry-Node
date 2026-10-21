@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.metadata;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
@@ -11,7 +13,6 @@ import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindow
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
@@ -23,17 +24,16 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.components.integration.metadata.MetadataViews.*;
 
 /** Shared, bounded custom-data manager. The binding owns transport, validation and atomic persistence. */
 public final class UiDataDictionaryEditor extends ModalWindowView {
     private static final int PAGE_SIZE = 20;
+    private final UiTheme theme;
     private final DataDictionaryBinding binding;
     private final View owner;
     private final String initialKey;
@@ -88,25 +88,36 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
     public static boolean show(View anchor, DataDictionaryBinding binding) {
         return show(anchor, tr("title"), binding, null);
     }
+    public static boolean show(View anchor, DataDictionaryBinding binding, UiTheme theme) {
+        return show(anchor, tr("title"), binding, null, theme);
+    }
     public static boolean show(View anchor, String title, DataDictionaryBinding binding) {
         return show(anchor, title, binding, null);
     }
     public static boolean show(View anchor, String title, DataDictionaryBinding binding, String initialKey) {
+        return show(anchor, title, binding, initialKey, UiThemes.EDITOR);
+    }
+    public static boolean show(View anchor, String title, DataDictionaryBinding binding, String initialKey, UiTheme theme) {
+        Objects.requireNonNull(theme, "theme");
         Objects.requireNonNull(anchor, "anchor"); Objects.requireNonNull(binding, "binding");
         OverlayHost host = OverlayHost.find(anchor);
         if (host == null) return false;
-        UiDataDictionaryEditor editor = new UiDataDictionaryEditor(anchor.getContext(), anchor, title, binding, initialKey);
-        return host.showModal(editor, new ModalOptions(false, true, anchor)) != null;
+        UiDataDictionaryEditor editor = new UiDataDictionaryEditor(anchor.getContext(), anchor, title, binding, initialKey, theme);
+        return host.showModal(editor, new ModalOptions(false, true, anchor, theme.surface().modalScrim())) != null;
     }
 
     UiDataDictionaryEditor(Context context, View owner, String title, DataDictionaryBinding binding, String initialKey) {
-        super(context, tr("title"));
+        this(context, owner, title, binding, initialKey, UiThemes.EDITOR);
+    }
+    UiDataDictionaryEditor(Context context, View owner, String title, DataDictionaryBinding binding, String initialKey, UiTheme theme) {
+        super(context, tr("title"), MovementMode.DRAGGABLE, Style.forTheme(theme));
+        this.theme = Objects.requireNonNull(theme, "theme");
         this.owner = owner; this.binding = binding; this.initialKey = initialKey;
         if (title != null && !title.isBlank() && !title.equals(tr("title"))) {
             String heading = tr("title");
             SpannableString caption = new SpannableString(heading + "   " + title);
             int start = heading.length() + 3;
-            caption.setSpan(new ForegroundColorSpan(UiTheme.Text.MUTED), start, caption.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            caption.setSpan(new ForegroundColorSpan(theme.text().muted()), start, caption.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             caption.setSpan(new RelativeSizeSpan(0.85f), start, caption.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             setTitle(caption);
         }
@@ -115,36 +126,36 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
         contentHost().setPadding(0, 0, 0, 0);
         LinearLayout root = column(context);
         LinearLayout toolbar = row(context); toolbar.setPadding(px(16), px(10), px(16), px(10));
-        search = input(context, "search", true); toolbar.addView(search, new LayoutParams(0, px(30), 1));
-        filterButton = new UiSelectButton(context, tr("all_types"), 11, () -> 2);
+        search = input(context, "search", true, theme); toolbar.addView(search, new LayoutParams(0, px(30), 1));
+        filterButton = new UiSelectButton(context, tr("all_types"), 11, () -> 2, theme);
         LayoutParams filterParams = params(104, 30); filterParams.leftMargin = px(6);
         toolbar.addView(filterButton, filterParams);
         filterButton.setOnClickListener(view -> choose(filterButton, true, type -> {
             filter = type; page = 0; filterButton.setValue(type == null ? tr("all_types") : typeLabel(type)); renderList();
         }));
-        add = button(context, "add", this::newEntry);
+        add = themedButton(context, "add", this::newEntry);
         LayoutParams addParams = params(64, 30); addParams.leftMargin = px(6); toolbar.addView(add, addParams);
         root.addView(toolbar, params(-1, 50)); root.addView(divider(context), params(-1, 1));
 
         LinearLayout content = row(context);
         LinearLayout left = column(context);
         LinearLayout listHeading = row(context); listHeading.setPadding(px(16), 0, px(16), 0);
-        listHeading.setBackground(fill(UiTheme.Surface.PANEL));
-        listCount = text(context, "", UiTheme.Text.MUTED);
+        listHeading.setBackground(fill(theme.surface().panel()));
+        listCount = text(context, "", theme.text().muted());
         listHeading.addView(listCount, new LayoutParams(0, -1, 1));
-        listHeading.addView(text(context, tr("key_value"), UiTheme.Text.MUTED), params(-2, -1));
+        listHeading.addView(text(context, tr("key_value"), theme.text().muted()), params(-2, -1));
         left.addView(listHeading, params(-1, 28)); left.addView(divider(context), params(-1, 1));
-        rows = column(context); UiScrollView listScroll = new UiScrollView(context);
+        rows = column(context); UiScrollView listScroll = new UiScrollView(context, theme.scroll());
         listScroll.setHorizontalScrollBarEnabled(false);
         listScroll.addView(rows, new FrameLayout.LayoutParams(-1, -2));
         left.addView(listScroll, new LayoutParams(-1, 0, 1));
         left.addView(divider(context), params(-1, 1));
         LinearLayout pages = row(context); pages.setPadding(px(12), 0, px(12), 0);
-        previous = button(context, "previous", () -> { if (page > 0) { page--; renderList(); } });
-        next = button(context, "next", () -> { page++; renderList(); });
+        previous = themedButton(context, "previous", () -> { if (page > 0) { page--; renderList(); } });
+        next = themedButton(context, "next", () -> { page++; renderList(); });
         previous.setText("‹"); next.setText("›"); previous.setContentDescription(tr("previous")); next.setContentDescription(tr("next"));
         previous.setPadding(0, 0, 0, 0); next.setPadding(0, 0, 0, 0);
-        pageLabel = text(context, "", UiTheme.Text.MUTED);
+        pageLabel = text(context, "", theme.text().muted());
         pages.addView(pageLabel, new LayoutParams(0, -1, 1));
         pages.addView(previous, params(24, 24));
         LayoutParams nextParams = params(24, 24); nextParams.leftMargin = px(4); pages.addView(next, nextParams);
@@ -152,35 +163,35 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
         content.addView(left, new LayoutParams(0, -1, 0.4f)); content.addView(divider(context), params(1, -1));
 
         LinearLayout right = column(context); right.setPadding(px(20), px(16), px(20), px(16));
-        selectionHint = text(context, tr("select"), UiTheme.Text.MUTED); right.addView(selectionHint, params(-1, 28));
+        selectionHint = text(context, tr("select"), theme.text().muted()); right.addView(selectionHint, params(-1, 28));
         form = column(context); right.addView(form, params(-1, -2));
         LinearLayout meta = row(context);
         LinearLayout keyColumn = column(context);
-        keyColumn.addView(text(context, tr("key"), UiTheme.Text.MUTED), params(-1, 24));
-        keyInput = input(context, "key", true); keyColumn.addView(keyInput, params(-1, 30));
+        keyColumn.addView(text(context, tr("key"), theme.text().muted()), params(-1, 24));
+        keyInput = input(context, "key", true, theme); keyColumn.addView(keyInput, params(-1, 30));
         LayoutParams keyParams = new LayoutParams(0, -2, 1); keyParams.rightMargin = px(12);
         meta.addView(keyColumn, keyParams);
         LinearLayout typeColumn = column(context);
-        typeColumn.addView(text(context, tr("type"), UiTheme.Text.MUTED), params(-1, 24));
-        valueType = new UiSelectButton(context, typeLabel(selectedType), 11, () -> 2);
+        typeColumn.addView(text(context, tr("type"), theme.text().muted()), params(-1, 24));
+        valueType = new UiSelectButton(context, typeLabel(selectedType), 11, () -> 2, theme);
         typeColumn.addView(valueType, params(-1, 30)); meta.addView(typeColumn, params(108, -2));
         form.addView(meta, params(-1, -2));
         LinearLayout valueHeading = row(context);
-        valueHeading.addView(text(context, tr("value"), UiTheme.Text.MUTED), new LayoutParams(0, -1, 1));
+        valueHeading.addView(text(context, tr("value"), theme.text().muted()), new LayoutParams(0, -1, 1));
         viewSwitch = row(context);
-        previewMode = button(context, "preview", () -> setPreviewMode(true));
-        editMode = button(context, "edit", () -> setPreviewMode(false));
+        previewMode = themedButton(context, "preview", () -> setPreviewMode(true));
+        editMode = themedButton(context, "edit", () -> setPreviewMode(false));
         viewSwitch.addView(previewMode, params(48, 24)); viewSwitch.addView(editMode, params(48, 24));
         valueHeading.addView(viewSwitch, params(-2, -1));
         LayoutParams valueHeadingParams = params(-1, 28); valueHeadingParams.topMargin = px(14);
         form.addView(valueHeading, valueHeadingParams);
-        valueInput = input(context, "value", false); form.addView(valueInput, params(-1, 150));
+        valueInput = input(context, "value", false, theme); form.addView(valueInput, params(-1, 150));
         booleanRow = row(context); booleanRow.setPadding(px(10), 0, px(10), 0);
-        ShapeDrawable booleanBackground = fill(UiTheme.Control.INPUT); booleanBackground.setStroke(px(1), UiTheme.Control.INPUT_BORDER);
+        ShapeDrawable booleanBackground = fill(theme.control().input()); booleanBackground.setStroke(px(1), theme.border().subtle());
         booleanRow.setBackground(booleanBackground);
-        booleanInput = new UiCheckBox(context); booleanInput.setContentDescription(tr("value"));
+        booleanInput = UiCheckBox.createThemed(context, theme); booleanInput.setContentDescription(tr("value"));
         booleanRow.addView(booleanInput, params(14, 14));
-        booleanLabel = text(context, "false", UiTheme.Text.NORMAL);
+        booleanLabel = text(context, "false", theme.text().normal());
         LayoutParams booleanLabelParams = params(-2, -1); booleanLabelParams.leftMargin = px(8);
         booleanRow.addView(booleanLabel, booleanLabelParams); form.addView(booleanRow, params(-1, 36));
         booleanRow.setOnClickListener(view -> booleanInput.performClick());
@@ -189,44 +200,45 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
             selectedType = type; valueType.setValue(typeLabel(type)); formDirty = true; showingPreview = false;
             valueInput.setText(defaultValue(type)); updateFormLayout(); updateButtons();
         }));
-        tree = text(context, "", UiTheme.Text.SECONDARY); tree.setPadding(px(8), px(8), px(8), px(8));
-        treeScroll = new UiScrollView(context); treeScroll.setBackground(fill(UiTheme.Control.INPUT));
+        tree = text(context, "", theme.text().secondary()); tree.setPadding(px(8), px(8), px(8), px(8));
+        treeScroll = new UiScrollView(context, theme.scroll()); treeScroll.setBackground(fill(theme.control().input()));
         treeScroll.addView(tree, new FrameLayout.LayoutParams(-1, -2)); form.addView(treeScroll, params(-1, 180));
         View editDivider = divider(context); LayoutParams editDividerParams = params(-1, 1); editDividerParams.topMargin = px(16);
         form.addView(editDivider, editDividerParams);
         LinearLayout edits = row(context);
-        remove = button(context, "remove", this::removeEntry); stage = button(context, "stage", () -> stageForm(true));
-        restore = button(context, "restore", this::restoreForm);
+        remove = themedButton(context, "remove", this::removeEntry); stage = themedButton(context, "stage", () -> stageForm(true));
+        restore = themedButton(context, "restore", this::restoreForm);
         edits.addView(remove, params(48, 28)); edits.addView(new View(context), new LayoutParams(0, 1, 1));
         edits.addView(restore, params(72, 28));
         LayoutParams stageParams = params(72, 28); stageParams.leftMargin = px(6); edits.addView(stage, stageParams);
         LayoutParams editsParams = params(-1, 28); editsParams.topMargin = px(12); form.addView(edits, editsParams);
-        UiScrollView rightScroll = new UiScrollView(context); rightScroll.setHorizontalScrollBarEnabled(false);
+        UiScrollView rightScroll = new UiScrollView(context, theme.scroll()); rightScroll.setHorizontalScrollBarEnabled(false);
         rightScroll.addView(right, new FrameLayout.LayoutParams(-1, -2));
         content.addView(rightScroll, new LayoutParams(0, -1, 0.6f));
         root.addView(content, new LayoutParams(-1, 0, 1));
         LinearLayout confirmation = row(context); confirmation.setPadding(px(16), px(6), px(16), px(6));
-        discard = button(context, "discard_confirm", () -> {
+        discard = themedButton(context, "discard_confirm", () -> {
             Runnable action = pendingDiscard; showDiscard(false); if (action != null) action.run();
         });
-        keep = button(context, "keep_editing", () -> { showDiscard(false); updateButtons(); });
+        keep = themedButton(context, "keep_editing", () -> { showDiscard(false); updateButtons(); });
         confirmation.addView(discard, params(-2, 30));
         LayoutParams keepParams = params(-2, 30); keepParams.leftMargin = px(6); confirmation.addView(keep, keepParams);
         discard.setVisibility(GONE); keep.setVisibility(GONE);
         confirmation.setVisibility(GONE); root.addView(confirmation, params(-1, -2));
         setContent(root);
         LinearLayout actions = row(context);
-        message = text(context, "", UiTheme.Text.MUTED); message.setMaxLines(2);
+        message = text(context, "", theme.text().muted()); message.setMaxLines(2);
         message.setEllipsize(TextUtils.TruncateAt.END); actions.addView(message, new LayoutParams(0, -1, 1));
-        UiActionButton cancel = button(context, "cancel", this::onCloseRequested);
-        reload = button(context, "reload", this::reloadDraft);
-        apply = new UiActionButton(context, tr("apply"), UiActionButton.Role.PRIMARY, UiActionButton.Density.NORMAL);
+        UiActionButton cancel = themedButton(context, "cancel", this::onCloseRequested);
+        reload = themedButton(context, "reload", this::reloadDraft);
+        apply = new UiActionButton(context, theme, tr("apply"), UiActionButton.Role.PRIMARY,
+                UiActionButton.Density.NORMAL, UiActionButton.Style.forTheme(theme));
         apply.setOnClickListener(view -> applyDraft());
         actions.addView(reload, params(76, 28));
         LayoutParams cancelParams = params(64, 28); cancelParams.leftMargin = px(6); actions.addView(cancel, cancelParams);
         LayoutParams applyParams = params(64, 28); applyParams.leftMargin = px(6); actions.addView(apply, applyParams);
         setActions(actions); actions.setLayoutParams(new LayoutParams(-1, -1));
-        actionsHost().setBackground(fill(UiTheme.Surface.PANEL));
+        actionsHost().setBackground(fill(theme.surface().panel()));
         watch(search, () -> { page = 0; renderList(); });
         watch(keyInput, this::formChanged); watch(valueInput, this::formChanged);
         keyInput.setEditActions(() -> stageForm(true), null);
@@ -315,15 +327,15 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
             LinearLayout row = column(getContext()); row.setPadding(px(16), px(5), px(16), px(5));
             if (Objects.equals(key, selectedKey)) {
                 ShapeDrawable selectedBackground = new ShapeDrawable();
-                selectedBackground.setColor(UiTheme.Control.CHECKED); row.setBackground(selectedBackground);
+                selectedBackground.setColor(theme.selection().fill()); row.setBackground(selectedBackground);
             }
-            UiDisplayText name = text(getContext(), key, UiTheme.Text.NORMAL); name.setSingleLine(true);
+            UiDisplayText name = text(getContext(), key, theme.text().normal()); name.setSingleLine(true);
             name.setEllipsize(TextUtils.TruncateAt.END);
-            UiDisplayText summary = text(getContext(), DataDictionaryDraft.summary(draft.values().get(key)), UiTheme.Text.MUTED);
+            UiDisplayText summary = text(getContext(), DataDictionaryDraft.summary(draft.values().get(key)), theme.text().muted());
             summary.setSingleLine(true); summary.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout heading = row(getContext());
             heading.addView(name, new LayoutParams(0, -1, 1));
-            UiDisplayText type = text(getContext(), typeLabel(DataDictionaryDraft.type(draft.values().get(key))), UiTheme.Text.MUTED);
+            UiDisplayText type = text(getContext(), typeLabel(DataDictionaryDraft.type(draft.values().get(key))), theme.text().muted());
             LayoutParams typeParams = params(-2, -1); typeParams.leftMargin = px(8); heading.addView(type, typeParams);
             row.addView(heading, params(-1, 22)); row.addView(summary, params(-1, 19));
             row.setOnClickListener(view -> { if (!saving && stageForm(false)) { loadForm(key); renderList(); } });
@@ -355,7 +367,8 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
         booleanLabel.setText(Boolean.toString(booleanInput.isChecked()));
         viewSwitch.setVisibility(composite ? VISIBLE : GONE);
         treeScroll.setVisibility(composite && showingPreview ? VISIBLE : GONE);
-        previewMode.setAlpha(showingPreview ? 1 : 0.6f); editMode.setAlpha(showingPreview ? 0.6f : 1);
+        previewMode.setPalette(UiActionButton.Palette.toggle(theme, showingPreview));
+        editMode.setPalette(UiActionButton.Palette.toggle(theme, !showingPreview));
     }
     private void setPreviewMode(boolean preview) {
         if (preview) {
@@ -457,7 +470,7 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
     }
     private void choose(View anchor, boolean all, Consumer<DataDictionaryDraft.Type> selected) {
         dismissSelector();
-        UiContextMenu menu = new UiContextMenu(getContext());
+        UiContextMenu menu = new UiContextMenu(getContext(), theme);
         if (all) menu.addMenuItem(tr("all_types"), () -> selected.accept(null));
         for (DataDictionaryDraft.Type type : DataDictionaryDraft.Type.values()) {
             if (!all && !type.editable()) continue;
@@ -470,8 +483,11 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
     private static ShapeDrawable fill(int color) {
         ShapeDrawable background = new ShapeDrawable(); background.setColor(color); return background;
     }
-    private static View divider(Context context) {
-        View view = new View(context); view.setBackground(fill(UiTheme.Control.INPUT_BORDER)); return view;
+    private UiActionButton themedButton(Context context, String key, Runnable action) {
+        return button(context, key, action, theme);
+    }
+    private View divider(Context context) {
+        View view = new View(context); view.setBackground(fill(theme.border().divider())); return view;
     }
     private void dismissSelector() { if (selector != null) { selector.dismiss(); selector = null; } }
     private static String typeLabel(DataDictionaryDraft.Type type) { return tr("type." + type.id()); }

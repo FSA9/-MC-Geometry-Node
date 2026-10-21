@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.document.edit.commands.connection.CmdConnect;
 import com.mine.geometry_node.client.ui.document.edit.commands.connection.CmdDisconnect;
@@ -444,7 +445,7 @@ public class ViewportController implements EditorContext.EditorListener,
     @Override
     public void onInsertReroute(ConnectionLayer.ConnectionHit connection) {
         if (mEditorContext == null || connection == null) return;
-        float radius = UIConstants.Node.PORT_VISUAL_RADIUS;
+        float radius = NodeUiMetrics.PORT_VISUAL_RADIUS;
         CmdInsertRerouteOnConnection cmd = new CmdInsertRerouteOnConnection(
                 mEditorContext.getGraphController(),
                 mEditorContext.getCurrentGraph(),
@@ -516,6 +517,7 @@ public class ViewportController implements EditorContext.EditorListener,
             case SET_FRAME_PROPERTY -> executeSetFrameProperty(
                     actionRequest.frameId(),
                     actionRequest.title(),
+                    // Persisted initial frame color, not an editor surface.
                     actionRequest.colorOr(0xFF556677)
             );
             case SET_GROUP_NODE_PROPERTY -> executeSetGroupNodeProperty(

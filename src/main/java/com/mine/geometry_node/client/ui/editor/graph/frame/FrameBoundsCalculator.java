@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.graph.frame;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.document.edit.FrameBoundsPolicy;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;
@@ -71,7 +70,7 @@ public final class FrameBoundsCalculator {
                 result.include(
                         node.getUiX(),
                         node.getUiY(),
-                        positive(node.getVisualWidthDp(), UIConstants.Node.NODE_WIDTH),
+                        positive(node.getVisualWidthDp(), NodeUiMetrics.NODE_WIDTH),
                         positive(node.getVisualHeightDp(), FALLBACK_NODE_HEIGHT)
                 );
             }

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.common;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
@@ -16,9 +17,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
-
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
@@ -27,9 +26,9 @@ import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.u
  * Graph-type dropdown used by the graph-properties panel.
  */
 public final class GraphTypeSelector extends FrameLayout {
-    private static final int COLOR_INPUT = 0xFF242424;
-    private static final int COLOR_INPUT_BORDER = 0xFF4A4A4A;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
+    private static final int COLOR_INPUT = UiThemes.EDITOR.control().input();
+    private static final int COLOR_INPUT_BORDER = UiThemes.EDITOR.control().inputBorder();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
 
     private final TextView mValue;
     private UiPopover mDropdown;

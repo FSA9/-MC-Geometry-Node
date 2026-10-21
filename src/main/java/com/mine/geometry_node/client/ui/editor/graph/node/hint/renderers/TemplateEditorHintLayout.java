@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import icyllis.modernui.core.Context;
@@ -53,13 +54,13 @@ final class TemplateEditorHintLayout extends FrameLayout implements ViewportScal
         );
         buttonParams.gravity = Gravity.TOP | Gravity.LEFT;
         buttonParams.topMargin = UIUtils.dp2pxInt(
-                previewAreaHeightDp + (UIConstants.Node.ROW_HEIGHT - InlineActionButton.heightDp()) * 0.5f
+                previewAreaHeightDp + (NodeUiMetrics.ROW_HEIGHT - InlineActionButton.heightDp()) * 0.5f
         );
         addView(editButton, buttonParams);
     }
 
     static float contentHeightDp(float previewAreaHeightDp) {
-        return previewAreaHeightDp + UIConstants.Node.ROW_HEIGHT;
+        return previewAreaHeightDp + NodeUiMetrics.ROW_HEIGHT;
     }
 
     @Override

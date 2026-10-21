@@ -1,11 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.document.edit.commands.port.CmdAddBranch;
 import com.mine.geometry_node.client.ui.document.edit.commands.group.CmdAddGroupVirtualPort;
 import com.mine.geometry_node.client.ui.document.edit.commands.port.CmdRemoveBranch;
 import com.mine.geometry_node.client.ui.document.edit.commands.group.CmdRemoveGroupVirtualPort;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.graph.query.NodeCommentTextBuilder;
@@ -29,13 +30,12 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.HashMap;
 import java.util.Map;
 
 final class NodeOverlayController {
-    static final int COMMENT_POPUP_WIDTH_DP = 10 * UIConstants.GRID_SIZE;
-    private static final int COMMENT_POPUP_MAX_HEIGHT_DP = 8 * UIConstants.GRID_SIZE;
+    static final int COMMENT_POPUP_WIDTH_DP = 10 * NodeUiMetrics.GRID_UNIT_DP;
+    private static final int COMMENT_POPUP_MAX_HEIGHT_DP = 8 * NodeUiMetrics.GRID_UNIT_DP;
 
     private static NodeOverlayController sOpenCommentOverlay;
 
@@ -92,7 +92,7 @@ final class NodeOverlayController {
             return;
         }
 
-        float currentY = UIConstants.Node.HEADER_HEIGHT;
+        float currentY = NodeUiMetrics.HEADER_HEIGHT;
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
             float rowHeight = mLayoutEngine.calculateRowHeight(mNodeData, row);
@@ -306,11 +306,11 @@ final class NodeOverlayController {
 
         float buttonHeight = InlineActionButton.heightDp();
         float controlRowOffset = row.uiHint() == UIHint.SELECT && !isInputConnected(row)
-                ? UIConstants.Node.ROW_HEIGHT
+                ? NodeUiMetrics.ROW_HEIGHT
                 : 0.0f;
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(InlineActionButton.widthPx(), InlineActionButton.heightPx());
         lp.gravity = Gravity.TOP | Gravity.LEFT;
-        lp.topMargin = UIUtils.dp2pxInt(currentY + controlRowOffset + (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + controlRowOffset + (NodeUiMetrics.ROW_HEIGHT - buttonHeight) / 2.0f);
         if (row.leftPort() != null && row.rightPort() != null) {
             lp.leftMargin = InlineActionButton.centerColumnLeftPx(mNodeWidth);
         } else {
@@ -327,9 +327,9 @@ final class NodeOverlayController {
         mAddButton = createDynamicButton(context, "+", true, null, null);
 
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
-        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = mNodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - inputBoxHeight) / 2.0f;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = mNodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 UIUtils.dp2pxInt(endX - startX),
@@ -404,7 +404,7 @@ final class NodeOverlayController {
             return;
         }
 
-        mCommentButton = UIUtils.createLockedTextView(context, "▼", 8.0f, 0xDDFFFFFF);
+        mCommentButton = UIUtils.createLockedTextView(context, "▼", 8.0f, (UiThemes.EDITOR.text().strong() & 0x00FFFFFF) | 0xDD000000);
         mCommentButton.setGravity(Gravity.CENTER);
         mCommentButton.setBackground(null);
         mCommentButton.setOnClickListener(v -> toggleCommentPopup());
@@ -412,18 +412,20 @@ final class NodeOverlayController {
         int buttonSize = UIUtils.dp2pxInt(12);
         FrameLayout.LayoutParams buttonLp = new FrameLayout.LayoutParams(buttonSize, buttonSize);
         buttonLp.gravity = Gravity.TOP | Gravity.LEFT;
-        buttonLp.topMargin = UIUtils.dp2pxInt((UIConstants.Node.HEADER_HEIGHT - 12) / 2.0f);
+        buttonLp.topMargin = UIUtils.dp2pxInt((NodeUiMetrics.HEADER_HEIGHT - 12) / 2.0f);
         buttonLp.leftMargin = UIUtils.dp2pxInt(mNodeWidth - 5 - 12);
         mHost.addView(mCommentButton, buttonLp);
 
-        mCommentTooltip = UIUtils.createLockedTextView(context, comment.trim(), 9.0f, UIConstants.CLR_WHITE);
+        mCommentTooltip = UIUtils.createLockedTextView(context, comment.trim(), 9.0f, UiThemes.EDITOR.text().strong());
         mCommentTooltip.setGravity(Gravity.LEFT | Gravity.TOP);
         mCommentTooltip.setSingleLine(false);
         mCommentTooltip.setHorizontallyScrolling(false);
         mCommentTooltip.setMinLines(1);
         mCommentTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
-        mCommentTooltip.setBackground(createRectDrawable(0xF0222222, 4.0f, 1, 0xFF555555));
+        mCommentTooltip.setBackground(createRectDrawable(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
         mCommentTooltip.setTextIsSelectable(true);
+        mCommentTooltip.setHighlightColor(UiThemes.EDITOR.selection().text());
+        UiScrollView.applyScrollbarColors(mCommentTooltip, UiThemes.EDITOR.scroll());
         mCommentTooltip.setVerticalScrollBarEnabled(true);
         mCommentTooltip.setVisibility(View.GONE);
 
@@ -471,7 +473,7 @@ final class NodeOverlayController {
             int units = estimateTextUnits(paragraph);
             lines += Math.max(1, (int) Math.ceil(units / (double) maxUnitsPerLine));
         }
-        return Math.max(UIConstants.Node.HEADER_HEIGHT, lines * 15 + 16);
+        return Math.max(NodeUiMetrics.HEADER_HEIGHT, lines * 15 + 16);
     }
 
     private int estimateTextUnits(String text) {

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -9,7 +9,7 @@ import icyllis.modernui.widget.LinearLayout;
 
 /** Draws the tree-local drop indicator after its rows. */
 final class DataLibraryTreeLayout extends LinearLayout {
-    private static final int DROP_INDICATOR_COLOR = UiTheme.Control.FOCUS;
+    private static final int DROP_INDICATOR_COLOR = UiThemes.EDITOR.selection().outline();
     private final Paint indicatorPaint = new Paint();
     private int indicatorY = -1;
     private int indicatorLeft = -1;

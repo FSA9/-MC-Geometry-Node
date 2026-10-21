@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.entitypreview.EntityPreviewClient;
-
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.DeferredEntityPreviewGuard;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
@@ -32,7 +31,6 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-
 import java.lang.ref.WeakReference;
 import java.util.Objects;
 import java.util.UUID;
@@ -47,6 +45,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
     private static EntityTemplateValue sClipboardTemplate;
 
+    private final ValuePreviewStyle mPreviewStyle;
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
     private final PreviewZoomController mZoom = new PreviewZoomController(() -> {
@@ -93,13 +92,22 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     public EntityTemplatePreviewView(Context context, RotationMode rotationMode) {
+        this(context, rotationMode, ValuePreviewStyle.DEFAULT);
+    }
+
+    public EntityTemplatePreviewView(Context context, RotationMode rotationMode, ValuePreviewStyle style) {
         super(context);
+        mPreviewStyle = style != null ? style : ValuePreviewStyle.DEFAULT;
         mRotationMode = rotationMode != null ? rotationMode : RotationMode.HORIZONTAL;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         setWillNotDraw(false);
         setClipChildren(false);
         updateFocusableState();
         setOnFocusChangeListener((view, focused) -> invalidate());
+    }
+
+    public final ValuePreviewStyle getPreviewStyle() {
+        return mPreviewStyle;
     }
 
     @Override
@@ -478,22 +486,24 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
         float width = getWidth();
         float height = getHeight();
-        float radius = UIUtils.dp2px(ValuePreviewStyle.CORNER_RADIUS_DP);
-        float stroke = UIUtils.dp2px(ValuePreviewStyle.STROKE_WIDTH_DP);
+        float radius = UIUtils.dp2px(mPreviewStyle.cornerRadiusDp());
+        float stroke = UIUtils.dp2px(mPreviewStyle.strokeWidthDp());
         mPaint.setAntiAlias(true);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(ValuePreviewStyle.COLOR_BACKGROUND);
+        mPaint.setColor(mPreviewStyle.backgroundColor());
         mTempRect.set(0, 0, width, height);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
 
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(isFocused()
-                ? ValuePreviewStyle.COLOR_BORDER_FOCUSED
-                : ValuePreviewStyle.COLOR_BORDER);
-        mTempRect.set(stroke / 2.0f, stroke / 2.0f, width - stroke / 2.0f, height - stroke / 2.0f);
-        canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+        if (stroke > 0) {
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(stroke);
+            mPaint.setColor(isFocused()
+                    ? mPreviewStyle.focusBorderColor()
+                    : mPreviewStyle.borderColor());
+            mTempRect.set(stroke / 2.0f, stroke / 2.0f, width - stroke / 2.0f, height - stroke / 2.0f);
+            canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+        }
     }
 
     @Override

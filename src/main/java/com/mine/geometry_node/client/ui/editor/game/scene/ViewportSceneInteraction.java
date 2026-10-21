@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.scene.ClientSceneService;
@@ -295,7 +296,7 @@ public final class ViewportSceneInteraction {
                 boolean selected=selection.contains(object.id());boolean active=object.id().equals(service.snapshot().active());
                 float x=px(bounds,projected.u()),y=py(bounds,projected.v()),r=UIUtils.dp2px(selected?7:5);
                 paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(selected?2:1.3f));
-                paint.setColor(selected?(active?0xFFFFD98A:0xFFFF9E35):Objects.equals(hovered,object.id())?0xFFFFFFFF:0xFFE4D899);
+                paint.setColor(selected?(active?UiThemes.EDITOR.text().strong():UiThemes.EDITOR.selection().outline()):Objects.equals(hovered,object.id())?UiThemes.EDITOR.text().strong():UiThemes.EDITOR.text().secondary());
                 canvas.drawCircle(x,y,r,paint);canvas.drawLine(x-r*1.7f,y,x+r*1.7f,y,paint);canvas.drawLine(x,y-r*1.7f,x,y+r*1.7f,paint);
                 if(active&&selected&&visibility.helpers())drawRange(canvas,object);
             }
@@ -303,8 +304,8 @@ public final class ViewportSceneInteraction {
         }
         worldOverlay.draw(canvas,frame,bounds,actionableWorldSelection(),worldActions.target(),this::selectable);
         if(pressed&&marquee){
-            paint.setStyle(Paint.FILL);paint.setColor(0x224C9AFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
-            paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0xFF75AFFF);canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
+            paint.setStyle(Paint.FILL);paint.setColor(UiThemes.EDITOR.selection().marqueeFill());canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
+            paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(UiThemes.EDITOR.selection().outline());canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
         }
         paint.setStyle(Paint.FILL);canvas.restore();
     }
@@ -326,7 +327,7 @@ public final class ViewportSceneInteraction {
     }
     private void drawBounds(Canvas canvas,SceneObject object,boolean selected){
         AABB box=selectionBounds(object,frame);
-        paint.setColor(selected?0xFFFFB547:0xFFFFFFFF);paint.setStrokeWidth(UIUtils.dp2px(selected?2:1));
+        paint.setColor(selected?UiThemes.EDITOR.selection().outline():UiThemes.EDITOR.text().strong());paint.setStrokeWidth(UIUtils.dp2px(selected?2:1));
         for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0){
             int j=i|bit;
             var a=ViewportSceneMath.project(frame,new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));
@@ -335,7 +336,7 @@ public final class ViewportSceneInteraction {
         }
     }
     private void drawRange(Canvas canvas,SceneObject object){
-        paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(0x66FFB547);
+        paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor((UiThemes.EDITOR.selection().outline() & 0x00FFFFFF) | 0x66000000);
         for(int plane=0;plane<3;plane++)for(int i=0;i<48;i++){
             double a=i*Math.PI/24,b=(i+1)*Math.PI/24,r=0.5;
             Vec3 p=com.mine.geometry_node.core.engine.system.scene.SceneTransforms.local(object,ring(plane,Math.cos(a)*r,Math.sin(a)*r)).add(object.position()),q=com.mine.geometry_node.core.engine.system.scene.SceneTransforms.local(object,ring(plane,Math.cos(b)*r,Math.sin(b)*r)).add(object.position());
@@ -361,6 +362,7 @@ public final class ViewportSceneInteraction {
     private void drawAxes(Canvas canvas){
         Vec3 center=selectedCenter();if(center==null)return;var p=ViewportSceneMath.project(frame,center);if(!p.visible())return;
         float x=px(bounds,p.u()),y=py(bounds,p.v());double length=axisLength(center);
+        // XYZ identity colors and the active-axis yellow belong to the transform gizmo, not the UI theme.
         for(int i=0;i<3;i++){var axis=AXES[i];var end=ViewportSceneMath.project(frame,center.add(axis.x*length,axis.y*length,axis.z*length));if(!end.visible())continue;
             paint.setColor((dragAxis==axis||(transforming()&&(transform.axes()&(1<<i))!=0))?0xFFFFFF77:new int[]{0xFFEB5967,0xFFA4CE50,0xFF4698EE}[i]);paint.setStrokeWidth(UIUtils.dp2px(2));
             float ex=px(bounds,end.u()),ey=py(bounds,end.v());canvas.drawLine(x,y,ex,ey,paint);paint.setStyle(Paint.FILL);canvas.drawCircle(ex,ey,UIUtils.dp2px(7),paint);drawAxisLetter(canvas,axis,ex,ey);
@@ -368,6 +370,7 @@ public final class ViewportSceneInteraction {
     }
     private void drawAxisLetter(Canvas canvas,EditViewportCamera.Axis axis,float x,float y){
         float unit=UIUtils.dp2px(1),w=2.3f*unit,h=3.1f*unit;
+        // Fixed dark ink must contrast with every colored axis handle.
         paint.setColor(0xFF182029);paint.setStrokeWidth(1.2f*unit);
         if(axis.x!=0){canvas.drawLine(x-w,y-h,x+w,y+h,paint);canvas.drawLine(x+w,y-h,x-w,y+h,paint);}
         else if(axis.y!=0){canvas.drawLine(x-w,y-h,x,y,paint);canvas.drawLine(x+w,y-h,x,y,paint);canvas.drawLine(x,y,x,y+h,paint);}

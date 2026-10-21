@@ -1,14 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.base.layout.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;
 import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
@@ -33,12 +33,10 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
-
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
@@ -55,14 +53,14 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
             Set.of(SidebarPanelScope.GRAPH_EDITOR, SidebarPanelScope.ASSET_BROWSER),
             GraphPropertiesPanel::create, com.mine.geometry_node.client.ui.components.base.icon.SvgIconView.Icon.PROPERTIES);
 
-    private static final int COLOR_BACKGROUND = 0xFF303030;
-    private static final int COLOR_SECTION = 0xFF292929;
-    private static final int COLOR_INPUT = 0xFF242424;
-    private static final int COLOR_INPUT_BORDER = 0xFF4A4A4A;
-    private static final int COLOR_LABEL = 0xFFA8A8A8;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF777777;
-    private static final int COLOR_ERROR = 0xFFE18A8A;
+    private static final int COLOR_BACKGROUND = UiThemes.EDITOR.surface().sidebar();
+    private static final int COLOR_SECTION = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_INPUT = UiThemes.EDITOR.control().input();
+    private static final int COLOR_INPUT_BORDER = UiThemes.EDITOR.control().inputBorder();
+    private static final int COLOR_LABEL = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().hint();
+    private static final int COLOR_ERROR = UiThemes.EDITOR.status().error();
 
     private final ScrollView mScroll;
     private final LinearLayout mContent;
@@ -122,7 +120,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
 
         mCommentSectionTitle = addSectionTitle(tr("geometry_node.graph_properties.comment"), 10);
         mCommentInput = new UiTextInput(context, new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, COLOR_TEXT, COLOR_MUTED,
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, COLOR_TEXT, COLOR_MUTED,
                 COLOR_INPUT, COLOR_INPUT_BORDER));
         mCommentInput.setSingleLine(false);
         mCommentInput.setMinLines(4);
@@ -159,7 +157,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         mContent.addView(inputRow, inputRowParams);
 
         mTagInput = new UiTextInput(context, new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, COLOR_TEXT, COLOR_MUTED,
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, COLOR_TEXT, COLOR_MUTED,
                 COLOR_INPUT, COLOR_INPUT_BORDER));
         mTagInput.setSingleLine(true);
         mTagInput.setTextColor(COLOR_TEXT);

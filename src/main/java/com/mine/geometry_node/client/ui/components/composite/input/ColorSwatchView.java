@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.input;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ColorPickerDialog;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
@@ -8,22 +10,14 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.View;
-
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Color preview with transparency checker and picker; the callback owns persistence and history. */
 public final class ColorSwatchView extends View {
-    private static final int COLOR_BG = 0xFF252525;
-    private static final int COLOR_BG_HOVER = 0xFF30343B;
-    private static final int COLOR_BG_ACTIVE = 0xFF343B45;
-    private static final int COLOR_BORDER = 0xFF333333;
-    private static final int COLOR_BORDER_HOVER = 0xFF566070;
-    private static final int COLOR_CHECKER_LIGHT = 0xFFB7BDC7;
-    private static final int COLOR_CHECKER_DARK = 0xFF6B7280;
-
     private static final float CHECKER_SIZE_DP = 4.0f;
 
+    private final UiTheme mTheme;
     private final Supplier<ColorValue> mColorSupplier;
     private final Consumer<ColorValue> mOnColorSelected;
     private final Paint mPaint = new Paint();
@@ -33,7 +27,13 @@ public final class ColorSwatchView extends View {
     private long mPickerGeneration;
 
     public ColorSwatchView(Context context, Supplier<ColorValue> colorSupplier, Consumer<ColorValue> onColorSelected) {
+        this(context, colorSupplier, onColorSelected, UiThemes.EDITOR);
+    }
+
+    public ColorSwatchView(Context context, Supplier<ColorValue> colorSupplier,
+                           Consumer<ColorValue> onColorSelected, UiTheme theme) {
         super(context);
+        mTheme = java.util.Objects.requireNonNull(theme, "theme");
         mColorSupplier = colorSupplier;
         mOnColorSelected = onColorSelected;
 
@@ -74,7 +74,8 @@ public final class ColorSwatchView extends View {
         mRect.set(0, 0, w, h);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(isPressed() ? COLOR_BG_ACTIVE : (isHovered() ? COLOR_BG_HOVER : COLOR_BG));
+        mPaint.setColor(isEnabled() && isPressed() ? mTheme.buttons().inline().hover()
+                : isEnabled() && isHovered() ? mTheme.buttons().inline().normal() : mTheme.surface().panel());
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
         drawChecker(canvas, mRect);
@@ -85,7 +86,8 @@ public final class ColorSwatchView extends View {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(isEnabled() && (isHovered() || isPressed() || isFocused()) ? COLOR_BORDER_HOVER : COLOR_BORDER);
+        mPaint.setColor(isEnabled() && (isHovered() || isPressed() || isFocused())
+                ? mTheme.border().focus() : mTheme.border().subtle());
         mRect.set(stroke * 0.5f, stroke * 0.5f, w - stroke * 0.5f, h - stroke * 0.5f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
     }
@@ -114,7 +116,7 @@ public final class ColorSwatchView extends View {
             mColor = next;
             if (mColorSupplier != null) syncFromSupplier();
             invalidate();
-        });
+        }, mTheme);
     }
 
     @Override
@@ -141,7 +143,8 @@ public final class ColorSwatchView extends View {
         for (float y = rect.top; y < rect.bottom; y += size, yIndex++) {
             int xIndex = 0;
             for (float x = rect.left; x < rect.right; x += size, xIndex++) {
-                mPaint.setColor(((xIndex + yIndex) & 1) == 0 ? COLOR_CHECKER_LIGHT : COLOR_CHECKER_DARK);
+                mPaint.setColor(((xIndex + yIndex) & 1) == 0
+                        ? mTheme.decoration().checkerLight() : mTheme.decoration().checkerDark());
                 canvas.drawRect(x, y, Math.min(x + size, rect.right), Math.min(y + size, rect.bottom), mPaint);
             }
         }

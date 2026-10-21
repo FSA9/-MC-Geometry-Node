@@ -1,12 +1,11 @@
 package com.mine.geometry_node.client.ui.components.composite.input;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
-
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
@@ -19,18 +18,25 @@ public final class UiSearchBar extends LinearLayout {
     private final UiIconButton submit;
 
     public UiSearchBar(Context context, CharSequence hint, CharSequence actionName, Runnable action) {
+        this(context, hint, actionName, action, UiThemes.EDITOR);
+    }
+
+    public UiSearchBar(Context context, CharSequence hint, CharSequence actionName, Runnable action, UiTheme theme) {
         super(context);
+        java.util.Objects.requireNonNull(theme, "theme");
         setOrientation(HORIZONTAL);
         setBaselineAligned(false);
         setGravity(Gravity.CENTER_VERTICAL);
         int size = UIUtils.dp2pxInt(CONTROL_SIZE_DP);
-        input = new UiSearchInput(context);
+        input = UiSearchInput.createThemed(context, theme);
         input.setHint(hint);
         addView(input, new LayoutParams(0, size, 1));
-        submit = new UiIconButton(context, new SvgIconView(context, SvgIconView.Icon.SEARCH, UiTheme.Text.SECONDARY),
-                new UiIconButton.Style(0, 1, UiTheme.Control.ICON,
-                        UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                        UiTheme.Control.ICON, UiTheme.Control.BORDER, 14, .5f));
+        submit = new UiIconButton(context, new SvgIconView(context, SvgIconView.Icon.SEARCH, theme.text().secondary()),
+                new UiIconButton.Style(0, 1, theme.control().icon(),
+                        theme.control().iconHover(), theme.control().iconPressed(),
+                        theme.control().icon(), theme.border().strong(), theme.border().strong(),
+                        0, 0, 0, 0, 14, .5f,
+                        theme.border().focus()));
         submit.setContentDescription(actionName);
         UiSearchSubmit.bind(submit, action, input);
         LayoutParams params = new LayoutParams(size, size);

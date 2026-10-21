@@ -15,12 +15,11 @@ final class ChoiceConfigEntryEditor extends AbstractConfigEntryEditor<String> {
     private ChoiceConfigEntryEditor(Context context, ConfigDraft draft, ConfigEntry<String> entry,
                                     SettingsEditorEnvironment environment) {
         super(context, draft, entry, environment);
-        mButton = text(context, "", 10.5f, SettingsEditorStyle.TEXT);
+        mButton = SettingsEditorStyle.actionButton(context, "");
         mButton.setGravity(Gravity.CENTER_VERTICAL);
         mButton.setPadding(UIUtils.dp2pxInt(9), 0, UIUtils.dp2pxInt(9), 0);
         mButton.setFocusable(true);
         mButton.setFocusableInTouchMode(true);
-        mButton.setBackground(SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL, 3.0f, SettingsEditorStyle.BORDER));
         mButton.setOnClickListener(view -> openChoices());
         mControlHost.addView(mButton, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(220), UIUtils.dp2pxInt(28)));
     }

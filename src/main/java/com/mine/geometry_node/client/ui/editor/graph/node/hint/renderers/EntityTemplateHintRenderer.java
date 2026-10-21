@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
@@ -11,9 +12,9 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public final class EntityTemplateHintRenderer implements UIHintRenderer {
-    private static final float PREVIEW_SIZE_DP = UIConstants.Node.ROW_HEIGHT * 6.0f;
+    private static final float PREVIEW_SIZE_DP = NodeUiMetrics.ROW_HEIGHT * 6.0f;
     private static final float CONTENT_HEIGHT_DP = TemplateEditorHintLayout.contentHeightDp(PREVIEW_SIZE_DP);
-    private static final float EXTRA_ROWS = CONTENT_HEIGHT_DP / UIConstants.Node.ROW_HEIGHT;
+    private static final float EXTRA_ROWS = CONTENT_HEIGHT_DP / NodeUiMetrics.ROW_HEIGHT;
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
@@ -41,9 +42,9 @@ public final class EntityTemplateHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float topOffset = row.leftPort() != null || row.rightPort() != null ? UIConstants.Node.ROW_HEIGHT : 0.0f;
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float topOffset = row.leftPort() != null || row.rightPort() != null ? NodeUiMetrics.ROW_HEIGHT : 0.0f;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
 
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 UIUtils.dp2pxInt(endX - startX),

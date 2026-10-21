@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.components.base.icon;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Bitmap;
 import icyllis.modernui.graphics.Canvas;
@@ -9,7 +10,6 @@ import icyllis.modernui.view.View;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -87,7 +87,7 @@ public class SvgIconView extends View {
         }
     }
 
-    private static final int DEFAULT_COLOR = 0xFFB8C0CC;
+    private static final int DEFAULT_COLOR = UiThemes.EDITOR.text().secondary();
     private static final int MAX_CACHED_IMAGES = 64;
     private static final BoundedCache<String, SvgDocument> DOCUMENTS =
             new BoundedCache<>(128, Long.MAX_VALUE, Duration.ZERO, ignored -> 1, ignored -> {});
@@ -142,6 +142,11 @@ public class SvgIconView extends View {
         }
         mResourcePath = icon.resourcePath();
         invalidate();
+    }
+
+    /** The resolved tint currently used by this renderer. */
+    public int getIconColor() {
+        return mColor;
     }
 
     public void setIconColor(int color) {

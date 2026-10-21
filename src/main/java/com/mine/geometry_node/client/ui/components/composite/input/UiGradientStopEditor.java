@@ -15,6 +15,7 @@ import java.util.Objects;
 
 /** Gradient display and stop dragging. Preview, persistence and undo belong to the supplied binding. */
 public final class UiGradientStopEditor extends View {
+    // Content-editing guides need fixed contrast against arbitrary gradient colors, not theme accents.
     private static final int COLOR_SELECTED = 0xFFFFFFFF;
     private static final int COLOR_STOP = 0xFF101010;
 

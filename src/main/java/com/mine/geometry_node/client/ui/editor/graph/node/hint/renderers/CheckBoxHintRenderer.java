@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
@@ -40,9 +41,9 @@ public class CheckBoxHintRenderer implements UIHintRenderer {
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(cbSizePx, cbSizePx);
         lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = UIUtils.dp2pxInt(UIConstants.Node.LABEL_MARGIN_PORT);
+        lp.leftMargin = UIUtils.dp2pxInt(NodeUiMetrics.LABEL_MARGIN_PORT);
 
-        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - UIHintUtils.getStandardInputHeight()) / 2.0f;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - UIHintUtils.getStandardInputHeight()) / 2.0f;
         lp.topMargin = UIUtils.dp2pxInt(currentY + verticalMargin);
 
         view.setLayoutParams(lp);

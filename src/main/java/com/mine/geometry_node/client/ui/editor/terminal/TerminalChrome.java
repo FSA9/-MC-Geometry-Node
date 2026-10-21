@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import net.minecraft.network.chat.Component;
@@ -12,7 +13,7 @@ final class TerminalChrome {
 
     static UiActionButton action(Context context, String text) {
         UiActionButton button = UiActionButton.withPalette(context, text, palette(false),
-                UiActionButton.Density.NORMAL, new UiActionButton.Style(0, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+                UiActionButton.Density.NORMAL, new UiActionButton.Style(0, 0, 0, UiMetrics.DISABLED_ALPHA));
         button.setMinWidth(0);
         button.setMinHeight(0);
         button.setMinimumWidth(0);
@@ -26,9 +27,9 @@ final class TerminalChrome {
     }
 
     static UiActionButton.Palette palette(boolean selected) {
-        return new UiActionButton.Palette(selected ? UiTheme.Control.ICON : 0,
-                UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                selected ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+        return new UiActionButton.Palette(selected ? UiThemes.EDITOR.control().icon() : 0,
+                UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(),
+                selected ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted());
     }
 
     static String tr(String suffix) {

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.runtime.dialogue.ui;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import icyllis.modernui.widget.FrameLayout;
@@ -16,11 +18,17 @@ import javax.annotation.Nonnull;
  */
 public final class VanillaComponentView extends FrameLayout {
     private final float textSizeDp;
+    private final UiTheme theme;
     private final MinecraftSurfaceView surfaceView;
     private volatile Component text;
 
     public VanillaComponentView(Context context, Component text, float textSizeDp) {
+        this(context, text, textSizeDp, UiThemes.HUD);
+    }
+
+    public VanillaComponentView(Context context, Component text, float textSizeDp, UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         this.text = safeCopy(text);
         this.textSizeDp = Math.max(1.0f, textSizeDp);
 
@@ -63,8 +71,10 @@ public final class VanillaComponentView extends FrameLayout {
         float textScale = targetLineHeight / font.lineHeight;
         float viewHeight = surfaceView.getHeight() / safeGuiScale;
         float drawY = Math.max(0.0f, (viewHeight - font.lineHeight * textScale) * 0.5f);
+        // The theme supplies fallback RGB. Native text applies draw alpha to every run,
+        // so opacity comes only from the surface, including explicitly colored content.
         int opacity = Math.max(0, Math.min(255, Math.round(alpha * 255.0f)));
-        int fallbackColor = (opacity << 24) | 0xFFFFFF;
+        int fallbackColor = UiTheme.withAlpha(theme.text().strong(), opacity);
 
         graphics.pose().pushMatrix();
         graphics.pose().translate(0.0f, drawY);

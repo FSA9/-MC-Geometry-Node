@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.base.scroll;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.graphics.drawable.Drawable;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -16,15 +18,37 @@ final class UiScrollBehavior {
         this.horizontal = horizontal;
     }
 
-    void configure(View host) {
+    void configure(View host, UiTheme.Scroll colors) {
         host.setScrollBarSize(Math.max(1, UIUtils.dp2pxInt(BAR_SIZE_DP)));
         // Outside means the track sits at the view edge, independently of user padding.
         // Inset reserves its width so no child button is painted underneath it.
         host.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_INSET);
-        // Native line strokes use the toolkit density and can exceed our scaled track.
-        // Filled rectangles stay inside the bounds that native scrollbar fading invalidates.
-        ShapeDrawable thumb = barDrawable(0x84ffffff);
-        ShapeDrawable track = barDrawable(0x39ffffff);
+        applyColors(host, horizontal, colors, -1);
+    }
+
+    /** Drawable colors only, also usable by native text scrolling without changing its geometry. */
+    static void applyColors(View host, boolean horizontal, UiTheme.Scroll colors) {
+        Drawable track = horizontal ? host.getHorizontalScrollbarTrackDrawable() : host.getVerticalScrollbarTrackDrawable();
+        Drawable sizing = track != null ? track : horizontal
+                ? host.getHorizontalScrollbarThumbDrawable() : host.getVerticalScrollbarThumbDrawable();
+        int intrinsicSize = sizing == null ? -1 : horizontal ? sizing.getIntrinsicHeight() : sizing.getIntrinsicWidth();
+        applyColors(host, horizontal, colors, intrinsicSize);
+    }
+
+    private static void applyColors(View host, boolean horizontal, UiTheme.Scroll colors, int intrinsicSize) {
+        java.util.Objects.requireNonNull(colors, "colors");
+        // Filled rectangles stay inside the native scrollbar's fading bounds.
+        ShapeDrawable thumb = barDrawable(colors.thumb());
+        ShapeDrawable track = barDrawable(colors.track());
+        // ModernUI gives the track's intrinsic thickness priority over getScrollBarSize().
+        // Preserve that choice for native text; shared scroll containers explicitly use BAR_SIZE_DP.
+        if (horizontal) {
+            track.setSize(-1, intrinsicSize);
+            thumb.setSize(-1, intrinsicSize);
+        } else {
+            track.setSize(intrinsicSize, -1);
+            thumb.setSize(intrinsicSize, -1);
+        }
         if (horizontal) {
             host.setHorizontalScrollbarThumbDrawable(thumb);
             host.setHorizontalScrollbarTrackDrawable(track);

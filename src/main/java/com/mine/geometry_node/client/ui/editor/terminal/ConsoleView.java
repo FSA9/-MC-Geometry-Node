@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
@@ -18,7 +19,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import icyllis.modernui.view.View;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -53,7 +53,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
     public ConsoleView(Context context) {
         super(context);
-        setBackground(createColorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.ROOT));
+        setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
 
         // 1. 底层主视图
         LinearLayout mainLayout = new LinearLayout(context);
@@ -69,16 +69,17 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         LinearLayout inputLayout = new LinearLayout(context);
         inputLayout.setOrientation(LinearLayout.HORIZONTAL);
         inputLayout.setGravity(Gravity.CENTER_VERTICAL);
-        inputLayout.setBackground(createColorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.PANEL));
+        inputLayout.setBackground(createColorDrawable(UiThemes.EDITOR.surface().panel()));
         inputLayout.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
 
-        TextView prompt = UIUtils.createLockedTextView(context, "geom-node $ ", 14f, 0xFF00AAFF);
+        TextView prompt = UIUtils.createLockedTextView(context, "geom-node $ ", 14f, UiThemes.EDITOR.status().info());
         inputLayout.addView(prompt);
 
         mInputBox = new EditText(context);
-        mInputBox.setTextColor(0xFFFFFFFF);
+        mInputBox.setTextColor(UiThemes.EDITOR.text().strong());
         mInputBox.setTextSize(TypedValue.COMPLEX_UNIT_PX, UIUtils.dp2px(14f));
         mInputBox.setBackground(null);
+        mInputBox.setHighlightColor(UiThemes.EDITOR.selection().text());
         mInputBox.setSingleLine(true);
         inputLayout.addView(mInputBox, new LinearLayout.LayoutParams(0, UIUtils.dp2pxInt(32f), 1f));
 
@@ -88,7 +89,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         // 2. 顶层悬浮视图
         mSuggestionContainer = new LinearLayout(context);
         mSuggestionContainer.setOrientation(LinearLayout.VERTICAL);
-        mSuggestionContainer.setBackground(createColorDrawable(0xFF333333));
+        mSuggestionContainer.setBackground(createColorDrawable(UiThemes.EDITOR.surface().popup()));
         mSuggestionContainer.setVisibility(View.GONE);
 
         LayoutParams suggLp = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -97,14 +98,14 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         suggLp.leftMargin = UIUtils.dp2pxInt(80f);
         addView(mSuggestionContainer, suggLp);
         for (int i = 0; i < MAX_VISIBLE_SUGGESTIONS; i++) {
-            TextView suggestionView = UIUtils.createLockedTextView(context, "", 13f, 0xFFCCCCCC);
+            TextView suggestionView = UIUtils.createLockedTextView(context, "", 13f, UiThemes.EDITOR.text().secondary());
             suggestionView.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(6),
                     UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(6));
             suggestionView.setVisibility(View.GONE);
             mSuggestionViews.add(suggestionView);
             mSuggestionContainer.addView(suggestionView);
         }
-        mMoreSuggestionsView = UIUtils.createLockedTextView(context, "... 更多匹配项", 11f, 0xFF888888);
+        mMoreSuggestionsView = UIUtils.createLockedTextView(context, "... 更多匹配项", 11f, UiThemes.EDITOR.text().muted());
         mMoreSuggestionsView.setPadding(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4),
                 UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(4));
         mMoreSuggestionsView.setVisibility(View.GONE);
@@ -129,7 +130,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
             return false;
         });
 
-        onLog("欢迎使用节点控制台。按 TAB 补全，按 ↑/↓ 浏览历史。", 0xFF888888);
+        onLog("欢迎使用节点控制台。按 TAB 补全，按 ↑/↓ 浏览历史。", UiThemes.EDITOR.text().muted());
     }
 
     // --- 键盘控制逻辑 ---
@@ -224,8 +225,8 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
             }
             boolean isSelected = (i == mSuggestionIndex);
             suggestionView.setText(mCurrentSuggestions.get(i).displayText());
-            suggestionView.setTextColor(isSelected ? 0xFFFFFFFF : 0xFFCCCCCC);
-            suggestionView.setBackground(isSelected ? createColorDrawable(0xFF0055AA) : null);
+            suggestionView.setTextColor(isSelected ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().secondary());
+            suggestionView.setBackground(isSelected ? createColorDrawable(UiThemes.EDITOR.selection().fill()) : null);
             suggestionView.setVisibility(View.VISIBLE);
         }
 
@@ -246,7 +247,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         }
         mHistoryIndex = mCommandHistory.size();
 
-        onLog("geom-node $ " + line, 0xFFFFFFFF);
+        onLog("geom-node $ " + line, UiThemes.EDITOR.text().strong());
 
         GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
         ConsoleCommandRegistry.executeLine(line, activeSession, this);
@@ -258,9 +259,11 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         TextView tv = new TextView(getContext());
         tv.setText(renderedText);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, UIUtils.dp2px(13f));
+        // Log producers own their content colors; only built-in prompts/statuses use UiTheme.
         tv.setTextColor(color);
         tv.setPadding(0, UIUtils.dp2pxInt(2), 0, UIUtils.dp2pxInt(2));
         tv.setTextIsSelectable(true);
+        tv.setHighlightColor(UiThemes.EDITOR.selection().text());
 
         mLogContainer.addView(tv);
         mLogEntries.addLast(new LogEntry(renderedText.length()));

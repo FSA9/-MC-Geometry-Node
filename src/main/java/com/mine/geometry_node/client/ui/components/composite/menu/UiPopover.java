@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuPanelLayout;
 import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
 
@@ -19,7 +22,11 @@ public final class UiPopover extends UiPopupOverlay {
 
     /** Size from the required child width in pixels, after individual UI dimensions are rounded. */
     public static UiPopover forContentWidth(Context context, View content, int contentWidthPx, int maxHeightDp) {
-        return new UiPopover(context, content, contentWidthPx, maxHeightDp, true);
+        return forContentWidth(context, content, contentWidthPx, maxHeightDp, UiThemes.EDITOR);
+    }
+
+    public static UiPopover forContentWidth(Context context, View content, int contentWidthPx, int maxHeightDp, UiTheme theme) {
+        return new UiPopover(context, content, contentWidthPx, maxHeightDp, true, theme);
     }
 
     public UiPopover(Context context, View content, int widthDp) {
@@ -28,14 +35,18 @@ public final class UiPopover extends UiPopupOverlay {
 
     /** A zero maximum height uses the available host height. */
     public UiPopover(Context context, View content, int widthDp, int maxHeightDp) {
-        this(context, content, widthDp, maxHeightDp, false);
+        this(context, content, widthDp, maxHeightDp, UiThemes.EDITOR);
     }
 
-    private UiPopover(Context context, View content, int requestedWidth, int maxHeightDp, boolean contentWidth) {
+    public UiPopover(Context context, View content, int widthDp, int maxHeightDp, UiTheme theme) {
+        this(context, content, widthDp, maxHeightDp, false, theme);
+    }
+
+    private UiPopover(Context context, View content, int requestedWidth, int maxHeightDp, boolean contentWidth, UiTheme theme) {
         super(context);
         if (requestedWidth <= 0 || maxHeightDp < 0) throw new IllegalArgumentException("Invalid popup dimensions");
         maxHeight = UIUtils.dp2pxInt(maxHeightDp);
-        panel = UiMenuPanelLayout.createPanel(context, content);
+        panel = UiMenuPanelLayout.createPanel(context, content, theme);
         width = contentWidth ? requestedWidth + panel.getPaddingLeft() + panel.getPaddingRight()
                 : UIUtils.dp2pxInt(requestedWidth);
         addView(panel, new FrameLayout.LayoutParams(width, -2));

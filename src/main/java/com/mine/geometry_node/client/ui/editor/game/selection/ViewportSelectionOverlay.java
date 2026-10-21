@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.selection;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
@@ -23,7 +24,7 @@ public final class ViewportSelectionOverlay {
         if (destination != null) box(canvas, frame, layout, new AABB(destination).inflate(.005));
     }
     private void box(Canvas canvas,PresentedViewportFrame frame,GameViewportLayout layout,AABB b) {
-        paint.setStyle(Paint.STROKE);paint.setColor(0xFF64FF91);
+        paint.setStyle(Paint.STROKE);paint.setColor(UiThemes.EDITOR.selection().outline());
         // No dp/pixel floor: distant outlines must shrink with the world as well.
         float width=projectedWidth(frame,layout,b.getCenter(),.02);
         if(width<=0)return;

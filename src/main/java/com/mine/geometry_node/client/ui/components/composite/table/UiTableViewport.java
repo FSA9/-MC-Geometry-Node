@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.composite.table;
 
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
@@ -15,7 +17,11 @@ public final class UiTableViewport extends UiHorizontalScrollView {
     private final Runnable widthsChanged = this::refreshTableWidths;
 
     public UiTableViewport(Context context, UiTableColumns columns, LinearLayout table) {
-        super(context);
+        this(context, columns, table, UiThemes.EDITOR);
+    }
+
+    public UiTableViewport(Context context, UiTableColumns columns, LinearLayout table, UiTheme theme) {
+        super(context, theme.scroll());
         this.columns = columns;
         this.table = table;
         setFillViewport(true);

@@ -1,8 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionId;
 import com.mine.geometry_node.client.ui.editor.asset.action.AssetLibraryActionRegistry;
@@ -37,7 +39,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,7 +46,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 final class AssetBrowserActionController {
@@ -219,13 +219,14 @@ final class AssetBrowserActionController {
 
         mIoTasks.run("移动文件",
                 context -> mLocalAssetService.moveFilesToDirectory(sourceFiles, targetDirectory, context),
-                (result, progress) -> {
+                result -> {
                     DocumentManager.INSTANCE.refreshFileReferences();
                     for (LocalAssetService.FileMove move : result.movedFiles()) {
                         ImageThumbnailView.invalidateUnder(move.source());
                         SchematicThumbnailView.invalidateUnder(move.source());
                         mFavoriteStore.updatePath(move.source(), move.destination());
                     }
+                }, (result, progress) -> {
                     if (!result.movedFiles().isEmpty()) {
                         mPanel.clearSelection();
                         mPanel.refreshFileList();
@@ -402,13 +403,14 @@ final class AssetBrowserActionController {
     private void runLocalDeleteTask(List<File> files) {
         mIoTasks.run("删除文件",
                 context -> mLocalAssetService.deleteFiles(files, context),
-                (result, progress) -> {
+                result -> {
                     DocumentManager.INSTANCE.refreshFileReferences();
                     for (File file : result.successfulFiles()) {
                         ImageThumbnailView.invalidateUnder(file);
                         SchematicThumbnailView.invalidateUnder(file);
                         mFavoriteStore.removePath(file);
                     }
+                }, (result, progress) -> {
                     if (!result.successfulFiles().isEmpty()) {
                         mPanel.clearSelection();
                         mPanel.refreshFileList();
@@ -529,8 +531,8 @@ final class AssetBrowserActionController {
         originalTextView.setVisibility(View.GONE);
 
         EditText editInput = new UiTextInput(mPanel.getContext(), new UiTextInput.Style(
-                TEXT_SIZE_LIST_ITEM, 6, UiTheme.Metrics.RADIUS_SMALL, UiTheme.Metrics.BORDER,
-                UiTheme.Text.STRONG, UiTheme.Text.HINT, UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                TEXT_SIZE_LIST_ITEM, 6, UiMetrics.RADIUS_SMALL, UiMetrics.BORDER,
+                UiThemes.EDITOR.text().strong(), UiThemes.EDITOR.text().hint(), UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         editInput.setSingleLine(true);
         editInput.setText(targetEntry.name());
 
@@ -584,13 +586,14 @@ final class AssetBrowserActionController {
         mPanel.refreshFileList();
         mIoTasks.run("重命名文件",
                 context -> mLocalAssetService.renameFile(targetFile, newName, context),
-                (result, progress) -> {
+                result -> {
                     DocumentManager.INSTANCE.refreshFileReferences();
                     if (result.renamed()) {
                         ImageThumbnailView.invalidateUnder(result.source());
                         SchematicThumbnailView.invalidateUnder(result.source());
                         mFavoriteStore.updatePath(result.source(), result.destination());
                     }
+                }, (result, progress) -> {
                     mPanel.refreshFileList();
                     progress.requestClose();
                 });
@@ -603,7 +606,7 @@ final class AssetBrowserActionController {
         boolean cutOperation = mClipboard.isLocalCut();
         mIoTasks.run(cutOperation ? "移动文件" : "复制文件",
                 context -> mLocalAssetService.pasteFiles(clipboardSnapshot, currentDirectory, cutOperation, context),
-                (result, progress) -> {
+                result -> {
                     if (cutOperation) {
                         DocumentManager.INSTANCE.refreshFileReferences();
                     }
@@ -612,6 +615,7 @@ final class AssetBrowserActionController {
                         SchematicThumbnailView.invalidateUnder(move.source());
                         mFavoriteStore.updatePath(move.source(), move.destination());
                     }
+                }, (result, progress) -> {
                     if (cutOperation && !result.movedFiles().isEmpty()) {
                         mClipboard.clearLocal();
                     }

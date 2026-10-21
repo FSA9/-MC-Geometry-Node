@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar.properties;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.Field;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.Kind;
@@ -12,7 +13,6 @@ import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.TextView;
-
 import java.util.function.Consumer;
 
 /** One schema field; synchronization never invokes the user-change callback. */
@@ -27,7 +27,7 @@ public final class ScenePropertyControl {
         this.field = field;
         this.changed = changed;
         if (!field.editable()) {
-            TextView text = UIUtils.createLockedTextView(context, "", 11, UiTheme.Text.MUTED);
+            TextView text = UIUtils.createLockedTextView(context, "", 11, UiThemes.EDITOR.text().muted());
             text.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             text.setSingleLine(true);
             text.setEllipsize(TextUtils.TruncateAt.END);
@@ -46,7 +46,7 @@ public final class ScenePropertyControl {
                 yield checkbox;
             }
             case CHOICE -> {
-                UiSelectButton button = new UiSelectButton(context, "", 11, () -> UiTheme.Metrics.RADIUS_SMALL);
+                UiSelectButton button = new UiSelectButton(context, "", 11, () -> UiMetrics.RADIUS_SMALL);
                 button.setOnClickListener(v -> showChoices.accept(this));
                 yield button;
             }

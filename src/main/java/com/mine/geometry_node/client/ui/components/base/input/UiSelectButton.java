@@ -1,7 +1,9 @@
 package com.mine.geometry_node.client.ui.components.base.input;
 
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -17,12 +19,7 @@ import icyllis.modernui.widget.*;
 
 /** Compact select trigger; options and persistence belong to its caller. */
 public final class UiSelectButton extends View {
-    private static final int COLOR_BUTTON_BG = UiTheme.Surface.PANEL;
-    private static final int COLOR_BUTTON_BG_HOVER = UiTheme.INLINE.normal();
-    private static final int COLOR_BUTTON_BG_ACTIVE = UiTheme.INLINE.hover();
-    private static final int COLOR_BUTTON_BORDER = UiTheme.Control.INPUT_BORDER;
-    private static final int COLOR_BUTTON_BORDER_HOVER = UiTheme.Control.FOCUS;
-
+    private final UiTheme theme;
 
     private final java.util.function.DoubleSupplier cornerRadius;
     private static final float TEXT_PADDING_DP = 8.0f;
@@ -36,7 +33,13 @@ public final class UiSelectButton extends View {
 
     public UiSelectButton(Context context, String value, float textSizeDp,
                           java.util.function.DoubleSupplier cornerRadius) {
+        this(context, value, textSizeDp, cornerRadius, UiThemes.EDITOR);
+    }
+
+    public UiSelectButton(Context context, String value, float textSizeDp,
+                          java.util.function.DoubleSupplier cornerRadius, UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         this.cornerRadius = cornerRadius;
         setWillNotDraw(false);
         setFocusable(true);
@@ -66,14 +69,14 @@ public final class UiSelectButton extends View {
         float radius = UIUtils.dp2px((float) cornerRadius.getAsDouble());
         float stroke = UIUtils.dp2px(1.0f);
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(isEnabled() && isPressed() ? COLOR_BUTTON_BG_ACTIVE
-                : isEnabled() && isHovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG);
+        mPaint.setColor(isEnabled() && isPressed() ? theme.buttons().inline().hover()
+                : isEnabled() && isHovered() ? theme.buttons().inline().normal() : theme.surface().panel());
         mRect.set(0, 0, w, h);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(isEnabled() && (isFocused() || isHovered()) ? COLOR_BUTTON_BORDER_HOVER : COLOR_BUTTON_BORDER);
+        mPaint.setColor(isEnabled() && (isFocused() || isHovered()) ? theme.border().focus() : theme.border().subtle());
         mRect.set(stroke * 0.5f, stroke * 0.5f, w - stroke * 0.5f, h - stroke * 0.5f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
@@ -83,14 +86,14 @@ public final class UiSelectButton extends View {
         float arrowX = Math.max(padding, w - padding - mArrowText.getAdvance());
 
         if (mValueText != null) {
-            mTextPaint.setColor(UiTheme.Text.SECONDARY);
+            mTextPaint.setColor(theme.text().secondary());
             int saved = canvas.save();
             canvas.clipRect(padding, 0, Math.max(padding, arrowX - padding), h);
             canvas.drawShapedText(mValueText, padding, baseline, mTextPaint);
             canvas.restoreToCount(saved);
         }
 
-        mTextPaint.setColor(UiTheme.Text.HINT);
+        mTextPaint.setColor(theme.text().hint());
         canvas.drawShapedText(mArrowText, arrowX, baseline, mTextPaint);
     }
 
@@ -103,7 +106,7 @@ public final class UiSelectButton extends View {
     protected void drawableStateChanged() {
         super.drawableStateChanged();
         if (!isEnabled() && isPressed()) setPressed(false);
-        setAlpha(isEnabled() ? 1 : UiTheme.Metrics.DISABLED_ALPHA);
+        setAlpha(isEnabled() ? 1 : UiMetrics.DISABLED_ALPHA);
         invalidate();
     }
 

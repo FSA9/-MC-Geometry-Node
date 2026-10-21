@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MeasureSpec;
@@ -20,10 +22,14 @@ public final class ItemPreviewCell extends ViewGroup {
 
     /** Preferred square size for inspector hosts; table cells keep their existing 64dp default. */
     public ItemPreviewCell(Context context, int preferredSizeDp) {
+        this(context, preferredSizeDp, UiThemes.EDITOR);
+    }
+
+    public ItemPreviewCell(Context context, int preferredSizeDp, UiTheme theme) {
         super(context);
         if (preferredSizeDp <= 0) throw new IllegalArgumentException("Preview size must be positive");
         this.preferredSizeDp = preferredSizeDp;
-        preview = new ItemSlotView(context);
+        preview = new ItemSlotView(context, ValuePreviewStyle.forTheme(theme), theme);
         preview.setVisibility(INVISIBLE);
         addView(preview, new LayoutParams(-2, -2));
     }

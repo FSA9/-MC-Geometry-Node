@@ -1,28 +1,26 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
-
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.Set;
 
 /** Settings for the owning viewport; it never owns another frame or camera. */
@@ -58,7 +56,7 @@ public final class GameViewportSidebarPanel extends UiScrollView implements Side
             params.bottomMargin = UIUtils.dp2pxInt(8);
             column.addView(button, params);
         }
-        help = UIUtils.createLockedTextView(context, "", 11, UiTheme.Text.SECONDARY);
+        help = UIUtils.createLockedTextView(context, "", 11, UiThemes.EDITOR.text().secondary());
         column.addView(help, new LinearLayout.LayoutParams(-1, -2));
         refresh();
     }
@@ -106,21 +104,21 @@ public final class GameViewportSidebarPanel extends UiScrollView implements Side
         if (!text.equals(lastHelp)) { lastHelp = text; help.setText(text); }
     }
 
-    private TextView button(Context context, String key, Runnable action) {
-        TextView view = new TextView(context) {
-            @Override protected void drawableStateChanged() {
-                super.drawableStateChanged();
-                ShapeDrawable background = new ShapeDrawable();
-                background.setColor(isPressed() ? UiTheme.Control.ICON_PRESSED
-                        : isHovered() ? UiTheme.Control.ICON_HOVER : UiTheme.Control.ICON);
-                background.setCornerRadius(UIUtils.dp2px(3));
-                if (isFocused()) background.setStroke(UIUtils.dp2pxInt(1), UiTheme.Control.FOCUS);
-                setBackground(background);
-            }
-        };
+    private static TextView button(Context context, String key, Runnable action) {
+        UiActionButton view = UiActionButton.withPalette(context, tr(key),
+                new UiActionButton.Palette(UiThemes.EDITOR.control().icon(),
+                        UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(),
+                        UiThemes.EDITOR.text().normal()),
+                UiActionButton.Density.COMPACT,
+                new UiActionButton.Style(3, 0, 0, UiMetrics.DISABLED_ALPHA));
+        view.setMinWidth(0);
+        view.setMinHeight(0);
+        view.setMinimumWidth(0);
+        view.setMinimumHeight(0);
+        view.setPadding(0, 0, 0, 0);
         view.setText(tr(key));
         UIUtils.setLockedTextSize(view, 11);
-        view.setTextColor(UiTheme.Text.NORMAL);
+        view.setTextColor(UiThemes.EDITOR.text().normal());
         view.setGravity(Gravity.CENTER);
         view.setSingleLine(true);
         view.setClickable(true);

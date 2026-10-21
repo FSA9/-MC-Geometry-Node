@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.components.base.button;
 
-import com.mine.geometry_node.client.ui.components.base.icon.UiIconColors;
-
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.base.icon.UiIconColors;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -14,10 +15,16 @@ import icyllis.modernui.view.Gravity;
 public class UiIconButton extends FrameLayout {
     private final Style style;
     private final View icon;
+    private Integer callerIconColor;
+    private Integer appliedIconColor;
     private final ShapeDrawable stateBackground = new ShapeDrawable();
 
     public UiIconButton(Context context, View icon) {
         this(context, icon, Style.DEFAULT);
+    }
+
+    public static UiIconButton createThemed(Context context, UiTheme theme, View icon) {
+        return new UiIconButton(context, icon, Style.forTheme(theme));
     }
 
     public UiIconButton(Context context, View icon, Style style) {
@@ -37,7 +44,6 @@ public class UiIconButton extends FrameLayout {
             FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(iconSize, iconSize);
             iconParams.gravity = Gravity.CENTER;
             addView(icon, iconParams);
-            applyIconColor(this.style.iconColor());
         }
         updateVisualState();
     }
@@ -73,13 +79,44 @@ public class UiIconButton extends FrameLayout {
     }
 
     private void applyIconColor(int color) {
-        UiIconColors.apply(icon, color);
+        if (icon == null || icon.getParent() != this) return;
+        updateIconColor(color);
+    }
+
+    private void updateIconColor(int color) {
+        Integer current = UiIconColors.get(icon);
+        if (current == null) return;
+        // A caller edit supersedes our saved tint, including edits made while disabled.
+        if (appliedIconColor == null || !current.equals(appliedIconColor)) callerIconColor = current;
+        if (color == 0) {
+            if (appliedIconColor != null && !current.equals(callerIconColor)) {
+                UiIconColors.apply(icon, callerIconColor);
+            }
+            appliedIconColor = null;
+        } else {
+            UiIconColors.apply(icon, color);
+            appliedIconColor = UiIconColors.get(icon);
+        }
+    }
+
+    @Override
+    protected void onViewAdded(View child) {
+        super.onViewAdded(child);
+        if (child == icon && style != null) {
+            applyIconColor(isEnabled() ? style.iconColor() : style.disabledIconColor());
+        }
+    }
+
+    @Override
+    protected void onViewRemoved(View child) {
+        if (child == icon) updateIconColor(0);
+        super.onViewRemoved(child);
     }
 
     private void updateBackground(int color, int strokeColor) {
         stateBackground.setColor(color);
         if (isEnabled() && isFocused()) {
-            stateBackground.setStroke(Math.max(1, UIUtils.dp2pxInt(UiTheme.Metrics.BORDER)), UiTheme.Control.FOCUS);
+            stateBackground.setStroke(Math.max(1, UIUtils.dp2pxInt(UiMetrics.BORDER)), style.focusColor());
         } else if (strokeColor != 0 && style.strokeWidthDp() > 0) {
             stateBackground.setStroke(Math.max(1, UIUtils.dp2pxInt(style.strokeWidthDp())), strokeColor);
         } else {
@@ -90,12 +127,27 @@ public class UiIconButton extends FrameLayout {
     public record Style(float cornerRadiusDp, float strokeWidthDp, int normalColor, int hoverColor,
                         int pressedColor, int disabledColor, int strokeColor,
                         int disabledStrokeColor, int iconColor, int disabledIconColor,
-                        float buttonWidthDp, float buttonHeightDp, float iconSizeDp, float disabledAlpha) {
-        public static final Style DEFAULT = new Style(1.0f, UiTheme.Metrics.BORDER,
-                UiTheme.Control.ICON, UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                UiTheme.Surface.PANEL, UiTheme.Control.ICON_BORDER, UiTheme.Control.ICON_DISABLED_BORDER,
-                UiTheme.Text.STRONG, UiTheme.Text.DISABLED, UiTheme.Metrics.ICON_BUTTON_SIZE,
-                UiTheme.Metrics.ICON_BUTTON_SIZE, UiTheme.Metrics.ICON_SIZE, 0.5f);
+                        float buttonWidthDp, float buttonHeightDp, float iconSizeDp, float disabledAlpha,
+                        int focusColor) {
+        public static final Style DEFAULT = forTheme(UiThemes.EDITOR);
+
+        public static Style forTheme(UiTheme theme) {
+            return new Style(1.0f, UiMetrics.BORDER,
+                    theme.control().icon(), theme.control().iconHover(), theme.control().iconPressed(),
+                    theme.control().disabledBackground(), theme.control().iconBorder(), theme.control().iconDisabledBorder(),
+                    theme.text().strong(), theme.text().disabled(), UiMetrics.ICON_BUTTON_SIZE,
+                    UiMetrics.ICON_BUTTON_SIZE, UiMetrics.ICON_SIZE, UiMetrics.DISABLED_ALPHA,
+                    theme.border().focus());
+        }
+
+        public Style(float cornerRadiusDp, float strokeWidthDp, int normalColor, int hoverColor,
+                     int pressedColor, int disabledColor, int strokeColor,
+                     int disabledStrokeColor, int iconColor, int disabledIconColor,
+                     float buttonWidthDp, float buttonHeightDp, float iconSizeDp, float disabledAlpha) {
+            this(cornerRadiusDp, strokeWidthDp, normalColor, hoverColor, pressedColor, disabledColor,
+                    strokeColor, disabledStrokeColor, iconColor, disabledIconColor,
+                    buttonWidthDp, buttonHeightDp, iconSizeDp, disabledAlpha, UiThemes.EDITOR.border().focus());
+        }
 
         public Style(float cornerRadiusDp, float strokeWidthDp, int normalColor,
                      int hoverColor, int strokeColor) {

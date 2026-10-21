@@ -1,11 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.graph.connection;
 
+import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
+
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionManager;
 import com.mine.geometry_node.core.node.document.Connection;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -42,14 +44,14 @@ public class ConnectionLayer {
         this.mViewport = viewport;
         mConnectionPaint.setAntiAlias(true);
         mConnectionPaint.setStyle(Paint.Style.STROKE);
-        mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION);
-        mConnectionPaint.setColor(0xFFE0E0E0);
+        mConnectionPaint.setStrokeWidth(GraphUiStyle.CONNECTION_LINE_WIDTH);
+        mConnectionPaint.setColor(UiThemes.EDITOR.graph().draftConnection());
     }
 
     public void draw(Canvas canvas, ViewportCamera camera) {
         if (!mViewport.isReady()) return;
 
-        float scaledLineWidth = UIConstants.ViewPort.LINE_WIDTH_CONNECTION * camera.getScale();
+        float scaledLineWidth = GraphUiStyle.CONNECTION_LINE_WIDTH * camera.getScale();
         mConnectionPaint.setStrokeWidth(scaledLineWidth);
 
         boolean canCull = mViewport.getWidth() > 0 && mViewport.getHeight() > 0;
@@ -73,7 +75,7 @@ public class ConnectionLayer {
     public void drawForExport(Canvas canvas, ViewportCamera camera) {
         if (!mViewport.isReady()) return;
 
-        mConnectionPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_CONNECTION * camera.getScale());
+        mConnectionPaint.setStrokeWidth(GraphUiStyle.CONNECTION_LINE_WIDTH * camera.getScale());
         for (int i = 0; i < mVisualConnections.size(); i++) {
             VisualConnection vc = mVisualConnections.get(i);
             mConnectionPaint.setColor(vc.color);
@@ -133,6 +135,7 @@ public class ConnectionLayer {
         mViewport.invalidate();
     }
 
+    // Real connections carry port-type identity; only the initial/draft paint uses a theme default.
     private int resolveConnectionColor(NodeGraph graph, NodeData outNode, String outPortId, boolean isExecution) {
         PortType type = graph != null
                 ? RerouteNodeSupport.resolvePortType(graph.nodes, outNode, outPortId, false)

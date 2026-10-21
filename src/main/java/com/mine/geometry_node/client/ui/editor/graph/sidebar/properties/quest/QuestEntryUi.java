@@ -1,13 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
 
@@ -26,7 +25,7 @@ final class QuestEntryUi {
         LinearLayout option = new LinearLayout(context);
         option.setGravity(Gravity.CENTER_VERTICAL);
         option.addView(toggle, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(14), UIUtils.dp2pxInt(14)));
-        TextView title = label(context, tr(labelKey), 10.5f, UiTheme.Text.MUTED);
+        TextView title = label(context, tr(labelKey), 10.5f, UiThemes.EDITOR.text().muted());
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
         titleLp.leftMargin = UIUtils.dp2pxInt(7);
         option.addView(title, titleLp);

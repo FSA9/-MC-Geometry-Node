@@ -1,9 +1,11 @@
 package com.mine.geometry_node.client.ui.components.composite.table;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -21,7 +23,6 @@ public final class UiTableStyle {
     public static final int SELECTION_COLUMN_WIDTH = 32;
     public static final int ROW_HEIGHT = 44;
     public static final int MIN_COLUMN_WIDTH = 24;
-    public static final int DIVIDER_COLOR = UiTheme.Control.INPUT_BORDER;
     public static final int ROW_NUMBER_WIDTH = 36;
 
     /** Display-order index, independent of data identity, sorting and editable data columns. */
@@ -30,7 +31,11 @@ public final class UiTableStyle {
     }
 
     public static UiDisplayText rowNumberCell(Context context, int number) {
-        UiDisplayText cell = cell(context, number > 0 ? Integer.toString(number) : "#", UiTheme.Text.MUTED);
+        return rowNumberCell(context, number, UiThemes.EDITOR);
+    }
+
+    public static UiDisplayText rowNumberCell(Context context, int number, UiTheme theme) {
+        UiDisplayText cell = cell(context, number > 0 ? Integer.toString(number) : "#", theme.text().muted());
         cell.setGravity(Gravity.CENTER);
         cell.setPadding(0, 0, 0, 0);
         return cell;
@@ -56,12 +61,20 @@ public final class UiTableStyle {
     }
 
     public static UiTableRow header(Context context, UiTableColumns columns) {
-        UiTableRow row = new UiTableRow(context, columns);
+        return header(context, columns, UiThemes.EDITOR);
+    }
+
+    public static UiTableRow header(Context context, UiTableColumns columns, UiTheme theme) {
+        UiTableRow row = new UiTableRow(context, columns, theme);
         row.setHeader(true);
         ShapeDrawable background = new ShapeDrawable();
-        background.setColor(UiTheme.Surface.HEADER);
+        background.setColor(theme.surface().header());
         row.setBackground(background);
         return row;
+    }
+
+    public static UiDisplayText cell(Context context, String text, UiTheme theme) {
+        return cell(context, text, theme.text().normal());
     }
 
     public static UiDisplayText cell(Context context, String text, int color) {
@@ -74,22 +87,30 @@ public final class UiTableStyle {
     }
 
     public static UiActionButton headerCell(Context context, String text, Runnable action) {
-        UiActionButton button = rowButton(context);
+        return headerCell(context, text, action, UiThemes.EDITOR);
+    }
+
+    public static UiActionButton headerCell(Context context, String text, Runnable action, UiTheme theme) {
+        UiActionButton button = rowButton(context, theme);
         button.setText(text);
         button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         button.setPadding(UIUtils.dp2pxInt(9), 0, UIUtils.dp2pxInt(6), 0);
         button.setSingleLine(true);
         button.setEllipsize(TextUtils.TruncateAt.END);
         UIUtils.setLockedTextSize(button, CELL_TEXT_SIZE_DP);
-        button.setPalette(rowPalette(false, UiTheme.Surface.HEADER));
+        button.setPalette(rowPalette(false, theme.surface().header(), theme));
         if (action != null) button.setOnClickListener(view -> action.run());
         return button;
     }
 
     public static UiActionButton rowButton(Context context) {
-        UiActionButton button = new UiActionButton(context, "", UiActionButton.Role.INLINE,
+        return rowButton(context, UiThemes.EDITOR);
+    }
+
+    public static UiActionButton rowButton(Context context, UiTheme theme) {
+        UiActionButton button = new UiActionButton(context, theme, "", UiActionButton.Role.INLINE,
                 UiActionButton.Density.COMPACT,
-                new UiActionButton.Style(0, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(0, 0, 0, UiMetrics.DISABLED_ALPHA, theme.border().focus()));
         button.setMinWidth(0);
         button.setMinHeight(0);
         button.setPadding(0, 0, 0, 0);
@@ -97,12 +118,22 @@ public final class UiTableStyle {
     }
 
     public static int rowColor(boolean alternate) {
-        return alternate ? UiTheme.Surface.ROOT : UiTheme.Surface.CANVAS;
+        return rowColor(alternate, UiThemes.EDITOR);
+    }
+
+    public static int rowColor(boolean alternate, UiTheme theme) {
+        return alternate ? theme.surface().root() : theme.surface().canvas();
     }
 
     public static UiActionButton.Palette rowPalette(boolean selected, int base) {
-        return new UiActionButton.Palette(selected ? UiTheme.Control.CHECKED : base,
-                selected ? UiTheme.Control.FOCUS : UiTheme.Control.ICON_HOVER,
-                selected ? UiTheme.Control.CHECKED : UiTheme.Control.ICON_PRESSED, UiTheme.Text.NORMAL);
+        return rowPalette(selected, base, UiThemes.EDITOR);
+    }
+
+    public static UiActionButton.Palette rowPalette(boolean selected, int base, UiTheme theme) {
+        return UiActionButton.Palette.row(theme, selected, base);
+    }
+
+    public static int dividerColor(UiTheme theme) {
+        return theme.border().divider();
     }
 }

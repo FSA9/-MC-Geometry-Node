@@ -25,11 +25,10 @@ final class PathListConfigEntryEditor extends AbstractConfigEntryEditor<List<Str
         mRows.setOrientation(VERTICAL);
         mControlHost.addView(mRows, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        mAdd = text(context, "+  " + tr("geometry_node.settings.action.add_path"), 10.5f, SettingsEditorStyle.TEXT);
+        mAdd = SettingsEditorStyle.actionButton(context, "+  " + tr("geometry_node.settings.action.add_path"));
         mAdd.setGravity(Gravity.CENTER);
         mAdd.setFocusable(true);
         mAdd.setFocusableInTouchMode(true);
-        mAdd.setBackground(SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL, 3.0f, SettingsEditorStyle.BORDER));
         mAdd.setOnClickListener(view -> mEnvironment.requestDirectory(mAdd, this::addPath));
         LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(130), UIUtils.dp2pxInt(28));
         addParams.topMargin = UIUtils.dp2pxInt(4);

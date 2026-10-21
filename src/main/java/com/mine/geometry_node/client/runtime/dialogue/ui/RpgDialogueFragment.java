@@ -1,48 +1,49 @@
 package com.mine.geometry_node.client.runtime.dialogue.ui;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
+import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.fragment.OnBackPressedCallback;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.UIManager;
 import icyllis.modernui.text.SpannableStringBuilder;
+import icyllis.modernui.util.ColorStateList;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.LayoutInflater;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 
 /**
  * In-game RPG dialogue overlay rendered with ModernUI.
  */
 public class RpgDialogueFragment extends Fragment {
-    private static final int TEXT_MAIN = DialogueHudTheme.TEXT_PRIMARY;
-    private static final int TEXT_MUTED = DialogueHudTheme.TEXT_MUTED;
-    private static final int DIVIDER = DialogueHudTheme.DIVIDER;
-    private static final int CHOICE_BG = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0x40);
-    private static final int CHOICE_BG_DEFAULT = DialogueHudTheme.withAlpha(DialogueHudTheme.BUTTON, 0x4A);
-    private static final int CHOICE_BG_HOVER = DialogueHudTheme.withAlpha(DialogueHudTheme.BUTTON_HOVER, 0x66);
-    private static final int CHOICE_BG_PRESSED = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT_PRESSED, 0x88);
-    private static final int CHOICE_BG_DISABLED = DialogueHudTheme.withAlpha(DialogueHudTheme.PANEL, 0x25);
-    private static final int CHOICE_STROKE = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x44);
-    private static final int CHOICE_STROKE_HOVER = DialogueHudTheme.withAlpha(DialogueHudTheme.ACCENT, 0x88);
-    private static final int CHOICE_STROKE_DISABLED = DialogueHudTheme.withAlpha(DialogueHudTheme.TEXT_MUTED, 0x28);
+    private static final int TEXT_MAIN = UiThemes.HUD.text().normal();
+    private static final int TEXT_MUTED = UiThemes.HUD.text().muted();
+    private static final int DIVIDER = UiThemes.HUD.border().divider();
+    private static final int CHOICE_BG = UiTheme.withAlpha(UiThemes.HUD.surface().root(), 0x40);
+    private static final int CHOICE_BG_DEFAULT = UiTheme.withAlpha(UiThemes.HUD.buttons().secondary().normal(), 0x4A);
+    private static final int CHOICE_BG_HOVER = UiTheme.withAlpha(UiThemes.HUD.buttons().secondary().hover(), 0x66);
+    private static final int CHOICE_BG_PRESSED = UiTheme.withAlpha(UiThemes.HUD.buttons().primary().pressed(), 0x88);
+    private static final int CHOICE_BG_DISABLED = UiTheme.withAlpha(UiThemes.HUD.surface().root(), 0x25);
+    private static final int CHOICE_STROKE = UiTheme.withAlpha(UiThemes.HUD.buttons().primary().normal(), 0x44);
+    private static final int CHOICE_STROKE_HOVER = UiTheme.withAlpha(UiThemes.HUD.buttons().primary().normal(), 0x88);
+    private static final int CHOICE_STROKE_DISABLED = UiTheme.withAlpha(UiThemes.HUD.text().muted(), 0x28);
     private static final float LAYOUT_SCALE = 2.0f;
     private static final int PANEL_MIN_HEIGHT_DP = 142;
     private static final int PANEL_MAX_HEIGHT_DP = 360;
@@ -143,7 +144,7 @@ public class RpgDialogueFragment extends Fragment {
         column.setPadding(0, 0, dp(40), 0);
 
         Component speaker = packet.speaker().getString().isBlank()
-                ? Component.literal("Dialogue").withStyle(ChatFormatting.GOLD)
+                ? Component.literal("Dialogue")
                 : packet.speaker();
         VanillaComponentView speakerView = new VanillaComponentView(context, speaker, 22.0f * LAYOUT_SCALE);
         speakerView.setPadding(0, 0, 0, dp(4));
@@ -168,7 +169,7 @@ public class RpgDialogueFragment extends Fragment {
         bodyView = body;
         body.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) ->
                 adjustPanelHeight(body, packet.choices().size()));
-        ScrollView bodyScroll = new UiScrollView(context);
+        ScrollView bodyScroll = new UiScrollView(context, UiThemes.HUD.scroll());
         bodyScroll.setFillViewport(true);
         bodyScroll.addView(body, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -242,7 +243,7 @@ public class RpgDialogueFragment extends Fragment {
         column.setPadding(dp(18), 0, 0, 0);
 
         if (!packet.choices().isEmpty()) {
-            ScrollView choiceScroll = new UiScrollView(context);
+            ScrollView choiceScroll = new UiScrollView(context, UiThemes.HUD.scroll());
             choiceScroll.setFillViewport(true);
             choiceScroll.addView(createChoices(packet), new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -282,9 +283,8 @@ public class RpgDialogueFragment extends Fragment {
         TextView row = label(text, 14.0f, choice.enabled() ? TEXT_MAIN : TEXT_MUTED, Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         row.setPadding(dp(12), 0, dp(12), 0);
         row.setEnabled(choice.enabled());
-        applyChoiceBackground(row, false, false, choice.enabled(), choice.defaultChoice());
+        bindChoiceFeedback(row, choice.defaultChoice());
         if (choice.enabled()) {
-            bindChoiceFeedback(row, choice.defaultChoice());
             row.setOnClickListener(v -> {
                 if (waitingForServer) {
                     return;
@@ -299,59 +299,22 @@ public class RpgDialogueFragment extends Fragment {
     }
 
     private void bindChoiceFeedback(TextView row, boolean defaultChoice) {
-        final boolean[] hovered = {false};
-        final boolean[] pressed = {false};
-        Runnable update = () -> applyChoiceBackground(row, hovered[0], pressed[0], true, defaultChoice);
-
-        row.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                hovered[0] = true;
-                update.run();
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                hovered[0] = false;
-                pressed[0] = false;
-                update.run();
-            }
-            return false;
-        });
-
-        row.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN -> {
-                    pressed[0] = true;
-                    update.run();
-                }
-                case MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    pressed[0] = false;
-                    update.run();
-                }
-                default -> {
-                }
-            }
-            return false;
-        });
-    }
-
-    private void applyChoiceBackground(View view, boolean hovered, boolean pressed, boolean enabled, boolean defaultChoice) {
-        int background;
-        int stroke;
-        if (!enabled) {
-            background = CHOICE_BG_DISABLED;
-            stroke = CHOICE_STROKE_DISABLED;
-        } else if (pressed) {
-            background = CHOICE_BG_PRESSED;
-            stroke = CHOICE_STROKE_HOVER;
-        } else if (hovered) {
-            background = CHOICE_BG_HOVER;
-            stroke = CHOICE_STROKE_HOVER;
-        } else if (defaultChoice) {
-            background = CHOICE_BG_DEFAULT;
-            stroke = CHOICE_STROKE_HOVER;
-        } else {
-            background = CHOICE_BG;
-            stroke = CHOICE_STROKE;
-        }
-        view.setBackground(rect(background, 3.0f, 1, stroke));
+        ShapeDrawable background = rect(CHOICE_BG, 3.0f, 1, CHOICE_STROKE);
+        background.setColor(new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {R.attr.state_pressed}, {R.attr.state_hovered}, {}
+        }, new int[]{CHOICE_BG_DISABLED, CHOICE_BG_PRESSED, CHOICE_BG_HOVER,
+                defaultChoice ? CHOICE_BG_DEFAULT : CHOICE_BG}));
+        background.setStroke(dp(1), new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {R.attr.state_focused},
+                {R.attr.state_pressed}, {R.attr.state_hovered}, {}
+        }, new int[]{CHOICE_STROKE_DISABLED, UiThemes.HUD.border().focus(),
+                CHOICE_STROKE_HOVER, CHOICE_STROKE_HOVER,
+                defaultChoice ? CHOICE_STROKE_HOVER : CHOICE_STROKE}));
+        row.setBackground(background);
+        row.setTextColor(new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {}
+        }, new int[]{TEXT_MUTED, TEXT_MAIN}));
+        row.setFocusable(true);
     }
 
     private CharSequence disabledChoiceText(DialogueRichText choiceText, DialogueText disabledReason) {
@@ -366,7 +329,11 @@ public class RpgDialogueFragment extends Fragment {
     }
 
     private TextView label(CharSequence text, float sizeDp, int color, int gravity) {
-        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp * LAYOUT_SCALE, color);
+        TextView view = new TextView(getContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
+        UIUtils.setLockedTextSize(view, sizeDp * LAYOUT_SCALE);
+        view.setTextColor(color);
         view.setText(text == null ? "" : text);
         view.setGravity(gravity);
         return view;

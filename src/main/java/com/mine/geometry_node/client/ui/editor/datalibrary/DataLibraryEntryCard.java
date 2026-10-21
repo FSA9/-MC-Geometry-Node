@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
-
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -14,7 +14,6 @@ import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -23,7 +22,6 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -64,17 +62,17 @@ final class DataLibraryEntryCard {
         check.setContentDescription(tr("geometry_node.data_library.select_entry"));
         check.setOnCheckedChangeListener((button, checked) -> selectionChanged.accept(checked));
         header.addView(UiTableStyle.selectionCell(context, check), new ViewGroup.LayoutParams(-1, -1));
-        disclosure = new SvgIconView(context, SvgIconView.Icon.forExpandedState(false), UiTheme.Text.SECONDARY);
+        disclosure = new SvgIconView(context, SvgIconView.Icon.forExpandedState(false), UiThemes.EDITOR.text().secondary());
         UiIconButton toggle = new UiIconButton(context, disclosure,
-                new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER, 0));
+                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(), 0));
         toggle.setContentDescription(tr("geometry_node.data_library.expand_entry"));
         toggle.setOnClickListener(view -> toggleExpanded.run());
         header.addView(toggle, new ViewGroup.LayoutParams(-1, px(24)));
-        name = UiTableStyle.cell(context, title, UiTheme.Text.NORMAL);
+        name = UiTableStyle.cell(context, title, UiThemes.EDITOR.text().normal());
         header.addView(name, new ViewGroup.LayoutParams(-1, -1));
-        header.addView(UiTableStyle.cell(context, typeName, UiTheme.Text.NORMAL),
+        header.addView(UiTableStyle.cell(context, typeName, UiThemes.EDITOR.text().normal()),
                 new ViewGroup.LayoutParams(-1, -1));
-        registryType = UiTableStyle.cell(context, "", UiTheme.Text.NORMAL);
+        registryType = UiTableStyle.cell(context, "", UiThemes.EDITOR.text().normal());
         header.addView(registryType, new ViewGroup.LayoutParams(-1, -1));
         boolean entity = type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE;
         boolean item = type == PortType.ITEM_STACK;
@@ -82,7 +80,7 @@ final class DataLibraryEntryCard {
         if (entityPreview != null) entityPreview.setVisibilityRow(header);
         itemPreview = item ? new ItemPreviewCell(context) : null;
         if (itemPreview != null) itemPreview.setVisibilityRow(header);
-        value = entity || item ? null : UiTableStyle.cell(context, "", UiTheme.Text.SECONDARY);
+        value = entity || item ? null : UiTableStyle.cell(context, "", UiThemes.EDITOR.text().secondary());
         header.addView(entity ? entityPreview : item ? itemPreview : value, new ViewGroup.LayoutParams(-1, -1));
         tags = new UiTagStrip(context);
         header.addView(tags, new ViewGroup.LayoutParams(-1, -1));
@@ -149,7 +147,7 @@ final class DataLibraryEntryCard {
         while (surface.getChildCount() > 1) surface.removeViewAt(1);
         if (value) {
             View divider = new View(surface.getContext());
-            divider.setBackground(background(UiTableStyle.DIVIDER_COLOR));
+            divider.setBackground(background(UiTableStyle.dividerColor(UiThemes.EDITOR)));
             surface.addView(divider, new LinearLayout.LayoutParams(-1, px(1)));
             surface.addView(Objects.requireNonNull(editor),
                     new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.toolbar;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -13,13 +14,13 @@ abstract class ViewportToolButton extends View {
     private final TooltipHost mTooltipHost;
     private String mTooltipText;
     private boolean mActive;
-    private boolean mHovered;
 
     ViewportToolButton(Context context, String tooltipText, TooltipHost tooltipHost) {
         super(context);
         this.mTooltipText = tooltipText;
         this.mTooltipHost = tooltipHost;
         setWillNotDraw(false);
+        setFocusable(true);
         setOnHoverListener(this::handleHover);
     }
 
@@ -34,23 +35,38 @@ abstract class ViewportToolButton extends View {
     }
 
     boolean isToolHovered() {
-        return mHovered;
+        return isEnabled() && isHovered();
     }
 
     void setTooltipText(String tooltipText) {
         mTooltipText = tooltipText;
-        if (mHovered && mTooltipHost != null && mTooltipText != null && !mTooltipText.isBlank()) {
+        if (isToolHovered() && mTooltipHost != null && mTooltipText != null && !mTooltipText.isBlank()) {
             mTooltipHost.showToolTooltip(this, mTooltipText);
         }
     }
 
+    @Override
+    public boolean performClick() {
+        return isEnabled() && super.performClick();
+    }
+
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        setAlpha(isEnabled() ? 1.0f : UiMetrics.DISABLED_ALPHA);
+        if (!isEnabled()) {
+            setHovered(false);
+            setPressed(false);
+            if (mTooltipHost != null) mTooltipHost.hideToolTooltip(this);
+        }
+        invalidate();
+    }
+
     private boolean handleHover(View view, MotionEvent event) {
+        if (!isEnabled()) return false;
         int action = event.getAction();
         if (action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) {
-            if (!mHovered) {
-                mHovered = true;
-                invalidate();
-            }
+            setHovered(true);
             if (mTooltipHost != null && mTooltipText != null && !mTooltipText.isBlank()) {
                 mTooltipHost.showToolTooltip(this, mTooltipText);
             }
@@ -58,10 +74,7 @@ abstract class ViewportToolButton extends View {
         }
 
         if (action == MotionEvent.ACTION_HOVER_EXIT) {
-            if (mHovered) {
-                mHovered = false;
-                invalidate();
-            }
+            setHovered(false);
             if (mTooltipHost != null) {
                 mTooltipHost.hideToolTooltip(this);
             }

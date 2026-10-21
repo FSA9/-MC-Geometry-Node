@@ -1,6 +1,24 @@
 # UI 组件层级规则与推荐入口
 
-新增界面先按职责选择组件，再查看下方使用契约。尺寸与文字使用 `UIUtils` 的项目缩放，颜色使用 `UiTheme`；业务查询、数据写入、历史命令和服务器交互由调用方负责。
+新增界面先按职责选择组件，再查看下方使用契约。尺寸与文字使用 `ui/utils/UIUtils` 的项目缩放，共享视觉尺寸使用 `ui/theme/UiMetrics`（包含通用框选描边 `MARQUEE_BORDER`）；颜色通过统一入口 `UiThemes.EDITOR / HUD` 获取，两者都是不可变的 `UiTheme`。业务查询、数据写入、历史命令和服务器交互由调用方负责。
+
+`ui/UIConstants.java` 与旧 `ui/style` 目录已经退役，不使用兼容别名。项目密度由 `UIUtils` 私有持有，读取使用 `density()`，修改使用只接受有限正数的 `setDensity(float)`；`syncFixedDensity()` 复用该入口，现有单位转换继续使用 `UIUtils`。共享视觉指标不保存密度或编辑器布局/交互策略。
+
+主题角色、HUD 覆盖、状态优先级及内容色边界见 [UI 主题与组件样式](../../../../../../../../../docs/ui/themes.md)。局部 Style 保留尺寸与实例定制，普通页面不再维护私有色板。`QUIET` 为透明低强调按钮；导航和表格共用 `UiActionButton.Palette.row(selected, base)`。
+
+需要显式预设时使用按钮、图标按钮、文本输入、复选框的 `createThemed(...)` 或 `Style.forTheme(theme)`；普通构造和旧 Style 简写使用 EDITOR。滚动容器传入 `theme.scroll()`，同时覆盖滑块、轨道和边缘反馈。不要只换背景或 Palette，却遗漏焦点、错误与选区颜色。
+
+## 组合组件的主题传递
+
+无主题参数的入口保持编辑器预设。复用到 HUD 时，显式向组件传入 `UiThemes.HUD`，无需切换全局主题。上下文菜单负责将主题传给级联子菜单、面板和滚动条；颜色选择器负责通道输入、焦点、错误态和操作按钮；表格需要调用方给行、表头、横向视口和列筛选器选择同一个预设，筛选器再负责自己的输入、复选框和标签。
+
+数值输入、搜索栏、导航行、分段按钮、Data 摘要/预览/编辑器、实体/物品预览单元格及分割器同样提供显式主题入口。`ModalWindowView` 使用 `Style.forTheme(theme)`；长文本编辑器在原参数末尾增加主题，`showRichText` 的主题位于可选 `onDismissed` 回调之后，避免原有 null 调用歧义。`UiSearchInput.createThemed(context, theme)` 保留搜索输入类型及搜索字号；`ValuePreviewStyle.forTheme(theme)` 只控制装饰。
+
+复合菜单行和折叠标题使用 `UiMenuItems.decorate(item,baseColor,cornerRadiusDp,theme)`，保留局部排版与底色，交互反馈由共享的原生状态 drawable 提供。可选择的原生文本显式设置主题选区；仅需给文本自己的纵向滚动条着色时使用 `UiScrollView.applyScrollbarColors(view,theme.scroll())`，不会改变其布局与手势。背包选择器的锚点入口支持 `showFor(anchor,onPicked,onDismissed,theme)`，默认主题与生命周期同其他入口。
+
+禁用复合控件时须同时约束子操作：`UiTableFilterHeader` 将禁用传递到排序与筛选按钮；`UiContextMenu` 禁用行同时阻止点击与悬停子菜单。`VectorIconView` 的装饰 alpha 与实例 tint alpha 相乘，不能在绘制细节时重置传入透明度。原生多行输入目前不启用自己的滚动条；未来显式启用时，调用方也需传入实例滚动条配色。
+
+传入的任意子 View 不会自动换色，例如网格菜单的业务预览与表格的外部单元格；调用方仍需使用对应主题创建它们。颜色编辑内容、图标原色与业务分类颜色不随 UI 主题替换。`UiIconButton.Style` 的图标颜色 `0` 表示保留调用方原色，重新启用或移除图标会解除状态着色覆盖，避免禁用色残留。具体参数与示例见各组件源码及 [主题说明](../../../../../../../../../docs/ui/themes.md)。
 
 ## 层级与选择规则
 
@@ -14,14 +32,15 @@
 - 搜索输入用 [UiSearchInput](base/input/UiSearchInput.java)，工具栏搜索用 [UiSearchBar](composite/input/UiSearchBar.java)，菜单搜索区用 [UiSearchMenuLayout](composite/menu/UiSearchMenuLayout.java)，完整选择菜单用 [UiSearchableMenu](composite/menu/UiSearchableMenu.java)。
 - 弹层输入、焦点、外部点击、Esc、Area 生命周期和安全移除机制属于 `base`；菜单内容、颜色编辑、文本编辑属于 `composite`；背包选择和物品提示属于 `integration`。
 - helper 跟随所属职责和使用者归层；纯算法、无状态或不引用 Minecraft 并不自动构成下沉 base 的理由。只有具备独立的基础职责和实际复用需求时才考虑提取，不把每个纯算法强拆到 base。原生预览的 `PreviewZoomController`、`ValuePreviewStyle` 留在 `integration/valuepreview`。
-- `base` 可以使用项目的主题、缩放及 Area 生命周期接口；这里的基础层不等同于脱离项目的独立 UI 库，但禁止直接依赖 Minecraft、core 数据模型及具体编辑器。完整模态弹层通过 `OverlayMount` 接入 shell，并保留独立宿主路径。
+- `base` 可以使用项目的主题、缩放、Area 生命周期及 `core.cache` 通用缓存契约；缓存包只依赖 JDK，不包含游戏状态或业务数据。这里的基础层不等同于脱离项目的独立 UI 库，但禁止直接依赖 Minecraft、core 数据模型及具体编辑器。完整模态弹层通过 `OverlayMount` 接入 shell，并保留独立宿主路径。
 - 组件内允许的依赖方向为 `integration → composite → base`，也允许 `integration → base`；禁止反向依赖。`composite` 可以接收纯数据类型，但不直接调用 Minecraft 渲染、世界状态或具体编辑器／运行时实现；本地化 `Component` 是允许的适配。编辑器专用拼装留在对应编辑器。
+- `base` / `composite` 不导入 `EditorLayoutPolicy`、`NodeUiMetrics`、`GraphUiStyle` 或 `GraphInteractionConfig`。编辑器在调用方读取 `EditorLayoutPolicy.MIN_PANEL_WEIGHT` 并注入分割器、侧栏等组件；图网格、节点布局和图交互参数留在 `ui/editor/graph`，不下沉到共享视觉指标。`UiThemeBoundaryTest` 守护这一边界。
 - 迁移必须更新 package、调用方与测试引用；不保留旧包名转发类或平行实现。本页组件链接统一使用分层后的路径。
 - `ComponentLayeringTest` 检查生产源码的层级边界、目录归属和包声明，阻止后续改动重新混入旧目录或产生反向依赖。
 
 ## 各层清单
 
-以下列出全部 72 个生产组件源文件：23 个 base、36 个 composite、13 个 integration。内部实现也列出，供维护时确认归属，不代表都应被调用方直接使用。
+以下按层列出组件及内部实现，供维护时确认归属，不代表都应被调用方直接使用。
 
 ### base：基础能力
 
@@ -158,6 +177,12 @@ Tag 的视觉统一使用 `UiTagChip`：世界对象／数据仓库表格和资�
 | 自定义原生渲染预览 | [ViewportNativePreviewView](integration/nativepreview/ViewportNativePreviewView.java)；通过 [NativePreviewHost](integration/nativepreview/NativePreviewHost.java) 注册，由共享 Layer 管理渲染 |
 
 节点中的 `UIItemSlot`、`UIEntityTemplatePreview` 仅负责端口取值、提交与编辑器入口；底层展示已复用上述公共组件，不要在节点包内复制绘制实现。
+
+实体与物品预览构造器可传入不可变的 `ValuePreviewStyle`，使用 `DEFAULT.withColors(background, border, focus)` 覆盖当前实例的底色、普通边框与焦点边框。默认构造保持编辑器预设；游戏 HUD 在调用处显式提供样式。picker 非空槽的强调边框由自身样式负责，不复用焦点参数。该参数不改变数据源、旋转、缩放、加载与可见性策略，`getPreviewStyle()` 可读取实际使用的样式。
+
+`QuestHintView` 位于 `integration/valuepreview`，为任务编辑器与任务 HUD 共享的物品／实体提示预览。它只负责内容适配和输入回调，不持有运行时任务会话；编辑器不再依赖 runtime 包内的展示控件。
+
+物品提示的主题独立显式传给 `ItemSlotView`／`QuestHintView`／picker 的主题参数，不根据预览底色猜测预设。`ItemStackTooltipOverlay.hide(owner)` 只关闭该控件的提示，`hideWithin(owner)` 关闭容器与后代的提示；局部刷新、退出、卸载不能使用全局 `hide()`，以免关闭另一个控件刚显示的提示。
 
 `integration/nativepreview` 是 ModernUI 与 Minecraft 渲染的桥接层，`integration/valuepreview` 是具体内容控件；已有物品／实体控件优先复用。长文本／富文本编辑位于 `composite/overlay`，不属于 Minecraft 原生绘制桥接。模态编辑覆盖层通过项目的 `OverlayMount` 管理，与局部菜单生命周期不同。
 

@@ -1,8 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.layers;
 
+import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
+
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.client.config.ConfigManager;
@@ -14,14 +16,14 @@ public class BackgroundLayer {
     private static final int MINOR_GRID_MAX_ALPHA = 165;
     private static final int MAJOR_GRID_ALPHA = 235;
     private static final int AXIS_ALPHA = 255;
-    private static final int COLOR_GRID_MAJOR = 0xFF303030;
+    private static final int COLOR_GRID_MAJOR = UiThemes.EDITOR.graph().gridMajor();
 
     private final Paint mBackgroundPaint = new Paint();
     private final Paint mGridPaint = new Paint();
     private boolean mGridAndAxisVisible = true;
 
     public BackgroundLayer() {
-        mBackgroundPaint.setColor(UIConstants.ViewPort.BG_COLOR);
+        mBackgroundPaint.setColor(UiThemes.EDITOR.surface().canvas());
         mGridPaint.setAntiAlias(true);
         mGridPaint.setStyle(Paint.Style.STROKE);
     }
@@ -44,21 +46,21 @@ public class BackgroundLayer {
         // 2. 绘制自适应网格：缩小时减少线密度，普通线低于可见阈值时不绘制。
         int minorAlpha = getMinorGridAlpha(gridSpacingPx);
         if (minorAlpha > 0) {
-            mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_LINE);
+            mGridPaint.setColor(UiThemes.EDITOR.graph().grid());
             mGridPaint.setAlpha(minorAlpha);
-            mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_NORMAL);
+            mGridPaint.setStrokeWidth(GraphUiStyle.GRID_LINE_WIDTH);
             drawGridLines(canvas, cx, cy, width, height, gridSpacingPx, true);
         }
 
         mGridPaint.setColor(COLOR_GRID_MAJOR);
         mGridPaint.setAlpha(MAJOR_GRID_ALPHA);
-        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_NORMAL);
+        mGridPaint.setStrokeWidth(GraphUiStyle.GRID_LINE_WIDTH);
         drawGridLines(canvas, cx, cy, width, height, gridSpacingPx * MAJOR_GRID_INTERVAL, false);
 
         // 3. 绘制世界坐标原点轴线，保持屏幕线宽稳定。
-        mGridPaint.setColor(UIConstants.ViewPort.COLOR_GRID_AXIS);
+        mGridPaint.setColor(UiThemes.EDITOR.graph().axis());
         mGridPaint.setAlpha(AXIS_ALPHA);
-        mGridPaint.setStrokeWidth(UIConstants.ViewPort.LINE_WIDTH_AXIS);
+        mGridPaint.setStrokeWidth(GraphUiStyle.AXIS_LINE_WIDTH);
         if (cx >= 0 && cx <= width) canvas.drawLine(cx, 0, cx, height, mGridPaint);
         if (cy >= 0 && cy <= height) canvas.drawLine(0, cy, width, cy, mGridPaint);
     }

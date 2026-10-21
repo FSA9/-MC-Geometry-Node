@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.interaction;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
+
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
@@ -8,7 +10,6 @@ import com.mine.geometry_node.client.ui.editor.graph.connection.ConnectionLayer;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,11 +41,11 @@ final class ConnectionInteraction {
     private void initPaints() {
         mDraftLinePaint.setAntiAlias(true);
         mDraftLinePaint.setStyle(Paint.Style.STROKE);
-        mDraftLinePaint.setColor(UIConstants.ViewPort.Connection.CLR_DRAFT_LINE);
+        mDraftLinePaint.setColor(UiThemes.EDITOR.graph().draftConnection());
 
         mCutLinePaint.setAntiAlias(true);
         mCutLinePaint.setStyle(Paint.Style.STROKE);
-        mCutLinePaint.setColor(0xFFFF4444);
+        mCutLinePaint.setColor(UiThemes.EDITOR.status().error());
         mCutLinePaint.setStrokeCap(Paint.Cap.ROUND);
         mCutLinePaint.setStrokeJoin(Paint.Join.ROUND);
     }
@@ -173,7 +174,7 @@ final class ConnectionInteraction {
         if (mDraftStartPort == null) return;
 
         ViewportCamera camera = mContext.getCamera();
-        mDraftLinePaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Connection.LINE_WIDTH_DRAFT) * camera.getScale());
+        mDraftLinePaint.setStrokeWidth(UIUtils.dp2px(GraphUiStyle.DRAFT_CONNECTION_LINE_WIDTH) * camera.getScale());
         mDraftStartPort.node.getPortPosition(mDraftStartPort.portId, mDraftStartPort.isInput, mTempPos);
         canvas.drawLine(camera.uiToScreenX(mDraftStartPort.node.getUiX() + mTempPos[0]),
                 camera.uiToScreenY(mDraftStartPort.node.getUiY() + mTempPos[1]),

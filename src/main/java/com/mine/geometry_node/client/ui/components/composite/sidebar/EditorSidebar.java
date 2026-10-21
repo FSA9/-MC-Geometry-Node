@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.components.composite.sidebar;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
@@ -9,7 +10,6 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.graphics.Canvas;
@@ -24,7 +24,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -33,14 +32,14 @@ import java.util.function.Consumer;
  * Editor-owned, Blender-style registration with a content host and a vertical tab rail.
  */
 public final class EditorSidebar extends LinearLayout {
-    private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
-    private static final int COLOR_HEADER = UiTheme.Surface.HEADER;
-    private static final int COLOR_BORDER = UiTheme.Surface.CANVAS;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-    private static final int COLOR_MUTED = UiTheme.Text.MUTED;
-    private static final int COLOR_HOVER = UiTheme.Control.ICON_HOVER;
-    private static final int COLOR_TAB_RAIL = UiTheme.Control.INPUT;
-    private static final int COLOR_TAB_SELECTED = UiTheme.Control.SELECTED;
+    private static final int COLOR_BACKGROUND = UiThemes.EDITOR.surface().sidebar();
+    private static final int COLOR_HEADER = UiThemes.EDITOR.surface().header();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_HOVER = UiThemes.EDITOR.control().iconHover();
+    private static final int COLOR_TAB_RAIL = UiThemes.EDITOR.control().input();
+    private static final int COLOR_TAB_SELECTED = UiThemes.EDITOR.selection().subtle();
     private static final int TAB_RAIL_WIDTH_DP = 36;
 
     private final Map<String, PanelEntry> mPanels = new LinkedHashMap<>();
@@ -105,7 +104,7 @@ public final class EditorSidebar extends LinearLayout {
                 if (!dragging || dropIndex < 0 || getChildCount() == 0) return;
                 float y = dropIndex < getChildCount() ? getChildAt(dropIndex).getTop()
                         : getChildAt(getChildCount()-1).getBottom();
-                indicator.setColor(0xFF00AAFF);
+                indicator.setColor(UiThemes.EDITOR.selection().outline());
                 canvas.drawRect(0,y-UIUtils.dp2px(1),getWidth(),y+UIUtils.dp2px(1),indicator);
             }
         };
@@ -397,6 +396,7 @@ public final class EditorSidebar extends LinearLayout {
     private static final class SidebarTabView extends FrameLayout {
         private final View mIcon;
         private final View mIndicator;
+        private final ShapeDrawable background = new ShapeDrawable();
 
         private SidebarTabView(Context context, String title, SvgIconView.Icon icon) {
             super(context);
@@ -404,6 +404,8 @@ public final class EditorSidebar extends LinearLayout {
             setFocusable(true);
             setTooltipText(title);
             setContentDescription(title);
+            background.setCornerRadius(UIUtils.dp2px(3));
+            setBackground(background);
             if (icon != null) {
                 mIcon = new SvgIconView(context, icon, COLOR_MUTED);
             } else {
@@ -416,7 +418,7 @@ public final class EditorSidebar extends LinearLayout {
             iconParams.gravity = Gravity.CENTER;
             addView(mIcon, iconParams);
             mIndicator = new View(context);
-            mIndicator.setBackground(rect(UiTheme.Control.FOCUS, 1, 0, 0));
+            mIndicator.setBackground(rect(UiThemes.EDITOR.selection().outline(), 1, 0, 0));
             FrameLayout.LayoutParams indicatorParams = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(2), UIUtils.dp2pxInt(16));
             indicatorParams.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
             addView(mIndicator, indicatorParams);
@@ -429,15 +431,22 @@ public final class EditorSidebar extends LinearLayout {
             if (mIcon != null) updateStyle();
         }
 
+        @Override public boolean performClick() {
+            return isEnabled() && super.performClick();
+        }
+
         private void updateStyle() {
-            int color = isSelected() ? UiTheme.Control.FOCUS : isHovered() ? COLOR_TEXT : COLOR_MUTED;
+            int color = isSelected() ? UiThemes.EDITOR.selection().outline()
+                    : isEnabled() && isHovered() ? COLOR_TEXT : COLOR_MUTED;
             if (mIcon instanceof SvgIconView svg) svg.setIconColor(color);
             if (mIcon instanceof TextView text) text.setTextColor(color);
             if (mIndicator != null) mIndicator.setVisibility(isSelected() ? View.VISIBLE : View.INVISIBLE);
-            setAlpha(isEnabled() ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
-            setBackground(rect(isPressed() ? UiTheme.Control.ICON_PRESSED
-                            : isSelected() ? COLOR_TAB_SELECTED : isHovered() ? COLOR_HOVER : 0x00000000,
-                    3.0f, isFocused() ? 1 : 0, UiTheme.Control.FOCUS));
+            setAlpha(isEnabled() ? 1.0f : UiMetrics.DISABLED_ALPHA);
+            background.setColor(!isEnabled() ? (isSelected() ? COLOR_TAB_SELECTED : 0)
+                    : isSelected() ? (isPressed() ? UiThemes.EDITOR.selection().subtlePressed()
+                    : isHovered() ? UiThemes.EDITOR.selection().subtleHover() : COLOR_TAB_SELECTED)
+                    : isPressed() ? UiThemes.EDITOR.control().iconPressed() : isHovered() ? COLOR_HOVER : 0);
+            background.setStroke(isEnabled() && isFocused() ? UIUtils.dp2pxInt(1) : 0, UiThemes.EDITOR.border().focus());
         }
     }
 }

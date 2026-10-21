@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.toolbar;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -7,10 +8,10 @@ import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 
 final class ViewportToggleButton extends ViewportToolButton {
-    private static final int COLOR_BG_OFF = 0xFF252A33;
-    private static final int COLOR_BORDER_OFF = 0xFF4B5565;
-    private static final int COLOR_ICON_OFF = 0xFF8992A3;
-    private static final int COLOR_HIGHLIGHT = 0x33FFFFFF;
+    private static final int COLOR_BG_OFF = UiThemes.EDITOR.control().icon();
+    private static final int COLOR_BORDER_OFF = UiThemes.EDITOR.border().subtle();
+    private static final int COLOR_ICON_OFF = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_HIGHLIGHT = UiThemes.EDITOR.control().hoverOverlay();
 
     private final Paint mPaint = new Paint();
     private final RectF mRect = new RectF();
@@ -28,7 +29,7 @@ final class ViewportToggleButton extends ViewportToolButton {
         return new ViewportToggleButton(
                 context,
                 tooltipHost,
-                new ToggleStyle(0xFF1F5D8F, 0xFF84D2FF, 0xFFFFFFFF),
+                new ToggleStyle(UiThemes.EDITOR.selection().fill(), UiThemes.EDITOR.selection().outline(), UiThemes.EDITOR.text().strong()),
                 ViewportToggleButton::drawSnapIcon
         );
     }
@@ -37,7 +38,7 @@ final class ViewportToggleButton extends ViewportToolButton {
         ViewportToggleButton button = new ViewportToggleButton(
                 context,
                 tooltipHost,
-                new ToggleStyle(0xFF2E5138, 0xFF8BE6A0, 0xFFFFFFFF),
+                new ToggleStyle(UiThemes.EDITOR.selection().fill(), UiThemes.EDITOR.selection().outline(), UiThemes.EDITOR.text().strong()),
                 ViewportToggleButton::drawGridVisibilityIcon
         );
         button.setChecked(true);
@@ -70,11 +71,16 @@ final class ViewportToggleButton extends ViewportToolButton {
         float radius = minSize * 0.22f;
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(active ? mStyle.mBackgroundOn : COLOR_BG_OFF);
+        int background = active ? mStyle.mBackgroundOn : COLOR_BG_OFF;
+        if (isEnabled()) {
+            if (isPressed()) background = active ? UiThemes.EDITOR.selection().pressed() : UiThemes.EDITOR.control().iconPressed();
+            else if (hovered) background = active ? UiThemes.EDITOR.selection().hover() : UiThemes.EDITOR.control().iconHover();
+        }
+        mPaint.setColor(background);
         mRect.set(left, top, right, bottom);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
-        if (active || hovered) {
+        if (isEnabled() && (active || hovered)) {
             mPaint.setColor(COLOR_HIGHLIGHT);
             mRect.set(left + stroke, top + stroke, right - stroke, top + minSize * 0.38f);
             canvas.drawRoundRect(mRect, radius * 0.8f, radius * 0.8f, radius * 0.8f, radius * 0.8f, mPaint);
@@ -82,7 +88,8 @@ final class ViewportToggleButton extends ViewportToolButton {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(active ? mStyle.mBorderOn : (hovered ? COLOR_ICON_OFF : COLOR_BORDER_OFF));
+        mPaint.setColor(isEnabled() && isFocused() ? UiThemes.EDITOR.border().focus()
+                : active ? mStyle.mBorderOn : (hovered ? COLOR_ICON_OFF : COLOR_BORDER_OFF));
         mRect.set(left + stroke * 0.5f, top + stroke * 0.5f, right - stroke * 0.5f, bottom - stroke * 0.5f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
@@ -120,7 +127,7 @@ final class ViewportToggleButton extends ViewportToolButton {
         }
 
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(active ? 0xFFBFEAFF : 0xFF5D6674);
+        paint.setColor(active ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().hint());
         paint.setAlpha(255);
         float pointSize = Math.max(1.0f, minSize * (active ? 0.16f : 0.12f));
         float cx = (iconLeft + iconRight) * 0.5f;

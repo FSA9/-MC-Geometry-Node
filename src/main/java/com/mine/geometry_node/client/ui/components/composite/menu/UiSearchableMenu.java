@@ -1,12 +1,11 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
-
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import net.minecraft.network.chat.Component;
 import icyllis.modernui.core.Context;
@@ -14,7 +13,6 @@ import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,9 +30,7 @@ public class UiSearchableMenu extends UiPopupOverlay {
     private static final int MENU_PADDING_DP = 8;
     private static final int ITEM_HEIGHT_DP = 24;
 
-    private static final int COLOR_PANEL_BG = UiTheme.Surface.PANEL;
-    private static final int COLOR_PANEL_BORDER = UiTheme.Control.BORDER;
-    private static final int COLOR_MUTED_TEXT = UiTheme.Text.DISABLED;
+    private final UiTheme theme;
 
     private static ShapeDrawable createRectDrawable(int color, float radiusDp) {
         ShapeDrawable drawable = new ShapeDrawable();
@@ -90,7 +86,13 @@ public class UiSearchableMenu extends UiPopupOverlay {
 
     public UiSearchableMenu(Context context, String title, List<String> options,
                             Map<String, String> optionLabels, Style style, Consumer<String> onSelect) {
+        this(context, title, options, optionLabels, style, onSelect, UiThemes.EDITOR);
+    }
+
+    public UiSearchableMenu(Context context, String title, List<String> options,
+                            Map<String, String> optionLabels, Style style, Consumer<String> onSelect, UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         this.style = java.util.Objects.requireNonNull(style);
         this.mTitle = title;
         this.mOptions = List.copyOf(options);
@@ -106,7 +108,7 @@ public class UiSearchableMenu extends UiPopupOverlay {
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mContentLayout.setBackground(createRectDrawable(COLOR_PANEL_BG, 6, 1, COLOR_PANEL_BORDER));
+        mContentLayout.setBackground(createRectDrawable(theme.surface().panel(), 6, 1, theme.border().strong()));
         mContentLayout.setPadding(
                 UIUtils.dp2pxInt(MENU_PADDING_DP),
                 UIUtils.dp2pxInt(MENU_PADDING_DP),
@@ -118,9 +120,9 @@ public class UiSearchableMenu extends UiPopupOverlay {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(UIUtils.dp2pxInt(style.widthDp()), LayoutParams.WRAP_CONTENT);
         mContentLayout.setLayoutParams(lp);
 
-        mSearchBox = UiSearchMenuLayout.addHeader(mContentLayout, mTitle, true);
+        mSearchBox = UiSearchMenuLayout.addHeader(mContentLayout, mTitle, true, theme);
 
-        mScrollView = new UiScrollView(context);
+        mScrollView = new UiScrollView(context, theme.scroll());
         mListContainer = new LinearLayout(context);
         mListContainer.setOrientation(LinearLayout.VERTICAL);
         mScrollView.addView(mListContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -146,7 +148,7 @@ public class UiSearchableMenu extends UiPopupOverlay {
                         long selectedPresentation = presentation;
                         mOnSelect.accept(item);
                         post(() -> { if (presentation == selectedPresentation) dismiss(); });
-                    });
+                    }, theme);
 
             int itemHeight = UIUtils.dp2pxInt(ITEM_HEIGHT_DP);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight);
@@ -162,7 +164,7 @@ public class UiSearchableMenu extends UiPopupOverlay {
         TextView tv = new TextView(getContext());
         tv.setText(text);
         tv.setTextSize(0, UIUtils.dp2px(12));
-        tv.setTextColor(COLOR_MUTED_TEXT);
+        tv.setTextColor(theme.text().disabled());
         tv.setSingleLine(true);
         tv.setGravity(Gravity.CENTER_VERTICAL);
         tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);

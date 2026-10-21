@@ -11,6 +11,7 @@ import icyllis.modernui.view.View;
 import java.io.File;
 
 public final class ImageThumbnailView extends View {
+    // Image-type identity fallback, not a UI status color.
     private static final int FALLBACK_COLOR = 0xFF77C99D;
 
     private final File mFile;
@@ -72,6 +73,7 @@ public final class ImageThumbnailView extends View {
         float height = mImage.getHeight() * scale;
         float left = (getWidth() - width) * 0.5f;
         float top = (getHeight() - height) * 0.5f;
+        // Neutral image modulation preserves the original pixels; theme text colors would tint them.
         mPaint.setColor(0xFFFFFFFF);
         canvas.drawImage(mImage, 0, 0, mImage.getWidth(), mImage.getHeight(),
                 left, top, left + width, top + height, mPaint);

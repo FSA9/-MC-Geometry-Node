@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.functions.color.ColorRamp;
@@ -27,8 +28,8 @@ public class CustomHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         int widthPx = UIUtils.dp2pxInt(endX - startX);
@@ -53,10 +54,10 @@ public class CustomHintRenderer implements UIHintRenderer {
     @Override
     public float getRequiredExtraRows(PortRow row) {
         if (row != null && ColorRamp.GRADIENT_INPUT.equals(row.customWidgetId())) {
-            return Math.max(1.0f, ColorRampView.HEIGHT_DP / (float) UIConstants.Node.ROW_HEIGHT);
+            return Math.max(1.0f, ColorRampView.HEIGHT_DP / (float) NodeUiMetrics.ROW_HEIGHT);
         }
         if (row != null && DataLibraryReference.INFO_WIDGET_ID.equals(row.customWidgetId())) {
-            return Math.max(1.0f, DataLibraryReferenceInfoView.HEIGHT_DP / (float) UIConstants.Node.ROW_HEIGHT);
+            return Math.max(1.0f, DataLibraryReferenceInfoView.HEIGHT_DP / (float) NodeUiMetrics.ROW_HEIGHT);
         }
         return UIHintRenderer.super.getRequiredExtraRows(row);
     }

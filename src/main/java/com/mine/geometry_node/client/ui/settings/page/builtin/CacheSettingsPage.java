@@ -1,12 +1,13 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
-
 import com.mine.geometry_node.client.platform.ClientServerIdentity;
 import com.mine.geometry_node.core.cache.CacheClearRequest;
 import com.mine.geometry_node.core.cache.CacheClearResult;
@@ -31,7 +32,6 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -54,11 +54,11 @@ public final class CacheSettingsPage implements SettingsPage {
     private static final Predicate<CacheDescriptor> CLEARABLE_CACHES =
             descriptor -> descriptor.domain() != CacheDescriptor.Domain.SERVER;
 
-    private static final int COLOR_GROUP = 0xFF242424;
-    private static final int COLOR_HEADER = 0xFF292929;
-    private static final int COLOR_BORDER = 0xFF444444;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF929292;
+    private static final int COLOR_GROUP = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_HEADER = UiThemes.EDITOR.surface().header();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
 
     private final ScrollView root;
     private final CacheOperations cache;
@@ -160,15 +160,19 @@ public final class CacheSettingsPage implements SettingsPage {
         detailsGroup = new LinearLayout(context.uiContext());
         detailsGroup.setOrientation(LinearLayout.VERTICAL);
         detailsGroup.setBackground(rect(COLOR_GROUP, COLOR_BORDER));
-        LinearLayout detailsHeader = new LinearLayout(context.uiContext());
+        LinearLayout detailsHeader = new LinearLayout(context.uiContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
         detailsHeader.setOrientation(LinearLayout.HORIZONTAL);
         detailsHeader.setGravity(Gravity.CENTER_VERTICAL);
         detailsHeader.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        detailsHeader.setBackground(rect(COLOR_HEADER, 0));
+        UiMenuItems.decorate(detailsHeader, COLOR_HEADER, 2.0f, UiThemes.EDITOR);
         detailsDisclosure = new SvgIconView(context.uiContext(), SvgIconView.Icon.forExpandedState(false), COLOR_MUTED);
         detailsHeader.addView(detailsDisclosure, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(20), -1));
-        detailsHeader.addView(text(context, tr(KEY + "details"), 10.5f, COLOR_TEXT),
-                new LinearLayout.LayoutParams(0, -1, 1));
+        TextView detailsTitle = text(context, tr(KEY + "details"), 10.5f, COLOR_TEXT);
+        detailsTitle.setDuplicateParentStateEnabled(true);
+        detailsTitle.setTextColor(UiMenuItems.textColors(COLOR_TEXT, UiThemes.EDITOR));
+        detailsHeader.addView(detailsTitle, new LinearLayout.LayoutParams(0, -1, 1));
         detailsHeader.setOnClickListener(view -> {
             detailsExpanded = !detailsExpanded;
             updateDetailsExpansion();

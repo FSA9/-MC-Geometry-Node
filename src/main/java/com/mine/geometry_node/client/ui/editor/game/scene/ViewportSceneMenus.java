@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
@@ -11,7 +12,6 @@ import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.Gravity;
@@ -160,13 +160,13 @@ public final class ViewportSceneMenus {
     }
     private View iconToggle(SvgIconView.Icon kind,BooleanSupplier value,BooleanSupplier enabled,Consumer<Boolean> change,java.util.List<Runnable> refresh){
         long token=epoch;
-        SvgIconView icon=new SvgIconView(owner.getContext(),kind,UiTheme.Text.STRONG);
-        UiIconButton button=new UiIconButton(owner.getContext(),icon,new UiIconButton.Style(2,0,0,UiTheme.Control.ICON_HOVER,0));
+        SvgIconView icon=new SvgIconView(owner.getContext(),kind,UiThemes.EDITOR.text().strong());
+        UiIconButton button=new UiIconButton(owner.getContext(),icon,new UiIconButton.Style(2,0,0,UiThemes.EDITOR.control().iconHover(),0));
         Runnable update = () -> {
             button.setEnabled(enabled.getAsBoolean());
             boolean selected = value.getAsBoolean();
             button.setSelected(selected);
-            icon.setIconColor(selected ? UiTheme.Text.STRONG : UiTheme.Text.DISABLED);
+            icon.setIconColor(selected ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().disabled());
             button.tooltip(button.isEnabled()?tr(kind==SvgIconView.Icon.SCENE_EYE?"visible":"selectable"):tr("selection_unavailable"));
         };
         refresh.add(update);
@@ -182,6 +182,6 @@ public final class ViewportSceneMenus {
     }
     private TextView centeredLabel(String text){TextView label=label(text);label.setGravity(Gravity.CENTER);return label;}
     private LinearLayout column(){LinearLayout c=new LinearLayout(owner.getContext());c.setOrientation(LinearLayout.VERTICAL);return c;}
-    private TextView label(String text){TextView t=UIUtils.createLockedTextView(owner.getContext(),text,11,UiTheme.Text.NORMAL);t.setGravity(Gravity.CENTER_VERTICAL);t.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);return t;}
+    private TextView label(String text){TextView t=UIUtils.createLockedTextView(owner.getContext(),text,11,UiThemes.EDITOR.text().normal());t.setGravity(Gravity.CENTER_VERTICAL);t.setPadding(UIUtils.dp2pxInt(5),0,UIUtils.dp2pxInt(5),0);return t;}
     private static String tr(String key){return Component.translatable("geometry_node.game_view.scene."+key).getString();}
 }

@@ -1,14 +1,14 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuFocus;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
 import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
-
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
@@ -37,14 +37,7 @@ public final class ColorPickerDialog extends FrameLayout {
     private static final int PANEL_PADDING_DP = 14;
     private static final int FIELD_H_DP = 28;
 
-    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
-    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
-    private static final int COLOR_TITLE = UiTheme.Surface.HEADER;
-    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
-    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
-    private static final int COLOR_LABEL = UiTheme.Text.SECONDARY;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-
+    private final UiTheme mTheme;
     private final OnColorSelected mListener;
     private final View mReturnFocusTarget;
     private final LinearLayout mWindow;
@@ -76,22 +69,24 @@ public final class ColorPickerDialog extends FrameLayout {
     private AreaLifecycle.Subscription mLifetime = AreaLifecycle.Subscription.NONE;
     private boolean mApplying;
 
-    private ColorPickerDialog(Context context, int initialColor, View returnFocusTarget, OnColorSelected listener) {
+    private ColorPickerDialog(Context context, int initialColor, View returnFocusTarget,
+                              OnColorSelected listener, UiTheme theme) {
         super(context);
+        mTheme = java.util.Objects.requireNonNull(theme, "theme");
         mListener = listener;
         mReturnFocusTarget = returnFocusTarget;
-        setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
+        setBackground(rect(mTheme.surface().modalScrim(), 0.0f, 0, 0));
         setFocusable(true);
         setFocusableInTouchMode(true);
 
         mWindow = new LinearLayout(context);
         mWindow.setOrientation(LinearLayout.VERTICAL);
-        mWindow.setBackground(rect(COLOR_WINDOW, 6.0f, 1, COLOR_BORDER));
+        mWindow.setBackground(rect(mTheme.surface().panel(), 6.0f, 1, mTheme.border().strong()));
         mWindow.setOnClickListener(v -> {});
 
-        TextView title = label(context, "调色盘", 14.0f, COLOR_TEXT, Gravity.CENTER_VERTICAL);
+        TextView title = label(context, "调色盘", 14.0f, mTheme.text().normal(), Gravity.CENTER_VERTICAL);
         title.setPadding(dpPx(12), 0, dpPx(8), 0);
-        title.setBackground(rect(COLOR_TITLE, 6.0f, 0, 0));
+        title.setBackground(rect(mTheme.surface().modalTitle(), 6.0f, 0, 0));
         title.setOnTouchListener(this::onTitleBarTouch);
         mWindow.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(34)));
 
@@ -114,12 +109,12 @@ public final class ColorPickerDialog extends FrameLayout {
         mPreviewView = new ColorPreviewView(context);
         rightColumn.addView(mPreviewView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(58)));
 
-        mHexView = label(context, "#FFFFFF", 13.0f, COLOR_TEXT, Gravity.CENTER);
+        mHexView = label(context, "#FFFFFF", 13.0f, mTheme.text().normal(), Gravity.CENTER);
         LinearLayout.LayoutParams hexLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(28));
         hexLp.topMargin = dpPx(8);
         rightColumn.addView(mHexView, hexLp);
 
-        TextView hueLabel = label(context, "Hue", 11.0f, COLOR_LABEL, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView hueLabel = label(context, "Hue", 11.0f, mTheme.text().secondary(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams hueLabelLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpPx(20));
         hueLabelLp.topMargin = dpPx(8);
         rightColumn.addView(hueLabel, hueLabelLp);
@@ -152,9 +147,9 @@ public final class ColorPickerDialog extends FrameLayout {
         content.addView(actions, actionsLp);
         LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(dpPx(82), dpPx(30));
         cancelLp.rightMargin = dpPx(8);
-        actions.addView(UiActionButton.create(context, "取消", UiActionButton.Role.SECONDARY,
+        actions.addView(UiActionButton.createThemed(context, mTheme, "取消", UiActionButton.Role.SECONDARY,
                 v -> dismiss()), cancelLp);
-        actions.addView(UiActionButton.create(context, "应用", UiActionButton.Role.PRIMARY,
+        actions.addView(UiActionButton.createThemed(context, mTheme, "应用", UiActionButton.Role.PRIMARY,
                 v -> applyAndDismiss()), new LinearLayout.LayoutParams(dpPx(86), dpPx(30)));
 
         mWindow.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -170,6 +165,11 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     public static ColorPickerDialog show(Context context, View anchor, int initialColor, OnColorSelected listener) {
+        return show(context, anchor, initialColor, listener, UiThemes.EDITOR);
+    }
+
+    public static ColorPickerDialog show(Context context, View anchor, int initialColor,
+                                         OnColorSelected listener, UiTheme theme) {
         if (context == null || anchor == null) {
             return null;
         }
@@ -177,16 +177,21 @@ public final class ColorPickerDialog extends FrameLayout {
         if (host == null) {
             return null;
         }
-        ColorPickerDialog dialog = new ColorPickerDialog(context, initialColor, anchor, listener);
+        ColorPickerDialog dialog = new ColorPickerDialog(context, initialColor, anchor, listener, theme);
         dialog.mount(anchor, host);
         return dialog;
     }
 
     public static ColorPickerDialog showIn(ViewGroup parent, int initialColor, OnColorSelected listener) {
+        return showIn(parent, initialColor, listener, UiThemes.EDITOR);
+    }
+
+    public static ColorPickerDialog showIn(ViewGroup parent, int initialColor,
+                                           OnColorSelected listener, UiTheme theme) {
         if (parent == null) {
             return null;
         }
-        ColorPickerDialog dialog = new ColorPickerDialog(parent.getContext(), initialColor, parent, listener);
+        ColorPickerDialog dialog = new ColorPickerDialog(parent.getContext(), initialColor, parent, listener, theme);
         dialog.mount(parent, parent);
         return dialog;
     }
@@ -203,7 +208,6 @@ public final class ColorPickerDialog extends FrameLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        requestFocus();
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
             mPointerDownInsideWindow = isInsideWindow(event.getX(), event.getY());
@@ -428,7 +432,7 @@ public final class ColorPickerDialog extends FrameLayout {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView rowTitle = label(context, title, 12.0f, COLOR_LABEL, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView rowTitle = label(context, title, 12.0f, mTheme.text().secondary(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
         row.addView(rowTitle, new LinearLayout.LayoutParams(dpPx(42), ViewGroup.LayoutParams.MATCH_PARENT));
         addChannel(row, context, first);
         addChannel(row, context, second);
@@ -437,7 +441,7 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     private void addChannel(LinearLayout row, Context context, ChannelField channel) {
-        TextView channelLabel = label(context, channel.label(), 11.0f, COLOR_LABEL, Gravity.CENTER);
+        TextView channelLabel = label(context, channel.label(), 11.0f, mTheme.text().secondary(), Gravity.CENTER);
         LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(dpPx(18), ViewGroup.LayoutParams.MATCH_PARENT);
         labelLp.leftMargin = dpPx(4);
         row.addView(channelLabel, labelLp);
@@ -445,11 +449,10 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     private EditText field(Context context) {
-        EditText input = new UiTextInput(context, new UiTextInput.Style(
-                12.0f, 5.0f, UiTheme.Metrics.RADIUS_INPUT, 1.0f,
-                COLOR_TEXT, UiTheme.Text.HINT, COLOR_FIELD, UiTheme.Control.INPUT_BORDER));
+        EditText input = new UiTextInput(context, UiTextInput.Style.forTheme(
+                mTheme, 12.0f, 5.0f, UiMetrics.RADIUS_INPUT, 1.0f));
         input.setSingleLine(true);
-        input.setTextColor(COLOR_TEXT);
+        input.setTextColor(mTheme.text().normal());
         UIUtils.setLockedTextSize(input, 12.0f);
         input.setGravity(Gravity.CENTER);
         input.setPadding(dpPx(5), 0, dpPx(5), 0);
@@ -679,6 +682,7 @@ public final class ColorPickerDialog extends FrameLayout {
             canvas.drawRoundRect(0, 0, getWidth(), getHeight(), radius, radius, radius, radius, mPaint);
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(UIUtils.dp2px(1.0f));
+            // Content preview boundary: retain neutral contrast rather than a theme accent.
             mPaint.setColor(0xAAFFFFFF);
             canvas.drawRoundRect(0, 0, getWidth(), getHeight(), radius, radius, radius, radius, mPaint);
         }
@@ -711,9 +715,10 @@ public final class ColorPickerDialog extends FrameLayout {
 
             float markerX = mSaturation * width;
             float markerY = (1.0f - mValue) * height;
+            // White/black locator rings must remain legible over the editable color spectrum.
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(UIUtils.dp2px(2.0f));
-            mPaint.setColor(UIConstants.CLR_WHITE);
+            mPaint.setColor(0xFFFFFFFF);
             canvas.drawCircle(markerX, markerY, UIUtils.dp2px(5.0f), mPaint);
             mPaint.setStrokeWidth(UIUtils.dp2px(1.0f));
             mPaint.setColor(0xFF000000);
@@ -760,9 +765,10 @@ public final class ColorPickerDialog extends FrameLayout {
             }
 
             float markerX = (mHue / 360.0f) * width;
+            // White center and black sides are content-editing guides, independent of UI selection.
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(UIUtils.dp2px(2.0f));
-            mPaint.setColor(UIConstants.CLR_WHITE);
+            mPaint.setColor(0xFFFFFFFF);
             canvas.drawLine(markerX, 0, markerX, height, mPaint);
             mPaint.setStrokeWidth(UIUtils.dp2px(1.0f));
             mPaint.setColor(0xFF000000);

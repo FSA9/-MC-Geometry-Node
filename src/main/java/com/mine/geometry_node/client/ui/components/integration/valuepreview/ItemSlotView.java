@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStackTooltipOverlay;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -20,7 +21,6 @@ import icyllis.modernui.view.PointerIcon;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.item.ItemStack;
-
 import java.util.function.Consumer;
 
 /** Reusable item-stack preview without graph-editor state or commands. */
@@ -30,6 +30,8 @@ public class ItemSlotView extends ViewportNativePreviewView {
     private static final float ITEM_MAX_SCALE = 1.25f;
     private static final float ITEM_VISUAL_SCALE = 0.8f;
 
+    private final ValuePreviewStyle mPreviewStyle;
+    private final UiTheme mTooltipTheme;
     private final Paint mPaint = new Paint();
     private final RectF mTempRect = new RectF();
     private final PreviewZoomController mZoom = new PreviewZoomController(() -> {
@@ -47,7 +49,17 @@ public class ItemSlotView extends ViewportNativePreviewView {
     private static String sClipboardItemJson;
 
     public ItemSlotView(Context context) {
+        this(context, ValuePreviewStyle.DEFAULT);
+    }
+
+    public ItemSlotView(Context context, ValuePreviewStyle style) {
+        this(context, style, UiThemes.EDITOR);
+    }
+
+    public ItemSlotView(Context context, ValuePreviewStyle style, UiTheme tooltipTheme) {
         super(context);
+        mPreviewStyle = style != null ? style : ValuePreviewStyle.DEFAULT;
+        mTooltipTheme = java.util.Objects.requireNonNull(tooltipTheme, "tooltipTheme");
         setWillNotDraw(false);
         setClipChildren(false);
         updateFocusableState();
@@ -56,6 +68,14 @@ public class ItemSlotView extends ViewportNativePreviewView {
             handleHover(event);
             return true;
         });
+    }
+
+    public final ValuePreviewStyle getPreviewStyle() {
+        return mPreviewStyle;
+    }
+
+    public final UiTheme getTooltipTheme() {
+        return mTooltipTheme;
     }
 
     @Override
@@ -165,12 +185,12 @@ public class ItemSlotView extends ViewportNativePreviewView {
     }
 
     protected void onStackHover(MotionEvent event, ItemStack stack) {
-        ItemStackTooltipOverlay.showForEvent(this, stack, event);
+        ItemStackTooltipOverlay.showForEvent(this, stack, event, mTooltipTheme);
     }
 
     protected void onStackHoverExit(ItemStack stack) {
         ItemTooltipProxy.clearTooltipTask(stack);
-        ItemStackTooltipOverlay.hide();
+        ItemStackTooltipOverlay.hide(this);
     }
 
     private void updateFocusableState() {
@@ -186,22 +206,24 @@ public class ItemSlotView extends ViewportNativePreviewView {
 
         float width = getWidth();
         float height = getHeight();
-        float radius = UIUtils.dp2px(ValuePreviewStyle.CORNER_RADIUS_DP);
-        float stroke = UIUtils.dp2px(ValuePreviewStyle.STROKE_WIDTH_DP);
+        float radius = UIUtils.dp2px(mPreviewStyle.cornerRadiusDp());
+        float stroke = UIUtils.dp2px(mPreviewStyle.strokeWidthDp());
         mPaint.setAntiAlias(true);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(ValuePreviewStyle.COLOR_BACKGROUND);
+        mPaint.setColor(mPreviewStyle.backgroundColor());
         mTempRect.set(0, 0, width, height);
         canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
 
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(stroke);
-        mPaint.setColor(mEditable && isFocused()
-                ? ValuePreviewStyle.COLOR_BORDER_FOCUSED
-                : ValuePreviewStyle.COLOR_BORDER);
-        mTempRect.set(stroke / 2.0f, stroke / 2.0f, width - stroke / 2.0f, height - stroke / 2.0f);
-        canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+        if (stroke > 0) {
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(stroke);
+            mPaint.setColor(mEditable && isFocused()
+                    ? mPreviewStyle.focusBorderColor()
+                    : mPreviewStyle.borderColor());
+            mTempRect.set(stroke / 2.0f, stroke / 2.0f, width - stroke / 2.0f, height - stroke / 2.0f);
+            canvas.drawRoundRect(mTempRect, radius, radius, radius, radius, mPaint);
+        }
     }
 
     @Override

@@ -19,6 +19,7 @@ public final class AssetTypeRegistry {
 
     private final Map<String, AssetType> mTypes = new LinkedHashMap<>();
 
+    // Asset identity colors are content metadata; keep them independent of the editor theme.
     private AssetTypeRegistry() {
         register(new AssetType(
                 DIRECTORY_ID, 0xFFFFC857, true, true, AssetPreviewKind.NONE,

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.toolbar;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigChangeListener;
 import com.mine.geometry_node.client.config.ConfigManager;
@@ -47,13 +47,13 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         mGridVisibilityButton.setOnClickListener(v -> performAction(ViewportActionId.TOGGLE_GRID_AND_AXIS));
         mToolStrip.addTool(mGridVisibilityButton, TOOL_BUTTON_SIZE_DP);
 
-        mTooltip = UIUtils.createLockedTextView(context, "", 10.0f, UIConstants.CLR_WHITE);
+        mTooltip = UIUtils.createLockedTextView(context, "", 10.0f, UiThemes.EDITOR.text().strong());
         mTooltip.setGravity(Gravity.LEFT | Gravity.TOP);
         mTooltip.setSingleLine(false);
         mTooltip.setHorizontallyScrolling(false);
         mTooltip.setMinLines(1);
         mTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
-        mTooltip.setBackground(createRectDrawable(0xF0222222, 4.0f, 1, 0xFF555555));
+        mTooltip.setBackground(createRectDrawable(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
         mTooltip.setVisibility(View.GONE);
         mTooltip.setEnabled(false);
         LayoutParams tooltipLp = new LayoutParams(UIUtils.dp2pxInt(120), LayoutParams.WRAP_CONTENT);

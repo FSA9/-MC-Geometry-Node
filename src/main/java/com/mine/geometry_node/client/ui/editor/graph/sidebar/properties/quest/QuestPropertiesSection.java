@@ -1,15 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
 import java.util.function.Supplier;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import icyllis.modernui.view.View;
-
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -21,7 +20,6 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
@@ -30,10 +28,10 @@ import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.u
  * Quest-specific content owned by the graph-properties panel.
  */
 public final class QuestPropertiesSection extends LinearLayout {
-    private static final int COLOR_SECTION = 0xFF292929;
-    private static final int COLOR_LABEL = 0xFFA8A8A8;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF777777;
+    private static final int COLOR_SECTION = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_LABEL = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().hint();
     private static final int COLOR_BUTTON = GraphPropertiesUi.ACTION_BACKGROUND;
     private static final int COLOR_BUTTON_HOVER = GraphPropertiesUi.ACTION_HOVER;
 
@@ -229,8 +227,8 @@ public final class QuestPropertiesSection extends LinearLayout {
 
     private EditText questInput(boolean singleLine, String hint) {
         EditText input = new UiTextInput(getContext(), new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
-                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, UiThemes.EDITOR.text().normal(), UiThemes.EDITOR.text().hint(),
+                UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         input.setSingleLine(singleLine);
         input.setTextColor(COLOR_TEXT);
         input.setHintTextColor(COLOR_MUTED);

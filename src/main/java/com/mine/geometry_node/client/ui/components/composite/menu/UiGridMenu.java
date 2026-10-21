@@ -1,16 +1,15 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
-import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
-
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -44,15 +43,21 @@ public final class UiGridMenu<T> {
 
     public UiGridMenu(Context context, String title, List<Entry<T>> entries, T selected,
                       Style style, Consumer<T> onSelect) {
+        this(context, title, entries, selected, style, onSelect, UiThemes.EDITOR);
+    }
+
+    public UiGridMenu(Context context, String title, List<Entry<T>> entries, T selected,
+                      Style style, Consumer<T> onSelect, UiTheme theme) {
+        Objects.requireNonNull(theme, "theme");
         List<Entry<T>> source = List.copyOf(entries);
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
-        UiSearchInput search = UiSearchMenuLayout.addHeader(content, title, true);
+        UiSearchInput search = UiSearchMenuLayout.addHeader(content, title, true, theme);
         CardGrid grid = new CardGrid(context, style);
         content.addView(grid, new LinearLayout.LayoutParams(-1, -2));
-        TextView empty = label(context, Component.translatable("geometry_node.data_library.no_results").getString());
+        TextView empty = label(context, Component.translatable("geometry_node.data_library.no_results").getString(), theme);
         content.addView(empty, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(28)));
-        popup = UiPopover.forContentWidth(context, content, style.contentWidthPx(), style.maxHeightDp());
+        popup = UiPopover.forContentWidth(context, content, style.contentWidthPx(), style.maxHeightDp(), theme);
         Consumer<String> filter = query -> {
             grid.removeAllViews();
             String needle = query.strip().toLowerCase(Locale.ROOT);
@@ -60,12 +65,12 @@ public final class UiGridMenu<T> {
                 String text = Objects.toString(entry.searchText(), "") + " " + Objects.toString(entry.caption(), "");
                 if (!text.toLowerCase(Locale.ROOT).contains(needle)) continue;
                 LinearLayout card = UiMenuItems.card(context,
-                        Objects.equals(selected, entry.value()), entry.enabled());
+                        Objects.equals(selected, entry.value()), entry.enabled(), theme);
                 FrameLayout preview = new FrameLayout(context);
                 preview.addView(entry.preview().apply(context), new FrameLayout.LayoutParams(-1, -1));
                 card.addView(preview, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(style.cardWidthDp())));
                 if (entry.caption() != null && !entry.caption().isBlank()) {
-                    TextView caption = label(context, entry.caption());
+                    TextView caption = label(context, entry.caption(), theme);
                     caption.setSingleLine(true);
                     caption.setEllipsize(TextUtils.TruncateAt.END);
                     card.addView(caption, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(style.captionHeightDp())));
@@ -89,8 +94,8 @@ public final class UiGridMenu<T> {
     public void dismiss() { popup.dismiss(); }
     public boolean isOpen() { return popup.isOpen(); }
 
-    private static TextView label(Context context, String text) {
-        TextView view = UIUtils.createLockedTextView(context, text, 11, UiTheme.Text.NORMAL);
+    private static TextView label(Context context, String text, UiTheme theme) {
+        TextView view = UIUtils.createLockedTextView(context, text, 11, theme.text().normal());
         view.setGravity(Gravity.CENTER);
         return view;
     }

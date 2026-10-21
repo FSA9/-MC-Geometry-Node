@@ -1,13 +1,14 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
-
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
@@ -20,26 +21,26 @@ public class UIHintUtils {
     public static final float INPUT_HEIGHT_OFFSET = 2.0f;
 
     public static float getStandardInputHeight() {
-        return UIConstants.Node.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
+        return NodeUiMetrics.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
     }
 
     public static EditText createInput(Context context) {
-        return new UiTextInput(context, new UiTextInput.Style(UIConstants.Node.TEXT_SIZE_LABEL, 8,
-                ConfigManager.INSTANCE.getConfig().node.cornerRadius, UiTheme.Metrics.BORDER,
-                UiTheme.Text.SECONDARY, UiTheme.Text.HINT, UiTheme.Surface.PANEL, 0xFF333333));
+        return new UiTextInput(context, new UiTextInput.Style(NodeUiMetrics.TEXT_SIZE_LABEL, 8,
+                ConfigManager.INSTANCE.getConfig().node.cornerRadius, UiMetrics.BORDER,
+                UiThemes.EDITOR.text().secondary(), UiThemes.EDITOR.text().hint(), UiThemes.EDITOR.surface().panel(), UiThemes.EDITOR.border().subtle()));
     }
 
     public static void applyStandardInputStyle(EditText et, PortType expectedType) {
-        et.setTextColor(UIConstants.CLR_GRAY_LABEL);
-        UIUtils.setLockedTextSize(et, UIConstants.Node.TEXT_SIZE_LABEL);
+        et.setTextColor(UiThemes.EDITOR.text().secondary());
+        UIUtils.setLockedTextSize(et, NodeUiMetrics.TEXT_SIZE_LABEL);
         et.setGravity(icyllis.modernui.view.Gravity.RIGHT | icyllis.modernui.view.Gravity.CENTER_VERTICAL);
         et.setSingleLine(true);
 
         if (!(et instanceof UiTextInput)) {
             ShapeDrawable bgDrawable = new ShapeDrawable();
-            bgDrawable.setColor(UiTheme.Surface.PANEL);
+            bgDrawable.setColor(UiThemes.EDITOR.surface().panel());
             bgDrawable.setCornerRadius(UIUtils.dp2px(ConfigManager.INSTANCE.getConfig().node.cornerRadius));
-            bgDrawable.setStroke(UIUtils.dp2pxInt(1), 0xFF333333);
+            bgDrawable.setStroke(UIUtils.dp2pxInt(1), UiThemes.EDITOR.border().subtle());
             et.setBackground(bgDrawable);
         }
 

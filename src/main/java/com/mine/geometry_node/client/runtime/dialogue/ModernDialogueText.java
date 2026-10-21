@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.runtime.dialogue;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueRichText;
 import com.mine.geometry_node.core.engine.system.dialogue.richtext.DialogueTextParser;
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
@@ -14,7 +15,6 @@ import icyllis.modernui.text.style.UnderlineSpan;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
-
 import java.util.Optional;
 
 /**
@@ -46,7 +46,7 @@ public final class ModernDialogueText {
             int start = builder.length();
             if (RichTextValue.KIND_LATEX.equals(segment.kind())) {
                 builder.append(latexLabel(segment));
-                builder.setSpan(new ForegroundColorSpan(0xFF88D7FF), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                builder.setSpan(new ForegroundColorSpan(UiThemes.HUD.buttons().primary().normal()), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 builder.setSpan(new StyleSpan(Typeface.ITALIC), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else {
                 builder.append(segment.text());

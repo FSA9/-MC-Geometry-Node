@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
@@ -16,7 +18,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -46,7 +47,12 @@ public final class UiRadialMenu extends FrameLayout {
     private AreaLifecycle.Subscription areaBinding = AreaLifecycle.Subscription.NONE;
 
     public UiRadialMenu(Context context, String title, List<Item> items) {
+        this(context, title, items, UiThemes.EDITOR);
+    }
+
+    public UiRadialMenu(Context context, String title, List<Item> items, UiTheme theme) {
         super(context);
+        Objects.requireNonNull(theme, "theme");
         layoutDensity = UIUtils.dp2px(1);
         var slots = EnumSet.noneOf(RadialMenuLayout.Slot.class);
         for (Item item : items) if (!slots.add(item.slot()))
@@ -60,7 +66,7 @@ public final class UiRadialMenu extends FrameLayout {
             { setWillNotDraw(false); ring.setAntiAlias(true); }
             @Override protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
-                ring.setColor(0xDD171717);
+                ring.setColor(theme.border().divider());
                 ring.setStyle(Paint.STROKE);
                 ring.setStrokeWidth(5 * layoutDensity);
                 canvas.drawCircle(208 * layoutDensity, 128 * layoutDensity, 13 * layoutDensity, ring);
@@ -70,7 +76,7 @@ public final class UiRadialMenu extends FrameLayout {
         panel.setPivotY(0);
         addView(panel, new LayoutParams(UIUtils.dp2pxInt(RadialMenuLayout.WIDTH), UIUtils.dp2pxInt(RadialMenuLayout.HEIGHT)));
         if (title != null && !title.isBlank()) {
-            TextView label = UIUtils.createLockedTextView(context, title, 11, UiTheme.Text.MUTED);
+            TextView label = UIUtils.createLockedTextView(context, title, 11, theme.text().muted());
             label.setGravity(Gravity.CENTER);
             label.setSingleLine(true);
             label.setEllipsize(TextUtils.TruncateAt.END);
@@ -78,12 +84,19 @@ public final class UiRadialMenu extends FrameLayout {
         }
         for (Item item : items) {
             LinearLayout button = new LinearLayout(context) {
+                private final ShapeDrawable background = new ShapeDrawable();
+                {
+                    background.setCornerRadius(3 * layoutDensity);
+                    background.setColor(theme.surface().popup());
+                    setBackground(background);
+                }
                 @Override protected void drawableStateChanged() {
                     super.drawableStateChanged();
-                    ShapeDrawable background = new ShapeDrawable();
-                    background.setCornerRadius(3 * layoutDensity);
-                    background.setColor(isPressed() ? 0xFF35658B : isHovered() ? 0xFF477EA7 : 0xEE191919);
-                    setBackground(background);
+                    if (background == null) return;
+                    setAlpha(isEnabled() ? 1f : UiMetrics.DISABLED_ALPHA);
+                    background.setColor(!isEnabled() ? theme.surface().popup()
+                            : isPressed() ? theme.selection().subtlePressed()
+                            : isHovered() ? theme.selection().subtleHover() : theme.surface().popup());
                 }
             };
             button.setOrientation(LinearLayout.HORIZONTAL);
@@ -92,10 +105,6 @@ public final class UiRadialMenu extends FrameLayout {
             button.setClickable(true);
             // Keep keyboard focus in the owning viewport for the trigger's key-up.
             button.setFocusable(false);
-            ShapeDrawable background = new ShapeDrawable();
-            background.setColor(0xEE191919);
-            background.setCornerRadius(3 * layoutDensity);
-            button.setBackground(background);
             if (item.icon() != null) {
                 View icon = Objects.requireNonNull(item.icon().apply(context));
                 icon.setClickable(false);
@@ -105,7 +114,7 @@ public final class UiRadialMenu extends FrameLayout {
                 button.addView(icon, params);
             }
             if (item.text() != null && !item.text().isBlank()) {
-                TextView label = UIUtils.createLockedTextView(context, item.text(), 12, 0xFFE0E0E0);
+                TextView label = UIUtils.createLockedTextView(context, item.text(), 12, theme.text().normal());
                 label.setSingleLine(true);
                 label.setEllipsize(TextUtils.TruncateAt.END);
                 button.addView(label, new LinearLayout.LayoutParams(-2, -2));

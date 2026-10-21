@@ -1,13 +1,14 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.core.Handler;
 import icyllis.modernui.core.Looper;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MeasureSpec;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -137,13 +138,24 @@ final class AreaEditorMenu extends FrameLayout {
     }
 
     private LinearLayout createRow(Context context, AreaEditorType type) {
-        LinearLayout row = new LinearLayout(context);
+        LinearLayout row = new LinearLayout(context) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+            @Override protected void drawableStateChanged() {
+                super.drawableStateChanged();
+                int color = !isEnabled() ? UiThemes.EDITOR.text().disabled()
+                        : isSelected() || isHovered() || isPressed() || isFocused()
+                        ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_ICON;
+                for (int i = 0; i < getChildCount(); i++) {
+                    if (getChildAt(i) instanceof SvgIconView icon) icon.setIconColor(color);
+                }
+            }
+        };
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(10.0f), 0, UIUtils.dp2pxInt(10.0f), 0);
-        row.setBackground(type == mCurrentType
-                ? AreaStyle.rounded(AreaStyle.COLOR_MENU_SELECTED, ROW_RADIUS_DP, 0, 0)
-                : null);
+        UiMenuItems.decorate(row, 0, ROW_RADIUS_DP, UiThemes.EDITOR);
+        row.setEnabled(true);
+        row.setSelected(type == mCurrentType);
 
         SvgIconView icon = new SvgIconView(context, type.icon(),
                 type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_ICON);
@@ -153,7 +165,9 @@ final class AreaEditorMenu extends FrameLayout {
 
         TextView label = UIUtils.createLockedTextView(context,
                 Component.translatable(type.translationKey()).getString(), 12.0f,
-                type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_TEXT);
+                AreaStyle.COLOR_TEXT);
+        label.setTextColor(UiMenuItems.textColors(AreaStyle.COLOR_TEXT, UiThemes.EDITOR));
+        label.setDuplicateParentStateEnabled(true);
         label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
                 0,
@@ -164,6 +178,8 @@ final class AreaEditorMenu extends FrameLayout {
 
         if (type == mCurrentType) {
             TextView marker = UIUtils.createLockedTextView(context, "ON", 9.0f, AreaStyle.COLOR_ACCENT);
+            marker.setTextColor(UiMenuItems.textColors(AreaStyle.COLOR_ACCENT, UiThemes.EDITOR));
+            marker.setDuplicateParentStateEnabled(true);
             marker.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
             row.addView(marker, new LinearLayout.LayoutParams(
                     UIUtils.dp2pxInt(20.0f),
@@ -175,25 +191,6 @@ final class AreaEditorMenu extends FrameLayout {
                 mOnSelect.accept(type);
             }
             dismiss();
-        });
-        row.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                row.setBackground(AreaStyle.rounded(type == mCurrentType
-                        ? AreaStyle.COLOR_MENU_SELECTED
-                        : AreaStyle.COLOR_BUTTON_BG_HOVER,
-                        ROW_RADIUS_DP,
-                        0,
-                        0));
-                label.setTextColor(AreaStyle.COLOR_ICON_SELECTED);
-                icon.setIconColor(AreaStyle.COLOR_ICON_SELECTED);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                row.setBackground(type == mCurrentType
-                        ? AreaStyle.rounded(AreaStyle.COLOR_MENU_SELECTED, ROW_RADIUS_DP, 0, 0)
-                        : null);
-                label.setTextColor(type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_TEXT);
-                icon.setIconColor(type == mCurrentType ? AreaStyle.COLOR_ICON_SELECTED : AreaStyle.COLOR_ICON);
-            }
-            return false;
         });
         return row;
     }

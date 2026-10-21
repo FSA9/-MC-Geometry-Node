@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.shell.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuItemDefinition;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuItemType;
@@ -7,13 +9,11 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -22,12 +22,11 @@ final class MainMenuPopup extends LinearLayout {
     static final float WIDTH_DP = 220.0f;
 
     private static final float ROW_HEIGHT_DP = 27.0f;
-    private static final int COLOR_BACKGROUND = 0xFF252525;
-    private static final int COLOR_BORDER = 0xFF484848;
-    private static final int COLOR_TEXT = 0xFFE0E0E0;
-    private static final int COLOR_MUTED = 0xFF888888;
-    private static final int COLOR_HOVER = 0xFF3D5F82;
-    private static final int COLOR_DIVIDER = 0xFF414141;
+    private static final int COLOR_BACKGROUND = UiThemes.EDITOR.surface().popup();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().strong();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_DIVIDER = UiThemes.EDITOR.border().divider();
 
     MainMenuPopup(Context context, List<MainMenuItemDefinition> definitions,
                   Consumer<MainMenuItemDefinition> onExecute) {
@@ -53,20 +52,26 @@ final class MainMenuPopup extends LinearLayout {
     private LinearLayout row(Context context, MainMenuItemDefinition definition,
                              Consumer<MainMenuItemDefinition> onExecute) {
         boolean enabled = safeEnabled(definition);
-        LinearLayout row = new LinearLayout(context);
+        boolean checked = definition.type() == MainMenuItemType.CHECK && safeChecked(definition);
+        LinearLayout row = new LinearLayout(context) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
         row.setOrientation(HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(6.0f), 0, UIUtils.dp2pxInt(7.0f), 0);
+        UiMenuItems.decorate(row, 0, 2.0f, UiThemes.EDITOR);
+        row.setEnabled(enabled);
+        row.setSelected(checked);
         row.setClickable(enabled);
 
         TextView check = text(context,
-                definition.type() == MainMenuItemType.CHECK && safeChecked(definition) ? "\u2713" : "",
-                enabled ? COLOR_TEXT : COLOR_MUTED, Gravity.CENTER);
+                checked ? "\u2713" : "",
+                COLOR_TEXT, Gravity.CENTER);
         row.addView(check, new LayoutParams(UIUtils.dp2pxInt(18.0f), ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView label = text(context,
                 Component.translatable(definition.labelTranslationKey()).getString(),
-                enabled ? COLOR_TEXT : COLOR_MUTED,
+                COLOR_TEXT,
                 Gravity.LEFT | Gravity.CENTER_VERTICAL);
         row.addView(label, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
@@ -79,12 +84,6 @@ final class MainMenuPopup extends LinearLayout {
 
         if (enabled) {
             row.setOnClickListener(view -> onExecute.accept(definition));
-            row.setOnHoverListener((view, event) -> {
-                boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
-                        || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
-                row.setBackground(hovered ? background(COLOR_HOVER, 2.0f, 0, 0) : null);
-                return true;
-            });
         }
         return row;
     }
@@ -93,7 +92,8 @@ final class MainMenuPopup extends LinearLayout {
         TextView view = new TextView(context);
         view.setText(value);
         UIUtils.setLockedTextSize(view, 11.0f);
-        view.setTextColor(color);
+        view.setTextColor(UiMenuItems.textColors(color, UiThemes.EDITOR));
+        view.setDuplicateParentStateEnabled(true);
         view.setGravity(gravity);
         return view;
     }

@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.components.base.layout;
 
-import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -23,8 +23,8 @@ public class ResizableDivider extends FrameLayout {
         void onDividerDrag(float delta);
     }
 
-    private static final int COLOR_DIVIDER = 0xFF070707;
-    private static final int COLOR_DIVIDER_DRAG_FILL = 0x3344AAFF;
+    private final UiTheme theme;
+    protected static final float DEFAULT_MIN_WEIGHT = 0.05f;
     private static final float HITBOX_DP = 8.0f;
     private static final float NORMAL_DP = 1.0f;
     private static final float DRAG_DP = 5.0f;
@@ -32,6 +32,7 @@ public class ResizableDivider extends FrameLayout {
     private final Orientation mOrientation;
     private final DragListener mListener;
     private final boolean mResizeWeightedSiblings;
+    private final float mMinimumWeight;
     private final View mVisualLine;
     private final boolean mHighlightOnHover;
     private boolean mHovered;
@@ -41,16 +42,32 @@ public class ResizableDivider extends FrameLayout {
     private final float[] mDragPoint = new float[2];
 
     public ResizableDivider(Context context, Orientation orientation, DragListener listener) {
-        this(context, orientation, listener, false);
+        this(context, orientation, listener, UiThemes.EDITOR);
     }
 
-    private ResizableDivider(Context context, Orientation orientation, DragListener listener, boolean resizeWeightedSiblings) {
-        this(context, orientation, listener, resizeWeightedSiblings, false);
+    public ResizableDivider(Context context, Orientation orientation, DragListener listener, UiTheme theme) {
+        this(context, orientation, listener, false, false, DEFAULT_MIN_WEIGHT, theme);
     }
 
     protected ResizableDivider(Context context, Orientation orientation, DragListener listener,
                                boolean resizeWeightedSiblings, boolean highlightOnHover) {
+        this(context, orientation, listener, resizeWeightedSiblings, highlightOnHover, DEFAULT_MIN_WEIGHT);
+    }
+
+    protected ResizableDivider(Context context, Orientation orientation, DragListener listener,
+                               boolean resizeWeightedSiblings, boolean highlightOnHover, float minimumWeight) {
+        this(context, orientation, listener, resizeWeightedSiblings, highlightOnHover, minimumWeight, UiThemes.EDITOR);
+    }
+
+    protected ResizableDivider(Context context, Orientation orientation, DragListener listener,
+                               boolean resizeWeightedSiblings, boolean highlightOnHover, float minimumWeight,
+                               UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
+        if (!Float.isFinite(minimumWeight) || minimumWeight < 0) {
+            throw new IllegalArgumentException("Minimum weight must be finite and nonnegative");
+        }
+        mMinimumWeight = minimumWeight;
         mOrientation = orientation != null ? orientation : Orientation.HORIZONTAL;
         mListener = listener;
         mResizeWeightedSiblings = resizeWeightedSiblings;
@@ -69,7 +86,21 @@ public class ResizableDivider extends FrameLayout {
 
     public static ResizableDivider weighted(
             Context context, Orientation orientation, DragListener listener) {
-        ResizableDivider divider = new ResizableDivider(context, orientation, listener, true);
+        return weighted(context, orientation, DEFAULT_MIN_WEIGHT, listener);
+    }
+
+    public static ResizableDivider weighted(Context context, Orientation orientation, float minimumWeight) {
+        return weighted(context, orientation, minimumWeight, null);
+    }
+
+    public static ResizableDivider weighted(Context context, Orientation orientation,
+                                            float minimumWeight, DragListener listener) {
+        return weighted(context, orientation, minimumWeight, listener, UiThemes.EDITOR);
+    }
+
+    public static ResizableDivider weighted(Context context, Orientation orientation,
+                                            float minimumWeight, DragListener listener, UiTheme theme) {
+        ResizableDivider divider = new ResizableDivider(context, orientation, listener, true, false, minimumWeight, theme);
         divider.setLayoutParams(layoutParams(orientation));
         return divider;
     }
@@ -191,7 +222,7 @@ public class ResizableDivider extends FrameLayout {
             return;
         }
 
-        float minWeight = Math.min(UIConstants.MainUI.WEIGHT_MIN, totalWeight * 0.45f);
+        float minWeight = Math.min(mMinimumWeight, totalWeight * 0.45f);
         float nextFirst = firstParams.weight + (delta / totalSize) * totalWeight;
         nextFirst = Math.max(minWeight, Math.min(totalWeight - minWeight, nextFirst));
 
@@ -214,11 +245,11 @@ public class ResizableDivider extends FrameLayout {
 
     private void updateVisual(boolean dragging) {
         boolean highlighted = dragging || (mHighlightOnHover && mHovered);
-        setBackground(dragging && !mHighlightOnHover ? rect(COLOR_DIVIDER_DRAG_FILL) : null);
+        setBackground(dragging && !mHighlightOnHover ? rect(theme.selection().marqueeFill()) : null);
         if (mVisualLine != null) {
             mVisualLine.setBackground(rounded(
-                    highlighted ? UIConstants.ViewPort.Selection.CLR_BORDER
-                            : mHighlightOnHover ? UiTheme.Control.INPUT_BORDER : COLOR_DIVIDER,
+                    highlighted ? theme.selection().outline()
+                            : mHighlightOnHover ? theme.border().subtle() : theme.border().divider(),
                     highlighted && !mHighlightOnHover ? 3.0f : 0.0f
             ));
             mVisualLine.setLayoutParams(visualParams(highlighted));

@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.model.render.lod.model.ModelLodPolicy;
 import com.mine.geometry_node.client.model.render.pipeline.ModelStaticRenderer;
 import com.mine.geometry_node.client.model.render.shadow.ModelShadowDistancePolicy;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -24,8 +26,14 @@ public final class ModelHud {
     private static final String KEY = "geometry_node.model.hud.";
     private static final long REFRESH_NANOS = 250_000_000L;
     private static final int MARGIN = 5;
-    private static final int GENERAL = 0xFFECEFF4, CPU = 0xFFB7C4D4, LOD = 0xFF71D7EF;
-    private static final int SHADOW = 0xFFFFD179, LOCAL_LIGHT = 0xFF8BE09C, GI = 0xFFC6AEF5, WARNING = 0xFFFF9C88;
+    private static final int GENERAL = UiThemes.HUD.text().normal();
+    private static final int CPU = UiThemes.HUD.text().secondary();
+    private static final int WARNING = UiThemes.HUD.status().warning();
+    // Metric family identities, independent of the HUD's chrome and warning state.
+    private static final int LOD = 0xFF71D7EF;
+    private static final int SHADOW = 0xFFFFD179;
+    private static final int LOCAL_LIGHT = 0xFF8BE09C;
+    private static final int GI = 0xFFC6AEF5;
     private static boolean enabled;
     private static long nextRefresh;
     private static int cachedWidth = -1, textWidth;
@@ -71,7 +79,8 @@ public final class ModelHud {
         int lineHeight = minecraft.font.lineHeight + 1;
         int count = Math.min(lines.size(), Math.max(0, (graphics.guiHeight() - MARGIN * 2) / lineHeight));
         if (count == 0) return;
-        graphics.fill(MARGIN - 2, MARGIN - 2, MARGIN + textWidth + 2, MARGIN + count * lineHeight + 1, 0xB010141A);
+        graphics.fill(MARGIN - 2, MARGIN - 2, MARGIN + textWidth + 2, MARGIN + count * lineHeight + 1,
+                UiTheme.withAlpha(UiThemes.HUD.surface().tooltip(), 176));
         for (int i = 0; i < count; i++) {
             var line = lines.get(i);
             graphics.text(minecraft.font, line.text(), MARGIN, MARGIN + i * lineHeight, line.color(), true);

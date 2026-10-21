@@ -1,14 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.game.sidebar;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
-
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.scene.SceneEditCapabilities;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
@@ -16,7 +15,6 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.*;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.game.ViewportMode;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.properties.ScenePropertyControl;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas;
@@ -30,7 +28,6 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.Minecraft;
-
 import java.util.*;
 
 /** Schema-driven edits form one transaction and wait for server acknowledgement. */
@@ -69,7 +66,7 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
         int p = UIUtils.dp2pxInt(10);
         column.setPadding(p, p, p, p);
         addView(column, new ViewGroup.LayoutParams(-1, -2));
-        status = UIUtils.createLockedTextView(context, "", 11, UiTheme.Text.MUTED);
+        status = UIUtils.createLockedTextView(context, "", 11, UiThemes.EDITOR.text().muted());
         column.addView(status, new LinearLayout.LayoutParams(-1, -2));
         form = new LinearLayout(context);
         form.setOrientation(LinearLayout.VERTICAL);
@@ -235,14 +232,14 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
                 fields.put(field.key(), control.textInput());
                 watch(control.textInput());
             }
-            TextView label = UIUtils.createLockedTextView(getContext(), field.label().getString(), 11, UiTheme.Text.SECONDARY);
+            TextView label = UIUtils.createLockedTextView(getContext(), field.label().getString(), 11, UiThemes.EDITOR.text().secondary());
             label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             label.setSingleLine(true);
             label.setEllipsize(TextUtils.TruncateAt.END);
             label.setTooltipText(field.label().getString());
             UiIconButton copy = new UiIconButton(getContext(),
-                    new SvgIconView(getContext(), SvgIconView.Icon.COPY, UiTheme.Text.SECONDARY),
-                    new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER, 0))
+                    new SvgIconView(getContext(), SvgIconView.Icon.COPY, UiThemes.EDITOR.text().secondary()),
+                    new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(), 0))
                     .tooltip(Component.translatable("geometry_node.game_view.scene.copy_value").getString());
             copy.setOnClickListener(v -> {
                 if (controls.get(field.key()) != control) return;

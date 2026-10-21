@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.components.composite.sidebar;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
@@ -17,7 +16,9 @@ public final class SidebarLayoutController {
     private final View mMainContent;
     private final View mDivider;
     private final EditorSidebar mSidebar;
+    private static final float DEFAULT_MIN_WEIGHT = 0.05f;
     private final StateListener mStateListener;
+    private final float mMinimumWeight;
     private float mExpandedWeight;
     private boolean mOwnerVisible = true;
     private UiFixedSplitLayout mFixedSplit;
@@ -45,6 +46,22 @@ public final class SidebarLayoutController {
             EditorSidebar sidebar,
             float expandedWeight,
             StateListener stateListener) {
+        this(parent, mainContent, divider, sidebar, expandedWeight, DEFAULT_MIN_WEIGHT, stateListener);
+    }
+
+    /** Weighted layout policy is supplied by the owning screen, independently of fixed-width bindings. */
+    public SidebarLayoutController(
+            LinearLayout parent,
+            View mainContent,
+            View divider,
+            EditorSidebar sidebar,
+            float expandedWeight,
+            float minimumWeight,
+            StateListener stateListener) {
+        if (!Float.isFinite(minimumWeight) || minimumWeight < 0) {
+            throw new IllegalArgumentException("Minimum weight must be finite and nonnegative");
+        }
+        mMinimumWeight = minimumWeight;
         mParent = parent;
         mMainContent = mainContent;
         mDivider = divider;
@@ -107,7 +124,7 @@ public final class SidebarLayoutController {
     private void transferWeight(float sidebarWeightDelta) {
         if (!(mMainContent.getLayoutParams() instanceof LinearLayout.LayoutParams contentParams)) return;
         contentParams.weight = Math.max(
-                UIConstants.MainUI.WEIGHT_MIN,
+                mMinimumWeight,
                 contentParams.weight + sidebarWeightDelta);
         mMainContent.setLayoutParams(contentParams);
     }

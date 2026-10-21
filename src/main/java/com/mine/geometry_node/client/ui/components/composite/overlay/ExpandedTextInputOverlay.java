@@ -1,9 +1,13 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
+import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuFocus;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
@@ -30,46 +34,40 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public final class ExpandedTextInputOverlay extends FrameLayout {
-    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
-    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
-    private static final int COLOR_SURFACE = UiTheme.Surface.HEADER;
-    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
-    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
-    private static final int COLOR_FIELD_BORDER = UiTheme.Control.INPUT_BORDER;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-    private static final int COLOR_BUTTON = UiTheme.SECONDARY.normal();
-    private static final int COLOR_BUTTON_HOVER = UiTheme.SECONDARY.hover();
-    private static final int COLOR_BUTTON_PRESSED = UiTheme.SECONDARY.pressed();
-    private static final int COLOR_PRIMARY = UiTheme.PRIMARY.normal();
     private static final int WINDOW_MARGIN_DP = 34;
 
     private static ExpandedTextInputOverlay sOpenOverlay;
 
+    private final UiTheme theme;
     private final PortType expectedType;
     private final boolean richTextMode;
     private final ValueParser valueParser;
     private final Predicate<Object> valueValidator;
     private final Consumer<Object> commitHandler;
     private final EditText editor;
+    private final View owner;
+    private AreaLifecycle.Subscription lifetime = AreaLifecycle.Subscription.NONE;
     private OverlayHandle overlayHandle;
     private boolean closed;
     private final UiMenuFocus focus = new UiMenuFocus();
     private boolean committing;
     private Runnable onDismissed;
 
-    private ExpandedTextInputOverlay(Context context, PortType expectedType, Object value,
+    private ExpandedTextInputOverlay(Context context, View owner, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
-                                     Consumer<Object> commitHandler) {
+                                     Consumer<Object> commitHandler, UiTheme theme) {
         super(context);
+        this.theme = Objects.requireNonNull(theme, "theme");
+        this.owner = owner;
         this.expectedType = expectedType;
         this.richTextMode = expectedType == PortType.RICH_TEXT;
         this.valueParser = valueParser;
@@ -77,7 +75,8 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         this.commitHandler = commitHandler;
         UIUtils.syncFixedDensity();
 
-        setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
+        // OverlayMount uses a transparent ModalOptions scrim; this also covers native fallback.
+        setBackground(rect(theme.surface().modalScrim(), 0.0f, 0, 0));
         setOnClickListener(v -> dismiss(OverlayCloseReason.OUTSIDE_CLICK));
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -85,22 +84,20 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         LinearLayout window = new LinearLayout(context);
         window.setOrientation(LinearLayout.VERTICAL);
         window.setPadding(dp(18), dp(14), dp(18), dp(14));
-        window.setBackground(rect(COLOR_WINDOW, 3.0f, 1, COLOR_BORDER));
+        window.setBackground(rect(theme.surface().panel(), 3.0f, 1, theme.border().strong()));
         window.setOnClickListener(v -> {
         });
 
         window.addView(createHeader(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         window.addView(divider(context), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
-        editor = new UiTextInput(context, new UiTextInput.Style(
-                14.0f, 14.0f, 2.0f, 1.0f, COLOR_TEXT, UiTheme.Text.HINT,
-                COLOR_FIELD, COLOR_FIELD_BORDER));
+        editor = new UiTextInput(context, UiTextInput.Style.forTheme(theme, 14.0f, 14.0f, 2.0f, 1.0f));
         if (richTextMode) {
             editor.setText(toEditable(RichTextValue.from(value)), TextView.BufferType.EDITABLE);
         } else {
             editor.setText(value == null ? "" : value.toString());
         }
-        editor.setTextColor(COLOR_TEXT);
+        editor.setTextColor(theme.text().normal());
         UIUtils.setLockedTextSize(editor, 14.0f);
         editor.setGravity(Gravity.LEFT | Gravity.TOP);
         editor.setSingleLine(false);
@@ -147,7 +144,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         View marker = new View(context);
-        marker.setBackground(rect(COLOR_PRIMARY, 1.0f, 0, 0));
+        marker.setBackground(rect(theme.buttons().primary().normal(), 1.0f, 0, 0));
         LinearLayout.LayoutParams markerParams = new LinearLayout.LayoutParams(dp(3), dp(26));
         markerParams.rightMargin = dp(11);
         header.addView(marker, markerParams);
@@ -155,7 +152,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         String titleKey = richTextMode
                 ? "geometry_node.rich_text_editor.title"
                 : "geometry_node.text_editor.title";
-        TextView title = label(context, tr(titleKey), 15.0f, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        TextView title = label(context, tr(titleKey), 15.0f, theme.text().normal(), Gravity.LEFT | Gravity.CENTER_VERTICAL);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
         return header;
     }
@@ -166,12 +163,12 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         actions.setPadding(0, dp(8), 0, 0);
 
-        actions.addView(UiActionButton.create(context, tr("geometry_node.common.cancel"),
+        actions.addView(UiActionButton.createThemed(context, theme, tr("geometry_node.common.cancel"),
                         UiActionButton.Role.SECONDARY, v -> dismiss()),
                 new LinearLayout.LayoutParams(dp(82), dp(32)));
         TextView spacer = label(context, "", 1.0f, 0, Gravity.CENTER);
         actions.addView(spacer, new LinearLayout.LayoutParams(dp(10), 1));
-        actions.addView(UiActionButton.create(context, tr("geometry_node.common.save"),
+        actions.addView(UiActionButton.createThemed(context, theme, tr("geometry_node.common.save"),
                         UiActionButton.Role.PRIMARY, v -> commit()),
                 new LinearLayout.LayoutParams(dp(90), dp(32)));
         return actions;
@@ -180,10 +177,16 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     public static void show(Context context, View anchor, PortType expectedType, Object value,
                             ValueParser valueParser, Predicate<Object> valueValidator,
                             Consumer<Object> onSave) {
+        show(context, anchor, expectedType, value, valueParser, valueValidator, onSave, UiThemes.EDITOR);
+    }
+
+    public static void show(Context context, View anchor, PortType expectedType, Object value,
+                            ValueParser valueParser, Predicate<Object> valueValidator,
+                            Consumer<Object> onSave, UiTheme theme) {
         if (anchor == null || valueParser == null || valueValidator == null || onSave == null) {
             return;
         }
-        showInternal(context, anchor, expectedType, value, valueParser, valueValidator, onSave, null);
+        showInternal(context, anchor, expectedType, value, valueParser, valueValidator, onSave, null, theme);
     }
 
     public static void showRichText(Context context, View anchor, RichTextValue value,
@@ -194,6 +197,12 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     /** Notifies the owner on every closing path, including cancel and replacement. */
     public static void showRichText(Context context, View anchor, RichTextValue value,
                                     Consumer<RichTextValue> onSave, Runnable onDismissed) {
+        showRichText(context, anchor, value, onSave, onDismissed, UiThemes.EDITOR);
+    }
+
+    /** Explicit theme follows the optional dismissal callback, keeping legacy null calls unambiguous. */
+    public static void showRichText(Context context, View anchor, RichTextValue value,
+                                    Consumer<RichTextValue> onSave, Runnable onDismissed, UiTheme theme) {
         if (anchor == null || onSave == null) {
             if (onDismissed != null) onDismissed.run();
             return;
@@ -203,12 +212,12 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             if (parsedValue instanceof RichTextValue richText) {
                 onSave.accept(richText);
             }
-        }, onDismissed);
+        }, onDismissed, theme);
     }
 
     private static void showInternal(Context context, View anchor, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
-                                     Consumer<Object> commitHandler, Runnable onDismissed) {
+                                     Consumer<Object> commitHandler, Runnable onDismissed, UiTheme theme) {
         ViewGroup host = findWindowHost(anchor);
         if (host == null) {
             if (onDismissed != null) onDismissed.run();
@@ -217,11 +226,12 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
 
         ExpandedTextInputOverlay overlay = new ExpandedTextInputOverlay(
                 context,
+                anchor,
                 expectedType,
                 value,
                 valueParser,
                 valueValidator,
-                commitHandler);
+                commitHandler, theme);
         overlay.onDismissed = onDismissed;
         closeOpenOverlay();
         overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> false, overlay::onClosed);
@@ -230,8 +240,10 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             host.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         sOpenOverlay = overlay;
+        if (!overlay.closed) overlay.lifetime = AreaTransientUi.bind(anchor, overlay,
+                () -> overlay.dismiss(OverlayCloseReason.OWNER_CLOSED));
         overlay.post(() -> {
-            if (overlay.closed) return;
+            if (overlay.closed || !overlay.ownerValid()) return;
             overlay.requestFocus();
             overlay.editor.requestFocus();
             overlay.editor.setSelection(overlay.editor.getText().length());
@@ -261,6 +273,10 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
 
     private void commit() {
         if (closed || committing) return;
+        if (!ownerValid()) {
+            dismiss(OverlayCloseReason.OWNER_CLOSED);
+            return;
+        }
         committing = true;
         try {
             Object parsedValue = valueParser.parse(editor.getText());
@@ -273,6 +289,16 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         } finally {
             committing = false;
         }
+    }
+
+    private boolean ownerValid() {
+        if (getParent() == null || getVisibility() != VISIBLE || !owner.isEnabled()
+                || owner.getRootView() != getRootView()) return false;
+        for (View view = owner; view != null;
+             view = view.getParent() instanceof View parent ? parent : null) {
+            if (view.getVisibility() != VISIBLE) return false;
+        }
+        return true;
     }
 
     private void dismiss() {
@@ -295,6 +321,8 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     private void onClosed(OverlayCloseReason reason) {
         if (closed) return;
         closed = true;
+        lifetime.close();
+        lifetime = AreaLifecycle.Subscription.NONE;
         focus.restoreAndClear(this);
         overlayHandle = null;
         if (sOpenOverlay == this) {
@@ -337,7 +365,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         toolbar.setOrientation(LinearLayout.VERTICAL);
         toolbar.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         toolbar.setPadding(dp(5), dp(6), dp(5), dp(6));
-        toolbar.setBackground(rect(COLOR_SURFACE, 2.0f, 1, COLOR_FIELD_BORDER));
+        toolbar.setBackground(rect(theme.surface().header(), 2.0f, 1, theme.border().subtle()));
 
         addToolButton(toolbar, toolButton(context, "B", "geometry_node.rich_text_editor.bold", v -> applyStyle("bold", true)));
         addToolButton(toolbar, toolButton(context, "I", "geometry_node.rich_text_editor.italic", v -> applyStyle("italic", true)));
@@ -352,7 +380,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         toolbar.addView(separator, separatorParams);
 
         TextView color = toolButton(context, "A", "geometry_node.rich_text_editor.color", v -> showColorPicker());
-        color.setTextColor(COLOR_PRIMARY);
+        color.setTextColor(theme.buttons().primary().normal());
         addToolButton(toolbar, color);
         addToolButton(toolbar, toolButton(context, "fx", "geometry_node.rich_text_editor.latex", v -> applyLatex()));
         addToolButton(toolbar, toolButton(context, "Tx", "geometry_node.rich_text_editor.clear_formatting", v -> clearSelectionStyles()));
@@ -367,8 +395,8 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
     }
 
     private TextView toolButton(Context context, String text, String tooltipKey, View.OnClickListener listener) {
-        TextView view = interactiveButton(context, text, 11.5f, COLOR_TEXT,
-                COLOR_BUTTON, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED, listener);
+        TextView view = interactiveButton(context, text, 11.5f, theme.text().normal(),
+                theme.buttons().secondary().normal(), theme.buttons().secondary().hover(), theme.buttons().secondary().pressed(), listener);
         view.setTooltipText(tr(tooltipKey));
         return view;
     }
@@ -410,7 +438,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             applyStyle("color", String.format("#%06x", color & 0xFFFFFF), start, end);
             editor.requestFocus();
             editor.setSelection(start, end);
-        });
+        }, theme);
     }
 
     private void applyLatex() {
@@ -422,7 +450,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         Editable editable = editor.getText();
         clearSpans(editable, start, end);
         editable.setSpan(new LatexSpan(editable.subSequence(start, end).toString(), "inline"), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        editable.setSpan(new ForegroundColorSpan(COLOR_PRIMARY), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        editable.setSpan(new ForegroundColorSpan(theme.buttons().primary().normal()), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         editable.setSpan(new StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         editor.setSelection(start, end);
     }
@@ -447,7 +475,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         }
     }
 
-    private static SpannableStringBuilder toEditable(RichTextValue value) {
+    private SpannableStringBuilder toEditable(RichTextValue value) {
         RichTextValue safe = value == null ? RichTextValue.EMPTY : value;
         SpannableStringBuilder builder = new SpannableStringBuilder();
         if (safe.segments().isEmpty()) {
@@ -460,7 +488,7 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             if (RichTextValue.KIND_LATEX.equals(segment.kind())) {
                 builder.append(segment.source());
                 builder.setSpan(new LatexSpan(segment.source(), segment.display()), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                builder.setSpan(new ForegroundColorSpan(COLOR_PRIMARY), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                builder.setSpan(new ForegroundColorSpan(theme.buttons().primary().normal()), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 builder.setSpan(new StyleSpan(Typeface.ITALIC), start, builder.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             } else {
                 builder.append(segment.text());
@@ -604,13 +632,13 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         }
     }
 
-    private static TextView interactiveButton(Context context, String text, float textSize, int textColor,
+    private TextView interactiveButton(Context context, String text, float textSize, int textColor,
                                               int normalColor, int hoverColor, int pressedColor,
                                               View.OnClickListener listener) {
-        UiActionButton view = UiActionButton.withPalette(context, text,
-                new UiActionButton.Palette(normalColor, hoverColor, pressedColor, textColor),
+        UiActionButton view = new UiActionButton(context, theme, text, UiActionButton.Role.SECONDARY,
                 UiActionButton.Density.NORMAL,
-                new UiActionButton.Style(2.0f, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(2.0f, 0, 0, UiMetrics.DISABLED_ALPHA, theme.border().focus()));
+        view.setPalette(new UiActionButton.Palette(normalColor, hoverColor, pressedColor, textColor));
         UIUtils.setLockedTextSize(view, textSize);
         view.setMinWidth(0);
         view.setMinHeight(0);
@@ -632,9 +660,9 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
         return view;
     }
 
-    private static View divider(Context context) {
+    private View divider(Context context) {
         View divider = new View(context);
-        divider.setBackground(rect(COLOR_BORDER, 0.0f, 0, 0));
+        divider.setBackground(rect(theme.border().strong(), 0.0f, 0, 0));
         return divider;
     }
 

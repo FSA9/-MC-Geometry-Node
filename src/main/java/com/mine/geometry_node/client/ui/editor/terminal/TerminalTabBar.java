@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -42,12 +43,12 @@ public class TerminalTabBar extends LinearLayout {
     public TerminalTabBar(Context context) {
         super(context);
         setOrientation(HORIZONTAL);
-        setBackground(createColorDrawable(UiTheme.Surface.PANEL));
+        setBackground(createColorDrawable(UiThemes.EDITOR.surface().panel()));
         setWillNotDraw(false);
 
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mIndicatorPaint = new Paint();
-        mIndicatorPaint.setColor(UiTheme.Control.FOCUS);
+        mIndicatorPaint.setColor(UiThemes.EDITOR.selection().outline());
     }
 
     public void setListener(TabListener listener) { mListener = listener; }
@@ -76,16 +77,16 @@ public class TerminalTabBar extends LinearLayout {
             LinearLayout tabItem = new LinearLayout(context);
             tabItem.setOrientation(HORIZONTAL);
             tabItem.setGravity(Gravity.CENTER_VERTICAL);
-            tabItem.setBackground(createColorDrawable(isActive ? UiTheme.Surface.ROOT : UiTheme.Surface.HEADER));
+            tabItem.setBackground(createColorDrawable(isActive ? UiThemes.EDITOR.surface().root() : UiThemes.EDITOR.surface().header()));
 
-            TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", 12f, 0xFF666666);
+            TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", 12f, UiThemes.EDITOR.text().hint());
             dragHandle.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(2), 0);
             dragHandle.setTooltipText(TerminalChrome.tr("tab.reorder"));
             dragHandle.setContentDescription(TerminalChrome.tr("tab.reorder"));
             tabItem.addView(dragHandle);
 
             TextView title = UIUtils.createLockedTextView(context, mTabs.get(i), 12f,
-                    isActive ? UiTheme.Text.STRONG : UiTheme.Text.MUTED);
+                    isActive ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted());
             title.setSingleLine(true);
             title.setSelected(isActive);
             tabItem.addView(title);
@@ -110,9 +111,9 @@ public class TerminalTabBar extends LinearLayout {
     }
 
     private static UiIconButton iconButton(Context context, SvgIconView.Icon icon, String tooltip) {
-        return new UiIconButton(context, new SvgIconView(context, icon, UiTheme.Text.MUTED),
-                new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER,
-                        UiTheme.Control.ICON_PRESSED, 0, 0, 14, UiTheme.Metrics.DISABLED_ALPHA))
+        return new UiIconButton(context, new SvgIconView(context, icon, UiThemes.EDITOR.text().muted()),
+                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(),
+                        UiThemes.EDITOR.control().iconPressed(), 0, 0, 14, UiMetrics.DISABLED_ALPHA))
                 .tooltip(TerminalChrome.tr(tooltip));
     }
 

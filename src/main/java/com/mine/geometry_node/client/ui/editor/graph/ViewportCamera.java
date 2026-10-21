@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.interaction.GraphInteractionConfig;
+
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.graphics.RectF;
 
@@ -49,10 +50,10 @@ public class ViewportCamera {
     public void zoom(boolean zoomIn, float pivotScreenX, float pivotScreenY) {
         if (!Float.isFinite(pivotScreenX) || !Float.isFinite(pivotScreenY)) return;
         float oldScale = mScale;
-        float factor = zoomIn ? UIConstants.ViewPort.ZOOM_SENSITIVITY : -UIConstants.ViewPort.ZOOM_SENSITIVITY;
+        float factor = zoomIn ? GraphInteractionConfig.ZOOM_SENSITIVITY : -GraphInteractionConfig.ZOOM_SENSITIVITY;
 
-        mScale = Math.max(UIConstants.ViewPort.ZOOM_MIN,
-                Math.min(UIConstants.ViewPort.ZOOM_MAX, oldScale + factor));
+        mScale = Math.max(GraphInteractionConfig.ZOOM_MIN,
+                Math.min(GraphInteractionConfig.ZOOM_MAX, oldScale + factor));
 
         if (mScale == oldScale) return;
 

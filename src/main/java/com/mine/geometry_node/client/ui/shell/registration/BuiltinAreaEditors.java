@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.shell.registration;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.integration.terminal.McpTerminalRuntimeFactory;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserWindow;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
@@ -55,7 +56,7 @@ public final class BuiltinAreaEditors {
         FrameLayout layout = new FrameLayout(context);
         TextView label = new TextView(context);
         label.setText(title);
-        label.setTextColor(0xFF777777);
+        label.setTextColor(UiThemes.EDITOR.text().hint());
         label.setGravity(Gravity.CENTER);
         layout.addView(label, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,

@@ -30,6 +30,7 @@ final class ColorInputView extends FrameLayout {
         addView(mSwatch, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }
 
+    // Swatches show user color data, including the white fallback; never substitute theme text colors.
     private ColorValue currentColor() {
         ColorValue color = ColorValue.from(UIHintValueBinder.getValue(mNodeData, mPort));
         return color != null ? color : ColorValue.WHITE;

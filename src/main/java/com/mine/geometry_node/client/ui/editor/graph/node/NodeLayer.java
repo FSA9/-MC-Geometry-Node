@@ -1,12 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
+import com.mine.geometry_node.client.ui.editor.graph.interaction.GraphInteractionConfig;
+
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.graphics.RectF;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
@@ -284,7 +285,7 @@ public class NodeLayer extends FrameLayout {
         for (int i = mNodeOrder.size() - 1; i >= 0; i--) {
             NodeVisualAdapter node = mNodeOrder.get(i);
             node.getLogicalBounds(mTmpNodeBounds);
-            mTmpNodeBounds.inset(-UIConstants.Node.PORT_VISUAL_RADIUS, -UIConstants.Node.PORT_VISUAL_RADIUS);
+            mTmpNodeBounds.inset(-NodeUiMetrics.PORT_VISUAL_RADIUS, -NodeUiMetrics.PORT_VISUAL_RADIUS);
             if (mTmpNodeBounds.contains(uiX, uiY)) {
                 return node;
             }
@@ -305,7 +306,7 @@ public class NodeLayer extends FrameLayout {
     }
 
     public Viewport.PortInfo findPortAt(float uiX, float uiY) {
-        float dynamicMargin = UIConstants.Node.PORT_HITBOX_RADIUS;
+        float dynamicMargin = GraphInteractionConfig.PORT_HITBOX_RADIUS;
         for (int i = mNodeOrder.size() - 1; i >= 0; i--) {
             NodeVisualAdapter node = mNodeOrder.get(i);
             node.getLogicalBounds(mTmpNodeBounds);

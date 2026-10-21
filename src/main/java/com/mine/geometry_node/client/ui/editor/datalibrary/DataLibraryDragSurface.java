@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
@@ -107,8 +110,21 @@ final class DataLibraryDragSurface extends LinearLayout {
     protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
         if (!resultRow) return;
-        rowPaint.setColor(UiTableStyle.DIVIDER_COLOR);
+        rowPaint.setStyle(Paint.FILL);
+        rowPaint.setColor(UiTableStyle.dividerColor(UiThemes.EDITOR));
         canvas.drawRect(0, getHeight() - Math.max(1, UIUtils.dp2pxInt(1)), getWidth(), getHeight(), rowPaint);
+        if (isEnabled() && isFocused()) {
+            float stroke = Math.max(1, UIUtils.dp2pxInt(UiMetrics.BORDER));
+            rowPaint.setStyle(Paint.STROKE);
+            rowPaint.setStrokeWidth(stroke);
+            rowPaint.setColor(UiThemes.EDITOR.border().focus());
+            canvas.drawRect(stroke / 2, stroke / 2, getWidth() - stroke / 2, getHeight() - stroke / 2, rowPaint);
+        }
+    }
+
+    @Override
+    public boolean performClick() {
+        return isEnabled() && super.performClick();
     }
 
     @Override

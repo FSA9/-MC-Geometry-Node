@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import icyllis.modernui.core.Context;
@@ -7,17 +8,15 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.List;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
 
 public final class QuestConditionOverviewView extends LinearLayout {
-    private static final int COLOR_LABEL = 0xFFA8A8A8;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF777777;
-    private static final int COLOR_ROW = 0xFF292929;
+    private static final int COLOR_LABEL = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().hint();
+    private static final int COLOR_ROW = UiThemes.EDITOR.surface().panel();
 
     public QuestConditionOverviewView(Context context) {
         super(context);

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.shell.MainUiServices;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
@@ -14,7 +15,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
 abstract class AssetDialogBase extends ModalWindowView {
-    private static final int ASSET_SCRIM_COLOR = 0x33000000;
+    private static final int ASSET_SCRIM_COLOR = UiThemes.EDITOR.surface().modalScrimLight();
 
     protected final LinearLayout mPanel;
 

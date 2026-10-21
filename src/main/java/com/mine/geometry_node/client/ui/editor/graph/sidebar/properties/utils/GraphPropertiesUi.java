@@ -1,11 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -22,22 +23,22 @@ import net.minecraft.network.chat.Component;
  */
 public final class GraphPropertiesUi {
     public static final int ACTION_SIZE_DP = 26;
-    public static final int ACTION_BACKGROUND = 0xFF4A4A4A;
-    public static final int ACTION_HOVER = 0xFF5A5A5A;
-    public static final int ACTION_PRESSED = 0xFF3A3A3A;
+    public static final int ACTION_BACKGROUND = UiThemes.EDITOR.control().icon();
+    public static final int ACTION_HOVER = UiThemes.EDITOR.control().iconHover();
+    public static final int ACTION_PRESSED = UiThemes.EDITOR.control().iconPressed();
 
     public static UiIconButton.Style actionStyle(float iconSizeDp) {
         return new UiIconButton.Style(3, 0, ACTION_BACKGROUND, ACTION_HOVER,
-                ACTION_PRESSED, UiTheme.Surface.PANEL, 0, iconSizeDp, UiTheme.Metrics.DISABLED_ALPHA);
+                ACTION_PRESSED, UiThemes.EDITOR.surface().panel(), 0, iconSizeDp, UiMetrics.DISABLED_ALPHA);
     }
 
     public static UiIconButton actionIcon(Context context, SvgIconView.Icon icon, String tooltipKey) {
-        return new UiIconButton(context, new SvgIconView(context, icon, UiTheme.Text.NORMAL), actionStyle(14))
+        return new UiIconButton(context, new SvgIconView(context, icon, UiThemes.EDITOR.text().normal()), actionStyle(14))
                 .tooltip(tr(tooltipKey));
     }
 
     public static UiIconButton actionIcon(Context context, VectorIconView.Kind icon, String tooltipKey) {
-        return new UiIconButton(context, new VectorIconView(context, icon, UiTheme.Text.NORMAL), actionStyle(14))
+        return new UiIconButton(context, new VectorIconView(context, icon, UiThemes.EDITOR.text().normal()), actionStyle(14))
                 .tooltip(tr(tooltipKey));
     }
 
@@ -70,8 +71,8 @@ public final class GraphPropertiesUi {
             int backgroundColor,
             int borderColor) {
         UiTextInput input = new UiTextInput(context, new UiTextInput.Style(
-                UiTheme.Metrics.TEXT_CONTROL, 7.0f, UiTheme.Metrics.RADIUS_INPUT,
-                UiTheme.Metrics.BORDER, textColor, hintColor, backgroundColor, borderColor));
+                UiMetrics.TEXT_CONTROL, 7.0f, UiMetrics.RADIUS_INPUT,
+                UiMetrics.BORDER, textColor, hintColor, backgroundColor, borderColor));
         input.setSingleLine(true);
         input.setText(value != null ? value : "");
         input.setHint(hint);
@@ -88,8 +89,8 @@ public final class GraphPropertiesUi {
         UiActionButton button = UiActionButton.withPalette(context, text,
                 new UiActionButton.Palette(normalColor, hoverColor, hoverColor, textColor),
                 UiActionButton.Density.COMPACT,
-                new UiActionButton.Style(UiTheme.Metrics.RADIUS_INPUT, 0, 0,
-                        UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(UiMetrics.RADIUS_INPUT, 0, 0,
+                        UiMetrics.DISABLED_ALPHA));
         button.setMinWidth(0);
         button.setMinHeight(0);
         button.setMinimumWidth(0);
@@ -120,7 +121,7 @@ public final class GraphPropertiesUi {
         LinearLayout order = new LinearLayout(context);
         order.setOrientation(LinearLayout.VERTICAL);
         UiIconButton up = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiTheme.Text.NORMAL), actionStyle(8))
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiThemes.EDITOR.text().normal()), actionStyle(8))
                 .tooltip(tr(upTooltipKey));
         up.setOnClickListener(v -> moveUp.run());
         order.addView(up, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -129,7 +130,7 @@ public final class GraphPropertiesUi {
         order.addView(divider, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, UIUtils.dp2pxInt(1))));
         UiIconButton down = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, UiTheme.Text.NORMAL), actionStyle(8))
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, UiThemes.EDITOR.text().normal()), actionStyle(8))
                 .tooltip(tr(downTooltipKey));
         down.setOnClickListener(v -> moveDown.run());
         order.addView(down, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));

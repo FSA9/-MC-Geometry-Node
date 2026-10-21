@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.settings.page.api.SettingsPage;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -16,7 +17,7 @@ final class SettingsContentHost extends FrameLayout {
     SettingsContentHost(Context context) {
         super(context);
         emptyView = UIUtils.createLockedTextView(context,
-                Component.translatable("geometry_node.settings.no_results").getString(), 11.0f, 0xFF929292);
+                Component.translatable("geometry_node.settings.no_results").getString(), 11.0f, UiThemes.EDITOR.text().muted());
         emptyView.setGravity(Gravity.CENTER);
     }
 

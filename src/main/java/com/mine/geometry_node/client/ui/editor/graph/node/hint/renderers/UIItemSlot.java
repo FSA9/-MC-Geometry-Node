@@ -8,11 +8,8 @@ import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.view.MotionEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.function.Consumer;
 
 /** Editor adapter for the reusable item-stack preview. */
 public class UIItemSlot extends ItemSlotView implements ViewportScaledHint, ViewportTransformedHint, InteractiveHintTarget {
@@ -48,22 +45,11 @@ public class UIItemSlot extends ItemSlotView implements ViewportScaledHint, View
     }
 
     @Override
-    protected void onStackHover(MotionEvent event, ItemStack stack) {
-        ItemStackTooltipOverlay.showForEvent(this, stack, event);
-    }
-
-    @Override
-    protected void onStackHoverExit(ItemStack stack) {
-        super.onStackHoverExit(stack);
-        ItemStackTooltipOverlay.hide();
-    }
-
-    @Override
     protected void onOpenEditorRequested() {
         Minecraft mc = Minecraft.getInstance();
         if (mNodeData == null || mEditorContext == null || mc.player == null) return;
 
-        ItemStackTooltipOverlay.hide();
+        ItemStackTooltipOverlay.hide(this);
         VanillaInventoryPicker.openItem(pickedStack -> {
             if (mc.level == null) return;
             UIHintValueBinder.commit(
@@ -74,7 +60,7 @@ public class UIItemSlot extends ItemSlotView implements ViewportScaledHint, View
             );
             mLastJson = null;
             refreshDisplayValue();
-            ItemStackTooltipOverlay.hide();
+            ItemStackTooltipOverlay.hide(this);
         }, this::requestFocus);
     }
 

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -44,7 +44,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
-
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -111,14 +110,15 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         this.coordinator = runtime.coordinator();
         coordinator.setObserver(this);
         setOrientation(VERTICAL);
+        // Terminal defaults are coupled to ANSI spans and inverse video, not editor surfaces.
         setBackground(colorDrawable(TerminalStyle.DEFAULT_BACKGROUND));
 
         LinearLayout statusBar = new LinearLayout(context);
         statusBar.setOrientation(HORIZONTAL);
         statusBar.setGravity(Gravity.CENTER_VERTICAL);
         statusBar.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
-        statusBar.setBackground(colorDrawable(com.mine.geometry_node.client.ui.theme.UiTheme.Surface.PANEL));
-        statusView = UIUtils.createLockedTextView(context, "HIGH TRUST  PowerShell", 12f, 0xFFAAAAAA);
+        statusBar.setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
+        statusView = UIUtils.createLockedTextView(context, "HIGH TRUST  PowerShell", 12f, UiThemes.EDITOR.text().muted());
         statusBar.addView(statusView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         actionView = TerminalChrome.action(context, TerminalChrome.tr("action.start"));
         actionView.setGravity(Gravity.CENTER);
@@ -129,10 +129,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         addView(statusBar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
 
         trustedEventView = UIUtils.createLockedTextView(context,
-                "CLI inherits OS file and network permissions  |  MCP starts with PowerShell", 11f, 0xFFB5CEA8);
+                "CLI inherits OS file and network permissions  |  MCP starts with PowerShell", 11f, UiThemes.EDITOR.status().success());
         trustedEventView.setGravity(Gravity.CENTER_VERTICAL);
         trustedEventView.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8), 0);
-        trustedEventView.setBackground(colorDrawable(0xFF173A2A));
+        trustedEventView.setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
         trustedEventView.setVisibility(View.VISIBLE);
         addView(trustedEventView, new LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(STATUS_HEIGHT_DP)));
@@ -153,6 +153,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         screenView.setHorizontallyScrolling(true);
         cellWidthPx = Math.max(1f, screenView.getPaint().measureTextRun("M", 0, 1, false, null));
         screenView.setTextIsSelectable(true);
+        screenView.setHighlightColor(UiThemes.EDITOR.selection().text());
         terminalSurface.setOnGenericMotionListener(this::handleTerminalScroll);
         scrollView.setOnGenericMotionListener(this::handleTerminalScroll);
         screenView.setOnGenericMotionListener(this::handleTerminalScroll);
@@ -164,6 +165,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
         inputSink = new EditText(context);
         inputSink.setSingleLine(false);
+        // Invisible input proxy: transparency is functional, not a theme text color.
         inputSink.setTextColor(0x00000000);
         inputSink.setBackground(null);
         inputSink.setPadding(0, 0, 0, 0);
@@ -204,7 +206,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             String code = event.code().isBlank() ? "" : "  " + event.code();
             String elapsed = event.state() == McpToolEvent.State.STARTED ? "" : "  " + event.elapsedMillis() + " ms";
             trustedEventView.setText("MCP  " + event.toolName() + "  " + event.state() + code + elapsed);
-            trustedEventView.setTextColor(event.state() == McpToolEvent.State.FAILED ? 0xFFF48771 : 0xFFB5CEA8);
+            trustedEventView.setTextColor(event.state() == McpToolEvent.State.FAILED ? UiThemes.EDITOR.status().error() : UiThemes.EDITOR.status().success());
         });
     }
 
@@ -290,7 +292,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             post(() -> {
                 if (!disposed) {
                     trustedEventView.setText("MCP server ready  |  waiting for tool call");
-                    trustedEventView.setTextColor(0xFFB5CEA8);
+                    trustedEventView.setTextColor(UiThemes.EDITOR.status().success());
                 }
             });
             post(this::requestInputFocus);
@@ -447,9 +449,10 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             if (lineIndex + 1 < lines.size()) text.append('\n');
         }
         if (snapshot.cursorVisible() && cursorStart >= 0 && cursorStart < text.length()) {
-            text.setSpan(new BackgroundColorSpan(0xFFD4D4D4), cursorStart, cursorStart + 1,
+            // Cursor uses the terminal default pair; keep it independent of editor selection styling.
+            text.setSpan(new BackgroundColorSpan(TerminalStyle.DEFAULT_FOREGROUND), cursorStart, cursorStart + 1,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            text.setSpan(new ForegroundColorSpan(0xFF1E1E1E), cursorStart, cursorStart + 1,
+            text.setSpan(new ForegroundColorSpan(TerminalStyle.DEFAULT_BACKGROUND), cursorStart, cursorStart + 1,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         return new RenderedSnapshot(snapshot.revision(), snapshot.rows(), lines.size(), text);
@@ -645,7 +648,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         String statusText = "HIGH TRUST  PowerShell  " + detail;
         String actionText = TerminalChrome.tr(displayedState.hasActiveBackend()
                 ? "action.stop" : startRequested ? "action.cancel" : "action.start");
-        int statusColor = pendingError.isBlank() ? 0xFFAAAAAA : 0xFFF48771;
+        int statusColor = pendingError.isBlank() ? UiThemes.EDITOR.text().muted() : UiThemes.EDITOR.status().error();
         if (!statusText.equals(displayedStatusText)) {
             displayedStatusText = statusText;
             statusView.setText(statusText);

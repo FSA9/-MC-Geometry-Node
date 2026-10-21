@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
@@ -248,7 +249,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
 
     private void addHeaderDivider(LinearLayout header, Context context) {
         View divider = new View(context);
-        divider.setBackground(AreaStyle.rect(0xFF151515));
+        divider.setBackground(AreaStyle.rect(UiThemes.EDITOR.border().divider()));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 Math.max(1, UIUtils.dp2pxInt(1.0f)),
                 UIUtils.dp2pxInt(16.0f));

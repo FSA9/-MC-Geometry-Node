@@ -1,15 +1,15 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
-
 import java.util.EnumMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -40,7 +40,7 @@ final class ViewportSnapPanel extends LinearLayout {
         LinearLayout row=new LinearLayout(context);row.setOrientation(HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);
         UiCheckBox exclude=new UiCheckBox(context);exclude.setChecked(get.get().excludeUnselectable());
         row.addView(exclude,new LayoutParams(UIUtils.dp2pxInt(20),UIUtils.dp2pxInt(20)));
-        var label=UIUtils.createLockedTextView(context,tr("exclude_unselectable"),11,UiTheme.Text.NORMAL);
+        var label=UIUtils.createLockedTextView(context,tr("exclude_unselectable"),11,UiThemes.EDITOR.text().normal());
         label.setGravity(Gravity.CENTER_VERTICAL);row.addView(label,new LayoutParams(0,UIUtils.dp2pxInt(27),1));
         label.setOnClickListener(v->exclude.performClick());
         exclude.setOnCheckedChangeListener((v,value)->change(get.get().withExcludeUnselectable(value)));
@@ -58,14 +58,14 @@ final class ViewportSnapPanel extends LinearLayout {
         button.setPalette(UiActionButton.Palette.toggle(value));
     }
     private UiActionButton button(String key,boolean center,Runnable click){
-        var button=UiActionButton.withPalette(getContext(),tr(key),new UiActionButton.Palette(0,UiTheme.Control.ICON_HOVER,UiTheme.Control.ICON_PRESSED,UiTheme.Text.NORMAL),
-                UiActionButton.Density.COMPACT,new UiActionButton.Style(0,0,0,UiTheme.Metrics.DISABLED_ALPHA));
+        var button=UiActionButton.withPalette(getContext(),tr(key),new UiActionButton.Palette(0,UiThemes.EDITOR.control().iconHover(),UiThemes.EDITOR.control().iconPressed(),UiThemes.EDITOR.text().normal()),
+                UiActionButton.Density.COMPACT,new UiActionButton.Style(0,0,0,UiMetrics.DISABLED_ALPHA));
         UIUtils.setLockedTextSize(button,11);button.setMinWidth(0);button.setMinHeight(0);
         button.setGravity((center?Gravity.CENTER:Gravity.LEFT|Gravity.CENTER_VERTICAL));
         button.setPadding(UIUtils.dp2pxInt(7),0,UIUtils.dp2pxInt(7),0);button.setOnClickListener(v->click.run());return button;
     }
     private void heading(String key){
-        var label=UIUtils.createLockedTextView(getContext(),tr(key),11,UiTheme.Text.SECONDARY);
+        var label=UIUtils.createLockedTextView(getContext(),tr(key),11,UiThemes.EDITOR.text().secondary());
         label.setGravity(Gravity.CENTER_VERTICAL);addView(label,new LayoutParams(-1,UIUtils.dp2pxInt(25)));
     }
     private static String tr(String key){return Component.translatable("geometry_node.game_view.snap."+key).getString();}

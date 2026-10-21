@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
     private final Object mPreviewLock = new Object();
-    private final List<ViewportNativePreview> mPreviews = new ArrayList<>();
-    private volatile List<ViewportNativePreview> mRenderOrder = List.of();
+    private final List<PreviewRegistration> mRegistrations = new ArrayList<>();
+    private volatile List<PreviewRegistration> mRenderOrder = List.of();
 
     public ViewportNativePreviewLayer(Context context) {
         super(context);
@@ -41,9 +41,12 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
                     double guiScale,
                     float alpha
             ) {
-                for (ViewportNativePreview preview : mRenderOrder) {
+                for (PreviewRegistration registration : mRenderOrder) {
+                    // A frame may retain an older snapshot after close/re-register.
+                    // Do not hold the list lock across rendering or interrupt an in-flight call.
+                    if (registration.mClosed.get()) continue;
                     try {
-                        preview.renderNativePreview(graphics, deltaTick, guiScale, alpha);
+                        registration.mPreview.renderNativePreview(graphics, deltaTick, guiScale, alpha);
                     } catch (RuntimeException failure) {
                         if (failure instanceof ReportedException reported && reported.getCause() instanceof Error) throw failure;
                         // One addon nativepreview must not prevent the remaining previews from rendering.
@@ -55,24 +58,25 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
 
     public NativePreviewHost.Registration registerPreview(ViewportNativePreview preview) {
         Objects.requireNonNull(preview, "preview");
+        PreviewRegistration registration = new PreviewRegistration(preview);
         synchronized (mPreviewLock) {
-            if (mPreviews.contains(preview)) {
+            if (mRegistrations.stream().anyMatch(existing -> preview.equals(existing.mPreview))) {
                 throw new IllegalStateException("Native preview is already registered");
             }
-            mPreviews.add(preview);
+            mRegistrations.add(registration);
             rebuildRenderOrderLocked();
         }
         setVisibility(View.VISIBLE);
         invalidate();
-        return new PreviewRegistration(preview);
+        return registration;
     }
 
-    private void unregisterPreview(ViewportNativePreview preview) {
+    private void unregisterPreview(PreviewRegistration registration) {
         boolean empty;
         synchronized (mPreviewLock) {
-            if (!mPreviews.remove(preview)) return;
+            if (!mRegistrations.remove(registration)) return;
             rebuildRenderOrderLocked();
-            empty = mPreviews.isEmpty();
+            empty = mRegistrations.isEmpty();
         }
         if (empty) setVisibility(View.GONE);
         invalidate();
@@ -90,8 +94,8 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
     }
 
     private void rebuildRenderOrderLocked() {
-        List<ViewportNativePreview> ordered = new ArrayList<>(mPreviews);
-        ordered.sort(Comparator.comparingLong(ViewportNativePreview::getNativePreviewOrder));
+        List<PreviewRegistration> ordered = new ArrayList<>(mRegistrations);
+        ordered.sort(Comparator.comparingLong(registration -> registration.mPreview.getNativePreviewOrder()));
         mRenderOrder = List.copyOf(ordered);
     }
 
@@ -115,7 +119,7 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
 
         @Override
         public void close() {
-            if (mClosed.compareAndSet(false, true)) unregisterPreview(mPreview);
+            if (mClosed.compareAndSet(false, true)) unregisterPreview(this);
         }
     }
 }

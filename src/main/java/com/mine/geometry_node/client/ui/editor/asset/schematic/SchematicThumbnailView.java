@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.schematic;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnail;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -8,7 +9,6 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.View;
-
 import java.io.File;
 
 public final class SchematicThumbnailView extends View {
@@ -83,7 +83,7 @@ public final class SchematicThumbnailView extends View {
         if (thumbnail.incomplete()) {
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(Math.max(1.0f, UIUtils.dp2px(1.0f)));
-            mPaint.setColor(0xAAFFD166);
+            mPaint.setColor((UiThemes.EDITOR.status().warning() & 0x00FFFFFF) | 0xAA000000);
             float inset = UIUtils.dp2px(3.0f);
             mRect.set(inset, inset, getWidth() - inset, getHeight() - inset);
             canvas.drawRoundRect(mRect, UIUtils.dp2px(4.0f), mPaint);
@@ -140,6 +140,7 @@ public final class SchematicThumbnailView extends View {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1.0f, half * 0.11f));
+        // Schematic-type identity fallback; material and block colors remain content-owned.
         mPaint.setColor(0xFF86B8FF);
 
         float left = cx - half;

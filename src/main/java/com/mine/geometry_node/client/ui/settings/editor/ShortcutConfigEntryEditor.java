@@ -1,6 +1,9 @@
 package com.mine.geometry_node.client.ui.settings.editor;
 
 import com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import icyllis.modernui.graphics.drawable.ShapeDrawable;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.config.ConfigDraft;
@@ -31,7 +34,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         super(context, draft, entry, environment, true);
         mCapture = new CaptureView(context);
         mCapture.setTextSize(0, UIUtils.dp2px(10.5f));
-        mCapture.setTextColor(SettingsEditorStyle.TEXT);
+        mCapture.setTextColor(UiMenuItems.textColors(SettingsEditorStyle.TEXT, UiThemes.EDITOR));
         mCapture.setGravity(Gravity.CENTER);
         mCapture.setFocusable(true);
         mCapture.setFocusableInTouchMode(true);
@@ -79,8 +82,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         mCapture.requestFocus();
         mCapture.setText(tr(mEntry.captureControlKeys()
                 ? "geometry_node.settings.value.press_control_binding" : "geometry_node.settings.value.press_binding"));
-        mCapture.setBackground(SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL_HOVER, 2.0f,
-                SettingsEditorStyle.ACCENT));
+        mCapture.updateAppearance();
     }
 
     private void cancelCapture() {
@@ -111,15 +113,37 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
     }
 
     private void showValidation(boolean valid, String message) {
-        mCapture.setBackground(SettingsEditorStyle.rect(
-                valid ? SettingsEditorStyle.CONTROL : SettingsEditorStyle.CONTROL_ERROR,
-                2.0f,
-                valid ? SettingsEditorStyle.BORDER : SettingsEditorStyle.BORDER_ERROR));
         setValidationSilently(valid, message);
+        mCapture.updateAppearance();
     }
 
     private final class CaptureView extends TextView implements OverlayEscapeCapture {
-        CaptureView(Context context) { super(context); }
+        private final ShapeDrawable stateBackground = SettingsEditorStyle.rect(SettingsEditorStyle.CONTROL,
+                2.0f, SettingsEditorStyle.BORDER);
+
+        CaptureView(Context context) {
+            super(context);
+            setBackground(stateBackground);
+        }
+
+        @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+
+        @Override protected void drawableStateChanged() {
+            super.drawableStateChanged();
+            if (stateBackground != null) updateAppearance();
+        }
+
+        private void updateAppearance() {
+            boolean valid = ShortcutConfigEntryEditor.this.isValid();
+            int fill = !valid ? SettingsEditorStyle.CONTROL_ERROR
+                    : !isEnabled() ? UiThemes.EDITOR.control().disabledBackground()
+                    : isPressed() ? UiThemes.EDITOR.control().iconPressed()
+                    : mCapturing || isHovered() ? SettingsEditorStyle.CONTROL_HOVER : SettingsEditorStyle.CONTROL;
+            int border = !valid ? SettingsEditorStyle.BORDER_ERROR
+                    : isEnabled() && (mCapturing || isFocused()) ? SettingsEditorStyle.ACCENT : SettingsEditorStyle.BORDER;
+            stateBackground.setColor(fill);
+            stateBackground.setStroke(Math.max(1, UIUtils.dp2pxInt(1)), border);
+        }
 
         @Override public boolean captureEscape(KeyEvent event) {
             return (mCapturing || mConsumedKey == event.getKeyCode()) && dispatchKeyEvent(event);
@@ -137,6 +161,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         }
 
         @Override public boolean dispatchKeyEvent(KeyEvent event) {
+            if (!isEnabled()) return false;
             if (mConsumedKey == event.getKeyCode()) {
                 if (event.getAction() == KeyEvent.ACTION_UP) mConsumedKey = -1;
                 return true;
@@ -160,6 +185,7 @@ final class ShortcutConfigEntryEditor extends AbstractConfigEntryEditor<String> 
         }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
+            if (!isEnabled()) return false;
             int action = event.getAction();
             if (action == MotionEvent.ACTION_DOWN) {
                 // A new gesture also recovers from a release lost outside this view.

@@ -1,8 +1,10 @@
 package com.mine.geometry_node.client.ui.components.integration.overlay;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
@@ -26,20 +28,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
 public final class InventoryItemPickerOverlay extends FrameLayout {
-    private static final int COLOR_DIM = UiTheme.Surface.OVERLAY_DIM;
-    private static final int COLOR_WINDOW = UiTheme.Surface.PANEL;
-    private static final int COLOR_FIELD = UiTheme.Control.INPUT;
-    private static final int COLOR_BORDER = UiTheme.Control.BORDER;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-    private static final int COLOR_ACCENT = 0xFFE0A84E;
-
     private static final int COLUMNS = 9;
     private static final int ROWS = 4;
     private static final int SLOT_SIZE_DP = 30;
@@ -48,6 +42,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
     private final Consumer<ItemStack> onPicked;
     private final Runnable onDismissed;
+    private final UiTheme theme;
     private final List<ItemStackView> itemSlots = new ArrayList<>();
     private ItemStackView hoveredSlot;
     private OverlayHandle overlayHandle;
@@ -55,20 +50,22 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     private final UiMenuFocus focus = new UiMenuFocus();
     private boolean picking;
 
-    private InventoryItemPickerOverlay(Context context, Consumer<ItemStack> onPicked, Runnable onDismissed) {
+    private InventoryItemPickerOverlay(Context context, UiTheme theme,
+                                       Consumer<ItemStack> onPicked, Runnable onDismissed) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         this.onPicked = onPicked;
         this.onDismissed = onDismissed;
 
         setFocusable(true);
         setFocusableInTouchMode(true);
-        setBackground(rect(COLOR_DIM, 0.0f, 0, 0));
+        setBackground(rect(theme.surface().overlayDim(), 0.0f, 0, 0));
         setOnClickListener(v -> dismiss());
 
         LinearLayout window = new LinearLayout(context);
         window.setOrientation(LinearLayout.VERTICAL);
         window.setPadding(dp(12), dp(10), dp(12), dp(12));
-        window.setBackground(rect(COLOR_WINDOW, 5.0f, 1, COLOR_BORDER));
+        window.setBackground(rect(theme.surface().panel(), 5.0f, 1, theme.border().strong()));
         window.setOnClickListener(v -> {
         });
         window.setOnHoverListener((v, event) -> {
@@ -76,7 +73,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             return false;
         });
 
-        TextView title = UIUtils.createLockedTextView(context, "选择物品", 13.0f, COLOR_TEXT);
+        TextView title = UIUtils.createLockedTextView(context, "选择物品", 13.0f, theme.text().normal());
         title.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         window.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
 
@@ -98,24 +95,34 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     }
 
     public static InventoryItemPickerOverlay showIn(ViewGroup parent, Consumer<ItemStack> onPicked, Runnable onDismissed) {
+        return showIn(parent, UiThemes.EDITOR, onPicked, onDismissed);
+    }
+
+    public static InventoryItemPickerOverlay showIn(ViewGroup parent, UiTheme theme,
+                                                    Consumer<ItemStack> onPicked, Runnable onDismissed) {
         if (parent == null) {
             return null;
         }
-        return show(parent, parent, onPicked, onDismissed);
+        return show(parent, parent, theme, onPicked, onDismissed);
     }
 
     public static InventoryItemPickerOverlay showFor(View anchor, Consumer<ItemStack> onPicked, Runnable onDismissed) {
+        return showFor(anchor, onPicked, onDismissed, UiThemes.EDITOR);
+    }
+
+    public static InventoryItemPickerOverlay showFor(View anchor, Consumer<ItemStack> onPicked,
+                                                     Runnable onDismissed, UiTheme theme) {
         if (anchor == null) {
             return null;
         }
         ViewGroup host = findWindowHost(anchor);
-        return host == null ? null : show(anchor, host, onPicked, onDismissed);
+        return host == null ? null : show(anchor, host, theme, onPicked, onDismissed);
     }
 
-    private static InventoryItemPickerOverlay show(View anchor, ViewGroup fallbackHost,
+    private static InventoryItemPickerOverlay show(View anchor, ViewGroup fallbackHost, UiTheme theme,
                                                    Consumer<ItemStack> onPicked, Runnable onDismissed) {
         closeOpenOverlay();
-        InventoryItemPickerOverlay overlay = new InventoryItemPickerOverlay(anchor.getContext(), onPicked, onDismissed);
+        InventoryItemPickerOverlay overlay = new InventoryItemPickerOverlay(anchor.getContext(), theme, onPicked, onDismissed);
         sOpenOverlay = overlay;
         overlay.overlayHandle = OverlayMount.modal(anchor, overlay, () -> {
             overlay.dismiss(OverlayCloseReason.ESCAPE);
@@ -138,7 +145,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
     private void buildInventoryGrid(Context context, LinearLayout grid) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
+        if (mc == null || mc.player == null) {
             return;
         }
         Inventory inventory = mc.player.getInventory();
@@ -165,7 +172,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
                     } finally {
                         dismiss();
                     }
-                }, true);
+                }, true, 1.0f, ItemStackView.previewStyleFor(theme), theme.selection().outline(), theme);
                 itemSlots.add(slot);
                 LinearLayout.LayoutParams slotLp = new LinearLayout.LayoutParams(dp(SLOT_SIZE_DP), dp(SLOT_SIZE_DP));
                 slotLp.rightMargin = dp(4);
@@ -228,9 +235,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         if (closed) return;
         closed = true;
         focus.restoreAndClear(this);
-        hoveredSlot = null;
-        ItemTooltipProxy.clearTooltipTask();
-        ItemStackTooltipOverlay.hide();
+        clearHoveredSlot();
         if (sOpenOverlay == this) {
             sOpenOverlay = null;
         }
@@ -282,7 +287,7 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         }
 
         hoveredSlot = slot;
-        ItemStackTooltipOverlay.show(this, slot.getStack(), rawX, rawY);
+        ItemStackTooltipOverlay.show(this, slot.getStack(), rawX, rawY, theme);
         return slot;
     }
 
@@ -303,10 +308,10 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
 
     private void clearHoveredSlot() {
         if (hoveredSlot != null) {
+            ItemTooltipProxy.clearTooltipTask(hoveredSlot.getStack());
             hoveredSlot = null;
         }
-        ItemStackTooltipOverlay.hide();
-        ItemTooltipProxy.clearTooltipTask();
+        ItemStackTooltipOverlay.hideWithin(this);
     }
 
     private static void closeOpenOverlay() {
@@ -331,9 +336,13 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
     }
 
     public static final class ItemStackView extends FrameLayout {
+        private static final ValuePreviewStyle DEFAULT_STYLE = previewStyleFor(UiThemes.EDITOR);
         private static final float ITEM_SIZE_GUI = 16.0f;
         private static final float ITEM_PADDING_DP = 4.0f;
 
+        private final ValuePreviewStyle previewStyle;
+        private final UiTheme tooltipTheme;
+        private final int populatedBorderColor;
         private final Paint paint = new Paint();
         private final RectF rect = new RectF();
         private final Consumer<ItemStack> onPicked;
@@ -352,7 +361,32 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
                              Consumer<ItemStack> onPicked,
                              boolean pickOnClick,
                              float visualScale) {
+            this(context, stack, onPicked, pickOnClick, visualScale, DEFAULT_STYLE,
+                    UiThemes.EDITOR.selection().outline());
+        }
+
+        public ItemStackView(Context context,
+                             ItemStack stack,
+                             Consumer<ItemStack> onPicked,
+                             boolean pickOnClick,
+                             float visualScale,
+                             ValuePreviewStyle style,
+                             int populatedBorderColor) {
+            this(context, stack, onPicked, pickOnClick, visualScale, style, populatedBorderColor, UiThemes.EDITOR);
+        }
+
+        public ItemStackView(Context context,
+                             ItemStack stack,
+                             Consumer<ItemStack> onPicked,
+                             boolean pickOnClick,
+                             float visualScale,
+                             ValuePreviewStyle style,
+                             int populatedBorderColor,
+                             UiTheme tooltipTheme) {
             super(context);
+            this.previewStyle = style != null ? style : DEFAULT_STYLE;
+            this.tooltipTheme = java.util.Objects.requireNonNull(tooltipTheme, "tooltipTheme");
+            this.populatedBorderColor = populatedBorderColor;
             this.stack = stack == null ? ItemStack.EMPTY : stack;
             this.onPicked = onPicked;
             this.pickOnClick = pickOnClick;
@@ -386,9 +420,26 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             addView(surfaceView, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         }
 
+        public ValuePreviewStyle getPreviewStyle() {
+            return previewStyle;
+        }
+
+        public int getPopulatedBorderColor() {
+            return populatedBorderColor;
+        }
+
+        public UiTheme getTooltipTheme() {
+            return tooltipTheme;
+        }
+
+        private static ValuePreviewStyle previewStyleFor(UiTheme theme) {
+            return new ValuePreviewStyle(3.0f, 1.0f, theme.control().input(),
+                    theme.border().subtle(), theme.border().focus());
+        }
+
         public void setStack(ItemStack stack) {
-            ItemTooltipProxy.clearTooltipTask();
-            ItemStackTooltipOverlay.hide();
+            ItemTooltipProxy.clearTooltipTask(this.stack);
+            ItemStackTooltipOverlay.hide(this);
             this.stack = stack == null ? ItemStack.EMPTY : stack;
             if (surfaceView != null) {
                 surfaceView.invalidate();
@@ -422,19 +473,21 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
             super.onDraw(canvas);
             float w = getWidth();
             float h = getHeight();
-            float stroke = UIUtils.dp2px(visualScale);
-            float radius = UIUtils.dp2px(3.0f * visualScale);
+            float stroke = UIUtils.dp2px(previewStyle.strokeWidthDp() * visualScale);
+            float radius = UIUtils.dp2px(previewStyle.cornerRadiusDp() * visualScale);
             paint.setAntiAlias(true);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(COLOR_FIELD);
+            paint.setColor(previewStyle.backgroundColor());
             rect.set(0, 0, w, h);
             canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
 
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(stroke);
-            paint.setColor(stack.isEmpty() ? 0xFF4E5664 : COLOR_ACCENT);
-            rect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
-            canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
+            if (stroke > 0) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                paint.setColor(stack.isEmpty() ? previewStyle.borderColor() : populatedBorderColor);
+                rect.set(stroke / 2.0f, stroke / 2.0f, w - stroke / 2.0f, h - stroke / 2.0f);
+                canvas.drawRoundRect(rect, radius, radius, radius, radius, paint);
+            }
         }
 
         @Override
@@ -461,10 +514,10 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         private void handleHover(MotionEvent event) {
             int action = event.getAction();
             if ((action == MotionEvent.ACTION_HOVER_ENTER || action == MotionEvent.ACTION_HOVER_MOVE) && !stack.isEmpty()) {
-                ItemStackTooltipOverlay.showForEvent(this, stack, event);
+                ItemStackTooltipOverlay.showForEvent(this, stack, event, tooltipTheme);
             } else if (action == MotionEvent.ACTION_HOVER_EXIT || action == MotionEvent.ACTION_CANCEL) {
-                ItemTooltipProxy.clearTooltipTask();
-                ItemStackTooltipOverlay.hide();
+                ItemTooltipProxy.clearTooltipTask(stack);
+                ItemStackTooltipOverlay.hide(this);
             }
         }
 
@@ -472,8 +525,8 @@ public final class InventoryItemPickerOverlay extends FrameLayout {
         protected void onDetachedFromWindow() {
             pointerPressed = false;
             super.onDetachedFromWindow();
-            ItemTooltipProxy.clearTooltipTask();
-            ItemStackTooltipOverlay.hide();
+            ItemTooltipProxy.clearTooltipTask(stack);
+            ItemStackTooltipOverlay.hide(this);
         }
 
         @Override

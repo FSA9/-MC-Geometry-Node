@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.table;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
@@ -10,7 +12,6 @@ import com.mine.geometry_node.client.ui.components.base.layout.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.query.ColumnFilters;
 import com.mine.geometry_node.core.metadata.TagPolicy;
@@ -26,12 +27,18 @@ import java.util.function.*;
 
 /** Shared column-filter editors. Drafts are local; only Apply/Clear submit immutable criteria. */
 public final class UiColumnFilterPopover {
+    private final UiTheme theme;
     private final Context context;
     private final View owner;
     private UiPopover popup;
     private long generation;
 
     public UiColumnFilterPopover(Context context, View host) {
+        this(context, host, UiThemes.EDITOR);
+    }
+
+    public UiColumnFilterPopover(Context context, View host, UiTheme theme) {
+        this.theme = Objects.requireNonNull(theme, "theme");
         this.context = Objects.requireNonNull(context);
         owner = Objects.requireNonNull(host);
     }
@@ -67,7 +74,9 @@ public final class UiColumnFilterPopover {
         boolean[] unrestricted = { !selected.restricted() };
         UiCheckBox scopeCheck = scopeLabel == null ? null : checkRow(content, scopeLabel, scope);
         if (scopeCheck != null) space(content);
-        UiSearchInput search = new UiSearchInput(context);
+        UiSearchInput search = new UiSearchInput(context, UiTextInput.Style.forTheme(theme,
+                UiSearchInput.DEFAULT_STYLE.textSizeDp(), UiSearchInput.DEFAULT_STYLE.horizontalPaddingDp(),
+                UiSearchInput.DEFAULT_STYLE.cornerRadiusDp(), UiSearchInput.DEFAULT_STYLE.strokeWidthDp()));
         search.setHint(tr("keyword"));
         content.addView(search, params(-1, 30));
         LinearLayout commands = row();
@@ -103,7 +112,7 @@ public final class UiColumnFilterPopover {
             rows.forEach((id, view) -> view.setVisibility(labels.get(id).toLowerCase(Locale.ROOT).contains(query)
                     || id.toLowerCase(Locale.ROOT).contains(query) ? View.VISIBLE : View.GONE));
         });
-        UiScrollView scroll = new UiScrollView(context);
+        UiScrollView scroll = new UiScrollView(context, theme.scroll());
         scroll.addView(list, new FrameLayout.LayoutParams(-1, -2));
         content.addView(scroll, params(-1, Math.min(210, Math.max(32, labels.size() * 30))));
         actions(content, () -> {
@@ -186,7 +195,7 @@ public final class UiColumnFilterPopover {
         private void rebuildChips() {
             chips.removeAllViews();
             for (String tag : tags) {
-                UiTagChip chip = new UiTagChip(context, tag);
+                UiTagChip chip = new UiTagChip(context, tag, theme);
                 chip.setOnRemove(tr("remove_tag"), () -> {
                     if (!active()) return;
                     tags.remove(tag); rebuildChips(); popup.refreshSize();
@@ -235,7 +244,7 @@ public final class UiColumnFilterPopover {
     private void actions(LinearLayout content, Runnable apply, Runnable clear, UiTextInput... inputs) {
         space(content);
         UiDisplayText error = label(tr("invalid_filter"));
-        error.setTextColor(UiTheme.Control.ERROR);
+        error.setTextColor(theme.status().error());
         error.setVisibility(View.GONE);
         content.addView(error, params(-1, 30));
         LinearLayout actions = row();
@@ -273,13 +282,13 @@ public final class UiColumnFilterPopover {
         }
         if (host == null && owner.getRootView() instanceof FrameLayout frame) host = frame;
         if (host == null) return;
-        popup = new UiPopover(context, content, 300, 460);
+        popup = new UiPopover(context, content, 300, 460, theme);
         popup.showBelow(anchor, host);
     }
 
     private UiCheckBox checkRow(LinearLayout content, String text, boolean checked) {
         LinearLayout row = row();
-        UiCheckBox check = new UiCheckBox(context);
+        UiCheckBox check = UiCheckBox.createThemed(context, theme);
         check.setChecked(checked);
         check.setContentDescription(text);
         LinearLayout.LayoutParams cp = params(16, 16); cp.leftMargin = px(4); cp.rightMargin = px(6);
@@ -291,17 +300,18 @@ public final class UiColumnFilterPopover {
     }
 
     private UiTextInput input(String value, String hint) {
-        UiTextInput input = new UiTextInput(context);
+        UiTextInput input = UiTextInput.createThemed(context, theme);
         input.setSingleLine(true); input.setHint(hint); input.setText(value);
         return input;
     }
     private UiDisplayText label(String text) {
-        UiDisplayText label = UiTableStyle.cell(context, text, UiTheme.Text.NORMAL);
+        UiDisplayText label = UiTableStyle.cell(context, text, theme);
         label.setPadding(px(3), 0, px(3), 0);
         return label;
     }
     private UiActionButton button(String text) {
-        return new UiActionButton(context, text, UiActionButton.Role.SECONDARY, UiActionButton.Density.COMPACT);
+        return new UiActionButton(context, theme, text, UiActionButton.Role.SECONDARY,
+                UiActionButton.Density.COMPACT, UiActionButton.Style.forTheme(theme));
     }
     private LinearLayout column() { LinearLayout view = new LinearLayout(context); view.setOrientation(LinearLayout.VERTICAL); return view; }
     private LinearLayout row() { LinearLayout view = new LinearLayout(context); view.setBaselineAligned(false); view.setGravity(Gravity.CENTER_VERTICAL); return view; }

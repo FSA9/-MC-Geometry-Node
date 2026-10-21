@@ -1,9 +1,9 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
 import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.ui.settings.editor.SettingsChoice;
@@ -25,18 +25,14 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
 /** MainUI services exposed to config editors without root-view discovery. */
 final class SettingsWindowEnvironment implements SettingsEditorEnvironment, AutoCloseable {
-    private static final int COLOR_BACKGROUND = 0xFF242424;
-    private static final int COLOR_BORDER = 0xFF4A4A4A;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_HOVER = 0xFF3A3A3A;
-    private static final int COLOR_SELECTED = 0xFF4A4A4A;
+    private static final int COLOR_BACKGROUND = UiThemes.EDITOR.surface().popup();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().subtle();
     private static final float ROW_HEIGHT_DP = 28.0f;
     private static final int MAX_VISIBLE_ROWS = 8;
     private static final float EDGE_MARGIN_DP = 4.0f;
@@ -208,10 +204,9 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
         boolean selected = Objects.equals(owner.selected, choice.value());
         UiActionButton row = UiActionButton.withPalette(context,
                 (selected ? "\u2713  " : "    ") + choice.label(),
-                new UiActionButton.Palette(selected ? COLOR_SELECTED : 0, COLOR_HOVER,
-                        COLOR_SELECTED, selected ? 0xFFFFFFFF : COLOR_TEXT),
+                UiActionButton.Palette.row(selected, 0),
                 UiActionButton.Density.COMPACT,
-                new UiActionButton.Style(2, 0, 0, UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(2, 0, 0, UiMetrics.DISABLED_ALPHA));
         row.setMinWidth(0);
         row.setMinHeight(0);
         row.setMinimumWidth(0);

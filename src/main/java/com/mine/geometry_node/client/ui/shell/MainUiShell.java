@@ -1,12 +1,11 @@
 package com.mine.geometry_node.client.ui.shell;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.UiOverlay;
 import com.mine.geometry_node.client.ui.overlay.modal.UiModal;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
-
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLayoutRoot;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorRegistry;
@@ -32,6 +31,7 @@ import icyllis.modernui.widget.LinearLayout;
  * Composition root for one MainUI instance.
  */
 public final class MainUiShell extends FrameLayout implements OverlayHost {
+    private static final int HEADER_HEIGHT_DP = 30;
     private final MainUiServices services;
     private final MainUiLayerHost transientLayer;
     private final MainUiLayerHost modalLayer;
@@ -41,7 +41,7 @@ public final class MainUiShell extends FrameLayout implements OverlayHost {
 
     public MainUiShell(Context context) {
         super(context);
-        setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
+        setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
 
         LinearLayout contentLayer = new LinearLayout(context);
         contentLayer.setOrientation(LinearLayout.VERTICAL);
@@ -64,7 +64,7 @@ public final class MainUiShell extends FrameLayout implements OverlayHost {
         services.addCloseAction(settingsWindowController::close);
         contentLayer.addView(menuController.menuBar(), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(UIConstants.MainUI.HEIGHT_HEADER)
+                UIUtils.dp2pxInt(HEADER_HEIGHT_DP)
         ));
 
         AreaEditorRegistry editorRegistry = new AreaEditorRegistry();

@@ -1,12 +1,12 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuPanelLayout;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import icyllis.modernui.graphics.Matrix;
-
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.*;
@@ -14,14 +14,12 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-
 import java.util.function.Consumer;
 
 public class UiContextMenu extends UiPopupOverlay {
     private static final int MENU_WIDTH_DP = 160;
     private static final int MENU_ITEM_HEIGHT_DP = 26;
-    private static final int COLOR_TEXT = UiTheme.Text.SECONDARY;
-    private static final int COLOR_SHORTCUT_TEXT = UiTheme.Text.MUTED;
+    private final UiTheme theme;
 
     private final LinearLayout mContentLayout;
     private final UiScrollView mPanel;
@@ -29,14 +27,20 @@ public class UiContextMenu extends UiPopupOverlay {
     private UiContextMenu mChildMenu;
     private View mOpenSubMenuItem;
     private ViewGroup mHostParent;
+    private View mOwner;
     private Runnable mOnDismissListener;
     private boolean mDismissed = true;
 
     public UiContextMenu(Context context) {
+        this(context, UiThemes.EDITOR);
+    }
+
+    public UiContextMenu(Context context, UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mPanel = UiMenuPanelLayout.createPanel(context, mContentLayout);
+        mPanel = UiMenuPanelLayout.createPanel(context, mContentLayout, theme);
         // A scrolled-away branch must not keep a detached submenu at its old position.
         mPanel.setOnScrollChangeListener((view, x, y, oldX, oldY) -> dismissChildMenu());
         addView(mPanel, new FrameLayout.LayoutParams(-2, -2));
@@ -48,11 +52,11 @@ public class UiContextMenu extends UiPopupOverlay {
 
     public void addMenuItem(String text, String shortcut, Runnable action) {
         LinearLayout row = createMenuRow();
-        TextView label = createMenuText(text, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
+        TextView label = createMenuText(text, theme.text().secondary(), Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         if (shortcut != null && !shortcut.isBlank()) {
-            TextView shortcutView = createMenuText(shortcut, COLOR_SHORTCUT_TEXT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 10.0f);
+            TextView shortcutView = createMenuText(shortcut, theme.text().muted(), Gravity.RIGHT | Gravity.CENTER_VERTICAL, 10.0f);
             row.addView(shortcutView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
 
@@ -74,8 +78,8 @@ public class UiContextMenu extends UiPopupOverlay {
 
     public void addSubMenuItem(String text, Consumer<UiContextMenu> builder) {
         LinearLayout row = createMenuRow();
-        TextView label = createMenuText(text, COLOR_TEXT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
-        TextView arrow = createMenuText("›", COLOR_TEXT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 13.0f);
+        TextView label = createMenuText(text, theme.text().secondary(), Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);
+        TextView arrow = createMenuText("›", theme.text().secondary(), Gravity.RIGHT | Gravity.CENTER_VERTICAL, 13.0f);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
         row.addView(arrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -97,14 +101,14 @@ public class UiContextMenu extends UiPopupOverlay {
 
     private void showSubMenu(View anchor, Consumer<UiContextMenu> builder) {
         UiContextMenu rootMenu = rootMenu();
-        if (mDismissed || !rootMenu.isOpen() || rootMenu.mHostParent == null) return;
+        if (!anchor.isEnabled() || mDismissed || !rootMenu.isOpen() || rootMenu.mHostParent == null) return;
         if (mChildMenu != null && mOpenSubMenuItem == anchor) {
             return;
         }
         dismissChildMenu();
         anchor.setSelected(true);
 
-        UiContextMenu childMenu = new UiContextMenu(getContext());
+        UiContextMenu childMenu = new UiContextMenu(getContext(), theme);
         childMenu.mParentMenu = this;
         builder.accept(childMenu);
 
@@ -136,12 +140,12 @@ public class UiContextMenu extends UiPopupOverlay {
     }
 
     public void addTitle(String text) {
-        UiSearchMenuLayout.addHeader(mContentLayout, text, false);
+        UiSearchMenuLayout.addHeader(mContentLayout, text, false, theme);
     }
 
     public void addDivider() {
         View divider = new View(getContext());
-        ShapeDrawable line = new ShapeDrawable(); line.setColor(UiTheme.Surface.ROOT);
+        ShapeDrawable line = new ShapeDrawable(); line.setColor(theme.border().divider());
         divider.setBackground(line);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1));
         lp.setMargins(0, UIUtils.dp2pxInt(4), 0, UIUtils.dp2pxInt(4));
@@ -154,16 +158,22 @@ public class UiContextMenu extends UiPopupOverlay {
 
     /** Shows at host-local coordinates after the host has usable layout bounds. */
     public void showAt(float x, float y, ViewGroup parent) {
+        showAt(x, y, parent, parent);
+    }
+
+    private void showAt(float x, float y, View owner, ViewGroup parent) {
         if (getParent() != null) dismiss();
         // UiPopupOverlay defers removal when called during layout.
         if (getParent() != null || parent == null || parent.isInLayout()
                 || parent.getWidth() <= 0 || parent.getHeight() <= 0) return;
         mHostParent = parent;
+        mOwner = owner;
         layoutPanel(mPanel, x, y, parent, x);
         mDismissed = false;
-        if (!attachOverlay(parent, parent)) {
+        if (!attachOverlay(owner, parent)) {
             mDismissed = true;
             mHostParent = null;
+            mOwner = null;
         }
     }
 
@@ -175,7 +185,7 @@ public class UiContextMenu extends UiPopupOverlay {
         float[] point = {0, anchor.getHeight()};
         transform.mapPoint(point);
         if (!UIUtils.rootToLocal(host, point[0], point[1], new Matrix(), point)) return;
-        showAt(point[0], point[1], host);
+        showAt(point[0], point[1], anchor, host);
     }
 
     public void setOnDismissListener(Runnable listener) {
@@ -188,7 +198,9 @@ public class UiContextMenu extends UiPopupOverlay {
 
     @Override
     public boolean isOpen() {
-        return !mDismissed && super.isOpen();
+        // A never-attached standalone host sends no detach callback when its anchor is removed.
+        return !mDismissed && super.isOpen() && mOwner != null
+                && mOwner.getRootView() == getRootView();
     }
 
     @Override
@@ -206,6 +218,7 @@ public class UiContextMenu extends UiPopupOverlay {
             else parent.removeView(mPanel);
         }
         mHostParent = null;
+        mOwner = null;
         if (mOnDismissListener != null) {
             Runnable listener = mOnDismissListener;
             mOnDismissListener = null;
@@ -282,9 +295,11 @@ public class UiContextMenu extends UiPopupOverlay {
     }
 
     private LinearLayout createMenuRow() {
-        LinearLayout row = new LinearLayout(getContext());
+        LinearLayout row = new LinearLayout(getContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
         row.setOrientation(LinearLayout.HORIZONTAL);
-        UiMenuItems.decorate(row, false);
+        UiMenuItems.decorate(row, false, theme);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
         return row;
@@ -293,7 +308,7 @@ public class UiContextMenu extends UiPopupOverlay {
     private TextView createMenuText(String text, int color, int gravity, float textSizeDp) {
         TextView tv = new TextView(getContext());
         tv.setText(text);
-        tv.setTextColor(UiMenuItems.textColors(color));
+        tv.setTextColor(UiMenuItems.textColors(color, theme));
         tv.setDuplicateParentStateEnabled(true);
         tv.setTextSize(0, UIUtils.dp2px(textSizeDp));
         tv.setSingleLine(true);

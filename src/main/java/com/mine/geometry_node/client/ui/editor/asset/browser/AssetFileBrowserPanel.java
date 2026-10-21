@@ -1,14 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
@@ -50,7 +49,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -61,7 +59,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -117,7 +114,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private static final float NAV_ROW_HEIGHT = 32.0f;
     private static final float NAV_BUTTON_SIZE = 30.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final int COLOR_TOOLBAR_BG = UiTheme.Surface.SIDEBAR;
+    private static final int COLOR_TOOLBAR_BG = UiThemes.EDITOR.surface().sidebar();
 
     public AssetFileBrowserPanel(Context context, AssetBrowserCoordinator coordinator) {
         this(context, coordinator, true, true, true, true, false);
@@ -247,7 +244,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void addUpButton(LinearLayout navBar, Context context) {
         UiIconButton btnUp = createIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiTheme.Text.NORMAL),
+                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.up"));
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LinearLayout.LayoutParams(
@@ -285,7 +282,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void addQuickAccessButton(LinearLayout navBar, Context context) {
         UiIconButton btnAdd = createIconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.PLUS, UiTheme.Text.NORMAL),
+                new SvgIconView(context, SvgIconView.Icon.PLUS, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.add_quick_access"));
         btnAdd.setOnClickListener(v -> {
             if (!mEnableQuickAccessAdd || mCoordinator == null) return;
@@ -312,7 +309,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void addSearchButton(LinearLayout navBar, Context context) {
         UiIconButton btnSearch = createIconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.SEARCH, UiTheme.Text.NORMAL),
+                new SvgIconView(context, SvgIconView.Icon.SEARCH, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.search"));
         UiSearchSubmit.bind(btnSearch, this::applySearch, mSearchInput, mTagSearchInput);
         LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
@@ -321,7 +318,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void addClearSearchButton(LinearLayout navBar, Context context) {
         UiIconButton btnClearSearch = createIconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.CLOSE, UiTheme.Text.NORMAL),
+                new SvgIconView(context, SvgIconView.Icon.CLOSE, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.clear_search"));
         btnClearSearch.setOnClickListener(v -> clearSearch());
         LinearLayout.LayoutParams clearButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
@@ -330,7 +327,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void addOptionsButton(LinearLayout navBar, Context context) {
-        TextView optionsIcon = UIUtils.createLockedTextView(context, "⋮", 18, UiTheme.Text.NORMAL);
+        TextView optionsIcon = UIUtils.createLockedTextView(context, "⋮", 18, UiThemes.EDITOR.text().normal());
         optionsIcon.setGravity(Gravity.CENTER);
         UiIconButton btnOptions = createIconButton(context, optionsIcon,
                 tr("geometry_node.asset_library.toolbar.more_options"));
@@ -361,18 +358,19 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     protected void onDetachedFromWindow() {
         WorkspaceDragService.INSTANCE.cancelIfSource(this);
-        mIoTasks.cancelAll();
         mActionController.clearClipboard();
         deactivatePanel();
         super.onDetachedFromWindow();
     }
 
     public void activatePanel() {
+        mIoTasks.activate();
         mActionController.activateRemoteRequests();
         mKeyManager.attach();
     }
 
     public void deactivatePanel() {
+        mIoTasks.deactivate();
         dismissTransientUi();
         mKeyManager.dispose();
         cancelBrowseRequest();
@@ -1017,9 +1015,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private UiIconButton createIconButton(Context context, View icon, String description) {
-        UiIconButton.Style style = new UiIconButton.Style(UiTheme.Metrics.RADIUS_INPUT, 0,
-                UiTheme.Control.ICON, UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                UiTheme.Surface.PANEL, 0, 16.0f, UiTheme.Metrics.DISABLED_ALPHA);
+        UiIconButton.Style style = new UiIconButton.Style(UiMetrics.RADIUS_INPUT, 0,
+                UiThemes.EDITOR.control().icon(), UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(),
+                UiThemes.EDITOR.surface().panel(), 0, 16.0f, UiMetrics.DISABLED_ALPHA);
         return new UiIconButton(context, icon, style).tooltip(description);
     }
 
@@ -1029,8 +1027,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private EditText createNavInput(Context context) {
         UiTextInput input = new UiTextInput(context, new UiTextInput.Style(
-                TEXT_SIZE_NAV, 10, UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER,
-                UiTheme.Text.SECONDARY, UiTheme.Text.HINT, UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                TEXT_SIZE_NAV, 10, UiMetrics.RADIUS_INPUT, UiMetrics.BORDER,
+                UiThemes.EDITOR.text().secondary(), UiThemes.EDITOR.text().hint(), UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         input.setGravity(Gravity.CENTER_VERTICAL);
         input.setSingleLine(true);
         return input;

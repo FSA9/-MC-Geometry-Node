@@ -1,19 +1,22 @@
 package com.mine.geometry_node.client.ui.editor.asset.navigation;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
+import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.util.ColorStateList;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -21,10 +24,8 @@ import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.io.File;
 import java.util.List;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 public class AssetNavigationPanel extends UiScrollView {
@@ -41,14 +42,14 @@ public class AssetNavigationPanel extends UiScrollView {
     private static final float TEXT_SIZE_PATH = 14.0f;
     private static final float TEXT_SIZE_HANDLE = 12.0f;
     private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final int COLOR_LOCAL_NORMAL = UiTheme.Surface.PANEL;
-    private static final int COLOR_LOCAL_HOVER = UiTheme.Control.ICON_HOVER;
-    private static final int COLOR_LOCAL_PRESSED = UiTheme.Control.ICON_PRESSED;
-    private static final int COLOR_LOCAL_SELECTED = UiTheme.Control.SELECTED;
-    private static final int COLOR_REMOTE_NORMAL = 0xFF263445;
-    private static final int COLOR_REMOTE_HOVER = 0xFF2F4055;
-    private static final int COLOR_REMOTE_PRESSED = 0xFF3C5874;
-    private static final int COLOR_REMOTE_SELECTED = 0xFF36597A;
+    private static final int COLOR_LOCAL_NORMAL = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_LOCAL_HOVER = UiThemes.EDITOR.selection().subtleHover();
+    private static final int COLOR_LOCAL_PRESSED = UiThemes.EDITOR.selection().subtlePressed();
+    private static final int COLOR_LOCAL_SELECTED = UiThemes.EDITOR.selection().subtle();
+    private static final int COLOR_REMOTE_NORMAL = UiThemes.EDITOR.decoration().remoteSurface();
+    private static final int COLOR_REMOTE_HOVER = UiThemes.EDITOR.decoration().remoteHover();
+    private static final int COLOR_REMOTE_PRESSED = UiThemes.EDITOR.decoration().remotePressed();
+    private static final int COLOR_REMOTE_SELECTED = UiThemes.EDITOR.decoration().remoteSelected();
 
     public AssetNavigationPanel(Context context, AssetBrowserCoordinator coordinator) {
         super(context);
@@ -57,7 +58,7 @@ public class AssetNavigationPanel extends UiScrollView {
 
         mLeftSidebar = new QuickAccessListLayout(context);
         mLeftSidebar.setOrientation(LinearLayout.VERTICAL);
-        mLeftSidebar.setBackground(createColorDrawable(0xFF1E1E1E));
+        mLeftSidebar.setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
 
         addView(mLeftSidebar, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -70,7 +71,7 @@ public class AssetNavigationPanel extends UiScrollView {
         mLeftSidebar.removeAllViews();
 
         // 快速访问
-        TextView title = UIUtils.createLockedTextView(context, "快速访问", TEXT_SIZE_TITLE, 0xFF888888);
+        TextView title = UIUtils.createLockedTextView(context, "快速访问", TEXT_SIZE_TITLE, UiThemes.EDITOR.text().muted());
         title.setPadding(dp2pxInt(10), 0, dp2pxInt(10), 0);
         title.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
@@ -108,11 +109,11 @@ public class AssetNavigationPanel extends UiScrollView {
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        TextView icon = UIUtils.createLockedTextView(context, " ★ ", TEXT_SIZE_HANDLE, 0xFFFFD166);
+        TextView icon = UIUtils.createLockedTextView(context, " ★ ", TEXT_SIZE_HANDLE, UiThemes.EDITOR.decoration().favorite());
         icon.setGravity(Gravity.CENTER);
         row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
-        TextView label = UIUtils.createLockedTextView(context, "我的收藏", TEXT_SIZE_PATH, 0xFFE6E6E6);
+        TextView label = UIUtils.createLockedTextView(context, "我的收藏", TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
         label.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         label.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
@@ -135,10 +136,10 @@ public class AssetNavigationPanel extends UiScrollView {
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        VectorIconView icon = new VectorIconView(context, VectorIconView.Kind.CLOUD, 0xFF8FBFFF);
+        VectorIconView icon = new VectorIconView(context, VectorIconView.Kind.CLOUD, UiThemes.EDITOR.decoration().remote());
         row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
-        TextView btnPath = UIUtils.createLockedTextView(context, "远程服务器", TEXT_SIZE_PATH, 0xFFE6F1FF);
+        TextView btnPath = UIUtils.createLockedTextView(context, "远程服务器", TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
@@ -162,10 +163,12 @@ public class AssetNavigationPanel extends UiScrollView {
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER, 0xFFDDAA00);
+        // The registry owns directory identity colors; navigation reuses the asset browser palette.
+        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER,
+                AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.DIRECTORY_ID).defaultColor());
         row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
-        TextView btnPath = UIUtils.createLockedTextView(context, label, TEXT_SIZE_PATH, 0xFFDDDDDD);
+        TextView btnPath = UIUtils.createLockedTextView(context, label, TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
@@ -194,7 +197,7 @@ public class AssetNavigationPanel extends UiScrollView {
         rowParams.setMargins(0, 0, 0, dp2pxInt(2));
         row.setLayoutParams(rowParams);
 
-        TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, 0xFF666666);
+        TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, UiThemes.EDITOR.text().hint());
         dragHandle.setGravity(Gravity.CENTER);
         row.addView(dragHandle, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -284,21 +287,23 @@ public class AssetNavigationPanel extends UiScrollView {
             return true;
         });
 
-        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER, 0xFFDDAA00);
+        // The registry owns directory identity colors; navigation reuses the asset browser palette.
+        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER,
+                AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.DIRECTORY_ID).defaultColor());
         row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
 
         String displayName = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        TextView btnPath = UIUtils.createLockedTextView(context, displayName, TEXT_SIZE_PATH, 0xFFDDDDDD);
+        TextView btnPath = UIUtils.createLockedTextView(context, displayName, TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
         btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
         btnPath.setGravity(Gravity.CENTER_VERTICAL);
 
         row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
         UiIconButton btnDel = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CLOSE, UiTheme.Control.ERROR),
-                new UiIconButton.Style(UiTheme.Metrics.RADIUS_SMALL, 0,
-                        UiTheme.Control.ICON, UiTheme.DANGER.hover(), UiTheme.DANGER.pressed(),
-                        UiTheme.Surface.PANEL, 0, 14, UiTheme.Metrics.DISABLED_ALPHA))
+                new VectorIconView(context, VectorIconView.Kind.CLOSE, UiThemes.EDITOR.status().error()),
+                new UiIconButton.Style(UiMetrics.RADIUS_SMALL, 0,
+                        UiThemes.EDITOR.control().icon(), UiThemes.EDITOR.buttons().danger().hover(), UiThemes.EDITOR.buttons().danger().pressed(),
+                        UiThemes.EDITOR.surface().panel(), 0, 14, UiMetrics.DISABLED_ALPHA))
                 .tooltip(Component.translatable("geometry_node.asset_library.action.remove_quick_access").getString());
         btnDel.setOnClickListener(view -> {
             ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.remove(pathStr));
@@ -334,63 +339,46 @@ public class AssetNavigationPanel extends UiScrollView {
     }
 
     private void bindRowFeedback(LinearLayout row, String key, int normalColor, int hoverColor, int pressedColor, int selectedColor, Runnable action) {
-        final boolean[] hovered = {false};
-        final boolean[] pressed = {false};
+        // Keep the remote decoration palette and selection-over-hover priority of these rows.
+        ShapeDrawable background = createColorDrawable(normalColor);
+        background.setColor(new ColorStateList(new int[][]{
+                {-R.attr.state_enabled, R.attr.state_selected}, {-R.attr.state_enabled},
+                {R.attr.state_pressed}, {R.attr.state_selected}, {R.attr.state_hovered}, {}
+        }, new int[]{selectedColor, normalColor, pressedColor, selectedColor, hoverColor, normalColor}));
+        row.setBackground(background);
+        row.setSelected(key.equals(mSelectedKey));
+        row.setOnClickListener(v -> {
+            if (row.isEnabled()) action.run();
+        });
+
         final boolean[] moved = {false};
         final float[] downX = {0};
         final float[] downY = {0};
-        Runnable update = () -> {
-            int color;
-            if (pressed[0]) {
-                color = pressedColor;
-            } else if (key.equals(mSelectedKey)) {
-                color = selectedColor;
-            } else if (hovered[0]) {
-                color = hoverColor;
-            } else {
-                color = normalColor;
-            }
-            row.setBackground(createColorDrawable(color));
-        };
-        update.run();
-
-        row.setOnClickListener(v -> action.run());
-        row.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                hovered[0] = true;
-                update.run();
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                hovered[0] = false;
-                pressed[0] = false;
-                update.run();
-            }
-            return false;
-        });
-
         row.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     downX[0] = event.getRawX();
                     downY[0] = event.getRawY();
                     moved[0] = false;
-                    pressed[0] = true;
-                    update.run();
                     return false;
                 case MotionEvent.ACTION_MOVE:
-                    if (Math.abs(event.getRawX() - downX[0]) > mTouchSlop || Math.abs(event.getRawY() - downY[0]) > mTouchSlop) {
+                    if (!moved[0] && (Math.abs(event.getRawX() - downX[0]) > mTouchSlop
+                            || Math.abs(event.getRawY() - downY[0]) > mTouchSlop)) {
                         moved[0] = true;
-                        pressed[0] = false;
-                        update.run();
+                        // Cancel both the native press and any delayed tap in the scrolling parent.
+                        MotionEvent cancel = event.copy();
+                        cancel.setAction(MotionEvent.ACTION_CANCEL);
+                        try {
+                            row.onTouchEvent(cancel);
+                        } finally {
+                            cancel.recycle();
+                        }
                     }
-                    return false;
+                    return moved[0];
                 case MotionEvent.ACTION_UP:
-                    pressed[0] = false;
-                    update.run();
-                    return false;
+                    return moved[0];
                 case MotionEvent.ACTION_CANCEL:
-                    pressed[0] = false;
                     moved[0] = false;
-                    update.run();
                     return false;
                 default:
                     return false;
@@ -412,7 +400,7 @@ public class AssetNavigationPanel extends UiScrollView {
             super(context);
             setWillNotDraw(false);
             mIndicatorPaint = new Paint();
-            mIndicatorPaint.setColor(0xFF00AAFF);
+            mIndicatorPaint.setColor(UiThemes.EDITOR.selection().outline());
         }
 
         public void updateIndicator(int y) {

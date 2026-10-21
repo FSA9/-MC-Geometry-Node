@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.frame;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.FrameData;
-
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
@@ -27,9 +27,9 @@ public class UIFrame implements FrameVisualAdapter {
     private static final float CORNER_RADIUS_DP = 6f;
     private static final float BODY_INSET_DP = 1.0f;
     private static final float HEADER_BOTTOM_LINE_DP = 1f;
-    private static final int FRAME_BODY_BASE = 0xFF20242C;
-    private static final int FRAME_HEADER_BASE = 0xFF262C36;
-    private static final int FRAME_OUTLINE_BASE = 0xFF1A1E24;
+    private static final int FRAME_BODY_BASE = UiThemes.EDITOR.surface().root();
+    private static final int FRAME_HEADER_BASE = UiThemes.EDITOR.surface().header();
+    private static final int FRAME_OUTLINE_BASE = UiThemes.EDITOR.graph().nodeOutline();
 
     private final Paint mPaint = new Paint();
     private final TextPaint mTitlePaint = new TextPaint();
@@ -97,6 +97,7 @@ public class UIFrame implements FrameVisualAdapter {
     private void drawFrameLocal(Canvas canvas, float w, float h) {
         float scaledRadius = UIUtils.dp2px(CORNER_RADIUS_DP);
         float headerBottom = UIUtils.dp2px(FRAME_HEADER_H);
+        // User-authored frame color remains the accent; only neutral visual bases follow UiTheme.
         int accentColor = ensureOpaque(mFrameData.color);
         int bodyColor = withAlpha(mixColor(FRAME_BODY_BASE, accentColor, mIsSelected ? 0.32f : 0.22f), mIsSelected ? 0xE8 : 0xD4);
         int headerColor = withAlpha(mixColor(FRAME_HEADER_BASE, accentColor, mIsSelected ? 0.78f : 0.64f), 0xF2);
@@ -126,7 +127,7 @@ public class UIFrame implements FrameVisualAdapter {
 
         // 3. 画标题文字，居中对齐。
         if (mTitleText != null) {
-            mTitlePaint.setColor(UIConstants.CLR_WHITE);
+            mTitlePaint.setColor(UiThemes.EDITOR.text().strong());
             mTitlePaint.setAlpha(255);
             mTitlePaint.getFontMetricsInt(mTitleMetrics);
             float titleX = (w - mTitleText.getAdvance()) / 2.0f;
@@ -143,7 +144,7 @@ public class UIFrame implements FrameVisualAdapter {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(UIUtils.dp2px(mIsSelected ? 2.4f : 1.4f));
-        mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : borderColor);
+        mPaint.setColor(mIsSelected ? UiThemes.EDITOR.text().strong() : borderColor);
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
     }

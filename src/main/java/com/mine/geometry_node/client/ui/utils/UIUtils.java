@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.utils;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.view.View;
@@ -13,6 +12,20 @@ import net.minecraft.client.Minecraft;
  */
 public class UIUtils {
     private static final float REFERENCE_HEIGHT_PX = 1080.0f;
+    private static volatile float density = 2.0f;
+
+    /** Current project UI pixel scale, independent of Minecraft's GUI scale. */
+    public static float density() {
+        return density;
+    }
+
+    /** Updates the conversion scale. Call during UI initialization or a display-size update. */
+    public static void setDensity(float value) {
+        if (!Float.isFinite(value) || value <= 0.0f) {
+            throw new IllegalArgumentException("UI density must be finite and positive");
+        }
+        density = value;
+    }
 
     /**
      * Keeps project UI sizing independent from Minecraft's GUI scale.
@@ -22,28 +35,28 @@ public class UIUtils {
         if (!Boolean.getBoolean("gn.standalone")) {
             physicalHeight = Minecraft.getInstance().getWindow().getHeight();
         }
-        UIConstants.mDensity = Math.max(0.01f, physicalHeight / REFERENCE_HEIGHT_PX);
+        setDensity(Math.max(0.01f, physicalHeight / REFERENCE_HEIGHT_PX));
     }
 
     /**
      * 将逻辑坐标 (dp) 转换为物理像素 (px)
      */
     public static float dp2px(float dp) {
-        return dp * UIConstants.mDensity;
+        return dp * density;
     }
 
     /**
      * 将逻辑坐标 (dp) 转换为物理像素 (px) - 返回整数
      */
     public static int dp2pxInt(float dp) {
-        return Math.round(dp * UIConstants.mDensity);
+        return Math.round(dp * density);
     }
 
     /**
      * 将物理像素 (px) 转换为逻辑坐标 (dp)
      */
     public static float px2dp(float px) {
-        return px / UIConstants.mDensity;
+        return px / density;
     }
 
     /**

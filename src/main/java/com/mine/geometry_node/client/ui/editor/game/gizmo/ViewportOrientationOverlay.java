@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.gizmo;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera.Axis;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 import icyllis.modernui.graphics.Canvas;
@@ -45,23 +46,25 @@ public final class ViewportOrientationOverlay {
         for (var e : geometry.endpoints) {
             float r = geometry.ballRadius;
             paint.setStyle(Paint.FILL);
-            paint.setColor(e.axis.positive() ? color(e.axis) : 0xEE252A30);
+            paint.setColor(e.axis.positive() ? color(e.axis) : (UiThemes.EDITOR.surface().panel() & 0x00FFFFFF) | 0xEE000000);
             canvas.drawCircle(e.x, e.y, r, paint);
             paint.setStyle(Paint.STROKE);
             paint.setStrokeWidth((e.axis == hovered ? 2f : 1.3f) * u);
-            paint.setColor(e.axis == hovered ? 0xFFFFFFFF : color(e.axis));
+            paint.setColor(e.axis == hovered ? UiThemes.EDITOR.text().strong() : color(e.axis));
             canvas.drawCircle(e.x, e.y, r, paint);
             if (e.axis.positive()) drawLetter(canvas, e.axis, e.x, e.y, u);
         }
         paint.setStyle(Paint.FILL);
     }
 
+    // XYZ identity colors match the transform gizmo and stay independent of editor decoration.
     private static int color(Axis axis) {
         return axis.x != 0 ? 0xFFEB5967 : axis.y != 0 ? 0xFFA4CE50 : 0xFF4698EE;
     }
 
     // Three tiny vector glyphs remain sharp under parent transforms without font shaping per frame.
     private void drawLetter(Canvas canvas, Axis axis, float x, float y, float u) {
+        // Fixed dark ink keeps the letters legible on all three axis colors.
         paint.setColor(0xFF182029);
         paint.setStrokeWidth(1.1f * u);
         float w = 2.4f * u, h = 3.2f * u;

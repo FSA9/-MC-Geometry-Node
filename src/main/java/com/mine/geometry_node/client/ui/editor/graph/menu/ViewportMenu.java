@@ -1,14 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
+
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.graph.query.NodeSearchService;
-
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigChangeListener;
 import com.mine.geometry_node.client.config.ConfigManager;
@@ -30,7 +29,6 @@ import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
 import net.minecraft.network.chat.Component;
-
 import java.util.Stack;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,16 +43,15 @@ public class ViewportMenu extends FrameLayout {
     private static final int ITEM_RADIUS_DP = 4;
     private static final int MAX_LIST_HEIGHT_DP = 320;
 
-    private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
-    private static final int COLOR_PANEL_BORDER = 0xFF151515;
-    private static final int COLOR_DIVIDER = 0xFF171717;
-    private static final int COLOR_SECTION_TEXT = 0xFF777777;
-    private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
-    private static final int COLOR_CATEGORY_TEXT = 0xFFE0E0E0;
-    private static final int COLOR_NODE_TEXT = 0xFFCCCCCC;
-    private static final int COLOR_MUTED_TEXT = 0xFF999999;
-    private static final int COLOR_SHORTCUT_TEXT = 0xFF8B949E;
-    private static final int COLOR_HOVER_BG = 0xFF3A4652;
+    private static final int COLOR_PANEL_BG = UiThemes.EDITOR.surface().popup();
+    private static final int COLOR_PANEL_BORDER = UiThemes.EDITOR.border().strong();
+    private static final int COLOR_DIVIDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_SECTION_TEXT = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_ACTION_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_CATEGORY_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_NODE_TEXT = UiThemes.EDITOR.text().secondary();
+    private static final int COLOR_MUTED_TEXT = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_SHORTCUT_TEXT = UiThemes.EDITOR.text().hint();
 
     private LinearLayout mContentLayout;
     private LinearLayout mListContainer;
@@ -90,7 +87,7 @@ public class ViewportMenu extends FrameLayout {
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mContentLayout.setBackground(createRectDrawable(COLOR_PANEL_BG, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS + 5, 1, COLOR_PANEL_BORDER));
+        mContentLayout.setBackground(createRectDrawable(COLOR_PANEL_BG, GraphUiStyle.MENU_RADIUS_DP, 1, COLOR_PANEL_BORDER));
 
         int menuPadding = UIUtils.dp2pxInt(MENU_PADDING_DP);
         mContentLayout.setPadding(menuPadding, menuPadding, menuPadding, menuPadding);
@@ -101,13 +98,13 @@ public class ViewportMenu extends FrameLayout {
         mContentLayout.setLayoutParams(lp);
 
         mSearchBox = new UiTextInput(context, new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
-                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, UiThemes.EDITOR.text().normal(), UiThemes.EDITOR.text().hint(),
+                UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         mSearchBox.setHint(Component.translatable("menu.node.search").getString());
 
         mSearchBox.setTextSize(0, UIUtils.dp2px(12));
-        mSearchBox.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
-        mSearchBox.setHintTextColor(0xFF777777);
+        mSearchBox.setTextColor(UiThemes.EDITOR.text().strong());
+        mSearchBox.setHintTextColor(UiThemes.EDITOR.text().hint());
         mSearchBox.setSingleLine(true);
         mSearchBox.setGravity(Gravity.CENTER_VERTICAL);
         mSearchBox.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
@@ -257,25 +254,10 @@ public class ViewportMenu extends FrameLayout {
     }
 
     private void addClickItem(String text, int color, View.OnClickListener listener) {
-        TextView tv = new TextView(getContext());
-        tv.setText(text);
-        tv.setTextSize(0, UIUtils.dp2px(12));
-        tv.setTextColor(color);
-        tv.setSingleLine(true);
-        tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+        TextView tv = UiMenuItems.row(getContext(), text, false, true, () -> {});
+        tv.setTextColor(UiMenuItems.textColors(color));
         tv.setGravity(Gravity.CENTER_VERTICAL);
         tv.setOnClickListener(listener);
-
-        tv.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                tv.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
-                tv.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                tv.setBackground(null);
-                tv.setTextColor(color);
-            }
-            return false;
-        });
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP));
         int marginV = UIUtils.dp2pxInt(1);
@@ -284,7 +266,10 @@ public class ViewportMenu extends FrameLayout {
     }
 
     private void addShortcutItem(String text, String shortcut, int color, View.OnClickListener listener) {
-        LinearLayout row = new LinearLayout(getContext());
+        LinearLayout row = new LinearLayout(getContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
+        UiMenuItems.decorate(row, 0, ITEM_RADIUS_DP, UiThemes.EDITOR);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
@@ -293,7 +278,8 @@ public class ViewportMenu extends FrameLayout {
         TextView label = new TextView(getContext());
         label.setText(text);
         label.setTextSize(0, UIUtils.dp2px(12));
-        label.setTextColor(color);
+        label.setTextColor(UiMenuItems.textColors(color));
+        label.setDuplicateParentStateEnabled(true);
         label.setSingleLine(true);
         label.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
@@ -301,23 +287,11 @@ public class ViewportMenu extends FrameLayout {
         TextView shortcutView = new TextView(getContext());
         shortcutView.setText(shortcut != null ? shortcut : "");
         shortcutView.setTextSize(0, UIUtils.dp2px(10));
-        shortcutView.setTextColor(COLOR_SHORTCUT_TEXT);
+        shortcutView.setTextColor(UiMenuItems.textColors(COLOR_SHORTCUT_TEXT));
+        shortcutView.setDuplicateParentStateEnabled(true);
         shortcutView.setSingleLine(true);
         shortcutView.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         row.addView(shortcutView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        row.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                row.setBackground(createRectDrawable(COLOR_HOVER_BG, ITEM_RADIUS_DP));
-                label.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
-                shortcutView.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                row.setBackground(null);
-                label.setTextColor(color);
-                shortcutView.setTextColor(COLOR_SHORTCUT_TEXT);
-            }
-            return false;
-        });
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP));
         int marginV = UIUtils.dp2pxInt(1);

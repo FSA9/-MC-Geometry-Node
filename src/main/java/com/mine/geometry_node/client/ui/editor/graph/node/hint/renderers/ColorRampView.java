@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.components.composite.input.ColorSwatchView;
 import com.mine.geometry_node.client.ui.components.composite.input.UiGradientStopEditor;
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.config.ConfigManager;
@@ -75,7 +76,7 @@ final class ColorRampView extends LinearLayout {
         toolbar.addView(button(context, "▼", v -> showActionMenu(v)), fixed(TOOL_BUTTON_WIDTH_DP));
         addView(toolbar, fullRow());
 
-        mModeSelect = new UiSelectButton(context, mGradient.mode().id, UIConstants.Node.TEXT_SIZE_LABEL,
+        mModeSelect = new UiSelectButton(context, mGradient.mode().id, NodeUiMetrics.TEXT_SIZE_LABEL,
                 () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         mModeSelect.setOnClickListener(v -> showMenu(mModeSelect, "颜色模式", List.of("RGB", "HSV", "HSL"), value -> {
             ColorMode mode = ColorMode.from(value);
@@ -85,7 +86,7 @@ final class ColorRampView extends LinearLayout {
         addView(mModeSelect, fullRow());
 
         mInterpolationSelect = new UiSelectButton(context, interpolationLabel(mGradient.interpolation()),
-                UIConstants.Node.TEXT_SIZE_LABEL, () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+                NodeUiMetrics.TEXT_SIZE_LABEL, () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
         mInterpolationSelect.setOnClickListener(v -> showMenu(mInterpolationSelect, "插值",
                 interpolationOptions(mGradient.mode()), value -> commit(mGradient.withInterpolation(interpolationFromLabel(value)))));
         addView(mInterpolationSelect, fullRow());
@@ -197,6 +198,7 @@ final class ColorRampView extends LinearLayout {
         return mGradient.stops().get(index);
     }
 
+    // Gradient stops and the picker palette are user data, independent of editor decoration.
     private ColorValue selectedColor() {
         return selectedStop().color();
     }

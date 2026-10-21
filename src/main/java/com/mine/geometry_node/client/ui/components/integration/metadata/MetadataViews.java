@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
@@ -25,14 +27,20 @@ final class MetadataViews {
         return result;
     }
     static UiActionButton button(Context context, String key, Runnable action) {
-        UiActionButton button = new UiActionButton(context, tr(key), UiActionButton.Role.SECONDARY,
-                UiActionButton.Density.NORMAL);
+        return button(context, key, action, UiThemes.EDITOR);
+    }
+    static UiActionButton button(Context context, String key, Runnable action, UiTheme theme) {
+        UiActionButton button = new UiActionButton(context, theme, tr(key), UiActionButton.Role.SECONDARY,
+                UiActionButton.Density.NORMAL, UiActionButton.Style.forTheme(theme));
         button.setOnClickListener(view -> action.run());
         button.setPadding(px(10), 0, px(10), 0);
         return button;
     }
     static UiTextInput input(Context context, String hint, boolean singleLine) {
-        UiTextInput input = new UiTextInput(context);
+        return input(context, hint, singleLine, UiThemes.EDITOR);
+    }
+    static UiTextInput input(Context context, String hint, boolean singleLine, UiTheme theme) {
+        UiTextInput input = new UiTextInput(context, UiTextInput.Style.forTheme(theme));
         input.setSingleLine(singleLine);
         input.setHint(tr(hint));
         input.setGravity(Gravity.LEFT | (singleLine ? Gravity.CENTER_VERTICAL : Gravity.TOP));

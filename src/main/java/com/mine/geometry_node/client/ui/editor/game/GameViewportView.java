@@ -1,11 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.ui.editor.game.gizmo.ViewportOrientationOverlay;
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportPixelDemand;
-
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
@@ -70,7 +70,7 @@ final class GameViewportView extends View {
         setFocusable(true);
         setFocusableInTouchMode(true);
         ShapeDrawable background = new ShapeDrawable();
-        background.setColor(0xFF080808);
+        background.setColor(UiThemes.EDITOR.surface().canvas());
         setBackground(background);
     }
 

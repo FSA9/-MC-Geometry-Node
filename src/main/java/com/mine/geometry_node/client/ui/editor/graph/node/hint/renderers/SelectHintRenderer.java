@@ -1,9 +1,10 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;
@@ -51,7 +52,7 @@ public class SelectHintRenderer implements UIHintRenderer {
         String displayVal = optionLabels.getOrDefault(selectedValue, selectedValue);
         String title = selectTitle(nodeData, row);
 
-        UiSelectButton dropdownBtn = new UiSelectButton(context, displayVal, UIConstants.Node.TEXT_SIZE_LABEL,
+        UiSelectButton dropdownBtn = new UiSelectButton(context, displayVal, NodeUiMetrics.TEXT_SIZE_LABEL,
                 () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
 
         dropdownBtn.setOnClickListener(v -> {
@@ -81,11 +82,11 @@ public class SelectHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
 
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
-        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         int leftMarginPx = UIUtils.dp2pxInt(startX);
@@ -103,7 +104,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         lp.gravity = Gravity.LEFT | Gravity.TOP;
         lp.leftMargin = leftMarginPx;
-        lp.topMargin = UIUtils.dp2pxInt(currentY + UIConstants.Node.ROW_HEIGHT + verticalMargin);
+        lp.topMargin = UIUtils.dp2pxInt(currentY + NodeUiMetrics.ROW_HEIGHT + verticalMargin);
 
         view.setLayoutParams(lp);
     }

@@ -1,12 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeData;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.TextView;
-
 import java.util.UUID;
 
 /** Compact, read-only Data Library metadata shown under a reference UUID. */
@@ -24,7 +24,7 @@ final class DataLibraryReferenceInfoView extends TextView {
         this.nodeData = nodeData;
         setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         UIUtils.setLockedTextSize(this, 10.0f);
-        setTextColor(0xFFB9BEC6);
+        setTextColor(UiThemes.EDITOR.text().secondary());
         setPadding(UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(2),
                 UIUtils.dp2pxInt(6), UIUtils.dp2pxInt(2));
 

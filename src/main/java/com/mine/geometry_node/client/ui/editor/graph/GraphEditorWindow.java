@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
+import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
@@ -29,11 +30,12 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
-
 import java.util.List;
 
 public class GraphEditorWindow extends LinearLayout
         implements AreaEditorWindow, SurfaceRegistrationAware, ViewportSurface {
+    private static final float INITIAL_WORKSPACE_WEIGHT = 0.8f;
+
     private final GraphViewportPanel mGraphViewportPanel;
     private final GraphPropertiesPanel mPropertiesPanel;
     private final EditorSidebar mRightSidebar;
@@ -48,7 +50,7 @@ public class GraphEditorWindow extends LinearLayout
         super(context);
         mUiStateContext = java.util.Objects.requireNonNull(uiStateContext);
         setOrientation(LinearLayout.HORIZONTAL);
-        setBackground(createColorDrawable(UIConstants.MainUI.BG_ROOT));
+        setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
 
         if (!mUiStateContext.contains(EditorSidebarState.GRAPH, EditorSidebarState.SCOPE)) {
             AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
@@ -66,10 +68,10 @@ public class GraphEditorWindow extends LinearLayout
 
         mGraphViewportPanel = new GraphViewportPanel(context);
         workspace.addView(mGraphViewportPanel, createWeightParams(
-                UIConstants.MainUI.WEIGHT_CENTER + UIConstants.MainUI.WEIGHT_RIGHT - sidebarWeight));
+                INITIAL_WORKSPACE_WEIGHT - sidebarWeight));
 
         View sidebarDivider = ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
+                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> persistSidebarState());
         workspace.addView(sidebarDivider);
 
         mRightSidebar = new EditorSidebar(context);
@@ -88,6 +90,7 @@ public class GraphEditorWindow extends LinearLayout
                 sidebarDivider,
                 mRightSidebar,
                 sidebarWeight,
+                EditorLayoutPolicy.MIN_PANEL_WEIGHT,
                 (visible, weight) -> mUiStateContext.write(
                         EditorSidebarState.GRAPH, EditorSidebarState.SCOPE,
                         new EditorSidebarState(visible, weight, mRightSidebar.getSelectedPanelId())));

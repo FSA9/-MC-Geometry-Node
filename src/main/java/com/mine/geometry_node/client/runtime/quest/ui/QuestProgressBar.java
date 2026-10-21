@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.runtime.quest.ui;
 
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -22,11 +24,11 @@ final class QuestProgressBar extends View {
         super.onDraw(canvas);
         paint.setAntiAlias(true);
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(QuestScreenTheme.withAlpha(QuestScreenTheme.SURFACE, 0x60));
+        paint.setColor(UiTheme.withAlpha(UiThemes.HUD.surface().panel(), 0x60));
         rect.set(0, 0, getWidth(), getHeight());
         canvas.drawRect(rect, paint);
         if (progress > 0.0f) {
-            paint.setColor(progress >= 1.0f ? 0xFF55B96B : 0xFF4DA3FF);
+            paint.setColor(progress >= 1.0f ? UiThemes.HUD.status().success() : UiThemes.HUD.buttons().primary().normal());
             rect.set(0, 0, getWidth() * progress, getHeight());
             canvas.drawRect(rect, paint);
         }

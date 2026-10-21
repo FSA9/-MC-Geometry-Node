@@ -1,0 +1,72 @@
+{
+  "assetBrowser": {
+    "quickAccessPaths": [],
+    "favoriteAssetPaths": [],
+    "viewMode": "LIST",
+    "rightSidebarVisible": true,
+    "rightSidebarWeight": 0.2,
+    "rightSidebarTab": "properties"
+  },
+  "viewport": {
+    "gridSize": 15,
+    "snapToGrid": false,
+    "showGridAndAxis": true,
+    "rightSidebarVisible": true,
+    "rightSidebarWeight": 0.2,
+    "rightSidebarTab": "properties"
+  },
+  "gameView": {
+    "backgroundFps": 20
+  },
+  "node": {
+    "cornerRadius": 1.5
+  },
+  "keyBindings": {
+    "global": {
+      "undo": "CTRL+Z",
+      "redo": "CTRL+Y",
+      "save": "CTRL+S",
+      "copy": "CTRL+C",
+      "paste": "CTRL+V",
+      "cut": "CTRL+X",
+      "delete": "DELETE",
+      "rename": "F2",
+      "selectAll": "CTRL+A"
+    },
+    "viewport": {
+      "toggleSnapToGrid": "SHIFT+TAB",
+      "toggleGridAndAxis": "SHIFT+ALT+Z",
+      "groupIntoFrame": "CTRL+J",
+      "groupIntoNodeGroup": "CTRL+G",
+      "moveSelection": "G",
+      "toggleRightSidebar": "N"
+    },
+    "gameView": {
+      "entityMove": "CTRL+RIGHT_CLICK",
+      "toggleProjection": "KP_5",
+      "toggleSidebar": "N",
+      "viewMenu": "GRAVE_ACCENT",
+      "add": "SHIFT+A",
+      "focus": "F",
+      "cancel": "ESCAPE",
+      "toggleSnap": "SHIFT+TAB",
+      "move": "G",
+      "rotate": "R",
+      "scale": "S",
+      "axisX": "X",
+      "axisY": "Y",
+      "axisZ": "Z",
+      "confirm": "ENTER",
+      "forward": "W",
+      "backward": "S",
+      "left": "A",
+      "right": "D",
+      "up": "SPACE",
+      "down": "CTRL",
+      "exit": "ESCAPE"
+    },
+    "shopEditor": {
+      "clearSlot": "CTRL+LEFT_CLICK"
+    }
+  }
+}

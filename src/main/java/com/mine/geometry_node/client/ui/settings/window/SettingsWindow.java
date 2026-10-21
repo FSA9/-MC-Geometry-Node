@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.settings.window;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.config.ConfigDraft;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.config.ConfigRegistry;
@@ -24,7 +26,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,12 +34,12 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 final class SettingsWindow extends ModalWindowView {
-    private static final int COLOR_PANEL = 0xFF303030;
-    private static final int COLOR_NAV = 0xFF292929;
-    private static final int COLOR_BORDER = 0xFF181818;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF929292;
-    private static final int COLOR_DANGER = 0xFFE18A8A;
+    private static final int COLOR_PANEL = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_NAV = UiThemes.EDITOR.surface().root();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_DANGER = UiThemes.EDITOR.status().error();
 
     private final MainUiServices services;
     private final ConfigDraft draft;
@@ -336,14 +337,13 @@ final class SettingsWindow extends ModalWindowView {
     }
 
     private EditText createSearchInput(Context context) {
-        EditText input = new EditText(context);
+        UiTextInput input = new UiTextInput(context);
         input.setSingleLine(true);
         input.setTextSize(0, UIUtils.dp2px(11.0f));
         input.setTextColor(COLOR_TEXT);
         input.setHintTextColor(COLOR_MUTED);
         input.setHint(tr("geometry_node.settings.search_hint"));
         input.setPadding(UIUtils.dp2pxInt(9.0f), 0, UIUtils.dp2pxInt(9.0f), 0);
-        input.setBackground(rect(0xFF242424, 0xFF4A4A4A));
         return input;
     }
 

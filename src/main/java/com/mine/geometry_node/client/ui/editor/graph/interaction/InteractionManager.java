@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.interaction;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.editor.graph.CanvasVisualItem;
 import com.mine.geometry_node.client.ui.editor.graph.Viewport;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
@@ -14,7 +16,6 @@ import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -84,11 +85,11 @@ public class InteractionManager {
     }
 
     private void initPaints() {
-        mSelectionFillPaint.setColor(UIConstants.ViewPort.Selection.CLR_FILL);
+        mSelectionFillPaint.setColor(UiThemes.EDITOR.selection().marqueeFill());
         mSelectionFillPaint.setStyle(Paint.Style.FILL);
-        mSelectionBorderPaint.setColor(UIConstants.ViewPort.Selection.CLR_BORDER);
+        mSelectionBorderPaint.setColor(UiThemes.EDITOR.selection().outline());
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
-        mSelectionBorderPaint.setStrokeWidth(UIUtils.dp2px(UIConstants.ViewPort.Selection.STROKE_WIDTH));
+        mSelectionBorderPaint.setStrokeWidth(UIUtils.dp2px(UiMetrics.MARQUEE_BORDER));
     }
 
     public boolean onGenericMotionEvent(MotionEvent event) {
@@ -235,7 +236,7 @@ public class InteractionManager {
         float dy = screenY - mLastScreenY;
         float totalDx = screenX - mDownScreenX;
         float totalDy = screenY - mDownScreenY;
-        float touchSlopPx = UIUtils.dp2px(UIConstants.ViewPort.Interaction.TOUCH_SLOP);
+        float touchSlopPx = UIUtils.dp2px(GraphInteractionConfig.TOUCH_SLOP_DP);
 
         if (Math.abs(totalDx) > touchSlopPx || Math.abs(totalDy) > touchSlopPx) mHasMovedSignificantly = true;
 
@@ -430,7 +431,7 @@ public class InteractionManager {
             mAppliedDragUiDy = totalUiDy;
         }
 
-        if (Math.abs(totalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+        if (Math.abs(totalUiDx) > GraphInteractionConfig.MIN_DRAG_DISTANCE || Math.abs(totalUiDy) > GraphInteractionConfig.MIN_DRAG_DISTANCE) {
             List<String> selectedNodeIds = getSelectedNodeIds();
             List<String> selectedFrameIds = getSelectedFrameIds();
 
@@ -594,7 +595,7 @@ public class InteractionManager {
             mAppliedDragUiDy = rawTotalUiDy;
         }
 
-        if (Math.abs(rawTotalUiDx) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE || Math.abs(rawTotalUiDy) > UIConstants.ViewPort.Interaction.MIN_DRAG_DISTANCE) {
+        if (Math.abs(rawTotalUiDx) > GraphInteractionConfig.MIN_DRAG_DISTANCE || Math.abs(rawTotalUiDy) > GraphInteractionConfig.MIN_DRAG_DISTANCE) {
             commitMoveElements(new ArrayList<>(), List.of(draggedFrameId), rawTotalUiDx, rawTotalUiDy);
             updateSingleMovedFrameParent(List.of(draggedFrameId), endUiX, endUiY);
         } else {

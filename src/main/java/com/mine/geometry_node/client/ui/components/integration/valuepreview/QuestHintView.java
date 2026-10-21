@@ -1,8 +1,8 @@
-package com.mine.geometry_node.client.runtime.quest.ui;
+package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
-import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
-import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
@@ -13,7 +13,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
-
 import java.util.function.Consumer;
 
 public final class QuestHintView extends FrameLayout {
@@ -22,13 +21,21 @@ public final class QuestHintView extends FrameLayout {
     private QuestHintType hintType = QuestHintType.NONE;
 
     public QuestHintView(Context context) {
+        this(context, ValuePreviewStyle.DEFAULT);
+    }
+
+    public QuestHintView(Context context, ValuePreviewStyle style) {
+        this(context, style, UiThemes.EDITOR);
+    }
+
+    public QuestHintView(Context context, ValuePreviewStyle style, UiTheme tooltipTheme) {
         super(context);
         setClipChildren(false);
 
-        itemView = new ItemSlotView(context);
+        itemView = new ItemSlotView(context, style, tooltipTheme);
         addView(itemView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
-        entityView = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.HORIZONTAL);
+        entityView = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.HORIZONTAL, style);
         entityView.setVisibility(View.GONE);
         addView(entityView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
     }

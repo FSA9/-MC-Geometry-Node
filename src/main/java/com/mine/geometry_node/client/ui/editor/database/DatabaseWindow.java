@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
 import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
-
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
@@ -15,7 +15,6 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.editor.database.sidebar.DatabaseDetailsPanel;
 import com.mine.geometry_node.client.ui.editor.database.world.WorldObjectsView;
 import com.mine.geometry_node.client.ui.editor.datalibrary.*;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
@@ -66,9 +65,9 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     }
     public DatabaseWindow(Context context, DataLibraryRepository repository, UiStateContext state) {
         super(context); uiState = java.util.Objects.requireNonNull(state); this.repository = repository == null ? DataLibraryRepository.EMPTY : repository;
-        setOrientation(VERTICAL); setBackground(background(UiTheme.Surface.ROOT));
+        setOrientation(VERTICAL); setBackground(background(UiThemes.EDITOR.surface().root()));
         LinearLayout tabs = new LinearLayout(context);
-        tabs.setBackground(background(UiTheme.Surface.PANEL));
+        tabs.setBackground(background(UiThemes.EDITOR.surface().panel()));
         worldTab = tab(context, tr("world"), true);
         libraryTab = tab(context, tr("library"), false);
         addTab(tabs, worldTab);
@@ -147,7 +146,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         FrameLayout host = new FrameLayout(getContext());
         tab.setPadding(px(16), 0, px(16), 0);
         host.addView(tab, new FrameLayout.LayoutParams(-1, -1));
-        View underline = new View(getContext()); underline.setBackground(background(UiTheme.Control.FOCUS));
+        View underline = new View(getContext()); underline.setBackground(background(UiThemes.EDITOR.selection().outline()));
         host.addView(underline, new FrameLayout.LayoutParams(-1, px(2), Gravity.BOTTOM));
         tabUnderlines.put(tab, underline);
         tabs.addView(host, new LayoutParams(px(124), -1));
@@ -155,8 +154,8 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     private void updateTabs() {
         for (UiActionButton tab : List.of(worldTab, libraryTab)) {
             boolean active = tab == worldTab ? worldSelected : !worldSelected;
-            tab.setPalette(new UiActionButton.Palette(active ? UiTheme.Surface.HEADER : UiTheme.Surface.PANEL,
-                    UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED, active ? UiTheme.Text.STRONG : UiTheme.Text.MUTED));
+            tab.setPalette(new UiActionButton.Palette(active ? UiThemes.EDITOR.surface().header() : UiThemes.EDITOR.surface().panel(),
+                    UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(), active ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted()));
             tabUnderlines.get(tab).setVisibility(active ? VISIBLE : INVISIBLE);
         }
     }

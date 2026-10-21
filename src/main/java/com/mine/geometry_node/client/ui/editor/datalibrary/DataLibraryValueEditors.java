@@ -1,10 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
 import com.mine.geometry_node.client.integration.picker.DataLibraryEntityPickerController;
-
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-
 import com.google.gson.JsonParser;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
@@ -13,7 +12,6 @@ import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiPropertyRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateScopes;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
@@ -51,7 +49,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,15 +62,14 @@ import java.util.function.BooleanSupplier;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
 import static icyllis.modernui.widget.LinearLayout.VERTICAL;
 
 /** Value-specific controls, native previews and commits; the window owns card/draft lifetimes. */
 final class DataLibraryValueEditors {
-    private static final int INPUT_BG = UiTheme.Control.INPUT;
-    private static final int BORDER = UiTheme.Control.INPUT_BORDER;
-    private static final int TEXT = UiTheme.Text.NORMAL;
-    private static final int MUTED = UiTheme.Text.MUTED;
+    private static final int INPUT_BG = UiThemes.EDITOR.control().input();
+    private static final int BORDER = UiThemes.EDITOR.control().inputBorder();
+    private static final int TEXT = UiThemes.EDITOR.text().normal();
+    private static final int MUTED = UiThemes.EDITOR.text().muted();
     private static final int CHECKBOX_SIZE_DP = 16;
     private static final int CARD_PREVIEW_SIZE_DP = 64;
     private static final int EDIT_ACTION_SIZE_DP = 26;

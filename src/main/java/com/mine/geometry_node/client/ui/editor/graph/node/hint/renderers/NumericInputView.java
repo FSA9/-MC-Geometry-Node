@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.base.input.UiNumericInput;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
@@ -27,7 +28,7 @@ final class NumericInputView extends UiNumericInput {
     }
 
     NumericInputView(Context context, NumericValueBinding binding, NumericInputSpec spec, String inlineLabel) {
-        super(context, binding, spec, inlineLabel, UIConstants.Node.TEXT_SIZE_LABEL,
+        super(context, binding, spec, inlineLabel, NodeUiMetrics.TEXT_SIZE_LABEL,
                 editor -> UIHintUtils.applyStandardInputStyle(editor, spec.type()));
     }
 

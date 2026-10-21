@@ -1,10 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagStrip;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
@@ -26,9 +27,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.List;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -42,12 +41,13 @@ final class AssetFileItemView extends LinearLayout {
     }
 
     private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
-    private static final int COLOR_ITEM_SELECTED = UiTheme.Control.SELECTED;
+    private static final int COLOR_ITEM_SELECTED = UiThemes.EDITOR.selection().subtle();
+    // Unselected items expose the parent surface; this is structural transparency.
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-    private static final int COLOR_SUBTEXT = UiTheme.Text.MUTED;
-    private static final int COLOR_STAR_ON = 0xFFFFD166;
-    private static final int COLOR_STAR_OFF = 0xFF69727D;
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_SUBTEXT = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_STAR_ON = UiThemes.EDITOR.decoration().favorite();
+    private static final int COLOR_STAR_OFF = UiThemes.EDITOR.text().hint();
 
     private final AssetEntry mEntry;
     private final List<String> mTags;
@@ -186,8 +186,8 @@ final class AssetFileItemView extends LinearLayout {
         star.setSingleLine(true);
         star.setPadding(0, 0, 0, 0);
         UiIconButton button = new UiIconButton(getContext(), star, new UiIconButton.Style(
-                UiTheme.Metrics.RADIUS_SMALL, 0, 0, UiTheme.Control.ICON_HOVER,
-                UiTheme.Control.ICON_PRESSED, 0, 0, 20, UiTheme.Metrics.DISABLED_ALPHA))
+                UiMetrics.RADIUS_SMALL, 0, 0, UiThemes.EDITOR.control().iconHover(),
+                UiThemes.EDITOR.control().iconPressed(), 0, 0, 20, UiMetrics.DISABLED_ALPHA))
                 .tooltip(Component.translatable("geometry_node.asset_library.action.favorite_toggle").getString());
         button.setOnClickListener(view -> mListener.onFavoriteToggled(mEntry));
         button.setOnHoverListener((view, event) -> {
@@ -204,6 +204,7 @@ final class AssetFileItemView extends LinearLayout {
         return mEntry.isDirectory() ? VectorIconView.Kind.FOLDER : VectorIconView.Kind.FILE;
     }
 
+    // Graph/asset type identity remains independent of selection and favorite decoration.
     private int iconColor() {
         if (AssetTypeRegistry.INSTANCE.isType(mEntry, AssetTypeRegistry.GRAPH_ID)) {
             GraphType graphType = GraphTypeRegistry.INSTANCE.get(mGraphTypeId);

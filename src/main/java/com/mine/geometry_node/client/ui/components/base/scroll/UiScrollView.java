@@ -1,7 +1,10 @@
 package com.mine.geometry_node.client.ui.components.base.scroll;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.View;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.widget.ScrollView;
 
@@ -10,9 +13,20 @@ public class UiScrollView extends ScrollView {
     private final UiScrollBehavior behavior = new UiScrollBehavior(false);
 
     public UiScrollView(Context context) {
+        this(context, UiThemes.EDITOR.scroll());
+    }
+
+    public UiScrollView(Context context, UiTheme.Scroll colors) {
         super(context);
+        java.util.Objects.requireNonNull(colors, "colors");
         setHorizontalScrollBarEnabled(false);
-        behavior.configure(this);
+        behavior.configure(this, colors);
+        setEdgeEffectColor(colors.edge());
+    }
+
+    /** Themes native vertical text scrollbars without changing layout, movement or hit policy. */
+    public static void applyScrollbarColors(View host, UiTheme.Scroll colors) {
+        UiScrollBehavior.applyColors(host, false, colors);
     }
 
     @Override

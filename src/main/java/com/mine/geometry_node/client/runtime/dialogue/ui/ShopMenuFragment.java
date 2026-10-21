@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.runtime.dialogue.ui;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.ModernDialogueText;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
@@ -11,12 +12,14 @@ import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStack
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.utils.ItemCodecUtils;
+import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.fragment.Fragment;
 import icyllis.modernui.fragment.OnBackPressedCallback;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.UIManager;
 import icyllis.modernui.text.TextUtils;
+import icyllis.modernui.util.ColorStateList;
 import icyllis.modernui.util.DataSet;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
@@ -31,7 +34,6 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,23 +41,25 @@ import java.util.List;
  * Client-side shop menu opened by the OpenShop dialogue node.
  */
 public class ShopMenuFragment extends Fragment {
-    private static final int COLOR_DIM = DialogueHudTheme.OVERLAY_DIM;
-    private static final int COLOR_WINDOW = DialogueHudTheme.PANEL;
-    private static final int COLOR_ROW = DialogueHudTheme.SURFACE;
-    private static final int COLOR_ROW_HOVER = DialogueHudTheme.SURFACE_HOVER;
-    private static final int COLOR_DIVIDER = DialogueHudTheme.DIVIDER;
-    private static final int COLOR_TEXT = DialogueHudTheme.TEXT_PRIMARY;
-    private static final int COLOR_MUTED = DialogueHudTheme.TEXT_MUTED;
-    private static final int COLOR_ACCENT = DialogueHudTheme.ACCENT;
-    private static final int COLOR_ACCENT_HOVER = DialogueHudTheme.ACCENT_HOVER;
-    private static final int COLOR_ACCENT_PRESSED = DialogueHudTheme.ACCENT_PRESSED;
-    private static final int COLOR_BUTTON = DialogueHudTheme.BUTTON;
-    private static final int COLOR_BUTTON_HOVER = DialogueHudTheme.BUTTON_HOVER;
-    private static final int COLOR_BUTTON_PRESSED = DialogueHudTheme.BUTTON_PRESSED;
-    private static final int COLOR_DISABLED = DialogueHudTheme.DISABLED;
-    private static final int COLOR_SUCCESS = DialogueHudTheme.SUCCESS;
-    private static final int COLOR_ERROR = DialogueHudTheme.ERROR;
-    private static final int COLOR_LIMIT = DialogueHudTheme.WARNING;
+    private static final int COLOR_DIM = UiThemes.HUD.surface().overlayDim();
+    private static final int COLOR_WINDOW = UiThemes.HUD.surface().root();
+    private static final int COLOR_ROW = UiThemes.HUD.surface().panel();
+    private static final int COLOR_ROW_HOVER = UiThemes.HUD.surface().hover();
+    private static final int COLOR_DIVIDER = UiThemes.HUD.border().divider();
+    private static final int COLOR_TEXT = UiThemes.HUD.text().normal();
+    private static final int COLOR_MUTED = UiThemes.HUD.text().muted();
+    private static final int COLOR_ACCENT = UiThemes.HUD.buttons().primary().normal();
+    private static final int COLOR_ACCENT_HOVER = UiThemes.HUD.buttons().primary().hover();
+    private static final int COLOR_ACCENT_PRESSED = UiThemes.HUD.buttons().primary().pressed();
+    private static final int COLOR_BUTTON = UiThemes.HUD.buttons().secondary().normal();
+    private static final int COLOR_BUTTON_HOVER = UiThemes.HUD.buttons().secondary().hover();
+    private static final int COLOR_BUTTON_PRESSED = UiThemes.HUD.buttons().secondary().pressed();
+    private static final int COLOR_DISABLED = UiThemes.HUD.control().disabledBackground();
+    private static final int COLOR_SUCCESS = UiThemes.HUD.status().success();
+    private static final int COLOR_ERROR = UiThemes.HUD.status().error();
+    private static final int COLOR_LIMIT = UiThemes.HUD.status().warning();
+    private static final ValuePreviewStyle PREVIEW_STYLE = new ValuePreviewStyle(
+            3.0f, 1.0f, UiThemes.HUD.surface().panel(), UiThemes.HUD.border().divider(), UiThemes.HUD.border().focus());
     private static final float DISPLAY_SCALE = 2.0f;
     private static final int WINDOW_WIDTH_DP = 696;
     private static final int TITLE_COLUMN_WIDTH_DP = 120;
@@ -113,7 +117,7 @@ public class ShopMenuFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        ItemStackTooltipOverlay.hide();
+        ItemStackTooltipOverlay.hideWithin(root);
         if (backPressedCallback != null) {
             backPressedCallback.remove();
             backPressedCallback = null;
@@ -123,7 +127,7 @@ public class ShopMenuFragment extends Fragment {
 
     public void refresh(PacketOpenDialogue packet) {
         waitingForServer = false;
-        ItemStackTooltipOverlay.hide();
+        ItemStackTooltipOverlay.hideWithin(window);
         if (window == null) {
             return;
         }
@@ -134,7 +138,7 @@ public class ShopMenuFragment extends Fragment {
         window.addView(createHeader(state), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         window.addView(createDivider(), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
 
-        ScrollView scrollView = new UiScrollView(getContext());
+        ScrollView scrollView = new UiScrollView(getContext(), UiThemes.HUD.scroll());
         scrollView.setClipChildren(false);
         LinearLayout offerList = new LinearLayout(getContext());
         offerList.setClipChildren(false);
@@ -232,13 +236,10 @@ public class ShopMenuFragment extends Fragment {
                 COLOR_ACCENT,
                 COLOR_ACCENT_HOVER,
                 COLOR_ACCENT_PRESSED,
+                UiThemes.HUD.buttons().primary().text(),
                 v -> tradeOffer(offer)
         );
         tradeButton.setEnabled(!offer.unavailable());
-        tradeButton.setTextColor(offer.unavailable() ? COLOR_MUTED : 0xFFFFFFFF);
-        if (offer.unavailable()) {
-            tradeButton.setBackground(rect(COLOR_DISABLED, 2.0f, 0, 0));
-        }
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(82), dp(32));
         buttonLp.leftMargin = dp(12);
         row.addView(tradeButton, buttonLp);
@@ -274,7 +275,10 @@ public class ShopMenuFragment extends Fragment {
                         stacks.get(i),
                         null,
                         false,
-                        DISPLAY_SCALE
+                        DISPLAY_SCALE,
+                        PREVIEW_STYLE,
+                        UiThemes.HUD.buttons().primary().normal(),
+                        UiThemes.HUD
                 );
                 LinearLayout.LayoutParams slotLp = new LinearLayout.LayoutParams(dp(SLOT_SIZE_DP), dp(SLOT_SIZE_DP));
                 if (i + 1 < rowEnd) {
@@ -325,13 +329,10 @@ public class ShopMenuFragment extends Fragment {
                 COLOR_BUTTON,
                 COLOR_BUTTON_HOVER,
                 COLOR_BUTTON_PRESSED,
+                COLOR_TEXT,
                 v -> chooseContinue(choice)
         );
         continueButton.setEnabled(choice != null && choice.enabled());
-        if (choice == null || !choice.enabled()) {
-            continueButton.setTextColor(COLOR_MUTED);
-            continueButton.setBackground(rect(COLOR_DISABLED, 2.0f, 0, 0));
-        }
         LinearLayout.LayoutParams continueLp = new LinearLayout.LayoutParams(dp(96), dp(32));
         continueLp.leftMargin = dp(12);
         footer.addView(continueButton, continueLp);
@@ -398,63 +399,40 @@ public class ShopMenuFragment extends Fragment {
                             int color,
                             int hoverColor,
                             int pressedColor,
+                            int textColor,
                             View.OnClickListener listener) {
-        TextView view = label(text, 12.0f, 0xFFFFFFFF, Gravity.CENTER);
+        TextView view = label(text, 12.0f, textColor, Gravity.CENTER);
         view.setSingleLine(true);
         view.setEllipsize(TextUtils.TruncateAt.END);
-        view.setBackground(rect(color, 2.0f, 0, 0));
+        view.setTextColor(new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {}
+        }, new int[]{COLOR_MUTED, textColor}));
         view.setOnClickListener(listener);
         bindButtonFeedback(view, color, hoverColor, pressedColor);
         return view;
     }
 
     private void bindButtonFeedback(View view, int color, int hoverColor, int pressedColor) {
-        final boolean[] hovered = {false};
-        final boolean[] pressed = {false};
-        Runnable update = () -> {
-            if (!view.isEnabled()) {
-                return;
-            }
-            int resolved = pressed[0] ? pressedColor : hovered[0] ? hoverColor : color;
-            view.setBackground(rect(resolved, 2.0f, 0, 0));
-        };
-
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                hovered[0] = true;
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                hovered[0] = false;
-                pressed[0] = false;
-            }
-            update.run();
-            return false;
-        });
-        view.setOnTouchListener((v, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                pressed[0] = true;
-            } else if (event.getActionMasked() == MotionEvent.ACTION_UP
-                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-                pressed[0] = false;
-            }
-            update.run();
-            return false;
-        });
+        ShapeDrawable background = rect(color, 2.0f, 0, 0);
+        background.setColor(new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {R.attr.state_pressed}, {R.attr.state_hovered}, {}
+        }, new int[]{COLOR_DISABLED, pressedColor, hoverColor, color}));
+        background.setStroke(dp(1), new ColorStateList(new int[][]{
+                {R.attr.state_enabled, R.attr.state_focused}, {}
+        }, new int[]{UiThemes.HUD.border().focus(), 0}));
+        view.setBackground(background);
+        view.setFocusable(true);
     }
 
     private View closeButton() {
-        FrameLayout button = new FrameLayout(getContext());
+        FrameLayout button = new FrameLayout(getContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
         button.setBackground(rect(0x00000000, 2.0f, 0, 0));
         button.setContentDescription(tr("geometry_node.common.cancel"));
         button.setTooltipText(tr("geometry_node.common.cancel"));
         button.setOnClickListener(v -> ClientDialogueState.close());
-        button.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                v.setBackground(rect(COLOR_BUTTON_HOVER, 2.0f, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                v.setBackground(rect(0x00000000, 2.0f, 0, 0));
-            }
-            return false;
-        });
+        bindButtonFeedback(button, 0, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED);
 
         VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, COLOR_MUTED);
         FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(18), dp(18));
@@ -470,7 +448,11 @@ public class ShopMenuFragment extends Fragment {
     }
 
     private TextView label(CharSequence text, float sizeDp, int color, int gravity) {
-        TextView view = UIUtils.createLockedTextView(getContext(), "", sizeDp * DISPLAY_SCALE, color);
+        TextView view = new TextView(getContext()) {
+            @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+        };
+        UIUtils.setLockedTextSize(view, sizeDp * DISPLAY_SCALE);
+        view.setTextColor(color);
         view.setText(text == null ? "" : text);
         view.setGravity(gravity);
         return view;

@@ -1,7 +1,10 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -23,19 +26,25 @@ public final class UiSearchMenuLayout {
      * @return the search input, or null when search is disabled
      */
     public static UiSearchInput addHeader(LinearLayout content, String title, boolean searchable) {
+        return addHeader(content, title, searchable, UiThemes.EDITOR);
+    }
+
+    public static UiSearchInput addHeader(LinearLayout content, String title, boolean searchable, UiTheme theme) {
+        java.util.Objects.requireNonNull(theme, "theme");
         if (title != null && !title.isBlank()) {
-            TextView heading = UIUtils.createLockedTextView(content.getContext(), title, 12, UiTheme.INLINE.text());
+            TextView heading = UIUtils.createLockedTextView(content.getContext(), title, 12, theme.buttons().inline().text());
             heading.setSingleLine(true);
             heading.setGravity(Gravity.CENTER_VERTICAL);
             heading.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
             ShapeDrawable background = new ShapeDrawable();
-            background.setColor(UiTheme.Control.INPUT);
+            background.setColor(theme.control().input());
             background.setCornerRadius(UIUtils.dp2px(4));
             heading.setBackground(background);
             content.addView(heading, titleLayoutParams());
         }
         if (!searchable) return null;
-        UiSearchInput search = new UiSearchInput(content.getContext());
+        UiSearchInput search = new UiSearchInput(content.getContext(), UiTextInput.Style.forTheme(theme,
+                UiMetrics.TEXT_SEARCH, 10, UiMetrics.RADIUS_INPUT, UiMetrics.BORDER));
         search.setHint(Component.translatable("geometry_node.asset_library.toolbar.search").getString());
         content.addView(search, searchLayoutParams());
         return search;

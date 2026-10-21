@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
@@ -21,7 +21,6 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.io.File;
 import java.util.List;
 import java.util.function.Consumer;
@@ -36,6 +35,19 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     private final TextView mStatus;
     private String mPendingRemoteInitialDirectory;
     private int mCapabilityRequestId;
+    private final CapabilityRequests mCapabilityRequests;
+
+    interface CapabilityRequests {
+        void request(int id, Consumer<Boolean> available, Runnable unavailable);
+        void cancel(int id);
+    }
+
+    private static final CapabilityRequests REMOTE_CAPABILITIES = new CapabilityRequests() {
+        @Override public void request(int id, Consumer<Boolean> available, Runnable unavailable) {
+            RemoteAssetClient.requestCapabilities(id, response -> available.accept(response.canBrowse()), unavailable);
+        }
+        @Override public void cancel(int id) { RemoteAssetClient.cancel(id); }
+    };
 
     public static FilePickerDialog path(Context context, String title, String initialPath, Consumer<String> onPick) {
         return new FilePickerDialog(context, title, initialPath, onPick);
@@ -59,13 +71,19 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
     }
 
     private FilePickerDialog(Context context, String title, String initialPath, Consumer<String> onPick) {
+        this(context, title, initialPath, onPick, REMOTE_CAPABILITIES);
+    }
+
+    FilePickerDialog(Context context, String title, String initialPath, Consumer<String> onPick,
+                     CapabilityRequests capabilityRequests) {
         super(context, title);
+        mCapabilityRequests = capabilityRequests;
         setWindowSizeDp(WINDOW_WIDTH, 0);
         mOnPick = onPick;
 
         LinearLayout browserArea = new LinearLayout(context);
         browserArea.setOrientation(LinearLayout.HORIZONTAL);
-        browserArea.setBackground(rect(UiTheme.Surface.ROOT, UiTheme.Metrics.RADIUS_INPUT));
+        browserArea.setBackground(rect(UiThemes.EDITOR.surface().root(), UiMetrics.RADIUS_INPUT));
 
         mBrowser = AssetFileBrowserPanel.picker(context, this);
         mBrowser.setPickFileAction(this::chooseEntry);
@@ -91,7 +109,7 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
                 UIUtils.dp2pxInt(BROWSER_HEIGHT)
         ));
 
-        mStatus = label(context, "", 12, 0xFFFFB86C);
+        mStatus = label(context, "", 12, UiThemes.EDITOR.status().warning());
         mPanel.addView(mStatus, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 UIUtils.dp2pxInt(22)
@@ -115,6 +133,9 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         setActions(actions);
 
         navigateInitial(initialPath);
+        // Initial fallback is not user navigation. Every subsequent browser location change
+        // (including path input, up, and double-click) supersedes the deferred remote restore.
+        mBrowser.setLocationChangedListener(() -> mPendingRemoteInitialDirectory = null);
         requestRemoteCapabilities();
     }
 
@@ -198,11 +219,11 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         int requestId = RemoteAssetClient.nextRequestId();
         mCapabilityRequestId = requestId;
         try {
-            RemoteAssetClient.requestCapabilities(requestId, response -> post(() -> {
+            mCapabilityRequests.request(requestId, canBrowse -> post(() -> {
                 if (mCapabilityRequestId != requestId) return;
                 mCapabilityRequestId = 0;
                 mLeftPanel.buildSidebar();
-                if (response.canBrowse() && mPendingRemoteInitialDirectory != null) {
+                if (canBrowse && mPendingRemoteInitialDirectory != null) {
                     String target = mPendingRemoteInitialDirectory;
                     mPendingRemoteInitialDirectory = null;
                     mBrowser.navigateToRemote(target);
@@ -218,8 +239,9 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
 
     @Override
     protected void onAssetDialogDestroyed() {
+        mPendingRemoteInitialDirectory = null;
         if (mCapabilityRequestId != 0) {
-            RemoteAssetClient.cancel(mCapabilityRequestId);
+            mCapabilityRequests.cancel(mCapabilityRequestId);
             mCapabilityRequestId = 0;
         }
     }

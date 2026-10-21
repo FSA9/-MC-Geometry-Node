@@ -4,6 +4,8 @@ import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
@@ -27,6 +29,11 @@ public final class UiFixedSplitLayout extends LinearLayout {
 
     public UiFixedSplitLayout(Context context, ResizableDivider.Orientation axis, Edge edge,
                               float preferredDp, float minimumDp, float flexibleMinimumDp) {
+        this(context, axis, edge, preferredDp, minimumDp, flexibleMinimumDp, UiThemes.EDITOR);
+    }
+
+    public UiFixedSplitLayout(Context context, ResizableDivider.Orientation axis, Edge edge,
+                              float preferredDp, float minimumDp, float flexibleMinimumDp, UiTheme theme) {
         super(context);
         if (edge == null || !Float.isFinite(preferredDp) || !Float.isFinite(minimumDp)
                 || !Float.isFinite(flexibleMinimumDp) || minimumDp < 0 || flexibleMinimumDp < 0) {
@@ -40,7 +47,7 @@ public final class UiFixedSplitLayout extends LinearLayout {
         setOrientation(horizontal ? HORIZONTAL : VERTICAL);
         setBaselineAligned(false);
         divider = new ThinResizableDivider(context, horizontal ? ResizableDivider.Orientation.HORIZONTAL
-                : ResizableDivider.Orientation.VERTICAL, this::resizePane);
+                : ResizableDivider.Orientation.VERTICAL, this::resizePane, theme);
     }
 
     public void setPanes(View first, View last) {

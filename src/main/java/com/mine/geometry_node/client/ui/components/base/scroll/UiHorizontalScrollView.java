@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.base.scroll;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
@@ -10,9 +12,15 @@ public class UiHorizontalScrollView extends HorizontalScrollView {
     private final UiScrollBehavior behavior = new UiScrollBehavior(true);
 
     public UiHorizontalScrollView(Context context) {
+        this(context, UiThemes.EDITOR.scroll());
+    }
+
+    public UiHorizontalScrollView(Context context, UiTheme.Scroll colors) {
         super(context);
+        java.util.Objects.requireNonNull(colors, "colors");
         setVerticalScrollBarEnabled(false);
-        behavior.configure(this);
+        behavior.configure(this, colors);
+        setEdgeEffectColor(colors.edge());
     }
 
     @Override

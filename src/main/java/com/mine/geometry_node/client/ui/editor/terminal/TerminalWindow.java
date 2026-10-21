@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
-
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntime;
 import com.mine.geometry_node.client.integration.terminal.TerminalRuntimeFactory;
 import com.mine.geometry_node.client.terminal.TerminalSession;
@@ -9,7 +9,6 @@ import com.mine.geometry_node.client.terminal.TerminalMode;
 import com.mine.geometry_node.client.terminal.shell.PowerShellProfile;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
 import icyllis.modernui.core.Context;
@@ -60,7 +59,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mTabScrollView = new UiHorizontalScrollView(context);
         mTabScrollView.setFillViewport(true);
         mTabScrollView.setHorizontalScrollBarEnabled(false);
-        mTabScrollView.setBackground(colorDrawable(UiTheme.Surface.PANEL));
+        mTabScrollView.setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
         mTabScrollView.setOnGenericMotionListener((view, event) -> {
             if (event.getAction() != MotionEvent.ACTION_SCROLL) return false;
             float verticalScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
@@ -80,7 +79,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mModeBar.setOrientation(HORIZONTAL);
         mModeBar.setGravity(Gravity.CENTER_VERTICAL);
         mModeBar.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(3), UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(3));
-        mModeBar.setBackground(colorDrawable(UiTheme.Control.INPUT));
+        mModeBar.setBackground(colorDrawable(UiThemes.EDITOR.control().input()));
         mCommandMode = TerminalChrome.action(context, TerminalChrome.tr("mode.command"));
         mShellMode = TerminalChrome.action(context, TerminalChrome.tr("mode.shell"));
         mCommandMode.setOnClickListener(ignored -> switchMode(TerminalMode.COMMAND));

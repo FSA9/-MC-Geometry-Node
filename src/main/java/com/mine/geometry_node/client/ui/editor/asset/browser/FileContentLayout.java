@@ -1,21 +1,22 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.UIConstants;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.*;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
@@ -56,12 +57,12 @@ final class FileContentLayout extends ViewGroup {
         mHost = host;
         setWillNotDraw(false);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-        mSelectionFillPaint.setColor(UIConstants.ViewPort.Selection.CLR_FILL);
+        mSelectionFillPaint.setColor(UiThemes.EDITOR.selection().marqueeFill());
         mSelectionFillPaint.setStyle(Paint.Style.FILL);
-        mSelectionBorderPaint.setColor(UIConstants.ViewPort.Selection.CLR_BORDER);
+        mSelectionBorderPaint.setColor(UiThemes.EDITOR.selection().outline());
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
-        mSelectionBorderPaint.setStrokeWidth(dp2px(UIConstants.ViewPort.Selection.STROKE_WIDTH));
-        setBackground(AssetFileBrowserPanel.createColorDrawable(UiTheme.Surface.ROOT));
+        mSelectionBorderPaint.setStrokeWidth(dp2px(UiMetrics.MARQUEE_BORDER));
+        setBackground(AssetFileBrowserPanel.createColorDrawable(UiThemes.EDITOR.surface().root()));
     }
 
     void setViewMode(AssetViewMode mode) {

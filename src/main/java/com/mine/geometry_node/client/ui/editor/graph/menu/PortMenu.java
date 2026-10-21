@@ -1,10 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -13,18 +14,15 @@ import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
-
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.Map;
 import java.util.Objects;
 
@@ -34,15 +32,13 @@ public class PortMenu {
     private static final int EDGE_MARGIN_DP = 6;
     private static final int INPUT_H_DP = 28;
     private static final int ITEM_H_DP = 24;
-    private static final int ITEM_RADIUS_DP = 4;
 
-    private static final int COLOR_PANEL_BG = 0xFF2B2B2B;
-    private static final int COLOR_PANEL_BORDER = 0xFF151515;
-    private static final int COLOR_DIVIDER = 0xFF171717;
-    private static final int COLOR_SECTION_TEXT = 0xFF777777;
-    private static final int COLOR_ACTION_TEXT = 0xFF8FC7FF;
-    private static final int COLOR_MUTED_TEXT = 0xFF999999;
-    private static final int COLOR_HOVER_BG = 0xFF3A4652;
+    private static final int COLOR_PANEL_BG = UiThemes.EDITOR.surface().popup();
+    private static final int COLOR_PANEL_BORDER = UiThemes.EDITOR.border().strong();
+    private static final int COLOR_DIVIDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_SECTION_TEXT = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_ACTION_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED_TEXT = UiThemes.EDITOR.text().muted();
 
     public static void show(InteractionContext context, NodeVisualAdapter node, String portId, float screenX, float screenY) {
         String category = "inputs";
@@ -80,18 +76,18 @@ public class PortMenu {
         LinearLayout panel = new LinearLayout(uiContext);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP), dp(PANEL_PADDING_DP));
-        panel.setBackground(rect(COLOR_PANEL_BG, UIConstants.ViewPort.NodeMenu.BORDER_RADIUS + 5, 1, COLOR_PANEL_BORDER));
+        panel.setBackground(rect(COLOR_PANEL_BG, GraphUiStyle.MENU_RADIUS_DP, 1, COLOR_PANEL_BORDER));
         panel.setOnClickListener(v -> {});
 
         TextView section = sectionLabel(uiContext, "重命名端口");
         panel.addView(section, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(18)));
 
         EditText input = new UiTextInput(uiContext, new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
-                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, UiThemes.EDITOR.text().normal(), UiThemes.EDITOR.text().hint(),
+                UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         input.setText(effectiveName);
         input.setHint("名称");
-        input.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_SEARCH);
+        input.setTextColor(UiThemes.EDITOR.text().strong());
         input.setHintTextColor(COLOR_SECTION_TEXT);
         input.setSingleLine(true);
         input.setTextSize(0, UIUtils.dp2px(12));
@@ -207,19 +203,10 @@ public class PortMenu {
     }
 
     private static TextView menuItem(Context context, String text, int color, View.OnClickListener listener) {
-        TextView view = label(context, text, 12f, color, Gravity.CENTER_VERTICAL);
-        view.setPadding(dp(10), 0, dp(10), 0);
+        TextView view = UiMenuItems.row(context, text, false, true, () -> {});
+        view.setTextColor(UiMenuItems.textColors(color));
+        view.setGravity(Gravity.CENTER_VERTICAL);
         view.setOnClickListener(listener);
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                view.setTextColor(UIConstants.ViewPort.NodeMenu.TEXT_COLOR_HOVER);
-                view.setBackground(rect(COLOR_HOVER_BG, ITEM_RADIUS_DP));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                view.setTextColor(color);
-                view.setBackground(null);
-            }
-            return false;
-        });
         return view;
     }
 

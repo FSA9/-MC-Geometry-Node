@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.interaction;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.editor.graph.menu.FrameMenu;
@@ -25,7 +26,7 @@ final class ContextMenuRouter {
                 PortMenu.show(mContext, targetNode, clickedLabelPortId, screenX, screenY);
                 return RouteResult.handled(false);
             }
-            if (targetNode.getNodeData().isGroupNode() && localY >= 0 && localY <= UIConstants.Node.HEADER_HEIGHT) {
+            if (targetNode.getNodeData().isGroupNode() && localY >= 0 && localY <= NodeUiMetrics.HEADER_HEIGHT) {
                 mContext.clearSelection();
                 mContext.addToSelection(targetNode);
                 GroupNodeMenu.show(mContext, targetNode, screenX, screenY);

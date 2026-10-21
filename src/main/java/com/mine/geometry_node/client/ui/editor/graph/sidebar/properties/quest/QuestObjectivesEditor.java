@@ -1,11 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
-import com.mine.geometry_node.client.runtime.quest.ui.QuestHintView;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.QuestHintView;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
@@ -25,12 +26,10 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.singleLineInput;
@@ -39,11 +38,11 @@ import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.u
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertyNumbers.parseNonNegativeDouble;
 
 public final class QuestObjectivesEditor extends LinearLayout {
-    private static final int COLOR_ROW = UiTheme.Surface.PANEL;
-    private static final int COLOR_INPUT = 0xFF242424;
-    private static final int COLOR_BORDER = UiTheme.Control.INPUT_BORDER;
-    private static final int COLOR_TEXT = 0xFFE3E3E3;
-    private static final int COLOR_MUTED = 0xFF888888;
+    private static final int COLOR_ROW = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_INPUT = UiThemes.EDITOR.control().input();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.control().inputBorder();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
 
     private final LinearLayout rows;
     private final Runnable onChanged;
@@ -61,7 +60,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(label(context, tr("geometry_node.graph_properties.quest.objectives"), 10.5f, 0xFFA8A8A8),
+        header.addView(label(context, tr("geometry_node.graph_properties.quest.objectives"), 10.5f, UiThemes.EDITOR.text().muted()),
                 new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
         UiIconButton add = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.PLUS,
                 "geometry_node.graph_properties.quest.objective_add");
@@ -214,7 +213,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
             root.setOrientation(VERTICAL);
             root.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(6),
                     UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
-            root.setBackground(rect(COLOR_ROW, 5.0f, 1, 0xFF3B3B3B));
+            root.setBackground(rect(COLOR_ROW, 5.0f, 1, UiThemes.EDITOR.border().subtle()));
 
             LinearLayout contentRow = new LinearLayout(getContext());
             contentRow.setOrientation(HORIZONTAL);
@@ -303,7 +302,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
             hintRow.setOrientation(HORIZONTAL);
             hintRow.setGravity(Gravity.CENTER_VERTICAL);
             TextView displayLabel = label(getContext(),
-                    tr("geometry_node.graph_properties.quest.objective_display"), 10.5f, UiTheme.Text.MUTED);
+                    tr("geometry_node.graph_properties.quest.objective_display"), 10.5f, UiThemes.EDITOR.text().muted());
             hintRow.addView(displayLabel, new LayoutParams(UIUtils.dp2pxInt(78), UIUtils.dp2pxInt(28)));
             hintSelector = new QuestHintSelector(getContext(), true, selected -> {
                 if (hintType == selected) return;
@@ -430,13 +429,13 @@ public final class QuestObjectivesEditor extends LinearLayout {
         private void updateQuantityUi() {
             quantityToggle.setChecked(quantityEnabled);
             targetInput.setEnabled(quantityEnabled);
-            targetInput.setAlpha(quantityEnabled ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
+            targetInput.setAlpha(quantityEnabled ? 1.0f : UiMetrics.DISABLED_ALPHA);
         }
 
         private void updateCounterUi() {
             counterToggle.setChecked(counterEnabled);
             counterKeyInput.setEnabled(counterEnabled);
-            counterKeyInput.setAlpha(counterEnabled ? 1.0f : UiTheme.Metrics.DISABLED_ALPHA);
+            counterKeyInput.setAlpha(counterEnabled ? 1.0f : UiMetrics.DISABLED_ALPHA);
         }
 
         private void updateHintUi() {

@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.settings.page.builtin;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.config.ConfigCategory;
 import com.mine.geometry_node.client.config.ConfigEntry;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
@@ -17,7 +18,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -25,12 +25,11 @@ import java.util.function.Predicate;
 
 /** Shared renderer for pages that are projections of the config registry. */
 abstract class ConfigEntriesSettingsPage implements SettingsPage {
-    private static final int COLOR_GROUP = 0xFF242424;
-    private static final int COLOR_HEADER = 0xFF292929;
-    private static final int COLOR_HEADER_HOVER = 0xFF383838;
-    private static final int COLOR_BORDER = 0xFF444444;
-    private static final int COLOR_TITLE = 0xFFE3E3E3;
-    private static final int COLOR_DISCLOSURE = 0xFFAAAAAA;
+    private static final int COLOR_GROUP = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_HEADER = UiThemes.EDITOR.surface().header();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().divider();
+    private static final int COLOR_TITLE = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_DISCLOSURE = UiThemes.EDITOR.text().muted();
 
     private final ScrollView root;
     private final List<ConfigEntryEditor<?>> editors = new ArrayList<>();
@@ -121,7 +120,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(8), 0);
-        header.setBackground(headerBackground(COLOR_HEADER));
+        UiMenuItems.decorate(header, COLOR_HEADER, 2, UiThemes.EDITOR);
 
         SvgIconView disclosure = new SvgIconView(context.uiContext(),
                 SvgIconView.Icon.forExpandedState(false), COLOR_DISCLOSURE);
@@ -135,6 +134,8 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
                 COLOR_TITLE
         );
         title.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        title.setDuplicateParentStateEnabled(true);
+        title.setTextColor(UiMenuItems.textColors(COLOR_TITLE, UiThemes.EDITOR));
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
         titleParams.leftMargin = UIUtils.dp2pxInt(3);
@@ -185,16 +186,7 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         GroupBinding binding = new GroupBinding(group, entriesHost, disclosure, List.copyOf(entryBindings),
                 List.copyOf(children), help, (Component.translatable(category.titleTranslationKey()).getString()
                 + "\n" + description).toLowerCase(Locale.ROOT));
-        header.setOnClickListener(view -> binding.toggle());
-        header.setOnHoverListener((view, event) -> {
-            switch (event.getAction()) {
-                case icyllis.modernui.view.MotionEvent.ACTION_HOVER_ENTER ->
-                        header.setBackground(headerBackground(COLOR_HEADER_HOVER));
-                case icyllis.modernui.view.MotionEvent.ACTION_HOVER_EXIT ->
-                        header.setBackground(headerBackground(COLOR_HEADER));
-            }
-            return true;
-        });
+        header.setOnClickListener(view -> { if (header.isEnabled()) binding.toggle(); });
         return binding;
     }
 
@@ -218,13 +210,6 @@ abstract class ConfigEntriesSettingsPage implements SettingsPage {
         drawable.setColor(COLOR_GROUP);
         drawable.setCornerRadius(UIUtils.dp2px(2.0f));
         drawable.setStroke(Math.max(1, UIUtils.dp2pxInt(1.0f)), COLOR_BORDER);
-        return drawable;
-    }
-
-    private static ShapeDrawable headerBackground(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(2.0f));
         return drawable;
     }
 

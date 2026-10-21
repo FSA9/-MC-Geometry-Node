@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
-
 import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
 import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryDragPayload;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
@@ -30,13 +30,11 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 /**
@@ -85,7 +83,7 @@ public class GraphViewportPanel extends LinearLayout {
 
         mTabScrollView = new UiHorizontalScrollView(context);
         mTabScrollView.setHorizontalScrollBarEnabled(false);
-        mTabScrollView.setBackground(createColorDrawable(0xFF1E1E1E));
+        mTabScrollView.setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
 
         mTabScrollView.setOnGenericMotionListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_SCROLL) {
@@ -313,9 +311,9 @@ public class GraphViewportPanel extends LinearLayout {
         tabLayout.setGravity(Gravity.CENTER_VERTICAL);
 
         boolean isActive = (session == mSelectedSession);
-        tabLayout.setBackground(createColorDrawable(isActive ? 0xFF3C3C3C : 0xFF2A2A2A));
+        tabLayout.setBackground(createColorDrawable(isActive ? UiThemes.EDITOR.selection().subtle() : UiThemes.EDITOR.surface().panel()));
 
-        TextView dragHandle = UIUtils.createLockedTextView(getContext(), " ⋮⋮ ", TEXT_SIZE_TAB, 0xFF666666);
+        TextView dragHandle = UIUtils.createLockedTextView(getContext(), " ⋮⋮ ", TEXT_SIZE_TAB, UiThemes.EDITOR.text().hint());
         dragHandle.setPadding(dp2pxInt(PADDING_HANDLE_L), 0, dp2pxInt(PADDING_HANDLE_R), 0);
         tabLayout.addView(dragHandle);
 
@@ -325,10 +323,10 @@ public class GraphViewportPanel extends LinearLayout {
         contentArea.setPadding(dp2pxInt(PADDING_TITLE_L), 0, dp2pxInt(PADDING_TITLE_R), 0);
 
         String titleText = (session.isDirty ? "* " : "") + session.tabName;
-        TextView titleView = UIUtils.createLockedTextView(getContext(), titleText, TEXT_SIZE_TAB, isActive ? 0xFFFFFFFF : 0xFFAAAAAA);
+        TextView titleView = UIUtils.createLockedTextView(getContext(), titleText, TEXT_SIZE_TAB, isActive ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted());
         contentArea.addView(titleView);
 
-        TextView closeBtn = UIUtils.createLockedTextView(getContext(), " × ", TEXT_SIZE_TAB, isActive ? 0xFFCCCCCC : 0xFF888888);
+        TextView closeBtn = UIUtils.createLockedTextView(getContext(), " × ", TEXT_SIZE_TAB, isActive ? UiThemes.EDITOR.text().secondary() : UiThemes.EDITOR.text().muted());
         int padClose = dp2pxInt(PADDING_CLOSE);
         closeBtn.setPadding(padClose, 0, padClose, 0);
         closeBtn.setOnClickListener(v -> {
@@ -510,7 +508,7 @@ public class GraphViewportPanel extends LinearLayout {
             setWillNotDraw(false);
 
             mIndicatorPaint = new Paint();
-            mIndicatorPaint.setColor(0xFF00AAFF);
+            mIndicatorPaint.setColor(UiThemes.EDITOR.selection().outline());
         }
 
         public void updateIndicator(int x) {

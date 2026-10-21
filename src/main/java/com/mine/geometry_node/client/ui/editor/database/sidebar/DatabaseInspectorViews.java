@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.database.sidebar;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.layout.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
@@ -13,7 +14,6 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Item
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
@@ -25,17 +25,15 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-
 import java.util.List;
 import java.util.function.Supplier;
-
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
 
 /** Inspector presentation only; values and commands are supplied by the selected data source. */
 final class DatabaseInspectorViews {
-    private static final int TEXT = UiTheme.Text.NORMAL;
-    private static final int MUTED = UiTheme.Text.MUTED;
-    private static final int BORDER = UiTheme.Control.INPUT_BORDER;
+    private static final int TEXT = UiThemes.EDITOR.text().normal();
+    private static final int MUTED = UiThemes.EDITOR.text().muted();
+    private static final int BORDER = UiThemes.EDITOR.control().inputBorder();
 
     private DatabaseInspectorViews() {}
 
@@ -44,7 +42,8 @@ final class DatabaseInspectorViews {
         identity.setGravity(Gravity.CENTER_VERTICAL);
         if (icon != null) {
             FrameLayout badge = new FrameLayout(context);
-            badge.setBackground(surface(accent == 0 ? UiTheme.Surface.HEADER : 0x22000000 | (accent & 0x00FFFFFF), 0));
+            // Preserve the supplied data/type accent, including its translucent badge tint.
+            badge.setBackground(surface(accent == 0 ? UiThemes.EDITOR.surface().header() : 0x22000000 | (accent & 0x00FFFFFF), 0));
             FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(px(23), px(23), Gravity.CENTER);
             badge.addView(icon, iconParams);
             LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(px(37), px(37));
@@ -52,7 +51,7 @@ final class DatabaseInspectorViews {
             identity.addView(badge, badgeParams);
         }
         LinearLayout copy = vertical(context);
-        TextView heading = text(context, title, 12, UiTheme.Text.STRONG);
+        TextView heading = text(context, title, 12, UiThemes.EDITOR.text().strong());
         heading.setMaxLines(3);
         heading.setEllipsize(TextUtils.TruncateAt.END);
         heading.setTooltipText(title);
@@ -107,11 +106,11 @@ final class DatabaseInspectorViews {
     static LinearLayout section(Context context, String title, String subtitle) {
         LinearLayout section = vertical(context);
         View divider = new View(context);
-        divider.setBackground(surface(UiTheme.Control.INPUT_BORDER, 0));
+        divider.setBackground(surface(UiThemes.EDITOR.control().inputBorder(), 0));
         section.addView(divider, new LinearLayout.LayoutParams(-1, Math.max(1, px(1))));
         LinearLayout heading = new LinearLayout(context);
         heading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView name = text(context, title, 11, UiTheme.Text.SECONDARY);
+        TextView name = text(context, title, 11, UiThemes.EDITOR.text().secondary());
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         heading.addView(name, new LinearLayout.LayoutParams(0, px(25), 1));
@@ -148,12 +147,13 @@ final class DatabaseInspectorViews {
 
     static View position(Context context, List<DatabaseSelection.Field> axes) {
         LinearLayout grid = new LinearLayout(context);
+        // Coordinate identity colors (X/Y/Z), not ordinary text foregrounds.
         int[] colors = {0xFFB58284, 0xFF9AAF82, 0xFF85A4C7};
         for (int i = 0; i < axes.size(); i++) {
             DatabaseSelection.Field axis = axes.get(i);
             LinearLayout card = vertical(context);
             card.setPadding(px(7), px(6), px(7), px(6));
-            card.setBackground(surface(UiTheme.Surface.ROOT, BORDER));
+            card.setBackground(surface(UiThemes.EDITOR.surface().root(), BORDER));
             card.addView(text(context, axis.label(), 11, colors[i % colors.length]),
                     new LinearLayout.LayoutParams(-1, px(17)));
             TextView value = ellipsized(context, axis.value(), TEXT);
@@ -260,8 +260,8 @@ final class DatabaseInspectorViews {
     static View block(Context context, DatabaseSelection.Field field, boolean reference) {
         LinearLayout block = vertical(context);
         block.setPadding(px(10), px(9), px(10), px(9));
-        block.setBackground(surface(reference ? UiTheme.Surface.PANEL : UiTheme.Surface.ROOT,
-                reference ? UiTheme.Control.INPUT_BORDER : BORDER));
+        block.setBackground(surface(reference ? UiThemes.EDITOR.surface().panel() : UiThemes.EDITOR.surface().root(),
+                reference ? UiThemes.EDITOR.control().inputBorder() : BORDER));
         boolean hasLabel = field.label() != null && !field.label().isBlank();
         if (hasLabel) {
             LinearLayout heading = new LinearLayout(context);
@@ -271,7 +271,7 @@ final class DatabaseInspectorViews {
             heading.addView(copy(context, field.value()), new LinearLayout.LayoutParams(px(22), px(22)));
             block.addView(heading, new LinearLayout.LayoutParams(-1, -2));
         }
-        TextView value = text(context, field.value(), 11, reference ? UiTheme.Text.SECONDARY : UiTheme.Text.NORMAL);
+        TextView value = text(context, field.value(), 11, reference ? UiThemes.EDITOR.text().secondary() : UiThemes.EDITOR.text().normal());
         value.setTypeface(Typeface.MONOSPACED);
         value.setTooltipText(field.value());
         value.setMaxLines(8);
@@ -300,7 +300,7 @@ final class DatabaseInspectorViews {
     static View source(Context context, List<DatabaseSelection.Field> fields) {
         LinearLayout origin = new LinearLayout(context);
         View accent = new View(context);
-        accent.setBackground(surface(UiTheme.Control.FOCUS, 0));
+        accent.setBackground(surface(UiThemes.EDITOR.status().info(), 0));
         origin.addView(accent, new LinearLayout.LayoutParams(px(2), -1));
         LinearLayout rows = vertical(context);
         rows.setPadding(px(8), 0, 0, 0);
@@ -340,8 +340,8 @@ final class DatabaseInspectorViews {
 
     private static UiIconButton copy(Context context, String value) {
         UiIconButton copy = new UiIconButton(context,
-                new SvgIconView(context, SvgIconView.Icon.COPY, UiTheme.Text.MUTED),
-                new UiIconButton.Style(1, 0, 0, UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED, 0, 0, 12, .48f))
+                new SvgIconView(context, SvgIconView.Icon.COPY, UiThemes.EDITOR.text().muted()),
+                new UiIconButton.Style(1, 0, 0, UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(), 0, 0, 12, .48f))
                 .tooltip(tr("copy_value"));
         copy.setOnClickListener(view -> copyValue(value));
         return copy;

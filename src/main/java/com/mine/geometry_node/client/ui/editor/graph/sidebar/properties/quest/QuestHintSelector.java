@@ -1,31 +1,32 @@
 package com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.quest;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
+import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
+import icyllis.modernui.util.ColorStateList;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
-
 import java.util.List;
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.rect;
 import static com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.utils.GraphPropertiesUi.tr;
 
 /** Shared explicit display-kind selection for quest objectives and rewards. */
 final class QuestHintSelector extends FrameLayout {
     private final TextView value;
+    private final UiIconButton arrow;
     private final List<QuestHintType> options;
     private final Consumer<QuestHintType> onSelected;
     private QuestHintType selected = QuestHintType.NONE;
@@ -37,11 +38,17 @@ final class QuestHintSelector extends FrameLayout {
         options = allowEntity
                 ? List.of(QuestHintType.NONE, QuestHintType.ITEM_STACK, QuestHintType.ENTITY)
                 : List.of(QuestHintType.NONE, QuestHintType.ITEM_STACK);
-        setBackground(rect(0xFF242424, 3, 1, 0xFF4A4A4A));
-        value = label(context, "", 11, 0xFFE3E3E3);
+        UiMenuItems.decorate(this, UiThemes.EDITOR.control().input(), 3, UiThemes.EDITOR);
+        ((ShapeDrawable) getBackground()).setStroke(UIUtils.dp2pxInt(1), new ColorStateList(new int[][]{
+                {-R.attr.state_enabled}, {R.attr.state_focused}, {R.attr.state_hovered}, {}
+        }, new int[]{UiThemes.EDITOR.control().inputBorder(), UiThemes.EDITOR.border().focus(),
+                UiThemes.EDITOR.border().focus(), UiThemes.EDITOR.control().inputBorder()}));
+        value = label(context, "", 11, UiThemes.EDITOR.text().normal());
+        value.setTextColor(UiMenuItems.textColors(UiThemes.EDITOR.text().normal()));
+        value.setDuplicateParentStateEnabled(true);
         value.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(32), 0);
         addView(value, new LayoutParams(-1, -1));
-        UiIconButton arrow = GraphPropertiesUi.actionIcon(context, VectorIconView.Kind.CHEVRON_DOWN,
+        arrow = GraphPropertiesUi.actionIcon(context, VectorIconView.Kind.CHEVRON_DOWN,
                 "geometry_node.graph_properties.quest.objective_display");
         LayoutParams arrowLp = new LayoutParams(UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP),
                 UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -57,7 +64,18 @@ final class QuestHintSelector extends FrameLayout {
         value.setText(optionLabel(type));
     }
 
+    @Override public boolean performClick() {
+        return isEnabled() && super.performClick();
+    }
+
+    @Override public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
+        if (arrow != null) arrow.setEnabled(enabled);
+        if (!enabled && menu != null) menu.dismiss();
+    }
+
     private void toggleMenu() {
+        if (!isEnabled()) return;
         if (menu != null && menu.isOpen()) {
             menu.dismiss();
             return;
@@ -67,18 +85,17 @@ final class QuestHintSelector extends FrameLayout {
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(LinearLayout.VERTICAL);
         for (QuestHintType type : options) {
-            TextView option = label(getContext(), optionLabel(type), 11, 0xFFE3E3E3);
+            TextView option = new TextView(getContext()) {
+                @Override public boolean performClick() { return isEnabled() && super.performClick(); }
+            };
+            option.setText(optionLabel(type));
+            option.setTextSize(0, UIUtils.dp2px(11));
+            option.setTextColor(UiMenuItems.textColors(UiThemes.EDITOR.text().normal()));
+            option.setSingleLine(true);
+            option.setGravity(Gravity.CENTER_VERTICAL);
             option.setPadding(UIUtils.dp2pxInt(7), 0, UIUtils.dp2pxInt(7), 0);
-            ShapeDrawable background = rect(type == selected ? 0xFF424242 : 0xFF242424, 2, 0, 0);
-            option.setBackground(background);
-            option.setOnHoverListener((v, event) -> {
-                boolean hovered = event.getAction() == MotionEvent.ACTION_HOVER_ENTER
-                        || event.getAction() == MotionEvent.ACTION_HOVER_MOVE;
-                background.setColor(hovered ? GraphPropertiesUi.ACTION_HOVER
-                        : type == selected ? 0xFF424242 : 0xFF242424);
-                option.invalidate();
-                return true;
-            });
+            UiMenuItems.decorate(option, UiThemes.EDITOR.surface().popup(), 2, UiThemes.EDITOR);
+            option.setSelected(type == selected);
             option.setOnClickListener(v -> {
                 menu.dismiss();
                 onSelected.accept(type);

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.components.composite.table;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -13,6 +14,7 @@ import icyllis.modernui.view.ViewGroup;
 
 /** One cell per shared column. Headers reserve narrow boundary hit areas for resizing. */
 public final class UiTableRow extends ViewGroup {
+    private final UiTheme theme;
     private final UiTableColumns columns;
     private boolean header;
     private int dragging = -1;
@@ -22,7 +24,12 @@ public final class UiTableRow extends ViewGroup {
     private final float[] dragPoint = new float[2];
 
     public UiTableRow(Context context, UiTableColumns columns) {
+        this(context, columns, UiThemes.EDITOR);
+    }
+
+    public UiTableRow(Context context, UiTableColumns columns, UiTheme theme) {
         super(context);
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         this.columns = columns;
     }
 
@@ -163,7 +170,7 @@ public final class UiTableRow extends ViewGroup {
         for (int i = 0; i < columns.size(); i++) {
             x += columns.width(i);
             if (!columns.column(i).resizable()) continue;
-            paint.setColor(i == dragging || i == hovered ? UiTheme.Control.FOCUS : UiTheme.Control.BORDER);
+            paint.setColor(i == dragging || i == hovered ? theme.border().focus() : theme.border().strong());
             float thickness = Math.max(1, UIUtils.dp2px(1));
             canvas.drawRect(x - thickness, UIUtils.dp2px(6), x, getHeight() - UIUtils.dp2px(6), paint);
         }

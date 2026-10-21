@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
@@ -39,12 +40,12 @@ public class SlotRefHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
         float inputBoxHeight = UIHintUtils.getStandardInputHeight();
         boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f;
-        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - inputBoxHeight) / 2.0f;
+        float topOffset = hasLabel ? NodeUiMetrics.ROW_HEIGHT : 0.0f;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - inputBoxHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         int widthPx = UIUtils.dp2pxInt(endX - startX);

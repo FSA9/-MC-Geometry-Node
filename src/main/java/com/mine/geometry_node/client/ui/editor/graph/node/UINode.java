@@ -1,13 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
-
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -15,7 +14,6 @@ import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.*;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -203,23 +201,24 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
         float h = UIUtils.dp2px(mTotalHeight);
 
         float scaledRadius = UIUtils.dp2px(com.mine.geometry_node.client.config.ConfigManager.INSTANCE.getConfig().node.cornerRadius);
-        float scaledHeaderH = UIUtils.dp2px(UIConstants.Node.HEADER_HEIGHT);
+        float scaledHeaderH = UIUtils.dp2px(NodeUiMetrics.HEADER_HEIGHT);
 
         // 画节点背景
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(UIConstants.CLR_BG_NODE_BODY);
+        mPaint.setColor(UiThemes.EDITOR.surface().node());
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
         // 画节点头部
+        // User header overrides and node-category colors are graph content.
         mPaint.setColor(mNodeData.getHeaderColor(mNodeDef.category().getColor()));
         mTempRect.set(0, 0, w, scaledHeaderH);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, 0f, 0f, mPaint);
 
         // 画节点边框
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(mIsSelected ? UIConstants.Node.STROKE_WIDTH_SELECTED : UIConstants.Node.STROKE_WIDTH_NORMAL);
-        mPaint.setColor(mIsSelected ? UIConstants.CLR_WHITE : UIConstants.CLR_NODE_OUTLINE);
+        mPaint.setStrokeWidth(mIsSelected ? NodeUiMetrics.STROKE_WIDTH_SELECTED : NodeUiMetrics.STROKE_WIDTH_NORMAL);
+        mPaint.setColor(mIsSelected ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.graph().nodeOutline());
         mTempRect.set(0, 0, w, h);
         canvas.drawRoundRect(mTempRect, scaledRadius, scaledRadius, scaledRadius, scaledRadius, mPaint);
 
@@ -231,8 +230,9 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                 Float yDp = mLayout != null ? mLayout.inputPortY.get(row.leftPort().id()) : null;
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);
+                    // Port colors identify data types and must not follow selection or UI accent colors.
                     mPaint.setColor(row.leftPort().type().getColor());
-                    canvas.drawCircle(0, UIUtils.dp2px(yDp), UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
+                    canvas.drawCircle(0, UIUtils.dp2px(yDp), UIUtils.dp2px(NodeUiMetrics.PORT_VISUAL_RADIUS), mPaint);
                 }
             }
             if (row.rightPort() != null && !row.rightPort().hidePin()) {
@@ -240,7 +240,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
                 if (yDp != null) {
                     mPaint.setStyle(Paint.Style.FILL);
                     mPaint.setColor(row.rightPort().type().getColor());
-                    canvas.drawCircle(w, UIUtils.dp2px(yDp), UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS), mPaint);
+                    canvas.drawCircle(w, UIUtils.dp2px(yDp), UIUtils.dp2px(NodeUiMetrics.PORT_VISUAL_RADIUS), mPaint);
                 }
             }
         }
@@ -250,10 +250,10 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     private void drawTextRuns(Canvas canvas) {
         if (mLayout == null) return;
 
-        mLayoutEngine.getHeaderPaint().setColor(UIConstants.CLR_WHITE);
+        mLayoutEngine.getHeaderPaint().setColor(UiThemes.EDITOR.text().strong());
         canvas.drawShapedText(mLayout.titleText, mLayout.titleX, mLayout.titleBaseline, mLayoutEngine.getHeaderPaint());
 
-        mLayoutEngine.getLabelPaint().setColor(UIConstants.CLR_GRAY_LABEL);
+        mLayoutEngine.getLabelPaint().setColor(UiThemes.EDITOR.text().secondary());
         for (NodeLayout.LabelRun label : mLayout.labels) {
             canvas.drawShapedText(label.shapedText, label.x, label.baseline, mLayoutEngine.getLabelPaint());
         }
@@ -294,7 +294,7 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
     public void getPortPosition(String portId, boolean isInput, float[] outPos) {
         outPos[0] = isInput ? 0 : mWidth;
         Float y = mLayout != null ? (isInput ? mLayout.inputPortY.get(portId) : mLayout.outputPortY.get(portId)) : null;
-        outPos[1] = (y != null) ? y : UIConstants.Node.HEADER_HEIGHT + UIConstants.Node.ROW_HEIGHT / 2.0f;
+        outPos[1] = (y != null) ? y : NodeUiMetrics.HEADER_HEIGHT + NodeUiMetrics.ROW_HEIGHT / 2.0f;
     }
 
     @Override

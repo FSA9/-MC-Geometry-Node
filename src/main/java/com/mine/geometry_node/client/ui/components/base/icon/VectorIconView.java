@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.components.base.icon;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
@@ -20,7 +21,7 @@ public class VectorIconView extends View {
         CLOSE
     }
 
-    private static final int DEFAULT_COLOR = 0xFFB8C0CC;
+    private static final int DEFAULT_COLOR = UiThemes.EDITOR.text().secondary();
 
     private final Paint mPaint = new Paint();
     private final RectF mRect = new RectF();
@@ -43,6 +44,11 @@ public class VectorIconView extends View {
         invalidate();
     }
 
+    /** The resolved tint currently used by this renderer. */
+    public int getIconColor() {
+        return mColor == 0 ? DEFAULT_COLOR : mColor;
+    }
+
     public void setIconColor(int color) {
         int resolved = color == 0 ? DEFAULT_COLOR : color;
         if (mColor == resolved) {
@@ -62,8 +68,7 @@ public class VectorIconView extends View {
         float cy = h * 0.5f;
         float half = size * 0.36f;
 
-        mPaint.setAlpha(255);
-        mPaint.setColor(mColor == 0 ? DEFAULT_COLOR : mColor);
+        mPaint.setColor(getIconColor());
 
         switch (mKind) {
             case FOLDER -> drawFolder(canvas, cx, cy, half);
@@ -88,13 +93,14 @@ public class VectorIconView extends View {
         float radius = Math.max(2.0f, half * 0.16f);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setAlpha(190);
+        setTintAlpha(190);
         mRect.set(left, tabTop, tabRight, top + half * 0.18f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
-        mPaint.setAlpha(255);
+        setTintAlpha(255);
         mRect.set(left, top, right, bottom);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
         mPaint.setColor(0x33000000);
+        setTintAlpha(mPaint.getAlphaF() * 255);
         mRect.set(left + half * 0.1f, top + half * 0.28f, right - half * 0.1f, bottom - half * 0.12f);
         canvas.drawRoundRect(mRect, radius * 0.8f, radius * 0.8f, radius * 0.8f, radius * 0.8f, mPaint);
     }
@@ -112,13 +118,16 @@ public class VectorIconView extends View {
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
         mPaint.setColor(0x6636455A);
+        setTintAlpha(mPaint.getAlphaF() * 255);
         canvas.drawRect(right - fold, top, right, top + fold, mPaint);
         mPaint.setColor(0x66FFFFFF);
+        setTintAlpha(mPaint.getAlphaF() * 255);
         mPaint.setStrokeWidth(Math.max(1.0f, UIUtils.dp2px(1.0f)));
         canvas.drawLine(right - fold, top, right - fold, top + fold, mPaint);
         canvas.drawLine(right - fold, top + fold, right, top + fold, mPaint);
 
         mPaint.setColor(0xAA1D2734);
+        setTintAlpha(mPaint.getAlphaF() * 255);
         mPaint.setStrokeWidth(Math.max(1.0f, half * 0.08f));
         float lineLeft = left + half * 0.24f;
         float lineRight = right - half * 0.24f;
@@ -165,7 +174,7 @@ public class VectorIconView extends View {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setAlpha(210);
+        setTintAlpha(210);
         mRect.set(left, top, right, bottom);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
         canvas.drawLine(cx, top + stroke, cx, bottom - stroke, mPaint);
@@ -181,7 +190,7 @@ public class VectorIconView extends View {
 
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
-        mPaint.setAlpha(210);
+        setTintAlpha(210);
         mRect.set(left, top, right, bottom);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
         canvas.drawLine(left + stroke, cy, right - stroke, cy, mPaint);
@@ -191,9 +200,14 @@ public class VectorIconView extends View {
         float size = half * 0.62f;
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1.2f, half * 0.12f));
-        mPaint.setAlpha(220);
+        setTintAlpha(220);
         canvas.drawLine(cx - size, cy - size, cx + size, cy + size, mPaint);
         canvas.drawLine(cx + size, cy - size, cx - size, cy + size, mPaint);
+    }
+
+    /** Artwork opacity modulates the supplied tint, including fully transparent nonzero tints. */
+    private void setTintAlpha(float artworkAlpha) {
+        mPaint.setAlpha(Math.round(artworkAlpha * (getIconColor() >>> 24) / 255f));
     }
 
     private void drawTrash(Canvas canvas, float cx, float cy, float half) {

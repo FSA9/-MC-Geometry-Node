@@ -1,7 +1,9 @@
 package com.mine.geometry_node.client.ui.components.base.input;
 
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -9,16 +11,7 @@ import icyllis.modernui.view.View;
 
 /** Stateful checkbox whose drawn and interactive bounds are exactly the View bounds. */
 public final class UiCheckBox extends View {
-    public static final Style DEFAULT_STYLE = new Style(
-            UiTheme.Metrics.RADIUS_SMALL,
-            UiTheme.Metrics.BORDER,
-            1.6f,
-            UiTheme.Surface.PANEL,
-            UiTheme.Control.CHECKED,
-            UiTheme.Control.CHECK_BORDER,
-            UiTheme.Control.FOCUS,
-            UiTheme.Text.STRONG
-    );
+    public static final Style DEFAULT_STYLE = Style.forTheme(UiThemes.EDITOR);
 
     private final Paint paint = new Paint();
     private final Style style;
@@ -28,6 +21,10 @@ public final class UiCheckBox extends View {
 
     public UiCheckBox(Context context) {
         this(context, DEFAULT_STYLE);
+    }
+
+    public static UiCheckBox createThemed(Context context, UiTheme theme) {
+        return new UiCheckBox(context, Style.forTheme(theme));
     }
 
     public UiCheckBox(Context context, Style style) {
@@ -101,13 +98,13 @@ public final class UiCheckBox extends View {
         canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
 
         if (isEnabled() && (isHovered() || isPressed())) {
-            paint.setColor(isPressed() ? 0x28000000 : 0x18FFFFFF);
+            paint.setColor(isPressed() ? style.pressedOverlay() : style.hoverOverlay());
             canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
         }
 
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(strokeWidth);
-        paint.setColor(stateColor(focused ? UiTheme.Control.FOCUS
+        paint.setColor(stateColor(focused ? style.focusColor()
                 : selected ? style.checkedBorder() : style.uncheckedBorder()));
         canvas.drawRoundRect(offset, offset, width - offset, height - offset, radius, radius, paint);
 
@@ -126,7 +123,7 @@ public final class UiCheckBox extends View {
 
     private int stateColor(int color) {
         if (isEnabled()) return color;
-        int alpha = Math.round((color >>> 24) * UiTheme.Metrics.DISABLED_ALPHA);
+        int alpha = Math.round((color >>> 24) * style.disabledAlpha());
         return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
@@ -139,8 +136,27 @@ public final class UiCheckBox extends View {
             int checkedBackground,
             int uncheckedBorder,
             int checkedBorder,
-            int checkColor
+            int checkColor,
+            int focusColor,
+            int hoverOverlay,
+            int pressedOverlay,
+            float disabledAlpha
     ) {
+        public Style(float cornerRadiusDp, float strokeWidthDp, float checkStrokeWidthDp,
+                     int uncheckedBackground, int checkedBackground, int uncheckedBorder,
+                     int checkedBorder, int checkColor) {
+            this(cornerRadiusDp, strokeWidthDp, checkStrokeWidthDp, uncheckedBackground,
+                    checkedBackground, uncheckedBorder, checkedBorder, checkColor,
+                    UiThemes.EDITOR.border().focus(), UiThemes.EDITOR.control().hoverOverlay(),
+                    UiThemes.EDITOR.control().pressedOverlay(), UiMetrics.DISABLED_ALPHA);
+        }
+
+        public static Style forTheme(UiTheme theme) {
+            return new Style(UiMetrics.RADIUS_SMALL, UiMetrics.BORDER, 1.6f,
+                    theme.surface().panel(), theme.selection().fill(), theme.border().subtle(),
+                    theme.selection().outline(), theme.text().strong(), theme.border().focus(),
+                    theme.control().hoverOverlay(), theme.control().pressedOverlay(), UiMetrics.DISABLED_ALPHA);
+        }
     }
 
     @FunctionalInterface

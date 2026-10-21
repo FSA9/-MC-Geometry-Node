@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
@@ -10,7 +9,6 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -34,7 +32,7 @@ public class OverwriteConfirmDialog extends AssetDialogBase {
         mConflicts = conflicts;
         mOnDecision = onDecision;
 
-        mMessage = label(context, "", 13, UiTheme.Text.NORMAL);
+        mMessage = label(context, "", 13, UiThemes.EDITOR.text().normal());
         mPanel.addView(mMessage, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(42)));
 
         LinearLayout actions = new LinearLayout(context);

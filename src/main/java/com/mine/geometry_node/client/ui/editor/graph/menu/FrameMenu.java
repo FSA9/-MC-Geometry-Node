@@ -1,10 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
@@ -12,7 +10,6 @@ import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionReques
 import com.mine.geometry_node.client.ui.editor.graph.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.document.FrameData;
-
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -35,11 +32,12 @@ public final class FrameMenu {
     private static final int SWATCH_SIZE_DP = 20;
     private static final int SWATCH_GAP_DP = 3;
 
-    private static final int COLOR_PANEL_BG = 0xF02B2D33;
-    private static final int COLOR_PANEL_BORDER = 0xFF15171B;
-    private static final int COLOR_LABEL = 0xFF8F98A6;
-    private static final int COLOR_TEXT = 0xFFE7EAF0;
+    private static final int COLOR_PANEL_BG = (UiThemes.EDITOR.surface().popup() & 0x00FFFFFF) | 0xF0000000;
+    private static final int COLOR_PANEL_BORDER = UiThemes.EDITOR.border().strong();
+    private static final int COLOR_LABEL = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
 
+    // User-selectable document colors: these swatches are content, not a theme palette.
     private static final int[] PRESET_COLORS = {
             0xFF556677,
             0xFF4A90E2,
@@ -80,12 +78,12 @@ public final class FrameMenu {
         panel.addView(titleLabel, titleLabelLp);
 
         EditText titleInput = new UiTextInput(uiContext, new UiTextInput.Style(11, 8,
-                UiTheme.Metrics.RADIUS_INPUT, UiTheme.Metrics.BORDER, UiTheme.Text.NORMAL, UiTheme.Text.HINT,
-                UiTheme.Control.INPUT, UiTheme.Control.INPUT_BORDER));
+                UiMetrics.RADIUS_INPUT, UiMetrics.BORDER, UiThemes.EDITOR.text().normal(), UiThemes.EDITOR.text().hint(),
+                UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
         String oldTitle = frameData.title != null ? frameData.title : "";
         titleInput.setText(oldTitle);
         titleInput.setSingleLine(true);
-        titleInput.setTextColor(UIConstants.CLR_WHITE);
+        titleInput.setTextColor(UiThemes.EDITOR.text().strong());
         titleInput.setTextSize(0, UIUtils.dp2px(12));
         titleInput.setGravity(Gravity.CENTER_VERTICAL);
         titleInput.setPadding(dp(9), 0, dp(9), 0);
@@ -274,7 +272,7 @@ public final class FrameMenu {
             if (mSelectedColor || mHovered) {
                 mPaint.setStyle(Paint.Style.STROKE);
                 mPaint.setStrokeWidth(UIUtils.dp2px(mSelectedColor ? 2.0f : 1.0f));
-                mPaint.setColor(mSelectedColor ? UIConstants.CLR_WHITE : 0x99FFFFFF);
+                mPaint.setColor(mSelectedColor ? UiThemes.EDITOR.selection().outline() : (UiThemes.EDITOR.text().strong() & 0x00FFFFFF) | 0x99000000);
                 canvas.drawRoundRect(inset, inset, getWidth() - inset, getHeight() - inset, radius, radius, radius, radius, mPaint);
             }
         }

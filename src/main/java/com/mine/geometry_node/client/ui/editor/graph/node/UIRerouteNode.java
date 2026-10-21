@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
-import com.mine.geometry_node.client.ui.UIConstants;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.NodeData;
@@ -14,8 +14,8 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 
 public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
-    private static final float DIAMETER_DP = UIConstants.Node.PORT_VISUAL_RADIUS * 2.0f;
-    private static final float PORT_CENTER_DP = UIConstants.Node.PORT_VISUAL_RADIUS;
+    private static final float DIAMETER_DP = NodeUiMetrics.PORT_VISUAL_RADIUS * 2.0f;
+    private static final float PORT_CENTER_DP = NodeUiMetrics.PORT_VISUAL_RADIUS;
 
     private final NodeData mNodeData;
     private final NodeDef mNodeDef;
@@ -62,7 +62,8 @@ public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
 
     private void drawLocal(Canvas canvas) {
         float center = UIUtils.dp2px(PORT_CENTER_DP);
-        float radius = UIUtils.dp2px(UIConstants.Node.PORT_VISUAL_RADIUS);
+        float radius = UIUtils.dp2px(NodeUiMetrics.PORT_VISUAL_RADIUS);
+        // A reroute retains its locked port-type color.
         int portColor = RerouteNodeSupport.resolveLockedType(mNodeData).getColor();
 
         mPaint.setStyle(Paint.Style.FILL);
@@ -71,8 +72,8 @@ public class UIRerouteNode extends FrameLayout implements NodeVisualAdapter {
 
         if (mSelected) {
             mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(UIConstants.Node.STROKE_WIDTH_SELECTED);
-            mPaint.setColor(UIConstants.CLR_WHITE);
+            mPaint.setStrokeWidth(NodeUiMetrics.STROKE_WIDTH_SELECTED);
+            mPaint.setColor(UiThemes.EDITOR.text().strong());
             canvas.drawCircle(center, center, radius, mPaint);
         }
     }

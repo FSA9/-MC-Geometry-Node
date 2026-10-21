@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.overlay.modal;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.view.View;
 
 public record ModalOptions(
@@ -8,7 +9,7 @@ public record ModalOptions(
         View returnFocusTarget,
         int scrimColor
 ) {
-    public static final int DEFAULT_SCRIM_COLOR = 0x66000000;
+    public static final int DEFAULT_SCRIM_COLOR = UiThemes.EDITOR.surface().modalScrim();
 
     public ModalOptions(boolean closeOnOutsideClick, boolean closeOnEscape, View returnFocusTarget) {
         this(closeOnOutsideClick, closeOnEscape, returnFocusTarget, DEFAULT_SCRIM_COLOR);

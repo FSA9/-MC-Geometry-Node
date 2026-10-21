@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.database.sidebar;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryPreview;
@@ -10,20 +11,17 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Set;
 import java.util.List;
 import java.util.stream.IntStream;
-
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.px;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
 
@@ -274,9 +272,9 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
         if (previewView != null) previewView.setVisibility(active && !dataSelected ? VISIBLE : INVISIBLE);
         for (UiActionButton tab : List.of(propertiesTab, dataTab)) {
             boolean selected = tab == dataTab ? dataSelected : !dataSelected;
-            tab.setPalette(new UiActionButton.Palette(selected ? UiTheme.Surface.HEADER : UiTheme.Surface.PANEL,
-                    UiTheme.Control.ICON_HOVER, UiTheme.Control.ICON_PRESSED,
-                    selected ? UiTheme.Text.STRONG : UiTheme.Text.MUTED));
+            tab.setPalette(new UiActionButton.Palette(selected ? UiThemes.EDITOR.surface().header() : UiThemes.EDITOR.surface().panel(),
+                    UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(),
+                    selected ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted()));
         }
     }
 
@@ -303,7 +301,7 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
         LinearLayout empty = DatabaseInspectorViews.vertical(getContext());
         empty.setGravity(Gravity.CENTER_HORIZONTAL);
         empty.setPadding(px(8), px(24), px(8), px(24));
-        TextView hint = DatabaseInspectorViews.text(getContext(), tr("select_hint"), 11, UiTheme.Text.MUTED);
+        TextView hint = DatabaseInspectorViews.text(getContext(), tr("select_hint"), 11, UiThemes.EDITOR.text().muted());
         hint.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2);
         hintParams.topMargin = px(14);

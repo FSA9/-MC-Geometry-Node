@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.components.base.input;
 
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -18,7 +19,6 @@ import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewParent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
-
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -38,15 +38,7 @@ public class UiNumericInput extends FrameLayout {
         };
     }
 
-    private static final int COLOR_BG = UiTheme.Surface.PANEL;
-    private static final int COLOR_BG_HOVER = UiTheme.INLINE.normal();
-    private static final int COLOR_BG_ACTIVE = UiTheme.INLINE.hover();
-    private static final int COLOR_BORDER = UiTheme.Control.INPUT_BORDER;
-    private static final int COLOR_BORDER_HOVER = UiTheme.Control.FOCUS;
-    private static final int COLOR_RANGE = ((UiTheme.Control.FOCUS & 0x00FFFFFF) | 0x88000000);
-    private static final int COLOR_TEXT = UiTheme.Text.SECONDARY;
-    private static final int COLOR_LABEL = UiTheme.Text.MUTED;
-    private static final int COLOR_ARROW = UiTheme.Text.HINT;
+    private final UiTheme theme;
 
     private static final float INTEGER_DRAG_STEP_DP = 8.0f;
     private static final float ARROW_HIT_WIDTH_DP = 18.0f;
@@ -82,7 +74,13 @@ public class UiNumericInput extends FrameLayout {
 
     public UiNumericInput(Context context, Binding binding, Spec spec, String inlineLabel,
                           float textSizeDp, java.util.function.Consumer<EditText> configureEditor) {
+        this(context, binding, spec, inlineLabel, textSizeDp, configureEditor, UiThemes.EDITOR);
+    }
+
+    public UiNumericInput(Context context, Binding binding, Spec spec, String inlineLabel,
+                          float textSizeDp, java.util.function.Consumer<EditText> configureEditor, UiTheme theme) {
         super(context);
+        this.theme = Objects.requireNonNull(theme, "theme");
         this.mBinding = binding;
         this.mSpec = spec;
         this.textSizeDp = textSizeDp;
@@ -97,7 +95,7 @@ public class UiNumericInput extends FrameLayout {
         mPaint.setAntiAlias(true);
         mTextPaint.setTextAntiAlias(true);
         mTextPaint.setTextSize(UIUtils.dp2px(textSizeDp));
-        mTextPaint.setColor(COLOR_TEXT);
+        mTextPaint.setColor(theme.text().secondary());
 
         syncFromBinding();
         setInlineLabelText(inlineLabel);
@@ -123,14 +121,15 @@ public class UiNumericInput extends FrameLayout {
         float stroke = UIUtils.dp2px(1.0f);
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mPressed || mDragging ? COLOR_BG_ACTIVE : (mHovered ? COLOR_BG_HOVER : COLOR_BG));
+        mPaint.setColor(mPressed || mDragging ? theme.buttons().inline().hover()
+                : (mHovered ? theme.buttons().inline().normal() : theme.surface().panel()));
         mRect.set(0, 0, w, h);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
         if (mSpec.hasRange()) {
             float progress = clamp01(mSpec.progress(mDisplayValue));
             if (progress > 0.0f) {
-                mPaint.setColor(COLOR_RANGE);
+                mPaint.setColor(theme.control().rangeFill());
                 mRect.set(stroke, stroke, stroke + (w - stroke * 2.0f) * progress, h - stroke);
                 canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
             }
@@ -144,7 +143,7 @@ public class UiNumericInput extends FrameLayout {
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(stroke);
         mPaint.setColor(isEnabled() && (isFocused() || mHovered || mPressed || mDragging)
-                ? COLOR_BORDER_HOVER : COLOR_BORDER);
+                ? theme.border().focus() : theme.border().subtle());
         mRect.set(stroke * 0.5f, stroke * 0.5f, w - stroke * 0.5f, h - stroke * 0.5f);
         canvas.drawRoundRect(mRect, radius, radius, radius, radius, mPaint);
 
@@ -165,7 +164,7 @@ public class UiNumericInput extends FrameLayout {
     @Override
     protected void drawableStateChanged() {
         super.drawableStateChanged();
-        setAlpha(isEnabled() ? 1 : UiTheme.Metrics.DISABLED_ALPHA);
+        setAlpha(isEnabled() ? 1 : UiMetrics.DISABLED_ALPHA);
         if (mSpec != null && !isEnabled()) {
             // A child EditText stays enabled when its parent is disabled. Cancel its draft
             // now so re-enabling the control cannot commit a stale edit on later focus loss.
@@ -306,8 +305,9 @@ public class UiNumericInput extends FrameLayout {
         }
 
         UiTextInput editor = new UiTextInput(getContext(), new UiTextInput.Style(textSizeDp, TEXT_PADDING_DP,
-                UiTheme.Metrics.RADIUS_SMALL, UiTheme.Metrics.BORDER, COLOR_TEXT, UiTheme.Text.HINT,
-                COLOR_BG_ACTIVE, COLOR_BORDER_HOVER)) {
+                UiMetrics.RADIUS_SMALL, UiMetrics.BORDER, theme.text().secondary(), theme.text().hint(),
+                theme.buttons().inline().hover(), theme.border().focus(), theme.border().focus(),
+                theme.status().errorBorder(), theme.selection().text(), UiMetrics.DISABLED_ALPHA)) {
             @Override
             public void clearFocusInternal(icyllis.modernui.view.View focused, boolean propagate, boolean refocus) {
                 // ModernUI removes a focused subtree via unFocus(null) before detach.
@@ -415,11 +415,11 @@ public class UiNumericInput extends FrameLayout {
         if (mLabelText != null) {
             float availableWidth = Math.max(UIUtils.dp2px(1.0f), valueTextX - minGap - leftTextX);
             ShapedText labelText = labelTextForWidth(availableWidth);
-            mTextPaint.setColor(COLOR_LABEL);
+            mTextPaint.setColor(theme.text().muted());
             canvas.drawShapedText(labelText, leftTextX, baseline, mTextPaint);
         }
 
-        mTextPaint.setColor(COLOR_TEXT);
+        mTextPaint.setColor(theme.text().secondary());
         canvas.drawShapedText(mDisplayText, valueTextX, baseline, mTextPaint);
     }
 
@@ -457,7 +457,7 @@ public class UiNumericInput extends FrameLayout {
         mPaint.setStrokeWidth(UIUtils.dp2px(1.2f));
         mPaint.setStrokeCap(Paint.Cap.ROUND);
         mPaint.setStrokeJoin(Paint.Join.ROUND);
-        mPaint.setColor(COLOR_ARROW);
+        mPaint.setColor(theme.text().hint());
         if (left) {
             canvas.drawLine(centerX + size * 0.5f, centerY - size, centerX - size * 0.5f, centerY, mPaint);
             canvas.drawLine(centerX - size * 0.5f, centerY, centerX + size * 0.5f, centerY + size, mPaint);

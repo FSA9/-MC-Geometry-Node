@@ -6,6 +6,13 @@ import icyllis.modernui.view.View;
 public final class UiIconColors {
     private UiIconColors() {}
 
+    /** Returns the renderer's resolved tint, or null for an unsupported caller-owned view. */
+    public static Integer get(View icon) {
+        if (icon instanceof SvgIconView svg) return svg.getIconColor();
+        if (icon instanceof VectorIconView vector) return vector.getIconColor();
+        return null;
+    }
+
     public static void apply(View icon, int color) {
         // A zero style color means retain the caller's icon color.
         if (color == 0) return;

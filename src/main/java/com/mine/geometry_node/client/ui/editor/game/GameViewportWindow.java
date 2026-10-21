@@ -1,20 +1,20 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
+import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
+
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
-
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-
 import com.mine.geometry_node.client.ui.editor.game.input.GameViewportShortcuts;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
-
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.runtime.game.render.SharedGameFrame;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiRadialMenu;
 import com.mine.geometry_node.client.ui.components.composite.menu.RadialMenuLayout.Slot;
 import com.mine.geometry_node.client.ui.components.composite.menu.HeldMenuKey;
@@ -92,11 +92,11 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setBackground(background(UiTheme.Surface.HEADER));
+        header.setBackground(background(UiThemes.EDITOR.surface().header()));
         LinearLayout tools = new LinearLayout(context);
         tools.setOrientation(HORIZONTAL);
         tools.setGravity(Gravity.CENTER_VERTICAL);
-        tools.setBackground(background(UiTheme.Surface.HEADER));
+        tools.setBackground(background(UiThemes.EDITOR.surface().header()));
         modeButton = action(context, "mode.game", this::openModeMenu);
         projectionButton = action(context, "projection.perspective", this::toggleProjection);
         resetButton = action(context, "reset_camera", this::resetCamera);
@@ -109,7 +109,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         toolScroller.addView(tools, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         header.addView(toolScroller, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        transformStatus=UIUtils.createLockedTextView(context,"",11,UiTheme.Text.SECONDARY);
+        transformStatus=UIUtils.createLockedTextView(context,"",11,UiThemes.EDITOR.text().secondary());
         transformStatus.setSingleLine(true);
         header.addView(transformStatus, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         snapControl = new UiSplitButton(context, tr("scene.snap"), toolbarPalette(false),
@@ -132,7 +132,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
                 this::scheduleVisibilityRefresh);
         content.addView(viewport, new FrameLayout.LayoutParams(-1, -1));
         sceneMenus = new com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus(this,content,visualization,this::visualizationChanged);
-        waiting = UIUtils.createLockedTextView(context, tr("waiting"), 12.0f, UiTheme.Text.MUTED);
+        waiting = UIUtils.createLockedTextView(context, tr("waiting"), 12.0f, UiThemes.EDITOR.text().muted());
         waiting.setPadding(UIUtils.dp2pxInt(12), 0, UIUtils.dp2pxInt(12), 0);
         waiting.setGravity(Gravity.CENTER);
         content.addView(waiting, new FrameLayout.LayoutParams(-1, -1));
@@ -147,14 +147,14 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(HORIZONTAL);
         workspace.addView(content, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.75f));
-        View divider = ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL);
+        View divider = ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT);
         workspace.addView(divider);
         sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.GAME_VIEWPORT, this));
         sidebarPanel = sidebar.requirePanel(GameViewportSidebarPanel.PANEL_ID, GameViewportSidebarPanel.class);
         propertiesPanel = sidebar.requirePanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID, com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.class);
         workspace.addView(sidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.25f));
-        sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, null);
+        sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, EditorLayoutPolicy.MIN_PANEL_WEIGHT, null);
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
         sidebarLayout.initialize(false);
         addView(workspace, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -348,7 +348,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private UiActionButton action(Context context, String key, Runnable action) {
         UiActionButton button = UiActionButton.withPalette(context, tr(key), toolbarPalette(false),
                 UiActionButton.Density.COMPACT,
-                new UiActionButton.Style(3, 1, UiTheme.Control.ICON_BORDER, UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(3, 1, UiThemes.EDITOR.control().iconBorder(), UiMetrics.DISABLED_ALPHA));
         UIUtils.setLockedTextSize(button, 11);
         button.setSingleLine(true);
         button.setMinWidth(0);

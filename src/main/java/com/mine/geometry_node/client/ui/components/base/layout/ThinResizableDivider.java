@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.base.layout;
 
 import icyllis.modernui.core.Context;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.widget.LinearLayout;
 
@@ -9,11 +11,16 @@ import icyllis.modernui.widget.LinearLayout;
  */
 public final class ThinResizableDivider extends ResizableDivider {
     public ThinResizableDivider(Context context, Orientation orientation, DragListener listener) {
-        this(context, orientation, listener, false);
+        this(context, orientation, listener, UiThemes.EDITOR);
     }
 
-    private ThinResizableDivider(Context context, Orientation orientation, DragListener listener, boolean weighted) {
-        super(context, orientation, listener, weighted, true);
+    public ThinResizableDivider(Context context, Orientation orientation, DragListener listener, UiTheme theme) {
+        this(context, orientation, listener, false, DEFAULT_MIN_WEIGHT, theme);
+    }
+
+    private ThinResizableDivider(Context context, Orientation orientation, DragListener listener,
+                                 boolean weighted, float minimumWeight, UiTheme theme) {
+        super(context, orientation, listener, weighted, true, minimumWeight, theme);
         LinearLayout.LayoutParams params = layoutParams(orientation == Orientation.VERTICAL
                 ? Orientation.VERTICAL : Orientation.HORIZONTAL);
         // Only the line occupies layout space. The rest of the hit target lies over
@@ -35,6 +42,20 @@ public final class ThinResizableDivider extends ResizableDivider {
     }
 
     public static ThinResizableDivider weighted(Context context, Orientation orientation, DragListener listener) {
-        return new ThinResizableDivider(context, orientation, listener, true);
+        return weighted(context, orientation, DEFAULT_MIN_WEIGHT, listener);
+    }
+
+    public static ThinResizableDivider weighted(Context context, Orientation orientation, float minimumWeight) {
+        return weighted(context, orientation, minimumWeight, null);
+    }
+
+    public static ThinResizableDivider weighted(Context context, Orientation orientation,
+                                                float minimumWeight, DragListener listener) {
+        return weighted(context, orientation, minimumWeight, listener, UiThemes.EDITOR);
+    }
+
+    public static ThinResizableDivider weighted(Context context, Orientation orientation,
+                                                float minimumWeight, DragListener listener, UiTheme theme) {
+        return new ThinResizableDivider(context, orientation, listener, true, minimumWeight, theme);
     }
 }

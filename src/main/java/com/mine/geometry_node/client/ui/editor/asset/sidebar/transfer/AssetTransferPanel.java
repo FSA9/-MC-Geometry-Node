@@ -1,9 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -20,7 +19,6 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -28,7 +26,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.nio.file.Path;
 import java.util.List;
 import java.util.EnumMap;
@@ -45,18 +42,18 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             Set.of(SidebarPanelScope.ASSET_BROWSER),
             AssetTransferPanel::create, com.mine.geometry_node.client.ui.components.base.icon.SvgIconView.Icon.TRANSFERS);
 
-    private static final int COLOR_BACKGROUND = UiTheme.Surface.SIDEBAR;
-    private static final int COLOR_SECTION = UiTheme.Surface.PANEL;
-    private static final int COLOR_ROW = UiTheme.Surface.SIDEBAR;
-    private static final int COLOR_ROW_ALT = UiTheme.Surface.HEADER;
-    private static final int COLOR_BORDER = UiTheme.Surface.ROOT;
-    private static final int COLOR_TEXT = UiTheme.Text.NORMAL;
-    private static final int COLOR_MUTED = UiTheme.Text.MUTED;
-    private static final int COLOR_UPLOAD = 0xFF5793C1;
-    private static final int COLOR_DOWNLOAD = 0xFF62A56B;
-    private static final int COLOR_ERROR = UiTheme.Control.ERROR;
-    private static final int COLOR_WARNING = 0xFFE0B35B;
-    private static final int COLOR_HOVER = UiTheme.Control.ICON_HOVER;
+    private static final int COLOR_BACKGROUND = UiThemes.EDITOR.surface().sidebar();
+    private static final int COLOR_SECTION = UiThemes.EDITOR.surface().panel();
+    private static final int COLOR_ROW = UiThemes.EDITOR.surface().sidebar();
+    private static final int COLOR_ROW_ALT = UiThemes.EDITOR.surface().header();
+    private static final int COLOR_BORDER = UiThemes.EDITOR.border().subtle();
+    private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
+    private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
+    private static final int COLOR_UPLOAD = UiThemes.EDITOR.status().info();
+    private static final int COLOR_DOWNLOAD = UiThemes.EDITOR.status().success();
+    private static final int COLOR_ERROR = UiThemes.EDITOR.status().error();
+    private static final int COLOR_WARNING = UiThemes.EDITOR.status().warning();
+    private static final int COLOR_HOVER = UiThemes.EDITOR.control().iconHover();
     private static final long UI_UPDATE_DELAY_MS = 100L;
 
     private final ScrollView scroll;
@@ -145,7 +142,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(8), 0, px(4), 0);
-        row.setBackground(rect(0xFF272727, 1, COLOR_BORDER));
+        row.setBackground(rect(UiThemes.EDITOR.surface().panel(), 1, COLOR_BORDER));
         TextView title = label(directionText(job.direction()) + "  " + job.processedFileCount() + "/" + job.files().size(),
                 10, job.direction() == AssetTransferDirection.UPLOAD ? COLOR_UPLOAD : COLOR_DOWNLOAD);
         row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
@@ -258,7 +255,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(px(4), 0, px(4), 0);
-        header.setBackground(rect(COLOR_SECTION, 0, 0));
+        UiMenuItems.decorate(header, COLOR_SECTION, 0, UiThemes.EDITOR);
 
         boolean expanded = expandedSections.getOrDefault(section, true);
         SvgIconView disclosure = new SvgIconView(getContext(),
@@ -283,14 +280,6 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
             body.setVisibility(next ? View.VISIBLE : View.GONE);
             disclosure.setIcon(SvgIconView.Icon.forExpandedState(next));
         });
-        header.setOnHoverListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                header.setBackground(rect(COLOR_HOVER, 0, 0));
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                header.setBackground(rect(COLOR_SECTION, 0, 0));
-            }
-            return false;
-        });
 
         LinearLayout.LayoutParams params = wrapMatch();
         params.topMargin = content.getChildCount() == 0 ? 0 : px(6);
@@ -305,6 +294,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private View iconButton(SvgIconView.Icon icon, int color, String tooltip, Runnable action) {
+        // Transparent chrome and zero icon overrides preserve the caller-supplied status tint.
         UiIconButton.Style style = new UiIconButton.Style(0.0f, 0.0f, 0x00000000,
                 COLOR_HOVER, COLOR_HOVER, 0x00000000, 0, 14.0f, 0.5f);
         UiIconButton button = new UiIconButton(getContext(), new SvgIconView(getContext(), icon, color), style)

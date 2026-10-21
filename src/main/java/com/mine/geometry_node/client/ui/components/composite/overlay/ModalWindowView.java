@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.overlay.modal.UiModal;
-
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
@@ -17,7 +18,6 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-
 import java.util.Objects;
 
 /** Reusable window chrome for modal overlays mounted through the shared host protocol. */
@@ -34,17 +34,26 @@ public class ModalWindowView extends LinearLayout implements UiModal {
             int textColor,
             int mutedTextColor,
             int closeHoverColor,
-            float cornerRadiusDp
+            float cornerRadiusDp,
+            int closeFocusColor
     ) {
+        /** Retains the original chrome and close-button behavior for explicit legacy styles. */
+        public Style(int windowColor, int titleBarColor, int borderColor, int textColor,
+                     int mutedTextColor, int closeHoverColor, float cornerRadiusDp) {
+            this(windowColor, titleBarColor, borderColor, textColor, mutedTextColor, closeHoverColor,
+                    cornerRadiusDp, UiThemes.EDITOR.border().focus());
+        }
+
         public static Style defaults() {
+            return forTheme(UiThemes.EDITOR);
+        }
+
+        public static Style forTheme(UiTheme theme) {
+            Objects.requireNonNull(theme, "theme");
             return new Style(
-                    0xFF252525,
-                    0xFF202020,
-                    0xFF424242,
-                    0xFFE6E6E6,
-                    0xFFAAAAAA,
-                    0x334C9FFF,
-                    4.0f
+                    theme.surface().panel(), theme.surface().modalTitle(), theme.border().strong(),
+                    theme.text().normal(), theme.text().muted(), theme.control().hoverOverlay(),
+                    4.0f, theme.border().focus()
             );
         }
     }
@@ -312,9 +321,10 @@ public class ModalWindowView extends LinearLayout implements UiModal {
     }
 
     private FrameLayout createCloseButton(Context context) {
-        UiIconButton.Style buttonStyle = new UiIconButton.Style(2.0f, 0.0f, 0x00000000,
-                style.closeHoverColor(), style.closeHoverColor(), 0x00000000, 0,
-                CLOSE_ICON_SIZE_DP, 0.5f);
+        UiIconButton.Style buttonStyle = new UiIconButton.Style(2.0f, 0.0f, 0,
+                style.closeHoverColor(), style.closeHoverColor(), 0, 0,
+                0, style.mutedTextColor(), style.mutedTextColor(), 0, 0,
+                CLOSE_ICON_SIZE_DP, 0.5f, style.closeFocusColor());
         UiIconButton button = new UiIconButton(context,
                 new SvgIconView(context, SvgIconView.Icon.CLOSE, style.mutedTextColor()), buttonStyle);
         button.setOnClickListener(view -> onCloseRequested());

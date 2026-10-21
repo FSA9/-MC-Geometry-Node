@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
 import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
-
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.NativePreviewHost;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreview;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.*;
@@ -33,7 +33,6 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.RectF;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -109,7 +108,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
         mEmptyHint = new TextView(getContext());
         mEmptyHint.setText("当前没有打开的蓝图\n请在资产浏览器中双击 JSON 文件开始编辑");
         UIUtils.setLockedTextSize(mEmptyHint, 18.0f);
-        mEmptyHint.setTextColor(0xFF888888);
+        mEmptyHint.setTextColor(UiThemes.EDITOR.text().muted());
         mEmptyHint.setGravity(Gravity.CENTER);
 
         LayoutParams lp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);

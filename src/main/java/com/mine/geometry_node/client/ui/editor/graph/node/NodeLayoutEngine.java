@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.HintRendererFactory;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;
@@ -25,9 +24,9 @@ public class NodeLayoutEngine {
     private final FontMetricsInt mLabelMetrics = new FontMetricsInt();
 
     public NodeLayoutEngine() {
-        mHeaderPaint.setTextSize(UIUtils.dp2px(UIConstants.Node.TEXT_SIZE_HEADER));
+        mHeaderPaint.setTextSize(UIUtils.dp2px(NodeUiMetrics.TEXT_SIZE_HEADER));
         mHeaderPaint.setTextAntiAlias(true);
-        mLabelPaint.setTextSize(UIUtils.dp2px(UIConstants.Node.TEXT_SIZE_LABEL));
+        mLabelPaint.setTextSize(UIUtils.dp2px(NodeUiMetrics.TEXT_SIZE_LABEL));
         mLabelPaint.setTextAntiAlias(true);
     }
 
@@ -50,12 +49,12 @@ public class NodeLayoutEngine {
         String title = nodeDef.displayName().getString();
         layout.titleText = shape(title, mHeaderPaint);
         layout.titleX = (UIUtils.dp2px(nodeWidth) - layout.titleText.getAdvance()) / 2.0f;
-        layout.titleBaseline = centeredBaseline(0, UIConstants.Node.HEADER_HEIGHT, mHeaderMetrics);
+        layout.titleBaseline = centeredBaseline(0, NodeUiMetrics.HEADER_HEIGHT, mHeaderMetrics);
 
-        float currentY = UIConstants.Node.HEADER_HEIGHT;
+        float currentY = NodeUiMetrics.HEADER_HEIGHT;
         for (PortRow row : nodeDef.rows()) {
             float rowHeight = calculateRowHeight(nodeData, row);
-            float portCenterY = currentY + UIConstants.Node.ROW_HEIGHT / 2.0f;
+            float portCenterY = currentY + NodeUiMetrics.ROW_HEIGHT / 2.0f;
 
             if (row.leftPort() != null) {
                 PortDef port = row.leftPort();
@@ -84,7 +83,7 @@ public class NodeLayoutEngine {
         boolean isOutputDynamic = nodeDef.getMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.MAX_DYNAMIC_OUTPUT).isPresent();
         boolean isGroupVirtualDynamic = nodeData.isGroupInputNode() || nodeData.isGroupOutputNode();
         if (isInputDynamic || isOutputDynamic || isGroupVirtualDynamic) {
-            currentY += UIConstants.Node.ROW_HEIGHT;
+            currentY += NodeUiMetrics.ROW_HEIGHT;
         }
 
         layout.totalHeight = (int) currentY;
@@ -93,12 +92,12 @@ public class NodeLayoutEngine {
     }
 
     public float calculateRowHeight(NodeData nodeData, PortRow row) {
-        float height = UIConstants.Node.ROW_HEIGHT;
+        float height = NodeUiMetrics.ROW_HEIGHT;
         if (row.uiHint() == null) return height;
         if (!nodeData.isInputConnected(row.leftPort() != null ? row.leftPort().id() : "")) {
             UIHintRenderer renderer = HintRendererFactory.getRenderer(row);
             float extraRows = renderer != null ? renderer.getRequiredExtraRows(row) : 0.0f;
-            height = UIConstants.Node.ROW_HEIGHT * (row.leftPort() != null || row.rightPort() != null ? 1.0f + extraRows : Math.max(1.0f, extraRows));
+            height = NodeUiMetrics.ROW_HEIGHT * (row.leftPort() != null || row.rightPort() != null ? 1.0f + extraRows : Math.max(1.0f, extraRows));
         }
         return height;
     }
@@ -119,20 +118,20 @@ public class NodeLayoutEngine {
         float leftDp;
         float rightDp;
         if (isLeft) {
-            int leftMargin = UIConstants.Node.LABEL_MARGIN_PORT;
+            int leftMargin = NodeUiMetrics.LABEL_MARGIN_PORT;
             if (hint == UIHint.CHECKBOX && !nodeData.isInputConnected(port.id())) {
-                leftMargin = UIConstants.Node.LABEL_MARGIN_PORT + UIConstants.Node.CHECKBOX_DEFAULT_WIDTH + UIConstants.Node.MARGIN_CHECKBOX_GAP;
+                leftMargin = NodeUiMetrics.LABEL_MARGIN_PORT + NodeUiMetrics.CHECKBOX_DEFAULT_WIDTH + NodeUiMetrics.MARGIN_CHECKBOX_GAP;
             }
             leftDp = leftMargin;
-            rightDp = Math.min(nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT, leftDp + UIUtils.px2dp(shapedText.getAdvance()));
+            rightDp = Math.min(nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT, leftDp + UIUtils.px2dp(shapedText.getAdvance()));
         } else {
-            rightDp = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
-            leftDp = Math.max(UIConstants.Node.LABEL_MARGIN_PORT, rightDp - UIUtils.px2dp(shapedText.getAdvance()));
+            rightDp = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
+            leftDp = Math.max(NodeUiMetrics.LABEL_MARGIN_PORT, rightDp - UIUtils.px2dp(shapedText.getAdvance()));
         }
 
         float xPx = isLeft ? UIUtils.dp2px(leftDp) : UIUtils.dp2px(rightDp) - shapedText.getAdvance();
-        float baselinePx = centeredBaseline(currentY, UIConstants.Node.ROW_HEIGHT, mLabelMetrics);
-        RectF hitRect = new RectF(UIUtils.dp2px(leftDp), UIUtils.dp2px(currentY), UIUtils.dp2px(rightDp), UIUtils.dp2px(currentY + UIConstants.Node.ROW_HEIGHT));
+        float baselinePx = centeredBaseline(currentY, NodeUiMetrics.ROW_HEIGHT, mLabelMetrics);
+        RectF hitRect = new RectF(UIUtils.dp2px(leftDp), UIUtils.dp2px(currentY), UIUtils.dp2px(rightDp), UIUtils.dp2px(currentY + NodeUiMetrics.ROW_HEIGHT));
 
         NodeLayout.LabelRun label = new NodeLayout.LabelRun(port.id(), effectiveName, shapedText, xPx, baselinePx, hitRect);
         layout.labels.add(label);

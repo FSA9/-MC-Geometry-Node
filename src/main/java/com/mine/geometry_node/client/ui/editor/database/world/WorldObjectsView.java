@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.database.world;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
@@ -30,7 +31,6 @@ import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewpo
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.worldquery.*;
 import com.mine.geometry_node.core.node.RegistryDataManager;
@@ -106,6 +106,9 @@ public final class WorldObjectsView extends FrameLayout {
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
     private List<WorldObjectEntry> mountedEntries;
     private List<WorldObjectType> mountedTypes;
+    // Includes pending rows so a sort can reuse the attached subset of an interrupted batch.
+    private List<WorldObjectEntry> plannedEntries;
+    private List<WorldObjectType> plannedTypes;
     private DatabaseSelection publishedSelection;
     private List<WorldObjectType> typeCatalog = List.of();
     private List<WorldObjectType> indexedTypeCatalog;
@@ -171,8 +174,8 @@ public final class WorldObjectsView extends FrameLayout {
         addView(body, new LayoutParams(-1, -1));
         navigation = new LinearLayout(context); navigation.setOrientation(LinearLayout.VERTICAL);
         navigation.setPadding(px(8), px(10), px(8), px(10));
-        navigation.setBackground(background(UiTheme.Surface.ROOT));
-        TextView categoryTitle = label(context, tr("object_types"), UiTheme.Text.MUTED);
+        navigation.setBackground(background(UiThemes.EDITOR.surface().root()));
+        TextView categoryTitle = label(context, tr("object_types"), UiThemes.EDITOR.text().muted());
         categoryTitle.setPadding(px(8),0,0,0);
         navigation.addView(categoryTitle, new LinearLayout.LayoutParams(-1, px(32)));
         categoryRows = new LinearLayout(context); categoryRows.setOrientation(LinearLayout.VERTICAL);
@@ -182,12 +185,12 @@ public final class WorldObjectsView extends FrameLayout {
         navigationDivider = body.divider();
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setBackground(background(UiTheme.Surface.CANVAS));
+        column.setBackground(background(UiThemes.EDITOR.surface().canvas()));
         body.setPanes(navigation, column);
         filterPopover = new UiColumnFilterPopover(context, this);
         LinearLayout resultBar=new LinearLayout(context); resultBar.setGravity(Gravity.CENTER_VERTICAL);
         resultBar.setPadding(px(14),0,px(10),0);
-        resultTitle=label(context,tr("all_objects"),UiTheme.Text.NORMAL);
+        resultTitle=label(context,tr("all_objects"),UiThemes.EDITOR.text().normal());
         UIUtils.setLockedTextSize(resultTitle,UiTableStyle.CELL_TEXT_SIZE_DP);
         resultTitle.setSingleLine(true);resultTitle.setEllipsize(TextUtils.TruncateAt.END);
         resultBar.addView(resultTitle,new LinearLayout.LayoutParams(0,-1,1));
@@ -201,7 +204,7 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setOnCheckedChangeListener((checkbox, checked)->toggleAll());
         tableHeader.addView(UiTableStyle.selectionCell(context, selectAll),new ViewGroup.LayoutParams(-1,-1));
         for(String key:List.of("name","type","registry_type","value","dimension","position","lifetime","tags")) addHeader(key);
-        tableHeader.addView(UiTableStyle.cell(context, tr("data.title"), UiTheme.Text.NORMAL),
+        tableHeader.addView(UiTableStyle.cell(context, tr("data.title"), UiThemes.EDITOR.text().normal()),
                 new ViewGroup.LayoutParams(-1, -1));
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,px(UiTableStyle.HEADER_HEIGHT)));
@@ -213,9 +216,9 @@ public final class WorldObjectsView extends FrameLayout {
         table.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         UiTableViewport tableViewport=new UiTableViewport(context, columns, table);
         column.addView(tableViewport,new LinearLayout.LayoutParams(-1,0,1));
-        status=label(context,tr("query_hint"),UiTheme.Text.MUTED);
+        status=label(context,tr("query_hint"),UiThemes.EDITOR.text().muted());
         UIUtils.setLockedTextSize(status,11); status.setPadding(px(14),0,px(14),0); status.setSingleLine(true);
-        status.setBackground(background(UiTheme.Surface.PANEL));
+        status.setBackground(background(UiThemes.EDITOR.surface().panel()));
         column.addView(status,new LinearLayout.LayoutParams(-1,px(UiTableStyle.STATUS_BAR_HEIGHT)));
         selectAll.setEnabled(false);
         restoreState();
@@ -251,7 +254,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void updateNavigationSelection() {
         String id=category!=null?category.id():extraProvider.isEmpty()?"":"provider:"+extraProvider;
-        categoryButtons.forEach((key,button)->button.setPalette(rowPalette(key.equals(id),UiTheme.Surface.ROOT)));
+        categoryButtons.forEach((key,button)->button.setPalette(rowPalette(key.equals(id),UiThemes.EDITOR.surface().root())));
         resultTitle.setText((category==null?tr("all_objects"):Component.translatable(category.labelKey()).getString())
                 +"  ·  "+sortedEntries().size());
     }
@@ -513,13 +516,22 @@ public final class WorldObjectsView extends FrameLayout {
             updateSelection();
             return;
         }
+        boolean reuse = hasSameRowData(entries);
         cancelMount();
         mountedEntries = null; mountedTypes = null;
         List<WorldObjectType> mountingTypes = List.copyOf(typeCatalog);
-        rows.removeAllViews(); rowViews.clear(); rowBindings.clear();
-        if (entries.isEmpty()) {
-            TextView empty = label(getContext(), tr("empty"), UiTheme.Text.MUTED);
-            empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, px(96)));
+        plannedEntries = entries; plannedTypes = mountingTypes;
+        Runnable complete = () -> {
+            mountedEntries = entries;
+            mountedTypes = mountingTypes;
+            updateSelection();
+        };
+        if (!reuse) {
+            rows.removeAllViews(); rowViews.clear(); rowBindings.clear();
+            if (entries.isEmpty()) {
+                TextView empty = label(getContext(), tr("empty"), UiThemes.EDITOR.text().muted());
+                empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, px(96)));
+            }
         }
         Iterator<WorldObjectEntry> iterator = entries.iterator();
         rowBatch.start(new Iterator<Runnable>() {
@@ -528,14 +540,32 @@ public final class WorldObjectsView extends FrameLayout {
             @Override public Runnable next() {
                 WorldObjectEntry entry = iterator.next();
                 int rowIndex = index++;
-                return () -> mountRow(entry, rowIndex);
+                return () -> {
+                    if (rowBindings.containsKey(entry.key())) reorderRow(entry.key(), rowIndex);
+                    else mountRow(entry, rowIndex);
+                };
             }
-        }, () -> {
-            mountedEntries = entries;
-            mountedTypes = mountingTypes;
-            updateSelection();
-        });
+        }, complete);
         updateSelection();
+    }
+    private boolean hasSameRowData(List<WorldObjectEntry> entries) {
+        if (plannedEntries == null || !typeCatalog.equals(plannedTypes) || entries.size() != plannedEntries.size()) return false;
+        Map<String, WorldObjectEntry> previous = new HashMap<>();
+        for (WorldObjectEntry entry : plannedEntries) previous.put(entry.key(), entry);
+        for (WorldObjectEntry entry : entries)
+            if (!entry.equals(previous.remove(entry.key()))) return false;
+        return previous.isEmpty();
+    }
+    private void reorderRow(String key, int index) {
+        RowBinding binding = rowBindings.remove(key);
+        ((TextView)binding.cells().getChildAt(0)).setText(Integer.toString(index + 1));
+        int baseColor = UiTableStyle.rowColor(index % 2 != 0);
+        binding.button().setPalette(rowPalette(selected.contains(key), baseColor));
+        rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), binding.cells(), baseColor));
+        rowViews.remove(key);
+        rowViews.put(key, binding.button());
+        // Moving within the same parent preserves native preview registration and focus/attach state.
+        rows.bringChildToFront((View)binding.button().getParent());
     }
     private void cancelMount() {
         if (rowBatch.isRunning()) { mountedEntries = null; mountedTypes = null; }
@@ -578,9 +608,9 @@ public final class WorldObjectsView extends FrameLayout {
 
         // Cells determine height; background and selection overlays follow without stretching the row.
         FrameLayout host = new UiTableRowFrame(getContext(), line, row);
-        View stripe=new View(getContext());stripe.setBackground(background(UiTheme.Control.FOCUS));
+        View stripe=new View(getContext());stripe.setBackground(background(UiThemes.EDITOR.selection().outline()));
         host.addView(stripe,new LayoutParams(Math.max(1,px(2)),-1));
-        View border=new View(getContext());border.setBackground(background(UiTableStyle.DIVIDER_COLOR));
+        View border=new View(getContext());border.setBackground(background(UiTableStyle.dividerColor(UiThemes.EDITOR)));
         host.addView(border,new LayoutParams(-1,Math.max(1,px(1)),Gravity.BOTTOM));
         boolean[] modifiers = new boolean[2];
         row.setOnTouchListener((view, event) -> {
@@ -607,7 +637,7 @@ public final class WorldObjectsView extends FrameLayout {
         rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
     }
     private void cell(UiTableRow row, String text) {
-        TextView cell = UiTableStyle.cell(getContext(), text, UiTheme.Text.NORMAL);
+        TextView cell = UiTableStyle.cell(getContext(), text, UiThemes.EDITOR.text().normal());
         row.addView(cell, new ViewGroup.LayoutParams(-1, -1));
     }
     private boolean canSelect() { return !rowBatch.isRunning() && shown && !disposed && !awaitingScopeResponse && Objects.equals(stateScope, UiStateScopes.current()) && !snapshot.loading(); }
@@ -712,7 +742,7 @@ public final class WorldObjectsView extends FrameLayout {
                 .sorted(Map.Entry.comparingByKey()).forEach(ref->
                 source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
         return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
-                "",UiTheme.Text.MUTED,List.of(),
+                "",UiThemes.EDITOR.text().muted(),List.of(),
                 List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of(
                 new DatabaseSelection.Section(tr("spatial_position"),entry.dimension(),DatabaseSelection.Kind.POSITION,position),
                 new DatabaseSelection.Section(tr("object_information"),"",DatabaseSelection.Kind.METADATA,metadata),
@@ -794,6 +824,7 @@ public final class WorldObjectsView extends FrameLayout {
         awaitingScopeResponse = true;
         snapshot = new ClientWorldObjectRepository.Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), true, 0);
         renderedSnapshot = null; mountedEntries = null; mountedTypes = null;
+        plannedEntries = null; plannedTypes = null;
         typeCatalog = List.of(); dimensionCatalog = List.of();
         navigationCounts = WorldObjectPage.Counts.empty();
         indexedTypeCatalog = null; typeLookup.clear();
@@ -838,6 +869,7 @@ public final class WorldObjectsView extends FrameLayout {
     public void onDispose() {
         if (disposed) return;
         onHide(); disposed = true;
+        plannedEntries = null; plannedTypes = null;
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         session.removeChangeListener(changed); session.close();
     }

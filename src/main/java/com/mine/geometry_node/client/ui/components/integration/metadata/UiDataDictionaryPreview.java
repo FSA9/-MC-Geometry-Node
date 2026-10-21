@@ -1,18 +1,20 @@
 package com.mine.geometry_node.client.ui.components.integration.metadata;
 
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import java.util.Objects;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.function.Consumer;
-
 import static com.mine.geometry_node.client.ui.components.integration.metadata.MetadataViews.*;
 
 /** Sidebar preview: at most eight rows, search over the snapshot, full editing through the shared modal. */
 public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
+    private final UiTheme theme;
     private final UiTextInput search;
     private final LinearLayout entries;
     private final UiDisplayText status;
@@ -22,23 +24,30 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
     private Consumer<String> manageEntry;
 
     public UiDataDictionaryPreview(Context context) {
+        this(context, UiThemes.EDITOR);
+    }
+    public UiDataDictionaryPreview(Context context, UiTheme theme) {
         super(context); setOrientation(VERTICAL);
-        search = input(context, "search", true); addView(search, params(-1, 30));
-        status = text(context, "", UiTheme.Text.MUTED); addView(status, params(-1, 28));
+        this.theme = Objects.requireNonNull(theme, "theme");
+        search = input(context, "search", true, theme); addView(search, params(-1, 30));
+        status = text(context, "", theme.text().muted()); addView(status, params(-1, 28));
         entries = column(context); addView(entries, params(-1, -2));
-        manageButton = button(context, "manage", this::manage);
+        manageButton = button(context, "manage", this::manage, theme);
         LayoutParams buttons = params(-1, 30); buttons.topMargin = px(8); addView(manageButton, buttons);
         watch(search, this::renderEntries);
         render(null);
     }
     public UiDataDictionaryPreview(Context context, DataDictionaryBinding binding, Runnable manage) {
-        this(context); this.manage = manage; setBinding(binding);
+        this(context, binding, manage, UiThemes.EDITOR);
+    }
+    public UiDataDictionaryPreview(Context context, DataDictionaryBinding binding, Runnable manage, UiTheme theme) {
+        this(context, theme); this.manage = manage; setBinding(binding);
     }
     public void setManageAction(Runnable action) { manage = action; }
     public void setManageEntryAction(Consumer<String> action) { manageEntry = action; }
     private void manage() {
         if (binding == null || state == null || !state.available() || state.loading()) return;
-        if (manage != null) manage.run(); else UiDataDictionaryEditor.show(this, binding);
+        if (manage != null) manage.run(); else UiDataDictionaryEditor.show(this, binding, theme);
     }
     @Override protected boolean refreshOnAttach() { return true; }
     @Override protected void render(DataDictionaryBinding.State state) {
@@ -55,19 +64,19 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         var matches = DataDictionaryDraft.matching(state.values(), search.getText().toString(), null);
         status.setText(status(state).isEmpty() ? tr("showing", Math.min(8, matches.size()), matches.size()) : status(state));
         if (matches.isEmpty()) {
-            entries.addView(text(getContext(), tr("empty"), UiTheme.Text.MUTED), params(-1, 36)); return;
+            entries.addView(text(getContext(), tr("empty"), theme.text().muted()), params(-1, 36)); return;
         }
         for (String key : matches.subList(0, Math.min(8, matches.size()))) {
             LinearLayout row = column(getContext()); row.setPadding(px(8), px(6), px(8), px(6));
-            UiDisplayText name = text(getContext(), key, UiTheme.Text.NORMAL);
-            UiDisplayText value = text(getContext(), DataDictionaryDraft.summary(state.values().get(key)), UiTheme.Text.MUTED);
+            UiDisplayText name = text(getContext(), key, theme.text().normal());
+            UiDisplayText value = text(getContext(), DataDictionaryDraft.summary(state.values().get(key)), theme.text().muted());
             name.setSingleLine(true); name.setEllipsize(TextUtils.TruncateAt.END);
             value.setSingleLine(true); value.setEllipsize(TextUtils.TruncateAt.END);
             row.addView(name, params(-1, 20)); row.addView(value, params(-1, 20));
             row.setOnClickListener(view -> {
                 if (manageEntry != null) manageEntry.accept(key);
                 else if (manage != null) manage.run();
-                else UiDataDictionaryEditor.show(this, tr("title"), binding, key);
+                else UiDataDictionaryEditor.show(this, tr("title"), binding, key, theme);
             }); entries.addView(row, params(-1, -2));
         }
     }

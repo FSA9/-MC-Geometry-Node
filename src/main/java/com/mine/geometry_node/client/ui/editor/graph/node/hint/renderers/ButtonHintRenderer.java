@@ -1,10 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
+import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.document.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.UIConstants;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.ButtonHintActionDispatcher;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
@@ -20,9 +22,9 @@ import net.minecraft.network.chat.Component;
 
 public class ButtonHintRenderer implements UIHintRenderer {
     private static final String DEFAULT_LABEL = "Button";
-    private static final int DEFAULT_BG = UIConstants.Node.CLR_DYNAMIC_BTN_BG;
-    private static final int DEFAULT_STROKE = UIConstants.Node.CLR_DYNAMIC_BTN_STROKE;
-    private static final int DEFAULT_TEXT = UIConstants.Node.CLR_DYNAMIC_BTN_FG;
+    private static final int DEFAULT_BG = UiThemes.EDITOR.buttons().inline().normal();
+    private static final int DEFAULT_STROKE = UiThemes.EDITOR.border().strong();
+    private static final int DEFAULT_TEXT = UiThemes.EDITOR.buttons().inline().text();
 
     @Override
     public float getRequiredExtraRows(PortRow row) {
@@ -35,10 +37,9 @@ public class ButtonHintRenderer implements UIHintRenderer {
                 hintString(row, PortMetaKeys.BUTTON_LABEL),
                 DEFAULT_LABEL
         );
-        int bgColor = firstColor(
-                hintInt(row, PortMetaKeys.BUTTON_COLOR),
-                DEFAULT_BG
-        );
+        // Node metadata overrides theme defaults, including intentionally transparent colors.
+        Integer customBackground = hintInt(row, PortMetaKeys.BUTTON_COLOR);
+        int bgColor = firstColor(customBackground, DEFAULT_BG);
         int textColor = firstColor(
                 hintInt(row, PortMetaKeys.BUTTON_TEXT_COLOR),
                 DEFAULT_TEXT
@@ -46,8 +47,10 @@ public class ButtonHintRenderer implements UIHintRenderer {
         String action = hintString(row, PortMetaKeys.BUTTON_ACTION);
 
         InlineActionButton button = new InlineActionButton(context, displayLabel(label));
-        button.setPalette(new UiActionButton.Palette(bgColor, bgColor, bgColor, textColor));
-        button.setStyle(new UiActionButton.Style(2, 1, DEFAULT_STROKE, UiTheme.Metrics.DISABLED_ALPHA));
+        button.setPalette(new UiActionButton.Palette(bgColor,
+                customBackground != null ? bgColor : UiThemes.EDITOR.buttons().inline().hover(),
+                customBackground != null ? bgColor : UiThemes.EDITOR.buttons().inline().pressed(), textColor));
+        button.setStyle(new UiActionButton.Style(2, 1, DEFAULT_STROKE, UiMetrics.DISABLED_ALPHA));
         button.setPadding(UIUtils.dp2pxInt(6), 0, UIUtils.dp2pxInt(6), 0);
         button.setOnClickListener(v -> ButtonHintActionDispatcher.dispatch(editorContext, nodeData, row, action, v));
         return button;
@@ -55,13 +58,13 @@ public class ButtonHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = UIConstants.Node.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - UIConstants.Node.LABEL_MARGIN_PORT;
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
 
         boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-        float topOffset = hasLabel ? UIConstants.Node.ROW_HEIGHT : 0.0f;
+        float topOffset = hasLabel ? NodeUiMetrics.ROW_HEIGHT : 0.0f;
         float buttonHeight = UIHintUtils.getStandardInputHeight();
-        float verticalMargin = (UIConstants.Node.ROW_HEIGHT - buttonHeight) / 2.0f;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - buttonHeight) / 2.0f;
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         int widthPx = UIUtils.dp2pxInt(endX - startX);

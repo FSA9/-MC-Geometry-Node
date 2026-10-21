@@ -1,10 +1,11 @@
 package com.mine.geometry_node.client.ui.components.composite.display;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
-
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -17,6 +18,7 @@ import java.util.Objects;
 /** Shared tag presentation. Read-only by default; callbacks belong to the owning editor. */
 public final class UiTagChip extends LinearLayout {
     public static final int HEIGHT_DP = 24;
+    private final UiTheme theme;
     private final String tag;
     private final UiDisplayText label;
     private final ShapeDrawable fill = new ShapeDrawable();
@@ -24,15 +26,20 @@ public final class UiTagChip extends LinearLayout {
     private Runnable onRemove;
 
     public UiTagChip(Context context, String tag) {
+        this(context, tag, UiThemes.EDITOR);
+    }
+
+    public UiTagChip(Context context, String tag, UiTheme theme) {
         super(context);
+        this.theme = Objects.requireNonNull(theme, "theme");
         this.tag = Objects.requireNonNull(tag, "tag");
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
         setMinimumHeight(px(HEIGHT_DP));
         setPadding(px(6), 0, px(6), 0);
-        fill.setCornerRadius(UIUtils.dp2px(UiTheme.Metrics.RADIUS_SMALL));
+        fill.setCornerRadius(UIUtils.dp2px(UiMetrics.RADIUS_SMALL));
         setBackground(fill);
-        label = new UiDisplayText(context, tag, UiTheme.Metrics.TEXT_COMPACT, UiTheme.Text.SECONDARY);
+        label = new UiDisplayText(context, tag, UiMetrics.TEXT_COMPACT, theme.text().secondary());
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setSingleLine(true);
         label.setEllipsize(TextUtils.TruncateAt.END);
@@ -54,11 +61,11 @@ public final class UiTagChip extends LinearLayout {
     public void setOnRemove(CharSequence description, Runnable action) {
         onRemove = action;
         if (action != null && removeButton == null) {
-            var style = new UiIconButton.Style(1, 0, 0, UiTheme.Control.ICON_HOVER,
-                    UiTheme.Control.ICON_PRESSED, 0, 0, 0, UiTheme.Text.SECONDARY,
-                    UiTheme.Text.DISABLED, 20, 20, 12, UiTheme.Metrics.DISABLED_ALPHA);
+            var style = new UiIconButton.Style(1, 0, 0, theme.control().iconHover(),
+                    theme.control().iconPressed(), 0, 0, 0, theme.text().secondary(),
+                    theme.text().disabled(), 20, 20, 12, UiMetrics.DISABLED_ALPHA, theme.border().focus());
             removeButton = new UiIconButton(getContext(),
-                    new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, UiTheme.Text.SECONDARY), style);
+                    new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, theme.text().secondary()), style);
             removeButton.setOnClickListener(view -> {
                 if (isEnabled() && onRemove != null) onRemove.run();
             });
@@ -96,10 +103,10 @@ public final class UiTagChip extends LinearLayout {
     private void refreshState() {
         if (fill == null || label == null) return;
         boolean interactive = isEnabled() && isClickable();
-        fill.setColor(interactive && isPressed() ? UiTheme.Control.ICON_PRESSED
-                : interactive && isHovered() ? UiTheme.Control.ICON_HOVER : UiTheme.Surface.HEADER);
-        fill.setStroke(Math.max(1, px(1)), interactive && isFocused() ? UiTheme.Control.FOCUS : UiTheme.Control.INPUT_BORDER);
-        label.setTextColor(isEnabled() ? UiTheme.Text.SECONDARY : UiTheme.Text.DISABLED);
+        fill.setColor(interactive && isPressed() ? theme.control().iconPressed()
+                : interactive && isHovered() ? theme.control().iconHover() : theme.surface().header());
+        fill.setStroke(Math.max(1, px(1)), interactive && isFocused() ? theme.border().focus() : theme.border().subtle());
+        label.setTextColor(isEnabled() ? theme.text().secondary() : theme.text().disabled());
     }
     private static int px(float value) { return UIUtils.dp2pxInt(value); }
 }

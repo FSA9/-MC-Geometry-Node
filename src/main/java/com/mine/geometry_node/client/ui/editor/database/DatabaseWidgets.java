@@ -1,8 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -36,8 +37,8 @@ public final class DatabaseWidgets {
     public static UiActionButton button(Context context, String text, Runnable action, UiActionButton.Role role) {
         UiActionButton view = new UiActionButton(context, text,
                 role, UiActionButton.Density.COMPACT,
-                new UiActionButton.Style(0, UiTheme.Metrics.BORDER, UiTheme.Control.BORDER,
-                        UiTheme.Metrics.DISABLED_ALPHA));
+                new UiActionButton.Style(0, UiMetrics.BORDER, UiThemes.EDITOR.border().strong(),
+                        UiMetrics.DISABLED_ALPHA));
         view.setMinHeight(0); view.setMinWidth(0);
         view.setPadding(px(9), 0, px(9), 0);
         UIUtils.setLockedTextSize(view, 12);

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.runtime.marker;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import net.minecraft.client.Minecraft;
@@ -15,9 +17,14 @@ final class DefaultMarkerRenderer implements ClientMarkerRenderer {
     private static final Identifier EDGE = Identifier.fromNamespaceAndPath("geometry_node", "textures/gui/markers/edge.png");
     private final Identifier texture;
     private final String previewResource;
+    private final UiTheme theme;
 
     DefaultMarkerRenderer() { this("default"); }
     DefaultMarkerRenderer(String icon) {
+        this(icon, UiThemes.HUD);
+    }
+    DefaultMarkerRenderer(String icon, UiTheme theme) {
+        this.theme = java.util.Objects.requireNonNull(theme, "theme");
         texture = Identifier.fromNamespaceAndPath("geometry_node", "textures/gui/markers/" + icon + ".png");
         previewResource = "/assets/geometry_node/icons/markers/" + icon + ".svg";
     }
@@ -28,7 +35,8 @@ final class DefaultMarkerRenderer implements ClientMarkerRenderer {
         int x = context.screenX(), y = context.screenY();
         int size = context.screenEdge() ? 22 : 26;
         // A dark silhouette keeps the icon readable over sky, snow and busy terrain.
-        drawIcon(graphics, texture, x + 1, y + 1, size + 2, 0xC010141B);
+        drawIcon(graphics, texture, x + 1, y + 1, size + 2,
+                UiTheme.withAlpha(theme.surface().overlayDim(), 192));
         drawIcon(graphics, texture, x, y, size, context.color());
         if (context.screenEdge()) drawEdge(graphics, context);
         if (!context.displayText().isBlank()) drawLabel(graphics, context, size);
@@ -53,7 +61,7 @@ final class DefaultMarkerRenderer implements ClientMarkerRenderer {
             drawIcon(graphics, EDGE, 0, 0, 10, context.color());
         } finally { graphics.pose().popMatrix(); }
     }
-    private static void drawLabel(GuiGraphicsExtractor graphics, MarkerRenderContext context, int iconSize) {
+    private void drawLabel(GuiGraphicsExtractor graphics, MarkerRenderContext context, int iconSize) {
         Font font = Minecraft.getInstance().font;
         int available = Math.max(0, graphics.guiWidth()-16);
         String text = context.displayText();
@@ -65,8 +73,9 @@ final class DefaultMarkerRenderer implements ClientMarkerRenderer {
         int top = context.screenY()+iconSize/2+5;
         if (top+font.lineHeight+4 > graphics.guiHeight()) top = context.screenY()-iconSize/2-font.lineHeight-6;
         top = Math.max(3,top);
-        graphics.fill(left-5, top-3, left+width+5, top+font.lineHeight+3, 0xB81A2028);
+        graphics.fill(left-5, top-3, left+width+5, top+font.lineHeight+3,
+                UiTheme.withAlpha(theme.surface().tooltip(), 184));
         graphics.fill(left-5, top-3, left-3, top+font.lineHeight+3, context.color());
-        graphics.text(font, text, left, top, 0xFFF2F5F8, true);
+        graphics.text(font, text, left, top, theme.text().normal(), true);
     }
 }

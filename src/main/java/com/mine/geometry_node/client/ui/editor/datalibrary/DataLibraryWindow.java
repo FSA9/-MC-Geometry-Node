@@ -1,12 +1,11 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary;
 
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
-
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
-
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
@@ -21,7 +20,6 @@ import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchW
 import com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
-import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
@@ -54,7 +52,6 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -73,11 +70,11 @@ import java.util.function.Supplier;
 
 /** Compact editor for the server-authoritative Data Library. */
 public final class DataLibraryWindow extends LinearLayout implements AreaEditorWindow {
-    private static final int BG = UiTheme.Surface.CANVAS;
-    private static final int INPUT_BG = UiTheme.Control.INPUT;
-    private static final int BORDER = UiTheme.Control.BORDER;
-    private static final int TEXT = UiTheme.Text.NORMAL;
-    private static final int MUTED = UiTheme.Text.MUTED;
+    private static final int BG = UiThemes.EDITOR.surface().canvas();
+    private static final int INPUT_BG = UiThemes.EDITOR.control().input();
+    private static final int BORDER = UiThemes.EDITOR.border().strong();
+    private static final int TEXT = UiThemes.EDITOR.text().normal();
+    private static final int MUTED = UiThemes.EDITOR.text().muted();
     private static final int TREE_INDENT_DP = 20;
     private static final int TREE_ROW_PADDING_DP = 4;
     private static final int CHECKBOX_SIZE_DP = 16;
@@ -257,7 +254,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
         LinearLayout leftPanel = new LinearLayout(context);
         leftPanel.setOrientation(VERTICAL);
-        leftPanel.setBackground(solid(UiTheme.Surface.ROOT, 0));
+        leftPanel.setBackground(solid(UiThemes.EDITOR.surface().root(), 0));
         TextView leftTitle = label(context, tr("geometry_node.data_library.folders"), 11, MUTED);
         leftTitle.setGravity(Gravity.CENTER_VERTICAL);
         leftTitle.setPadding(px(10), 0, 0, 0);
@@ -283,7 +280,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         rightPanel.setBackground(solid(BG, 0));
         HorizontalScrollView breadcrumbScroll = new UiHorizontalScrollView(context);
         breadcrumbScroll.setHorizontalScrollBarEnabled(false);
-        breadcrumbScroll.setBackground(solid(UiTheme.Surface.PANEL, 0));
+        breadcrumbScroll.setBackground(solid(UiThemes.EDITOR.surface().panel(), 0));
         breadcrumbTrail = new LinearLayout(context);
         breadcrumbTrail.setBaselineAligned(false);
         breadcrumbTrail.setGravity(Gravity.CENTER_VERTICAL);
@@ -303,7 +300,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         LinearLayout results = new LinearLayout(context);
         results.setGravity(Gravity.CENTER_VERTICAL);
         results.setPadding(px(14), 0, px(10), 0);
-        results.setBackground(solid(UiTheme.Surface.CANVAS, 0));
+        results.setBackground(solid(UiThemes.EDITOR.surface().canvas(), 0));
         resultsView = label(context, "", UiTableStyle.CELL_TEXT_SIZE_DP, TEXT);
         resultsView.setGravity(Gravity.CENTER_VERTICAL);
         resultsView.setSingleLine(true);
@@ -323,7 +320,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         table.addView(createColumnHeader(), new LayoutParams(-1, px(UiTableStyle.HEADER_HEIGHT)));
         table.addView(rightScroll, new LayoutParams(-1, 0, 1));
         rightPanel.addView(new UiTableViewport(context, columns, table), new LayoutParams(-1, 0, 1));
-        statusView.setBackground(solid(UiTheme.Surface.PANEL, 0));
+        statusView.setBackground(solid(UiThemes.EDITOR.surface().panel(), 0));
         rightPanel.addView(statusView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(UiTableStyle.STATUS_BAR_HEIGHT)));
         groupsHost.setOnClickListener(v -> clearSelection());
         rightHost.setOnClickListener(v -> clearSelection());
@@ -828,8 +825,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         segment.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         segment.setPadding(px(6), 0, px(6), 0);
         segment.setSingleLine(true);
-        segment.setPalette(new UiActionButton.Palette(0, UiTheme.Control.ICON_HOVER,
-                UiTheme.Control.ICON_PRESSED, current ? TEXT : MUTED));
+        segment.setPalette(new UiActionButton.Palette(0, UiThemes.EDITOR.control().iconHover(),
+                UiThemes.EDITOR.control().iconPressed(), current ? TEXT : MUTED));
         segment.setClickable(!current);
         segment.setFocusable(!current);
         if (!current) segment.setOnClickListener(view -> { activeFolder = folderId; rebuild(); });
@@ -927,7 +924,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         // Tree rows are deliberately flat and borderless at every depth.  Keep the
         // unselected row transparent so the hierarchy reads as one continuous tree;
         // only the active/checked state gets a quiet fill.
-        int rowFill = active || selectedFolder ? UiTheme.Control.CHECKED : 0;
+        int rowFill = active || selectedFolder ? UiThemes.EDITOR.selection().fill() : 0;
         row.setBackground(solid(rowFill, 0f, 0));
         row.setOnClickListener(v -> { activeFolder = folder.id(); rebuild(); });
         UiIconButton disclosure = disclosureButton(expanded, TEXT);
@@ -974,7 +971,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         selectionViews.add(() -> {
             syncCheck.run();
             int fill = Objects.equals(activeFolder, folder.id()) || selectedFolders.contains(folder.id())
-                    ? UiTheme.Control.CHECKED : 0;
+                    ? UiThemes.EDITOR.selection().fill() : 0;
             row.setBackground(solid(fill, 0f, 0));
         });
         folderDropRows.put(row, folder.id());
@@ -990,7 +987,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(px(TREE_ROW_PADDING_DP), 0, px(TREE_ROW_PADDING_DP), 0);
         // Root follows the same flat tree treatment as child folders.
-        row.setBackground(solid(activeFolder == null ? UiTheme.Control.CHECKED : 0, 0f, 0));
+        row.setBackground(solid(activeFolder == null ? UiThemes.EDITOR.selection().fill() : 0, 0f, 0));
         row.setOnClickListener(v -> { clearSelection(); activeFolder = null; rebuild(); });
         UiIconButton disclosure = disclosureButton(rootExpanded, TEXT);
         disclosure.setOnClickListener(v -> {
@@ -1026,8 +1023,8 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private UiIconButton disclosureButton(boolean expanded, int color) {
         UiIconButton button = new UiIconButton(getContext(),
                 new SvgIconView(getContext(), SvgIconView.Icon.forExpandedState(expanded), color),
-                new UiIconButton.Style(0, 0, 0, UiTheme.Control.ICON_HOVER,
-                        UiTheme.Control.ICON_PRESSED, 0, 0, 12, UiTheme.Metrics.DISABLED_ALPHA));
+                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(),
+                        UiThemes.EDITOR.control().iconPressed(), 0, 0, 12, UiMetrics.DISABLED_ALPHA));
         button.setContentDescription(tr(expanded ? "geometry_node.data_library.collapse_entry"
                 : "geometry_node.data_library.expand_entry"));
         return button;
@@ -1123,7 +1120,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
 
     private EditText styledNameEditor(String value) {
         EditText editor = new UiTextInput(getContext(), new UiTextInput.Style(
-                EDITOR_TEXT_SIZE_DP, 2, 0, 0, TEXT, UiTheme.Text.HINT, 0, 0));
+                EDITOR_TEXT_SIZE_DP, 2, 2, 1, TEXT, UiThemes.EDITOR.text().hint(), INPUT_BG, BORDER));
         editor.setSingleLine(true);
         editor.setText(value == null ? "" : value);
         editor.setTextColor(TEXT);
@@ -1259,7 +1256,6 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
         long generation = stateGeneration;
         String scope = stateScope;
         EditText input = styledNameEditor(name.getText().toString());
-        input.setBackground(solid(INPUT_BG, 2, BORDER));
         int index = parent.indexOfChild(name);
         ViewGroup.LayoutParams params = name.getLayoutParams();
         // A UiTableRow assigns columns by child index: replace the name in place while editing.

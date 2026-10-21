@@ -1,7 +1,8 @@
 package com.mine.geometry_node.client.ui.components.base.menu;
 
-import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -15,12 +16,17 @@ public final class UiMenuPanelLayout {
     private UiMenuPanelLayout() {}
 
     public static UiScrollView createPanel(Context context, View content) {
-        UiScrollView panel = new UiScrollView(context);
+        return createPanel(context, content, UiThemes.EDITOR);
+    }
+
+    public static UiScrollView createPanel(Context context, View content, UiTheme theme) {
+        java.util.Objects.requireNonNull(theme, "theme");
+        UiScrollView panel = new UiScrollView(context, theme.scroll());
         panel.setOnClickListener(view -> {});
         ShapeDrawable background = new ShapeDrawable();
-        background.setColor(UiTheme.Surface.PANEL);
+        background.setColor(theme.surface().popup());
         background.setCornerRadius(UIUtils.dp2px(4));
-        background.setStroke(UIUtils.dp2pxInt(1), UiTheme.Control.BORDER);
+        background.setStroke(UIUtils.dp2pxInt(1), theme.border().strong());
         panel.setBackground(background);
         panel.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
         int padding = UIUtils.dp2pxInt(7);
