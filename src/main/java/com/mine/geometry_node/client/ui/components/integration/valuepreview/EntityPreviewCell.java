@@ -55,6 +55,7 @@ public final class EntityPreviewCell extends ViewGroup {
 
     private void showStatus(EntityTemplatePreviewView.Status status) {
         String key = switch (status) {
+            case LOADING -> "loading";
             case UNAVAILABLE -> "unavailable";
             case ERROR -> "error";
             default -> null;

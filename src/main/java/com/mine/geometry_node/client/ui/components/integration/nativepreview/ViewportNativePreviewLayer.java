@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.components.integration.nativepreview;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.MinecraftSurfaceView;
 import icyllis.modernui.view.View;
+import net.minecraft.ReportedException;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import javax.annotation.Nonnull;
@@ -43,7 +44,8 @@ public final class ViewportNativePreviewLayer extends MinecraftSurfaceView {
                 for (ViewportNativePreview preview : mRenderOrder) {
                     try {
                         preview.renderNativePreview(graphics, deltaTick, guiScale, alpha);
-                    } catch (RuntimeException ignored) {
+                    } catch (RuntimeException failure) {
+                        if (failure instanceof ReportedException reported && reported.getCause() instanceof Error) throw failure;
                         // One addon nativepreview must not prevent the remaining previews from rendering.
                     }
                 }

@@ -49,6 +49,14 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        com.mine.geometry_node.client.entitypreview.EntityPreviewClient.INSTANCE.init();
+        ClientboundPayloadRegistry.registerClientReceiver(
+                com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.TYPE,
+                (payload, context) -> {
+                    var previews = com.mine.geometry_node.client.entitypreview.EntityPreviewClient.INSTANCE;
+                    long generation = previews.generation();
+                    context.queue(() -> previews.accept(payload, generation));
+                });
         com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.TYPE,

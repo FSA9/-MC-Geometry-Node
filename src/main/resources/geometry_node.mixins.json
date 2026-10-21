@@ -3,6 +3,7 @@
   "package": "com.mine.geometry_node.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "entitypreview.EntityAppearanceInvoker",
     "resource.EntityResourceLifecycleMixin",
     "viewport.CameraChunkMapAccess",
     "viewport.CameraChunkMapMixin",
@@ -27,6 +28,7 @@
     "scoreboard.ServerScoreboardMixin"
   ],
   "client": [
+    "preview.GuiEntityPreviewSubmissionMixin",
     "game.chunk.EditClientChunkCacheMixin",
     "game.chunk.EditClientChunkStorageMixin",
     "game.render.GameViewRendererMixin",
