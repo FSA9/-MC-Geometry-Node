@@ -38,6 +38,14 @@ public interface UiOverlay {
     default void onShown(OverlayHandle handle) {
     }
 
+    /** Presentation paused; retain the logical session and unfinished input. */
+    default void onSuspended() {
+    }
+
+    /** Presentation restored on the same instance; do not reload its editing state. */
+    default void onResumed() {
+    }
+
     /** Cleanup callback. REPLACED and HOST_DESTROYED must not present another overlay. */
     default void onClosed(OverlayCloseReason reason) {
     }

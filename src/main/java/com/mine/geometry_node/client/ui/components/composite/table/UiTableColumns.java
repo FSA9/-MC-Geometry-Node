@@ -10,6 +10,7 @@ import java.util.Objects;
 
 /** Shared logical column widths for a table header and its rows. UI-thread confined. */
 public final class UiTableColumns {
+    public enum Sizing { FILL_VIEWPORT, INDEPENDENT }
     public static final float MAX_CUSTOM_WIDTH_DP = 4096f;
     public record Column(String id, float preferredDp, float minimumDp, boolean resizable) {
         public Column {
@@ -21,6 +22,7 @@ public final class UiTableColumns {
     }
 
     private final List<Column> columns;
+    private final Sizing sizing;
     private final int[] widths;
     private float[] customDp;
     // Freeze automatic siblings for the live drag session without turning them into persisted overrides.
@@ -32,6 +34,12 @@ public final class UiTableColumns {
     private Runnable changed = () -> {};
 
     public UiTableColumns(List<Column> columns) {
+        this(columns, Sizing.FILL_VIEWPORT);
+    }
+
+    /** Independent columns retain their preferred/user widths when adjacent panels resize. */
+    public UiTableColumns(List<Column> columns, Sizing sizing) {
+        this.sizing = Objects.requireNonNull(sizing);
         this.columns = List.copyOf(columns);
         if (columns.isEmpty()) throw new IllegalArgumentException("A table needs columns");
         var ids = new HashSet<String>();
@@ -150,11 +158,12 @@ public final class UiTableColumns {
         float flexible = 0;
         for (int i = 0; i < size(); i++) {
             Column column = columns.get(i);
-            widths[i] = Math.max(1, UIUtils.dp2pxInt(column.minimumDp()));
+            widths[i] = Math.max(1, UIUtils.dp2pxInt(sizing == Sizing.INDEPENDENT
+                    ? column.preferredDp() : column.minimumDp()));
             minimum += widths[i];
             flexible += column.preferredDp() - column.minimumDp();
         }
-        int remaining = Math.max(0, viewport - minimum);
+        int remaining = sizing == Sizing.INDEPENDENT ? 0 : Math.max(0, viewport - minimum);
         float cumulative = 0;
         int assigned = 0;
         for (int i = 0; i < size(); i++) {

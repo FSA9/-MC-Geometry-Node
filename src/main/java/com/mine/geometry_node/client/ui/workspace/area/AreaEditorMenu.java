@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -18,7 +19,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-final class AreaEditorMenu extends FrameLayout {
+final class AreaEditorMenu extends UiInputBarrier {
     private static final float MENU_WIDTH_DP = 205.0f;
     private static final float MENU_EDGE_MARGIN_DP = 6.0f;
     private static final float MENU_PADDING_DP = 8.0f;

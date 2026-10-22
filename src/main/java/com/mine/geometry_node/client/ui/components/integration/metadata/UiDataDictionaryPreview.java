@@ -20,6 +20,7 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
     private final UiDisplayText status;
     private final UiActionButton manageButton;
     private DataDictionaryBinding.State state;
+    private boolean editingEnabled = true;
     private Runnable manage;
     private Consumer<String> manageEntry;
 
@@ -45,8 +46,13 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
     }
     public void setManageAction(Runnable action) { manage = action; }
     public void setManageEntryAction(Consumer<String> action) { manageEntry = action; }
+    /** Presentation-only read access: keep search and values, suppress every editor entry point. */
+    public void setEditingEnabled(boolean enabled) {
+        if (editingEnabled == enabled) return;
+        editingEnabled = enabled; renderEntries();
+    }
     private void manage() {
-        if (binding == null || state == null || !state.available() || state.loading()) return;
+        if (!editingEnabled || binding == null || state == null || !state.available() || state.loading() || state.saving()) return;
         if (manage != null) manage.run(); else UiDataDictionaryEditor.show(this, binding, theme);
     }
     @Override protected boolean refreshOnAttach() { return true; }
@@ -57,7 +63,8 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         if (entries == null) return;
         entries.removeAllViews();
         boolean available = state != null && state.available() && !state.loading();
-        search.setEnabled(available); manageButton.setEnabled(available && !state.saving());
+        search.setEnabled(available); manageButton.setVisibility(editingEnabled ? VISIBLE : GONE);
+        manageButton.setEnabled(editingEnabled && available && !state.saving());
         if (!available) {
             status.setText(state == null ? tr("unavailable") : status(state)); return;
         }
@@ -74,10 +81,14 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
             value.setSingleLine(true); value.setEllipsize(TextUtils.TruncateAt.END);
             row.addView(name, params(-1, 20)); row.addView(value, params(-1, 20));
             row.setOnClickListener(view -> {
+                if (!editingEnabled || binding == null || state == null || !state.available() || state.loading() || state.saving()) return;
                 if (manageEntry != null) manageEntry.accept(key);
                 else if (manage != null) manage.run();
                 else UiDataDictionaryEditor.show(this, tr("title"), binding, key, theme);
-            }); entries.addView(row, params(-1, -2));
+            });
+            row.setClickable(editingEnabled && !state.saving());
+            row.setFocusable(editingEnabled && !state.saving());
+            entries.addView(row, params(-1, -2));
         }
     }
 }

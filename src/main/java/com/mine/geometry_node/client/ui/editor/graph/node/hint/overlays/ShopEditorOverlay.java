@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorData.OfferDraft;
@@ -53,7 +55,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class ShopEditorOverlay extends FrameLayout {
+public final class ShopEditorOverlay extends UiInputBarrier {
     // This is a live shop-style preview: retain the warm HUD palette instead of editor surfaces.
     private static final int COLOR_DIM = UiThemes.HUD.surface().overlayDim();
     private static final int COLOR_WINDOW = UiThemes.HUD.surface().root();
@@ -189,18 +191,6 @@ public final class ShopEditorOverlay extends FrameLayout {
         } else {
             return false;
         }
-        return true;
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        super.dispatchTouchEvent(event);
-        return true;
-    }
-
-    @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        super.dispatchGenericMotionEvent(event);
         return true;
     }
 
@@ -916,7 +906,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
     }
 
-    private final class ConditionDropdownMenu extends FrameLayout {
+    private final class ConditionDropdownMenu extends UiInputBarrier {
         private static final int COLOR_MENU_BG = UiThemes.HUD.surface().root();
         private static final int COLOR_MENU_BORDER = UiThemes.HUD.border().divider();
 
@@ -1304,7 +1294,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
     }
 
-    private final class StackSlotMenu extends FrameLayout {
+    private final class StackSlotMenu extends UiInputBarrier {
         private static final int COLOR_MENU_BG = UiThemes.HUD.surface().root();
         private static final int COLOR_MENU_BORDER = UiThemes.HUD.border().divider();
 
@@ -1379,7 +1369,7 @@ public final class ShopEditorOverlay extends FrameLayout {
         }
     }
 
-    private final class QuantityDialog extends FrameLayout {
+    private final class QuantityDialog extends UiInputBarrier {
         private final StackEntryView entry;
         private final EditText input;
 

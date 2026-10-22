@@ -8,10 +8,6 @@ import icyllis.modernui.widget.LinearLayout;
 
 final class AreaSplitView extends LinearLayout {
     private final AreaSplitNode mNode;
-    private final LinearLayout.LayoutParams mFirstParams;
-    private final LinearLayout.LayoutParams mSecondParams;
-    private final View mFirstView;
-    private final View mSecondView;
     private final AreaLayoutRoot mRoot;
 
     AreaSplitView(Context context, AreaLayoutRoot root, AreaSplitNode node) {
@@ -21,18 +17,16 @@ final class AreaSplitView extends LinearLayout {
         setOrientation(node.direction() == AreaSplitDirection.HORIZONTAL ? HORIZONTAL : VERTICAL);
         setBackground(AreaStyle.rect(AreaStyle.COLOR_PLATE));
 
-        mFirstView = root.createNodeView(node.first());
-        mSecondView = root.createNodeView(node.second());
-        AreaLayoutRoot.detachFromParent(mFirstView);
-        AreaLayoutRoot.detachFromParent(mSecondView);
-        mFirstParams = weightedParams(node.ratio());
-        mSecondParams = weightedParams(1.0f - node.ratio());
+        View firstView = root.createNodeView(node.first());
+        View secondView = root.createNodeView(node.second());
+        AreaLayoutRoot.detachFromParent(firstView);
+        AreaLayoutRoot.detachFromParent(secondView);
 
-        addView(mFirstView, mFirstParams);
+        addView(firstView, weightedParams(node.ratio()));
         ResizableDivider.Orientation orientation = toDividerOrientation(node.direction());
         addView(new ResizableDivider(context, orientation, this::handleDividerDrag),
                 ResizableDivider.layoutParams(orientation));
-        addView(mSecondView, mSecondParams);
+        addView(secondView, weightedParams(1.0f - node.ratio()));
     }
 
     private void handleDividerDrag(float delta) {
@@ -46,11 +40,17 @@ final class AreaSplitView extends LinearLayout {
     }
 
     private void applyWeights() {
-        mFirstParams.weight = mNode.ratio();
-        mSecondParams.weight = 1.0f - mNode.ratio();
-        mFirstView.setLayoutParams(mFirstParams);
-        mSecondView.setLayoutParams(mSecondParams);
+        // Splitting or closing a descendant can replace either direct child. The
+        // original view may now belong to a nested split with a different axis.
+        applyWeight(getChildAt(0), mNode.ratio());
+        applyWeight(getChildAt(2), 1.0f - mNode.ratio());
         requestLayout();
+    }
+
+    private static void applyWeight(View pane, float weight) {
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) pane.getLayoutParams();
+        params.weight = weight;
+        pane.setLayoutParams(params);
     }
 
     private LinearLayout.LayoutParams weightedParams(float weight) {

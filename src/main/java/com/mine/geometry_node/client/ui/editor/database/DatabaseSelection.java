@@ -65,14 +65,17 @@ public record DatabaseSelection(String title, String subtitle, String iconPath, 
     public record Action(String label, Runnable run) {}
 
     /** Async owner capability; the inspector never stores a second authoritative dictionary. */
-    public record DataEditor(String target, int count, DataDictionaryBinding binding) {
+    public record DataEditor(String target, int count, DataDictionaryBinding binding, boolean editable) {
         public DataEditor {
             Objects.requireNonNull(target);
             Objects.requireNonNull(binding);
             if (count < 0) throw new IllegalArgumentException("Negative data count");
         }
+        public DataEditor(String target, int count, DataDictionaryBinding binding) {
+            this(target, count, binding, true);
+        }
         boolean hasSamePresentation(DataEditor other) {
-            return other != null && target.equals(other.target) && count == other.count;
+            return other != null && target.equals(other.target) && count == other.count && editable == other.editable;
         }
     }
 

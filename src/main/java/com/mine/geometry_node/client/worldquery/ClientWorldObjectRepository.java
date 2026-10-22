@@ -234,6 +234,7 @@ public final class ClientWorldObjectRepository {
 
     public final class Session implements AutoCloseable {
         private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
+        private boolean dataOnly;
         private volatile Snapshot published = new Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), false, 0);
         private long requestId, sentAt, scopeRevision, tagScopeRevision, tagSentAt;
         private volatile long tagRequestId;
@@ -432,7 +433,24 @@ public final class ClientWorldObjectRepository {
                         page.types(), page.coverage(), page.message(), page.counts()), before.loading(), before.sequence() + 1);
             } catch (IllegalArgumentException pageLimit) { /* On-demand state remains valid even if a full page has no summary byte headroom. */ }
         }
+        /**
+         * Retains one currently authorized target for a separate edit lifetime. No query is shared:
+         * replacing/closing the table query cannot cancel this editor's reads and completed writes.
+         * Server-side target authorization and revisions still validate every operation.
+         */
+        public Session forkDataSession(WorldObjectEntry entry) {
+            synchronized (ClientWorldObjectRepository.this) {
+                if (!dataTarget(entry)) throw new IllegalStateException("Stale world data target");
+                Session fork = newSession();
+                fork.dataOnly = true;
+                fork.published = new Snapshot(published.query(), new WorldObjectPage(0,
+                        List.of(entry), false, List.of(), List.of(), List.of(), ""), false, 0);
+                return fork;
+            }
+        }
+
         public long query(WorldObjectQuery query) {
+            if (dataOnly) throw new IllegalStateException("Data edit sessions cannot replace their target");
             PreparedQuery prepared = prepareQuery(query, false);
             clientQueue.accept(prepared.dispatch());
             return prepared.id();

@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayEscapeCapture;
 import com.mine.geometry_node.client.ui.overlay.UiOverlay;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,17 +48,24 @@ public final class MainUiLayerManager implements AutoCloseable {
     private Entry tooltipEntry;
     private int closingDepth;
     private int replacementDepth;
+    private boolean refreshingModals;
+    private boolean refreshModalsRequested;
     private boolean closed;
     private Consumer<Boolean> interactionBlockedListener = ignored -> {};
+    private Boolean interactionBlocked;
 
     /** Lets the workspace release exclusive input without coupling overlays to Minecraft. */
     public void setInteractionBlockedListener(Consumer<Boolean> listener) {
         interactionBlockedListener = Objects.requireNonNull(listener, "listener");
+        interactionBlocked = null;
         notifyInteractionBlocked();
     }
 
     private void notifyInteractionBlocked() {
-        interactionBlockedListener.accept(hasModalOverlay() || hasTransientOverlay());
+        boolean blocked = hasModalOverlay() || hasTransientOverlay();
+        if (interactionBlocked != null && interactionBlocked == blocked) return;
+        interactionBlocked = blocked;
+        interactionBlockedListener.accept(blocked);
     }
 
     public MainUiLayerManager(Context context, MainUiLayerHost transientHost, MainUiLayerHost modalHost,
@@ -89,7 +97,7 @@ public final class MainUiLayerManager implements AutoCloseable {
 
     /** Route before workspace shortcuts, even when focus was moved by a callback. */
     public boolean dispatchKeyEvent(KeyEvent event) {
-        Entry top = transientEntry != null ? transientEntry : modalStack.peekLast();
+        Entry top = transientEntry != null ? transientEntry : activeModal();
         return top != null && top.container.dispatchKeyEvent(event);
     }
 
@@ -135,19 +143,12 @@ public final class MainUiLayerManager implements AutoCloseable {
             throw new IllegalStateException("The active transient overlay refused modal presentation");
         }
 
-        Entry previousTop = modalStack.peekLast();
         Entry entry = mount(modal, modalHost, true,
                 options.closeOnOutsideClick(), options.closeOnEscape(), options.returnFocusTarget(),
                 options.scrimColor());
-        if (previousTop != null) {
-            previousTop.container.setEnabled(false);
-            previousTop.container.setFocusable(false);
-        }
         modalStack.addLast(entry);
-        notifyInteractionBlocked();
-        entry.dragBlocker = WorkspaceDragDropRegistry.modalBlocker();
         WorkspaceDragService.INSTANCE.cancel();
-        modalHost.setVisibility(View.VISIBLE);
+        refreshModalPresentation();
         notifyShown(entry);
         focusTopModal();
         return entry.handle;
@@ -160,7 +161,7 @@ public final class MainUiLayerManager implements AutoCloseable {
 
     public boolean closeTopModal(OverlayCloseReason reason) {
         Objects.requireNonNull(reason, "reason");
-        Entry top = modalStack.peekLast();
+        Entry top = activeModal();
         return top == null || closeEntry(top, reason, false);
     }
 
@@ -169,9 +170,10 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     public boolean hasModalOverlay() {
-        return !modalStack.isEmpty();
+        return activeModal() != null;
     }
 
+    /** Number of logical modal sessions, including suspended ones. */
     public int modalCount() {
         return modalStack.size();
     }
@@ -192,8 +194,9 @@ public final class MainUiLayerManager implements AutoCloseable {
         if (transientEntry != null) {
             closeEntry(transientEntry, OverlayCloseReason.HOST_DESTROYED, true);
         }
-        while (!modalStack.isEmpty()) {
-            closeEntry(modalStack.peekLast(), OverlayCloseReason.HOST_DESTROYED, true);
+        // Include retained sessions, and give every shutdown entry the host reason.
+        for (Entry entry : new ArrayList<>(mounted.values())) {
+            closeEntry(entry, OverlayCloseReason.HOST_DESTROYED, true);
         }
         transientHost.removeAllViews();
         transientHost.setVisibility(View.GONE);
@@ -214,7 +217,9 @@ public final class MainUiLayerManager implements AutoCloseable {
 
         Entry entry = new Entry(overlay, host, modal, closeOnOutsideClick, closeOnEscape, returnFocusTarget);
         entry.owner = findOwner(returnFocusTarget);
-        if (entry.owner == null && host != tooltipHost) entry.owner = modalStack.peekLast();
+        if (entry.owner == null && returnFocusTarget == null && host != tooltipHost) {
+            entry.owner = activeModal();
+        }
         while (entry.owner != null && !entry.owner.open) entry.owner = entry.owner.owner;
         if (entry.returnFocusTarget == null && host != tooltipHost) {
             entry.returnFocusTarget = entry.owner != null ? entry.owner.container.findFocus()
@@ -252,6 +257,8 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     private void notifyShown(Entry entry) {
+        if (!entry.open) return;
+        entry.shown = true;
         try {
             entry.overlay.onShown(entry.handle);
         } catch (RuntimeException exception) {
@@ -259,7 +266,8 @@ public final class MainUiLayerManager implements AutoCloseable {
             closeEntry(entry, OverlayCloseReason.PROGRAMMATIC, true);
             throw exception;
         }
-        if (entry.open && entry.host != tooltipHost && entry.container.findFocus() == null) {
+        if (entry.modal) refreshModalPresentation();
+        if (entry.open && !entry.suspended && entry.host != tooltipHost && entry.container.findFocus() == null) {
             entry.container.setFocusable(true);
             entry.container.setFocusableInTouchMode(true);
             entry.container.requestFocus();
@@ -281,18 +289,21 @@ public final class MainUiLayerManager implements AutoCloseable {
         try {
             // Descendants cannot outlive their parent, even if they reject user dismissal.
             for (Entry child : new ArrayList<>(mounted.values())) {
-                if (child.owner == entry) closeEntry(child, OverlayCloseReason.OWNER_CLOSED, true);
+                if (child.owner == entry) closeEntry(child, reason == OverlayCloseReason.HOST_DESTROYED
+                        ? reason : OverlayCloseReason.OWNER_CLOSED, true);
             }
             mounted.remove(entry.overlay);
             if (entry == transientEntry) transientEntry = null;
             if (entry == tooltipEntry) tooltipEntry = null;
             if (entry.modal) modalStack.remove(entry);
-            notifyInteractionBlocked();
+            entry.suspended = false;
             if (entry.dragBlocker != null) {
                 entry.dragBlocker.close();
                 entry.dragBlocker = null;
             }
             try {
+                entry.container.setVisibility(View.GONE);
+                entry.container.clearFocus();
                 if (entry.container.getParent() == entry.host) entry.host.removeView(entry.container);
             } catch (RuntimeException exception) {
                 LOGGER.error("MainUI overlay detach failed", exception);
@@ -304,6 +315,7 @@ public final class MainUiLayerManager implements AutoCloseable {
             }
             repairEmptyModalHost();
             updateHostVisibility(entry.host);
+            if (closingDepth == 1) refreshModalPresentation();
             notifyClosed(entry, reason);
         } finally {
             if (reason == OverlayCloseReason.REPLACED) replacementDepth--;
@@ -344,17 +356,24 @@ public final class MainUiLayerManager implements AutoCloseable {
             if (transientEntry.container.findFocus() == null) transientEntry.container.requestFocus();
             return;
         }
-        if (!modalStack.isEmpty()) {
+        if (activeModal() != null) {
             focusTopModal();
-            Entry top = modalStack.peekLast();
+            Entry top = activeModal();
             if (top != null && entry.returnFocusTarget != null
                     && isDescendantOf(entry.returnFocusTarget, top.container)) {
                 entry.returnFocusTarget.requestFocus();
             }
             return;
         }
-        if (entry.returnFocusTarget != null && entry.returnFocusTarget.isAttachedToWindow()) {
-            entry.returnFocusTarget.requestFocus();
+        View target = entry.returnFocusTarget;
+        // Never return focus into another retained, hidden session.
+        for (int remaining = mounted.size() + 1; target != null && remaining > 0; remaining--) {
+            Entry owner = findOwner(target);
+            if (owner == null) break;
+            target = owner.returnFocusTarget;
+        }
+        if (target != null && findOwner(target) == null && target.isAttachedToWindow()) {
+            target.requestFocus();
         }
     }
 
@@ -381,19 +400,143 @@ public final class MainUiLayerManager implements AutoCloseable {
     }
 
     private void focusTopModal() {
-        Entry top = modalStack.peekLast();
+        Entry top = activeModal();
         if (top != null && top.open) {
             top.container.setEnabled(true);
             top.container.setFocusable(true);
             top.container.setFocusableInTouchMode(true);
             if (top.container.findFocus() == null) {
-                top.container.requestFocus();
+                if (top.savedFocus == null || !isDescendantOf(top.savedFocus, top.container)
+                        || !top.savedFocus.requestFocus()) top.container.requestFocus();
             }
         }
     }
 
     private void updateHostVisibility(MainUiLayerHost host) {
-        host.setVisibility(host.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+        for (int index = 0; index < host.getChildCount(); index++) {
+            if (host.getChildAt(index).getVisibility() == View.VISIBLE) {
+                host.setVisibility(View.VISIBLE);
+                return;
+            }
+        }
+        host.setVisibility(View.GONE);
+    }
+
+    private Entry activeModal() {
+        if (closed) return null;
+        var entries = modalStack.descendingIterator();
+        while (entries.hasNext()) {
+            Entry entry = entries.next();
+            if (isBranchAvailable(entry)) return entry;
+        }
+        return null;
+    }
+
+    private boolean isBranchAvailable(Entry entry) {
+        for (Entry current = entry; current != null; current = current.owner) {
+            if (!current.open || current.explicitlySuspended) return false;
+        }
+        return true;
+    }
+
+    private static boolean isOwnedBy(Entry entry, Entry owner) {
+        for (Entry current = entry; current != null; current = current.owner) {
+            if (current == owner) return true;
+        }
+        return false;
+    }
+
+    private boolean suspendEntry(Entry entry) {
+        Core.checkUiThread();
+        if (closed || !entry.open || !entry.modal) return false;
+        entry.explicitlySuspended = true;
+        // Menus and tooltips are transient presentations, not retained windows.
+        for (Entry child : new ArrayList<>(mounted.values())) {
+            if (!child.modal && isOwnedBy(child, entry)) {
+                closeEntry(child, OverlayCloseReason.REPLACED, true);
+            }
+        }
+        refreshModalPresentation();
+        if (activeModal() == null && transientEntry == null) restoreFocusAfterClose(entry);
+        return entry.open;
+    }
+
+    private boolean resumeEntry(Entry entry) {
+        Core.checkUiThread();
+        if (closed || !entry.open || !entry.modal) return false;
+        // A child cannot override an ancestor's explicit suspension (including a hidden source).
+        for (Entry ancestor = entry.owner; ancestor != null; ancestor = ancestor.owner) {
+            if (!ancestor.open || ancestor.explicitlySuspended) return false;
+        }
+        entry.explicitlySuspended = false;
+        Entry branch = entry;
+        while (branch.owner != null && branch.owner.modal) branch = branch.owner;
+        // Keep descendants above their owner, including independently suspended children.
+        for (Entry member : new ArrayList<>(modalStack)) {
+            if (isOwnedBy(member, branch)) {
+                modalStack.remove(member);
+                modalStack.addLast(member);
+                modalHost.bringChildToFront(member.container);
+            }
+        }
+        WorkspaceDragService.INSTANCE.cancel();
+        refreshModalPresentation();
+        return entry.open;
+    }
+
+    /** Apply visibility/input ownership before calling business lifecycle hooks. */
+    private void refreshModalPresentation() {
+        refreshModalsRequested = true;
+        if (refreshingModals) return;
+        refreshingModals = true;
+        try {
+            do {
+                refreshModalsRequested = false;
+                Entry top = activeModal();
+                for (Entry entry : new ArrayList<>(modalStack)) {
+                    if (!entry.open) continue;
+                    boolean suspended = entry != top;
+                    if (entry.suspended != suspended) {
+                        if (suspended) entry.savedFocus = entry.container.findFocus();
+                        entry.suspended = suspended;
+                    }
+                    if (suspended && entry.dragBlocker != null) {
+                        entry.dragBlocker.close();
+                        entry.dragBlocker = null;
+                    }
+                    if (suspended) entry.container.clearFocus();
+                    if (!entry.open) continue;
+                    entry.container.setVisibility(suspended ? View.GONE : View.VISIBLE);
+                    if (!entry.open) continue;
+                    entry.container.setEnabled(!suspended);
+                    entry.container.setFocusable(!suspended);
+                    if (!suspended && entry.open && entry.dragBlocker == null) {
+                        entry.dragBlocker = WorkspaceDragDropRegistry.modalBlocker();
+                    }
+                }
+                updateHostVisibility(modalHost);
+                notifyInteractionBlocked();
+                if (!closed && transientEntry == null) focusTopModal();
+                for (Entry entry : new ArrayList<>(modalStack)) {
+                    if (closed || !entry.open || !entry.shown
+                            || entry.notifiedSuspended == entry.suspended) continue;
+                    // A previous callback may already have changed the requested top.
+                    if (entry.suspended != (entry != activeModal())) {
+                        refreshModalsRequested = true;
+                        continue;
+                    }
+                    entry.notifiedSuspended = entry.suspended;
+                    try {
+                        if (entry.suspended) entry.overlay.onSuspended();
+                        else entry.overlay.onResumed();
+                    } catch (RuntimeException exception) {
+                        LOGGER.error("MainUI overlay presentation callback failed", exception);
+                    }
+                }
+            } while (refreshModalsRequested);
+        } finally {
+            refreshingModals = false;
+        }
     }
 
     private void repairEmptyModalHost() {
@@ -418,7 +561,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
     }
 
-    private final class OverlayContainer extends FrameLayout {
+    private final class OverlayContainer extends UiInputBarrier {
         private final Entry entry;
         private boolean outsideGesture;
 
@@ -429,8 +572,14 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
 
         @Override
+        protected boolean blocksPointerInput() {
+            // The scrim owns input for every instant it remains visible, even during cleanup.
+            return getVisibility() == View.VISIBLE && entry.host != tooltipHost;
+        }
+
+        @Override
         public boolean dispatchKeyEvent(KeyEvent event) {
-            if (!entry.open || entry.host == tooltipHost) return false;
+            if (!entry.open || entry.suspended || entry.host == tooltipHost) return false;
             if (entry.open && entry.closeOnEscape
                     && event.getAction() == KeyEvent.ACTION_DOWN
                     && event.getKeyCode() == KeyEvent.KEY_ESCAPE) {
@@ -448,8 +597,8 @@ public final class MainUiLayerManager implements AutoCloseable {
 
         @Override
         public boolean dispatchTouchEvent(MotionEvent event) {
-            if (entry.host == tooltipHost) return false;
-            if (!entry.open || entry.modal && entry != modalStack.peekLast()) return true;
+            if (!blocksPointerInput()) return false;
+            if (!entry.open || entry.suspended || entry.modal && entry != activeModal()) return true;
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_DOWN) {
                 outsideGesture = !isInsideContent(event.getX(), event.getY());
@@ -470,25 +619,13 @@ public final class MainUiLayerManager implements AutoCloseable {
 
         @Override
         public boolean dispatchGenericMotionEvent(MotionEvent event) {
-            if (entry.host == tooltipHost) return false;
-            if (!entry.open || entry.modal && entry != modalStack.peekLast()) return true;
+            if (!blocksPointerInput()) return false;
+            if (!entry.open || entry.suspended || entry.modal && entry != activeModal()) return true;
             if (consumeOverlayHover(entry, event.getRawX(), event.getRawY())) {
                 return true;
             }
-            if (isInsideContent(event.getX(), event.getY())) {
-                super.dispatchGenericMotionEvent(event);
-            }
-            return true;
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            return true;
-        }
-
-        @Override
-        public boolean onGenericMotionEvent(MotionEvent event) {
-            return true;
+            // Always dispatch so leaving the window also clears its old hover targets.
+            return super.dispatchGenericMotionEvent(event);
         }
 
         private boolean isInsideContent(float x, float y) {
@@ -527,6 +664,7 @@ public final class MainUiLayerManager implements AutoCloseable {
         private final boolean closeOnOutsideClick;
         private final boolean closeOnEscape;
         private View returnFocusTarget;
+        private View savedFocus;
         private WorkspaceDragDropRegistry.ModalBlocker dragBlocker;
         private final OverlayHandle handle = new EntryHandle(this);
 
@@ -534,6 +672,10 @@ public final class MainUiLayerManager implements AutoCloseable {
         private View content;
         private Entry owner;
         private boolean open = true;
+        private boolean shown;
+        private boolean suspended;
+        private boolean notifiedSuspended;
+        private boolean explicitlySuspended;
         private boolean checkingClose;
 
         private Entry(UiOverlay overlay, MainUiLayerHost host, boolean modal,
@@ -560,8 +702,25 @@ public final class MainUiLayerManager implements AutoCloseable {
         }
 
         @Override
+        public boolean suspend() {
+            return suspendEntry(entry);
+        }
+
+        @Override
+        public boolean resume() {
+            return resumeEntry(entry);
+        }
+
+        @Override
+        public boolean isSuspended() {
+            return entry.open && entry.suspended;
+        }
+
+        @Override
         public boolean requestClose(OverlayCloseReason reason) {
-            return closeEntry(entry, Objects.requireNonNull(reason, "reason"), false);
+            Objects.requireNonNull(reason, "reason");
+            return closeEntry(entry, reason, reason == OverlayCloseReason.OWNER_CLOSED
+                    || reason == OverlayCloseReason.HOST_DESTROYED);
         }
     }
 }

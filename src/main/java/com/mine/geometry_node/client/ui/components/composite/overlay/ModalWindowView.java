@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.overlay.UiWindowLifetime;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -76,6 +77,10 @@ public class ModalWindowView extends LinearLayout implements UiModal {
 
     private MovementMode movementMode;
     private OverlayHandle overlayHandle;
+    private UiWindowLifetime sessionOwner;
+    private AutoCloseable ownerSubscription;
+    private boolean suspendedByOwner;
+    private boolean manuallySuspended;
     private float preferredWidthDp = DEFAULT_WIDTH_DP;
     private float preferredHeightDp;
     private float minimumWidthDp = DEFAULT_MIN_WIDTH_DP;
@@ -248,9 +253,56 @@ public class ModalWindowView extends LinearLayout implements UiModal {
         requestLayout();
     }
 
+    /** Opt in to the logical source window lifetime; temporary View detachment is irrelevant. */
+    public final void bindSessionOwner(View anchor) {
+        if (overlayHandle != null) throw new IllegalStateException("Bind owner before showing the window");
+        sessionOwner = UiWindowLifetime.find(anchor);
+    }
+
+    private void reconcileOwner(UiWindowLifetime.State state) {
+        if (overlayHandle == null || !overlayHandle.isOpen()) return;
+        switch (state) {
+            case HIDDEN -> {
+                // A covered parent is effectively suspended already, but still needs an explicit
+                // owner suspension so closing its child cannot reveal it while the source is hidden.
+                suspendedByOwner = !manuallySuspended;
+                overlayHandle.suspend();
+            }
+            case VISIBLE -> {
+                if (suspendedByOwner) {
+                    suspendedByOwner = false;
+                    if (!manuallySuspended) overlayHandle.resume();
+                }
+            }
+            case CLOSED -> overlayHandle.requestClose(OverlayCloseReason.OWNER_CLOSED);
+        }
+    }
+
+    private void releaseOwner() {
+        if (ownerSubscription == null) return;
+        try { ownerSubscription.close(); }
+        catch (Exception failure) { throw new IllegalStateException("Cannot release window owner", failure); }
+        finally { ownerSubscription = null; }
+    }
+
     public final boolean requestClose() {
         return overlayHandle != null
                 && overlayHandle.requestClose(OverlayCloseReason.PROGRAMMATIC);
+    }
+
+    /** Hides this window and its descendants without closing or validating its form. */
+    public final boolean suspendWindow() {
+        boolean suspended = overlayHandle != null && overlayHandle.suspend();
+        if (suspended) manuallySuspended = true;
+        return suspended;
+    }
+
+    /** Restores the retained window branch without invoking onWindowShown again. */
+    public final boolean resumeWindow() {
+        if (sessionOwner != null && sessionOwner.state() != UiWindowLifetime.State.VISIBLE) return false;
+        boolean resumed = overlayHandle != null && overlayHandle.resume();
+        if (resumed) { manuallySuspended = false; suspendedByOwner = false; }
+        return resumed;
     }
 
     @Override
@@ -274,23 +326,52 @@ public class ModalWindowView extends LinearLayout implements UiModal {
     @Override
     public final void onShown(OverlayHandle handle) {
         overlayHandle = Objects.requireNonNull(handle, "handle");
+        if (sessionOwner != null && sessionOwner.state() == UiWindowLifetime.State.CLOSED) {
+            overlayHandle.requestClose(OverlayCloseReason.OWNER_CLOSED);
+            return;
+        }
         onWindowShown();
+        if (sessionOwner != null && overlayHandle != null && overlayHandle.isOpen()) {
+            ownerSubscription = sessionOwner.observe(this::reconcileOwner);
+            reconcileOwner(sessionOwner.state());
+        }
+        post(this::constrainToParent);
+    }
+
+    @Override
+    public final void onSuspended() {
+        dragging = false;
+        onWindowSuspended();
+    }
+
+    @Override
+    public final void onResumed() {
+        onWindowResumed();
         post(this::constrainToParent);
     }
 
     @Override
     public final void onClosed(OverlayCloseReason reason) {
         dragging = false;
+        releaseOwner();
         onWindowClosed(reason);
     }
 
     @Override
     public final void onDestroyed() {
+        releaseOwner();
         overlayHandle = null;
+        sessionOwner = null;
         onWindowDestroyed();
     }
 
     protected void onWindowShown() {
+    }
+
+    protected void onWindowSuspended() {
+    }
+
+    protected void onWindowResumed() {
     }
 
     protected void onWindowClosed(OverlayCloseReason reason) {

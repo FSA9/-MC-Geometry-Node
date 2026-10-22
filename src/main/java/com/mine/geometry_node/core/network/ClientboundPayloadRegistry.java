@@ -71,6 +71,8 @@ public final class ClientboundPayloadRegistry {
         add(com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.TYPE,
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.STREAM_CODEC);
         add(PacketAssetPreviewResponse.TYPE, PacketAssetPreviewResponse.STREAM_CODEC);
+        add(com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorResult.TYPE,
+                com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorResult.STREAM_CODEC);
         add(PacketRemoteDataLibraryResponse.TYPE, PacketRemoteDataLibraryResponse.STREAM_CODEC);
         add(com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.TYPE,
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.STREAM_CODEC);

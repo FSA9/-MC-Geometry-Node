@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
 import com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository;
 import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
 import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataEdits;
 import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry;
 import com.mine.geometry_node.core.metadata.DataDictionary;
 import net.minecraft.network.chat.Component;
@@ -57,40 +56,73 @@ public final class DatabaseDataBindings {
     public static DataDictionaryBinding world(ClientWorldObjectRepository.Session session, WorldObjectEntry expected,
                                                BooleanSupplier active) {
         Objects.requireNonNull(session); Objects.requireNonNull(expected); Objects.requireNonNull(active);
+        return worldBinding(session, expected, active, false);
+    }
+
+    private static DataDictionaryBinding worldBinding(ClientWorldObjectRepository.Session session,
+            WorldObjectEntry expected, BooleanSupplier active, boolean owned) {
         return new DataDictionaryBinding() {
-            private WorldObjectEntry current() {
-                if (!active.getAsBoolean()) return null;
-                String token = expected.references().get(WorldObjectDataEdits.TARGET_REFERENCE);
-                return session.snapshot().entries().stream().filter(row -> row.key().equals(expected.key())
-                        && token != null && token.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE)))
-                        .findFirst().orElse(null);
+            private ClientWorldObjectRepository.Session editorSession;
+            private boolean closed;
+            private ClientWorldObjectRepository.Session source() {
+                if (closed || !active.getAsBoolean()) return null;
+                if (!owned) return session;
+                if (editorSession == null) {
+                    try { editorSession = session.forkDataSession(expected); }
+                    catch (IllegalStateException stale) { return null; }
+                }
+                return editorSession;
+            }
+            @Override public DataDictionaryBinding openSession() {
+                return worldBinding(session, expected, active, true);
             }
             @Override public State snapshot() {
-                var row = current();
-                if (row == null) return new State(Map.of(), false, false, false, false, "");
-                var state = session.dataSnapshot(row);
-                // A capability can be advertised before its first on-demand read has been sent.
+                var source = source();
+                if (source == null) return new State(Map.of(), false, false, false, false, "");
+                var state = source.dataSnapshot(expected);
                 boolean unread = state.available() && !state.editable() && !state.loading() && state.message().isEmpty();
                 return new State(state.values(), state.loading() || unread, state.available(), state.editable(),
                         state.pending(), localized(state.message()));
             }
             @Override public void refresh() {
-                var row = current();
-                if (row != null) session.requestData(row);
+                var source = source();
+                if (source != null) source.requestData(expected);
             }
             @Override public void reload() {
-                var row = current();
-                if (row != null) session.refreshData(row);
+                var source = source();
+                if (source != null) source.refreshData(expected);
             }
             @Override public void apply(Map<String, Object> baseline, Map<String, Object> replacement,
                                         Consumer<String> completion) {
-                var row = current();
-                if (row == null) { completion.accept(message("unavailable")); return; }
-                if (!session.replaceData(row, baseline, replacement, result -> completion.accept(localized(result))))
+                var source = source();
+                if (source == null) { completion.accept(message("unavailable")); return; }
+                if (!source.replaceData(expected, baseline, replacement, result -> {
+                    // The passive inspector has a separate query lifetime. Refresh its cached DATA
+                    // after an edit without replacing its table query or coupling session ownership.
+                    try {
+                        if (owned && (result == null || result.isEmpty())) session.refreshData(expected);
+                    } catch (RuntimeException refreshFailure) {
+                        System.getLogger(DatabaseDataBindings.class.getName()).log(System.Logger.Level.WARNING,
+                                "Cannot refresh data preview after a completed edit", refreshFailure);
+                    }
+                    completion.accept(localized(result));
+                }))
                     completion.accept(message("conflict"));
             }
-            @Override public void addChangeListener(Runnable listener) { session.addChangeListener(listener); }
-            @Override public void removeChangeListener(Runnable listener) { session.removeChangeListener(listener); }
+            @Override public void addChangeListener(Runnable listener) {
+                var source = source();
+                if (source != null) source.addChangeListener(listener);
+            }
+            @Override public void removeChangeListener(Runnable listener) {
+                if (!owned) session.removeChangeListener(listener);
+                else if (editorSession != null) editorSession.removeChangeListener(listener);
+            }
+            @Override public void close() {
+                if (!owned || closed) return;
+                closed = true;
+                if (editorSession != null) editorSession.close();
+                editorSession = null;
+            }
         };
     }
 

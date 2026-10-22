@@ -137,6 +137,12 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
         super(context);
     }
 
+    /** Cursor previews use the native renderer's GUI-space mouse position. They need their own
+     * surface because a shared viewport renderer does not supply per-preview pointer coordinates. */
+    protected boolean followsNativePointer() {
+        return false;
+    }
+
     protected final void updateNativePreviewScale(float scale) {
         synchronized (mTransformLock) {
             mViewportScale = sanitizeScale(scale);
@@ -290,7 +296,7 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
         super.onAttachedToWindow();
         mAggregatedVisible = isShown();
         releaseNativePreviewRegistration();
-        NativePreviewHost host = findNativePreviewHost();
+        NativePreviewHost host = followsNativePointer() ? null : findNativePreviewHost();
         if (host != null) {
             removeFallbackSurface();
             mPreviewRegistration = host.registerNativePreview(this);
@@ -337,7 +343,9 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
                 // updateSurface() reads alpha, origin and size together on the UI thread.
                 // Encode clipping in that same packet: comparing its synchronized pose with a
                 // newer volatile UI position would drop otherwise visible frames during scrolling.
-                return isFullyVisible() ? super.getAlpha() : 0.0f;
+                // Pointer content is drawn at the render callback's mouse position, not this
+                // surface's UI rectangle. Clipping the latter must not hide the carried item.
+                return followsNativePointer() || isFullyVisible() ? super.getAlpha() : 0.0f;
             }
         };
         mFallbackSurface = surface;
@@ -372,8 +380,10 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
                         deltaTick,
                         guiScale,
                         alpha,
-                        graphics.pose().m20() * safeGuiScale,
-                        graphics.pose().m21() * safeGuiScale,
+                        followsNativePointer() ? mouseX * safeGuiScale - renderWidth / 2f
+                                : graphics.pose().m20() * safeGuiScale,
+                        followsNativePointer() ? mouseY * safeGuiScale - renderHeight / 2f
+                                : graphics.pose().m21() * safeGuiScale,
                         renderWidth,
                         renderHeight,
                         1.0f

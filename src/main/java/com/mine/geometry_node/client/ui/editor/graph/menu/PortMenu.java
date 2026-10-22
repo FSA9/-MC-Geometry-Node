@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -69,7 +70,7 @@ public class PortMenu {
         final String finalCategory = category;
 
         Context uiContext = context.getUIContext();
-        FrameLayout popupOverlay = new FrameLayout(uiContext);
+        FrameLayout popupOverlay = new UiInputBarrier(uiContext);
         popupOverlay.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         popupOverlay.setOnClickListener(v -> close(context, popupOverlay));
 

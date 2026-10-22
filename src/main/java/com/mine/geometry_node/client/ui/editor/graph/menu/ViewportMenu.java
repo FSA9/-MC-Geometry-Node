@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.graph.query.NodeSearchService;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
@@ -33,7 +34,7 @@ import java.util.Stack;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ViewportMenu extends FrameLayout {
+public class ViewportMenu extends UiInputBarrier {
     private static final int MENU_WIDTH_DP = 220;
     private static final int MENU_PADDING_DP = 8;
     private static final int MENU_EDGE_MARGIN_DP = 6;

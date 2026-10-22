@@ -71,6 +71,7 @@ final class DatabaseInspectorViews {
 
     static View actions(Context context, List<DatabaseSelection.Action> actions) {
         LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         for (int i = 0; i < actions.size(); i++) {
             DatabaseSelection.Action action = actions.get(i);

@@ -49,6 +49,7 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        com.mine.geometry_node.client.entityeditor.ClientEntityEditor.INSTANCE.init();
         com.mine.geometry_node.client.entitypreview.EntityPreviewClient.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.TYPE,

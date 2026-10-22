@@ -224,6 +224,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
                     if (accepted) {
                         mRoot.finishLeafDrag(event.getRawX(), event.getRawY());
                     } else {
+                        WorkspaceDragService.INSTANCE.cancelIfSource(mRoot);
                         mRoot.cancelLeafDrag();
                     }
                 } else {

@@ -29,6 +29,7 @@ import com.mine.geometry_node.client.ui.components.composite.table.UiTableRowFra
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
+import com.mine.geometry_node.client.ui.editor.entity.EntityEditorWindow;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -100,7 +101,7 @@ public final class WorldObjectsView extends FrameLayout {
             UiTableStyle.column("position", 180),
             UiTableStyle.column("lifetime", 100),
             UiTableStyle.column("tags", 180),
-            UiTableStyle.column("data", 220)));
+            UiTableStyle.column("data", 220)), UiTableColumns.Sizing.INDEPENDENT);
     private final LinearLayout table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
@@ -603,7 +604,8 @@ public final class WorldObjectsView extends FrameLayout {
         line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
         UiDataSummaryCell dataCell = new UiDataSummaryCell(getContext());
         dataCell.setSummary(dataCount(entry), entry.references().getOrDefault(WorldObjectDataEdits.SUMMARY_REFERENCE, ""),
-                entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE) ? () -> openDataEditor(entry) : null);
+                !isNativeEntity(entry) && entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
+                        ? () -> openDataEditor(entry) : null);
         line.addView(dataCell, new ViewGroup.LayoutParams(-1, -1));
 
         // Cells determine height; background and selection overlays follow without stretching the row.
@@ -712,7 +714,8 @@ public final class WorldObjectsView extends FrameLayout {
             binding.checkbox().setEnabled(enabled);
         });
         selectAll.setEnabled(enabled && !rowBindings.isEmpty());
-        focusButton.setEnabled(enabled && !selectedEntries().isEmpty());
+        List<WorldObjectEntry> entries = selectedEntries();
+        focusButton.setEnabled(enabled && !entries.isEmpty());
     }
     private List<WorldObjectEntry> selectedEntries() {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
@@ -726,6 +729,10 @@ public final class WorldObjectsView extends FrameLayout {
                 List.of(new DatabaseSelection.Field(tr("selected_count"),Integer.toString(entries.size()))),
                 List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of());
         var entry=entries.getFirst();
+        boolean nativeEntity = isNativeEntity(entry);
+        List<DatabaseSelection.Action> actions = new ArrayList<>();
+        actions.add(new DatabaseSelection.Action(tr("focus"), this::focusSelected));
+        if (nativeEntity) actions.add(new DatabaseSelection.Action(entityEditLabel(), this::editSelected));
         var position=List.of(new DatabaseSelection.Field("X",number(entry.position().x)),
                 new DatabaseSelection.Field("Y",number(entry.position().y)),new DatabaseSelection.Field("Z",number(entry.position().z)));
         var metadata=List.of(new DatabaseSelection.Field(tr("type"), entry.provider().equals("native")
@@ -743,12 +750,12 @@ public final class WorldObjectsView extends FrameLayout {
                 source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
         return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr("world"),
                 "",UiThemes.EDITOR.text().muted(),List.of(),
-                List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of(
+                actions,List.of(
                 new DatabaseSelection.Section(tr("spatial_position"),entry.dimension(),DatabaseSelection.Kind.POSITION,position),
                 new DatabaseSelection.Section(tr("object_information"),"",DatabaseSelection.Kind.METADATA,metadata),
                 new DatabaseSelection.Section(tr("tags"),"",DatabaseSelection.Kind.TAGS,
                         entry.tags().stream().map(tag->new DatabaseSelection.Field("",tag)).toList(),
-                        session.canEditTags(entry) ? new DatabaseSelection.TagEditor(
+                        !nativeEntity && session.canEditTags(entry) ? new DatabaseSelection.TagEditor(
                                 entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
                                 !session.isTagUpdatePending(), session.tagUpdateMessage().isEmpty() ? ""
                                         : Component.translatable("geometry_node." + session.tagUpdateMessage()).getString(),
@@ -757,7 +764,7 @@ public final class WorldObjectsView extends FrameLayout {
                 new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)), entityPreview(entry),
                 entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
                         ? new DatabaseSelection.DataEditor(stateScope + ":" + entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
-                        dataCount(entry), dataBinding(entry)) : null);
+                        dataCount(entry), dataBinding(entry), !nativeEntity) : null);
     }
     private static int dataCount(WorldObjectEntry entry) {
         try { return Math.max(0, Integer.parseInt(entry.references().getOrDefault(WorldObjectDataEdits.COUNT_REFERENCE, "0"))); }
@@ -766,16 +773,15 @@ public final class WorldObjectsView extends FrameLayout {
     private DataDictionaryBinding dataBinding(WorldObjectEntry entry) {
         var source = session;
         String scope = stateScope;
-        return DatabaseDataBindings.world(source, entry, () -> !disposed && shown && session == source
-                && Objects.equals(scope, stateScope) && Objects.equals(scope, UiStateScopes.current())
-                && selected.size() == 1 && selected.contains(entry.key()));
+        return DatabaseDataBindings.world(source, entry,
+                () -> Objects.equals(scope, UiStateScopes.current()));
     }
     private void openDataEditor(WorldObjectEntry expected) {
         if (!canSelect()) return;
         var live = snapshot.entries().stream().filter(row -> row.key().equals(expected.key())
                 && Objects.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
                 expected.references().get(WorldObjectDataEdits.TARGET_REFERENCE))).findFirst().orElse(null);
-        if (live == null) return;
+        if (live == null || isNativeEntity(live)) return;
         selected.clear(); selected.add(live.key()); anchorKey = live.key();
         updateSelection();
         UiDataDictionaryEditor.show(this, displayName(live) + " · " + tr("world"), dataBinding(live));
@@ -802,6 +808,20 @@ public final class WorldObjectsView extends FrameLayout {
     private static String number(double value) {return String.format(Locale.ROOT,"%.2f",value);}
     private static String position(WorldObjectEntry entry) {
         return String.format(Locale.ROOT, "%.1f, %.1f, %.1f", entry.position().x, entry.position().y, entry.position().z);
+    }
+    private static boolean isNativeEntity(WorldObjectEntry entry) {
+        if (!entry.provider().equals("native")) return false;
+        try { UUID.fromString(entry.references().getOrDefault("entityUuid", "")); return true; }
+        catch (IllegalArgumentException invalid) { return false; }
+    }
+    private static String entityEditLabel() {
+        return Component.translatable("geometry_node.entity_editor.edit").getString();
+    }
+    private void editSelected() {
+        if (!canSelect()) return;
+        List<WorldObjectEntry> entries = selectedEntries();
+        if (entries.size() == 1 && isNativeEntity(entries.getFirst()))
+            EntityEditorWindow.show(this, entries.getFirst(), this::queryNow);
     }
     private void focusSelected() {
         if (canSelect() && !selectedEntries().isEmpty()) setStatus(WorldObjectNavigation.focus(selectedEntries()));

@@ -114,7 +114,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
             UiTableStyle.column("registry_type", 180),
             UiTableStyle.column("value", 256),
             UiTableStyle.column("tags", 128),
-            UiTableStyle.column("data", 220)));
+            UiTableStyle.column("data", 220)), UiTableColumns.Sizing.INDEPENDENT);
     private final LinearLayout breadcrumbTrail;
     private final LinearLayout typeNavigation;
     private final TextView statusView;

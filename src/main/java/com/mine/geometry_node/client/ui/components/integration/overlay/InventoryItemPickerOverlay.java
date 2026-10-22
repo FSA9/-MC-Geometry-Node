@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuFocus;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -33,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-public final class InventoryItemPickerOverlay extends FrameLayout {
+public final class InventoryItemPickerOverlay extends UiInputBarrier {
     private static final int COLUMNS = 9;
     private static final int ROWS = 4;
     private static final int SLOT_SIZE_DP = 30;

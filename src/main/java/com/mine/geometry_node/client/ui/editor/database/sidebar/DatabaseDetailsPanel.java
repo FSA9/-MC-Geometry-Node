@@ -187,13 +187,15 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
             String target = selection.dataEditor().target();
             LinearLayout section = DatabaseInspectorViews.section(getContext(), tr("data.title"),
                     tr("data.count", selection.dataEditor().count()));
-            UiActionButton manage = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(
-                    getContext(), tr("data.manage"), () -> {
-                        var latest = current == null ? null : current.dataEditor();
-                        if (active && section.getParent() == content && latest != null && target.equals(latest.target()))
-                            UiDataDictionaryEditor.show(this, dataCaption(), latest.binding());
-                    });
-            section.addView(manage, new LayoutParams(-1, px(30)));
+            if (selection.dataEditor().editable()) {
+                UiActionButton manage = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(
+                        getContext(), tr("data.manage"), () -> {
+                            var latest = current == null ? null : current.dataEditor();
+                            if (active && section.getParent() == content && latest != null && latest.editable() && target.equals(latest.target()))
+                                UiDataDictionaryEditor.show(this, dataCaption(), latest.binding());
+                        });
+                section.addView(manage, new LayoutParams(-1, px(30)));
+            }
             addSection(children, section);
         }
         sectionViews = List.copyOf(nextSections);
@@ -228,17 +230,18 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
                 dataContent.addView(identity, new LayoutParams(-1, -2));
                 dataTitle = selection.title(); dataSubtitle = selection.subtitle();
                 dataPreview = new UiDataDictionaryPreview(getContext());
+                dataPreview.setEditingEnabled(editor.editable());
                 dataPreview.setBinding(editor.binding());
                 String target = editor.target();
                 UiDataDictionaryPreview mounted = dataPreview;
                 dataPreview.setManageAction(() -> {
                     var latest = current == null ? null : current.dataEditor();
-                    if (!active || dataPreview != mounted || latest == null || !target.equals(latest.target())) return;
+                    if (!active || dataPreview != mounted || latest == null || !latest.editable() || !target.equals(latest.target())) return;
                     UiDataDictionaryEditor.show(this, dataCaption(), latest.binding());
                 });
                 dataPreview.setManageEntryAction(key -> {
                     var latest = current == null ? null : current.dataEditor();
-                    if (!active || dataPreview != mounted || latest == null || !target.equals(latest.target())) return;
+                    if (!active || dataPreview != mounted || latest == null || !latest.editable() || !target.equals(latest.target())) return;
                     UiDataDictionaryEditor.show(this, dataCaption(), latest.binding(), key);
                 });
                 LayoutParams params = new LayoutParams(-1, -2);
@@ -251,6 +254,7 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
                         null, selection.accent()), 0, new LayoutParams(-1, -2));
                 dataTitle = selection.title(); dataSubtitle = selection.subtitle();
             }
+            dataPreview.setEditingEnabled(editor.editable());
         }
         updateTabVisibility();
     }

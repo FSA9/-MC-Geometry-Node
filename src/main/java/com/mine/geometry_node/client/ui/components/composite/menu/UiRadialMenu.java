@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -26,7 +28,7 @@ import java.util.function.Function;
 /** Reusable Blender-style pie menu. Mount as the last MATCH_PARENT child of a local overlay host.
  * Callers choose any show/dismiss trigger. Selection invokes the action without implicit dismissal.
  */
-public final class UiRadialMenu extends FrameLayout {
+public final class UiRadialMenu extends UiInputBarrier {
     public record Item(RadialMenuLayout.Slot slot, String text, Function<Context, View> icon,
                        Runnable action) {
         public Item {

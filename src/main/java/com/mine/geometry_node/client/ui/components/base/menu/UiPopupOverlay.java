@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.base.menu;
 
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
 import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
@@ -8,12 +9,13 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
+import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 
 /** Shared popup input and lifetime. Subclasses own their content and placement policy. */
-public abstract class UiPopupOverlay extends FrameLayout {
+public abstract class UiPopupOverlay extends UiInputBarrier {
     private final UiMenuFocus focus = new UiMenuFocus();
     private final Matrix inputMatrix = new Matrix();
     private final float[] inputPoint = new float[2];
@@ -97,7 +99,9 @@ public abstract class UiPopupOverlay extends FrameLayout {
     private MotionEvent localEvent(MotionEvent source) {
         if (!UIUtils.rootToLocal(this, source.getRawX(), source.getRawY(), inputMatrix, inputPoint)) return null;
         MotionEvent event = MotionEvent.obtain(source.getEventTimeNano(), source.getAction(), source.getActionButton(),
-                inputPoint[0], inputPoint[1], source.getModifiers(), source.getButtonState(), 0);
+                source.getRawX(), source.getRawY(), source.getModifiers(), source.getButtonState(), 0);
+        // Nested popup hosts must still see root coordinates through getRawX/Y().
+        event.setLocation(inputPoint[0], inputPoint[1]);
         event.setAxisValue(MotionEvent.AXIS_VSCROLL, source.getAxisValue(MotionEvent.AXIS_VSCROLL));
         event.setAxisValue(MotionEvent.AXIS_HSCROLL, source.getAxisValue(MotionEvent.AXIS_HSCROLL));
         return event;
@@ -106,7 +110,7 @@ public abstract class UiPopupOverlay extends FrameLayout {
     @Override public boolean dispatchTouchEvent(MotionEvent source) {
         if (!isOpen()) return false;
         MotionEvent event = localEvent(source);
-        if (event == null) return false;
+        if (event == null) return true;
         try {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 outsidePressed = !containsPopup(event.getX(), event.getY());
@@ -125,9 +129,20 @@ public abstract class UiPopupOverlay extends FrameLayout {
     @Override public boolean dispatchGenericMotionEvent(MotionEvent source) {
         if (!isOpen()) return false;
         MotionEvent event = localEvent(source);
-        if (event == null) return false;
+        if (event == null) return true;
         try {
             return super.dispatchGenericMotionEvent(event);
+        } finally {
+            event.recycle();
+        }
+    }
+
+    @Override public PointerIcon onResolvePointerIcon(MotionEvent source) {
+        if (!isOpen()) return null;
+        MotionEvent event = localEvent(source);
+        if (event == null) return PointerIcon.getSystemIcon(PointerIcon.TYPE_DEFAULT);
+        try {
+            return super.onResolvePointerIcon(event);
         } finally {
             event.recycle();
         }

@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuFocus;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
 import com.mine.geometry_node.client.ui.workspace.area.AreaTransientUi;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -28,7 +29,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 
-public final class ColorPickerDialog extends FrameLayout {
+public final class ColorPickerDialog extends UiInputBarrier {
     public interface OnColorSelected {
         void onColorSelected(int argbColor);
     }
@@ -244,21 +245,8 @@ public final class ColorPickerDialog extends FrameLayout {
     }
 
     @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (isInsideWindow(event.getX(), event.getY())) {
-            super.dispatchGenericMotionEvent(event);
-        }
-        return true;
-    }
-
-    @Override
     public boolean onTouchEvent(MotionEvent event) {
         requestFocus();
-        return true;
-    }
-
-    @Override
-    public boolean onGenericMotionEvent(MotionEvent event) {
         return true;
     }
 

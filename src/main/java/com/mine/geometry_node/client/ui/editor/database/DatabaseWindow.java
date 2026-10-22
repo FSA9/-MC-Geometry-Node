@@ -193,14 +193,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                 "", entry.type().getColor(), List.of(), List.of(), sections, libraryPreview(entry),
                 new DatabaseSelection.DataEditor(selectionScope + ":library:" + entry.id(), entry.data().size(),
                         com.mine.geometry_node.client.ui.editor.database.metadata.DatabaseDataBindings.library(
-                                repository, entry.id(), () -> !disposed && shown && !worldSelected
-                                        && java.util.Objects.equals(selectionScope, stateScope)
-                                        && java.util.Objects.equals(selectionScope, UiStateScopes.current())
-                                        && isSingleLibrarySelection(entry.id()))));
-    }
-    private boolean isSingleLibrarySelection(java.util.UUID id) {
-        var selected = library.selectedEntries();
-        return selected.size() == 1 && selected.getFirst().id().equals(id);
+                                repository, entry.id(), () -> java.util.Objects.equals(selectionScope, UiStateScopes.current()))));
     }
     private void submitLibraryTagEdit(DataLibraryRepository.Entry expected, String scope, String tag, boolean add) {
         if (disposed || !shown || worldSelected || !sidebarLayout.isVisible()

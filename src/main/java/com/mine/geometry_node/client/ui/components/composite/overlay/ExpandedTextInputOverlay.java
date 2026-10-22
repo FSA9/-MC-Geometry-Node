@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuFocus;
+import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
@@ -26,7 +27,6 @@ import icyllis.modernui.text.style.StyleSpan;
 import icyllis.modernui.text.style.UnderlineSpan;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
@@ -42,7 +42,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-public final class ExpandedTextInputOverlay extends FrameLayout {
+public final class ExpandedTextInputOverlay extends UiInputBarrier {
     private static final int WINDOW_MARGIN_DP = 34;
 
     private static ExpandedTextInputOverlay sOpenOverlay;
@@ -257,18 +257,6 @@ public final class ExpandedTextInputOverlay extends FrameLayout {
             return true;
         }
         return super.dispatchKeyEvent(event);
-    }
-
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        super.dispatchTouchEvent(event);
-        return true;
-    }
-
-    @Override
-    public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        super.dispatchGenericMotionEvent(event);
-        return true;
     }
 
     private void commit() {

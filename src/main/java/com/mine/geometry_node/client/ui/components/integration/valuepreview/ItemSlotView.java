@@ -90,7 +90,8 @@ public class ItemSlotView extends ViewportNativePreviewView {
             float heightPx,
             float viewportScale
     ) {
-        refreshDisplayValue();
+        // onDraw refreshes the adapter on the UI thread. Native callbacks consume that snapshot;
+        // an adapter may call setters that invalidate the attached ModernUI view tree.
         ItemStack stack = mDisplayStack;
         if (stack.isEmpty()) return;
 

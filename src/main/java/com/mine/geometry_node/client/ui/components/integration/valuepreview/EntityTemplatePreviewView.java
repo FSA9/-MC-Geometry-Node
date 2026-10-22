@@ -122,7 +122,8 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             float surfaceHeightPx,
             float viewportScale
     ) {
-        refreshDisplayValue();
+        // Adapter refreshes belong to UI onDraw; the render thread only consumes the snapshot.
+        // refreshDisplayValue may call applyTemplate, which invalidates the attached view tree.
         long revision = mSourceRevision;
         Entity entity = null;
         try {
