@@ -248,11 +248,17 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
                 params.topMargin = px(17);
                 dataContent.addView(dataPreview, params);
                 dataScroll.scrollTo(0, 0);
-            } else if (!Objects.equals(dataTitle, selection.title()) || !Objects.equals(dataSubtitle, selection.subtitle())) {
-                dataContent.removeViewAt(0);
-                dataContent.addView(DatabaseInspectorViews.identity(getContext(), selection.title(), selection.subtitle(),
-                        null, selection.accent()), 0, new LayoutParams(-1, -2));
-                dataTitle = selection.title(); dataSubtitle = selection.subtitle();
+            } else {
+                if (!Objects.equals(dataTitle, selection.title()) || !Objects.equals(dataSubtitle, selection.subtitle())) {
+                    dataContent.removeViewAt(0);
+                    dataContent.addView(DatabaseInspectorViews.identity(getContext(), selection.title(), selection.subtitle(),
+                            null, selection.accent()), 0, new LayoutParams(-1, -2));
+                    dataTitle = selection.title(); dataSubtitle = selection.subtitle();
+                }
+                // A query can invalidate the passive read cache without changing target/count.
+                // Rebind the latest capability, keeping this view, search and scroll state intact.
+                // BoundView requests an idempotent read only while attached and visible.
+                dataPreview.setBinding(editor.binding());
             }
             dataPreview.setEditingEnabled(editor.editable());
         }

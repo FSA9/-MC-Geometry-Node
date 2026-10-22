@@ -89,7 +89,7 @@ public final class WorldObjectsView extends FrameLayout {
     private final Map<String, UiActionButton> rowViews = new LinkedHashMap<>();
     private final Map<String, RowBinding> rowBindings = new LinkedHashMap<>();
     private record RowBinding(UiActionButton button, UiCheckBox checkbox, View stripe,
-                              UiTableRow cells, int baseColor) {}
+                              UiTableRow cells, int baseColor, WorldObjectEntry entry) {}
     private final UiTableColumns columns = new UiTableColumns(List.of(
             UiTableStyle.rowNumberColumn(),
             UiTableStyle.selectionColumn(),
@@ -105,12 +105,11 @@ public final class WorldObjectsView extends FrameLayout {
     private final LinearLayout table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
+    private WorldObjectQuery completedQuery;
     private List<WorldObjectEntry> mountedEntries;
     private List<WorldObjectType> mountedTypes;
-    // Includes pending rows so a sort can reuse the attached subset of an interrupted batch.
-    private List<WorldObjectEntry> plannedEntries;
-    private List<WorldObjectType> plannedTypes;
     private DatabaseSelection publishedSelection;
+    private boolean inspectorWaitingForQuery;
     private List<WorldObjectType> typeCatalog = List.of();
     private List<WorldObjectType> indexedTypeCatalog;
     private final Map<String, WorldObjectType> typeLookup = new HashMap<>();
@@ -418,6 +417,7 @@ public final class WorldObjectsView extends FrameLayout {
         cancelMount();
         renderedSnapshot=snapshot;
         if (!snapshot.loading()) {
+            completedQuery = snapshot.query();
             typeCatalog = snapshot.types();
             dimensionCatalog = snapshot.dimensionIds();
             if (snapshot.page().counts() != null) navigationCounts = snapshot.page().counts();
@@ -517,23 +517,37 @@ public final class WorldObjectsView extends FrameLayout {
             updateSelection();
             return;
         }
-        boolean reuse = hasSameRowData(entries);
         cancelMount();
         mountedEntries = null; mountedTypes = null;
         List<WorldObjectType> mountingTypes = List.copyOf(typeCatalog);
-        plannedEntries = entries; plannedTypes = mountingTypes;
         Runnable complete = () -> {
             mountedEntries = entries;
             mountedTypes = mountingTypes;
             updateSelection();
         };
-        if (!reuse) {
-            rows.removeAllViews(); rowViews.clear(); rowBindings.clear();
+        // A changed DTO is not a changed view identity. Retire only keys absent from the new
+        // result, including when a previous frame batch was interrupted by a newer query.
+        Set<String> liveKeys = new HashSet<>();
+        entries.forEach(entry -> liveKeys.add(entry.key()));
+        for (String key : List.copyOf(rowBindings.keySet())) {
+            if (liveKeys.contains(key)) continue;
+            RowBinding removed = rowBindings.remove(key);
+            rowViews.remove(key);
+            rows.removeView((View) removed.button().getParent());
+        }
+        if (rowBindings.isEmpty()) {
+            rows.removeAllViews(); // Only the empty-state label can remain here.
             if (entries.isEmpty()) {
                 TextView empty = label(getContext(), tr("empty"), UiThemes.EDITOR.text().muted());
                 empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, px(96)));
             }
         }
+        boolean needsReorder = rows.getChildCount() != entries.size();
+        for (int i = 0; !needsReorder && i < entries.size(); i++) {
+            RowBinding binding = rowBindings.get(entries.get(i).key());
+            needsReorder = binding == null || binding.button().getParent() != rows.getChildAt(i);
+        }
+        boolean reorder = needsReorder;
         Iterator<WorldObjectEntry> iterator = entries.iterator();
         rowBatch.start(new Iterator<Runnable>() {
             private int index;
@@ -542,31 +556,77 @@ public final class WorldObjectsView extends FrameLayout {
                 WorldObjectEntry entry = iterator.next();
                 int rowIndex = index++;
                 return () -> {
-                    if (rowBindings.containsKey(entry.key())) reorderRow(entry.key(), rowIndex);
+                    if (rowBindings.containsKey(entry.key())) updateRow(entry, rowIndex, reorder);
                     else mountRow(entry, rowIndex);
                 };
             }
         }, complete);
         updateSelection();
     }
-    private boolean hasSameRowData(List<WorldObjectEntry> entries) {
-        if (plannedEntries == null || !typeCatalog.equals(plannedTypes) || entries.size() != plannedEntries.size()) return false;
-        Map<String, WorldObjectEntry> previous = new HashMap<>();
-        for (WorldObjectEntry entry : plannedEntries) previous.put(entry.key(), entry);
-        for (WorldObjectEntry entry : entries)
-            if (!entry.equals(previous.remove(entry.key()))) return false;
-        return previous.isEmpty();
-    }
-    private void reorderRow(String key, int index) {
+    private void updateRow(WorldObjectEntry entry, int index, boolean reorder) {
+        String key = entry.key();
         RowBinding binding = rowBindings.remove(key);
-        ((TextView)binding.cells().getChildAt(0)).setText(Integer.toString(index + 1));
+        UiTableRow cells = binding.cells();
+        updateText(cells, 0, Integer.toString(index + 1));
+        updateText(cells, 2, displayName(entry));
+        updateText(cells, 3, displayType(entry));
+        updateText(cells, 4, WorldObjectEntries.registryType(entry));
+        binding.checkbox().setContentDescription(displayName(entry));
+        View value = cells.getChildAt(5);
+        if (hasEntityPreview(entry)) {
+            if (!(value instanceof EntityPreviewCell)) {
+                cells.removeViewAt(5);
+                value = createValueCell(entry, cells);
+                cells.addView(value, 5, new ViewGroup.LayoutParams(-1, -1));
+            } else bindPreview((EntityPreviewCell) value, entry);
+        } else if (value instanceof EntityPreviewCell) {
+            cells.removeViewAt(5);
+            cells.addView(createValueCell(entry, cells), 5, new ViewGroup.LayoutParams(-1, -1));
+        }
+        updateText(cells, 6, entry.dimension());
+        updateText(cells, 7, position(entry));
+        updateText(cells, 8, lifetimeLabel(entry.lifetime()));
+        ((UiTagStrip) cells.getChildAt(9)).setTags(entry.tags());
+        WorldObjectEntry previous = binding.entry();
+        if (dataCount(previous) != dataCount(entry) || !previous.references().equals(entry.references())
+                || isNativeEntity(previous) != isNativeEntity(entry))
+            bindDataSummary((UiDataSummaryCell) cells.getChildAt(10), entry);
         int baseColor = UiTableStyle.rowColor(index % 2 != 0);
         binding.button().setPalette(rowPalette(selected.contains(key), baseColor));
-        rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), binding.cells(), baseColor));
+        rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), cells, baseColor, entry));
         rowViews.remove(key);
         rowViews.put(key, binding.button());
         // Moving within the same parent preserves native preview registration and focus/attach state.
-        rows.bringChildToFront((View)binding.button().getParent());
+        if (reorder) rows.bringChildToFront((View)binding.button().getParent());
+    }
+    private static void updateText(UiTableRow row, int column, String value) {
+        TextView cell = (TextView) row.getChildAt(column);
+        if (!value.contentEquals(cell.getText())) cell.setText(value);
+    }
+    private static boolean hasEntityPreview(WorldObjectEntry entry) {
+        return entry.provider().equals("native") && !entry.type().equals("minecraft:interaction");
+    }
+    private View createValueCell(WorldObjectEntry entry, UiTableRow row) {
+        if (!hasEntityPreview(entry)) return UiTableStyle.cell(getContext(), "", UiThemes.EDITOR.text().normal());
+        EntityPreviewCell preview = new EntityPreviewCell(getContext());
+        preview.setVisibilityRow(row);
+        bindPreview(preview, entry);
+        return preview;
+    }
+    private static void bindPreview(EntityPreviewCell preview, WorldObjectEntry entry) {
+        UUID entityId = null;
+        try { entityId = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
+        catch (IllegalArgumentException ignored) { }
+        // The shared preview setter is idempotent for an unchanged UUID and dimension.
+        preview.setReference(entityId, entry.dimension());
+    }
+    private void bindDataSummary(UiDataSummaryCell cell, WorldObjectEntry entry) {
+        cell.setSummary(dataCount(entry), entry.references().getOrDefault(WorldObjectDataEdits.SUMMARY_REFERENCE, ""),
+                !isNativeEntity(entry) && entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
+                        ? () -> {
+                            RowBinding live = rowBindings.get(entry.key());
+                            if (live != null && live.cells().getChildAt(10) == cell) openDataEditor(live.entry());
+                        } : null);
     }
     private void cancelMount() {
         if (rowBatch.isRunning()) { mountedEntries = null; mountedTypes = null; }
@@ -581,31 +641,22 @@ public final class WorldObjectsView extends FrameLayout {
         line.addView(UiTableStyle.rowNumberCell(getContext(), index + 1),new ViewGroup.LayoutParams(-1,-1));
         UiCheckBox checkbox=new UiCheckBox(getContext());
         checkbox.setContentDescription(displayName(entry));
-        checkbox.setOnCheckedChangeListener((view,checked)->toggleCheckbox(entry,checked));
+        checkbox.setOnCheckedChangeListener((view,checked)-> {
+            RowBinding live = rowBindings.get(entry.key());
+            if (live != null && live.checkbox() == checkbox) toggleCheckbox(live.entry(), checked);
+        });
         line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
         cell(line,displayName(entry));
         cell(line,displayType(entry));
         cell(line,WorldObjectEntries.registryType(entry));
-        if (entry.provider().equals("native") && !entry.type().equals("minecraft:interaction")) {
-            EntityPreviewCell preview = new EntityPreviewCell(getContext());
-            preview.setVisibilityRow(line);
-            UUID entityId = null;
-            try { entityId = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
-            catch (IllegalArgumentException ignored) { }
-            preview.setReference(entityId, entry.dimension());
-            line.addView(preview, new ViewGroup.LayoutParams(-1, -1));
-        } else {
-            cell(line, "");
-        }
+        line.addView(createValueCell(entry, line), new ViewGroup.LayoutParams(-1, -1));
         cell(line,entry.dimension());
         cell(line,position(entry));
         cell(line,lifetimeLabel(entry.lifetime()));
         UiTagStrip tagCell=new UiTagStrip(getContext());tagCell.setTags(entry.tags());
         line.addView(tagCell,new ViewGroup.LayoutParams(-1,-1));
         UiDataSummaryCell dataCell = new UiDataSummaryCell(getContext());
-        dataCell.setSummary(dataCount(entry), entry.references().getOrDefault(WorldObjectDataEdits.SUMMARY_REFERENCE, ""),
-                !isNativeEntity(entry) && entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
-                        ? () -> openDataEditor(entry) : null);
+        bindDataSummary(dataCell, entry);
         line.addView(dataCell, new ViewGroup.LayoutParams(-1, -1));
 
         // Cells determine height; background and selection overlays follow without stretching the row.
@@ -628,12 +679,14 @@ public final class WorldObjectsView extends FrameLayout {
             boolean toggle=modifiers[0], extend=modifiers[1];
             modifiers[0] = modifiers[1] = false;
             if (!canSelect()) return;
-            select(entry, toggle, extend);
+            RowBinding live = rowBindings.get(entry.key());
+            if (live == null || live.button() != row) return;
+            select(live.entry(), toggle, extend);
             row.requestFocus();
             rowClicked(entry.key(),toggle||extend,System.nanoTime());
         });
         rowViews.put(entry.key(), row);
-        rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor));
+        rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor,entry));
         row.setEnabled(false);
         checkbox.setEnabled(false);
         rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
@@ -699,9 +752,14 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setIndeterminate(count>0 && count<entries.size());
         selectAll.setContentDescription(tr("select_all")+" · "+tr("selected",count));
         updateInteractionState();
-        DatabaseSelection next=selection();
+        // Keep the last inspector mounted during a replacement query. Commands still resolve
+        // live state and reject loading/stale targets; scope changes must clear it immediately.
+        boolean completedRefresh = inspectorWaitingForQuery && !snapshot.loading();
+        inspectorWaitingForQuery = retainInspector() && publishedSelection != null;
+        DatabaseSelection next=presentationSelection();
         // Actions resolve live state when invoked; their newly allocated callbacks are not content changes.
-        if (publishedSelection==null?next!=null:!publishedSelection.hasSamePresentation(next)) {
+        // A completed refresh must also reconnect passive DATA bindings whose read cache was reset.
+        if (completedRefresh || (publishedSelection==null?next!=null:!publishedSelection.hasSamePresentation(next))) {
             publishedSelection=next;
             selectionChanged.accept(next);
         }
@@ -719,6 +777,15 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private List<WorldObjectEntry> selectedEntries() {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
+    }
+    private boolean retainInspector() {
+        return snapshot.loading() && !awaitingScopeResponse
+                && Objects.equals(stateScope, UiStateScopes.current())
+                && snapshot.query().equals(completedQuery);
+    }
+    /** Display-only snapshot for owners reactivating this tab; commands use selection()/canSelect(). */
+    public DatabaseSelection presentationSelection() {
+        return retainInspector() ? publishedSelection : selection();
     }
     public DatabaseSelection selection() {
         // Visual row mounting does not invalidate the authoritative selected objects.
@@ -844,7 +911,7 @@ public final class WorldObjectsView extends FrameLayout {
         awaitingScopeResponse = true;
         snapshot = new ClientWorldObjectRepository.Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), true, 0);
         renderedSnapshot = null; mountedEntries = null; mountedTypes = null;
-        plannedEntries = null; plannedTypes = null;
+        completedQuery = null;
         typeCatalog = List.of(); dimensionCatalog = List.of();
         navigationCounts = WorldObjectPage.Counts.empty();
         indexedTypeCatalog = null; typeLookup.clear();
@@ -889,7 +956,6 @@ public final class WorldObjectsView extends FrameLayout {
     public void onDispose() {
         if (disposed) return;
         onHide(); disposed = true;
-        plannedEntries = null; plannedTypes = null;
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         session.removeChangeListener(changed); session.close();
     }

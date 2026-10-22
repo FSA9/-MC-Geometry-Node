@@ -130,7 +130,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         saveTab();
         world.setVisibility(value ? VISIBLE : GONE); library.setVisibility(value ? GONE : VISIBLE);
         if (shown) { if (value) world.onShow(); else library.onShow(); }
-        setSelection(value ? world.selection() : librarySelection(library.selectedEntries()));
+        setSelection(value ? world.presentationSelection() : librarySelection(library.selectedEntries()));
         if (registration != null) registration.markInteracted();
         updateTabs();
     }
