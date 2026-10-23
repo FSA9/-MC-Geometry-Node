@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.DialoguePagePayl
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayloadFactory;
-import com.mine.geometry_node.core.engine.system.quest.QuestScreenViewFactory;
+import com.mine.geometry_node.core.engine.system.quest.screen.QuestScreenViewFactory;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;

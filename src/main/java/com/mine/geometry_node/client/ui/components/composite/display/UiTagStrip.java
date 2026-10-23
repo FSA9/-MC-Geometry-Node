@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.components.composite.display;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
@@ -12,6 +13,7 @@ import java.util.List;
 /** Read-only tags for fixed-height table rows; excess tags clip and remain available in the tooltip. */
 public final class UiTagStrip extends LinearLayout {
     private final UiTheme theme;
+    private final float textSizeDp;
     private List<String> tags = List.of();
     private String prefix = "";
 
@@ -20,7 +22,13 @@ public final class UiTagStrip extends LinearLayout {
     }
 
     public UiTagStrip(Context context, UiTheme theme) {
+        this(context, theme, UiMetrics.TEXT_COMPACT);
+    }
+
+    public UiTagStrip(Context context, UiTheme theme, float textSizeDp) {
         super(context);
+        if (!Float.isFinite(textSizeDp) || textSizeDp <= 0) throw new IllegalArgumentException("Invalid text size");
+        this.textSizeDp = textSizeDp;
         this.theme = java.util.Objects.requireNonNull(theme, "theme");
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(px(6), 0, px(4), 0);
@@ -37,7 +45,7 @@ public final class UiTagStrip extends LinearLayout {
         removeAllViews();
         setTooltipText(String.join(", ", tags));
         for (String tag : tags) {
-            UiTagChip chip = new UiTagChip(getContext(), tag, theme);
+            UiTagChip chip = new UiTagChip(getContext(), tag, theme, textSizeDp);
             // The strip owns overflow disclosure, including tags clipped out of view.
             chip.setTooltipText(null);
             chip.setPrefix(prefix);

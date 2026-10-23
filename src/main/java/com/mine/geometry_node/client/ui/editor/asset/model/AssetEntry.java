@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.asset.model;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
 import java.io.File;
 

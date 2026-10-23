@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -29,7 +30,7 @@ final class EntityEditorViews {
     static LinearLayout row(Context c) { LinearLayout v = new LinearLayout(c); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
     static LinearLayout.LayoutParams size(int w, int h) { return new LinearLayout.LayoutParams(w < 0 ? w : px(w), h < 0 ? h : px(h)); }
     static UiDisplayText text(Context c, String value, int color) {
-        UiDisplayText v = new UiDisplayText(c, value, 11, color); v.setGravity(Gravity.CENTER_VERTICAL); return v;
+        UiDisplayText v = new UiDisplayText(c, value, UiMetrics.TEXT_BODY, color); v.setGravity(Gravity.CENTER_VERTICAL); return v;
     }
     static UiActionButton button(Context c, UiTheme theme, String key, Runnable action) {
         return button(c, theme, key, UiActionButton.Role.SECONDARY, action);
@@ -37,10 +38,11 @@ final class EntityEditorViews {
     static UiActionButton button(Context c, UiTheme theme, String key, UiActionButton.Role role, Runnable action) {
         UiActionButton v = new UiActionButton(c, theme, tr(key), role, UiActionButton.Density.NORMAL,
                 UiActionButton.Style.forTheme(theme));
+        UIUtils.setLockedTextSize(v, UiMetrics.TEXT_BODY);
         v.setOnClickListener(ignored -> action.run()); return v;
     }
     static UiTextInput input(Context c, UiTheme theme) {
-        UiTextInput v = new UiTextInput(c, UiTextInput.Style.forTheme(theme)); v.setSingleLine(true); return v;
+        UiTextInput v = new UiTextInput(c, UiTextInput.Style.forTheme(theme, UiMetrics.TEXT_BODY)); v.setSingleLine(true); return v;
     }
     static void watch(UiTextInput v, Runnable action) {
         v.addTextChangedListener(new TextWatcher() {

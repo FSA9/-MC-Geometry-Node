@@ -339,7 +339,7 @@ public final class ViewportSceneInteraction {
         paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor((UiThemes.EDITOR.selection().outline() & 0x00FFFFFF) | 0x66000000);
         for(int plane=0;plane<3;plane++)for(int i=0;i<48;i++){
             double a=i*Math.PI/24,b=(i+1)*Math.PI/24,r=0.5;
-            Vec3 p=com.mine.geometry_node.core.engine.system.scene.SceneTransforms.local(object,ring(plane,Math.cos(a)*r,Math.sin(a)*r)).add(object.position()),q=com.mine.geometry_node.core.engine.system.scene.SceneTransforms.local(object,ring(plane,Math.cos(b)*r,Math.sin(b)*r)).add(object.position());
+            Vec3 p=com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.local(object,ring(plane,Math.cos(a)*r,Math.sin(a)*r)).add(object.position()),q=com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.local(object,ring(plane,Math.cos(b)*r,Math.sin(b)*r)).add(object.position());
             var from=ViewportSceneMath.project(frame,p);var to=ViewportSceneMath.project(frame,q);
             if(from.visible()&&to.visible())canvas.drawLine(px(bounds,from.u()),py(bounds,from.v()),px(bounds,to.u()),py(bounds,to.v()),paint);
         }

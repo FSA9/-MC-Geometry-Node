@@ -1,6 +1,10 @@
 package com.mine.geometry_node.core.engine.metadata;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
+import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
+import com.mine.geometry_node.core.engine.system.scene.ServerSceneService;
 import com.mine.geometry_node.core.metadata.*;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.server.MinecraftServer;

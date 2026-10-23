@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.entitypreview;
 
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewLimits;
+
 /** A connection gets a burst of two batches, then four batches per second, even while paused. */
 final class EntityPreviewRateLimit {
     static final int BURST = 2;

@@ -129,7 +129,6 @@ public final class CacheRegistry {
     }
     private static void rethrowFatal(Throwable error) {
         if (error instanceof VirtualMachineError fatal) throw fatal;
-        if (error instanceof ThreadDeath fatal) throw fatal;
     }
     private static String message(Throwable error) {
         while ((error instanceof CompletionException || error instanceof ExecutionException) && error.getCause() != null)

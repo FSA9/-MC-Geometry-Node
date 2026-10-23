@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetMutationRegistry;
-import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetMutationRegistry;
+import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 import net.minecraft.server.MinecraftServer;
 

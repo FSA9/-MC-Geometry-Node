@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network.packet.entitypreview;
 
-import com.mine.geometry_node.core.engine.system.entitypreview.*;
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewLimits;
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewTarget;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 final class EntityPreviewPacketCodecs {

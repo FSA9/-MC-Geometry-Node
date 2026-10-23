@@ -1,6 +1,11 @@
 package com.mine.geometry_node.core.network.packet.worldquery;
 
-import com.mine.geometry_node.core.engine.system.worldquery.*;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.phys.*;
 import java.util.*;
@@ -30,6 +35,8 @@ final class WorldObjectPacketCodecs {
         strings(b, q.searchFallbackTypes(), ColumnFilters.MAX_TEXT);
         strings(b, q.columnNameFallbackTypes(), ColumnFilters.MAX_TEXT);
         b.writeUtf(q.registryType(), WorldObjectQuery.MAX_FILTER_TEXT);
+        b.writeUtf(q.graphFilter().type(), WorldObjectQuery.MAX_FILTER_TEXT);
+        b.writeUtf(q.graphFilter().name(), WorldObjectQuery.MAX_FILTER_TEXT);
     }
     static WorldObjectQuery query(RegistryFriendlyByteBuf b) {
         DecodeBudget budget = new DecodeBudget();
@@ -43,13 +50,16 @@ final class WorldObjectPacketCodecs {
         Set<String> searchFallbackTypes = budget.set(b, ColumnFilters.MAX_CHOICES, ColumnFilters.MAX_TEXT, TextScope.FALLBACK);
         Set<String> columnNameFallbackTypes = budget.set(b, ColumnFilters.MAX_CHOICES, ColumnFilters.MAX_TEXT, TextScope.FALLBACK);
         String registryType = budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.COLUMN);
+        var graphFilter = new WorldObjectGraphFilter(
+                budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.GRAPH),
+                budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.GRAPH));
         return new WorldObjectQuery(WorldObjectQuery.Range.values()[range], dimension, providers, types, name,
-                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType);
+                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType, graphFilter);
     }
     private static Set<String> filters(RegistryFriendlyByteBuf b, DecodeBudget budget) {
         return budget.set(b, WorldObjectQuery.MAX_FILTERS, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.LEGACY);
     }
-    private enum TextScope { LEGACY, COLUMN, FALLBACK }
+    private enum TextScope { LEGACY, COLUMN, FALLBACK, GRAPH }
     /** Reject each text before allocating its UTF-8 array/string or inserting into any collection. */
     private static final class DecodeBudget {
         int totalText, legacyText, columnText, wireBytes = 256;
@@ -121,8 +131,17 @@ final class WorldObjectPacketCodecs {
         b.writeBoolean(e.entityId() != null); if (e.entityId() != null) b.writeInt(e.entityId());
         b.writeVarInt(e.references().size());
         e.references().forEach((k, v) -> { b.writeUtf(k, WorldObjectEntry.MAX_TEXT); b.writeUtf(v, WorldObjectEntry.MAX_TEXT); });
+        b.writeVarInt(e.graphs().size());
+        for (var graph : e.graphs()) {
+            b.writeUtf(graph.id(), WorldObjectEntry.MAX_TEXT);
+            b.writeUtf(graph.type(), WorldObjectEntry.MAX_TEXT);
+            b.writeUtf(graph.name(), WorldObjectEntry.MAX_TEXT);
+        }
     }
     static WorldObjectEntry entry(RegistryFriendlyByteBuf b) {
+        return entry(b, WorldObjectPage.MAX_ENTRY_BYTES);
+    }
+    private static WorldObjectEntry entry(RegistryFriendlyByteBuf b, int remainingBytes) {
         String key = b.readUtf(WorldObjectEntry.MAX_TEXT), provider = b.readUtf(WorldObjectEntry.MAX_TEXT),
                 type = b.readUtf(WorldObjectEntry.MAX_TEXT), name = b.readUtf(WorldObjectEntry.MAX_TEXT),
                 dimension = b.readUtf(WorldObjectEntry.MAX_TEXT);
@@ -136,7 +155,29 @@ final class WorldObjectPacketCodecs {
             if (refs.putIfAbsent(b.readUtf(WorldObjectEntry.MAX_TEXT), b.readUtf(WorldObjectEntry.MAX_TEXT)) != null)
                 throw new IllegalArgumentException("Duplicate reference metadata");
         }
-        return new WorldObjectEntry(key, provider, type, name, dimension, pos, bounds, tags, source, lifetime, scene, entity, refs);
+        var base = new WorldObjectEntry(key, provider, type, name, dimension, pos, bounds, tags, source, lifetime, scene, entity, refs);
+        var budget = new GraphMetadataBudget(remainingBytes - base.estimatedBytes());
+        int graphCount = count(b, WorldObjectEntry.MAX_GRAPHS);
+        List<WorldObjectGraph> graphs = new ArrayList<>(graphCount);
+        for (int i = 0; i < graphCount; i++)
+            graphs.add(new WorldObjectGraph(budget.text(b), budget.text(b), budget.text(b)));
+        return new WorldObjectEntry(key, provider, type, name, dimension, pos, bounds, tags, source, lifetime, scene, entity, refs, graphs);
+    }
+    /** Apply the remaining page budget before allocating each graph text body. */
+    private static final class GraphMetadataBudget {
+        int remaining;
+        GraphMetadataBudget(int remaining) {
+            if (remaining < 0) throw new IllegalArgumentException("World query byte limit exceeded");
+            this.remaining = remaining;
+        }
+        String text(RegistryFriendlyByteBuf b) {
+            int start = b.readerIndex(), bytes = b.readVarInt();
+            if (bytes < 0 || bytes > WorldObjectEntry.MAX_TEXT * 3 || bytes > remaining - 5 || bytes > b.readableBytes())
+                throw new IllegalArgumentException("World query graph byte limit exceeded");
+            remaining -= bytes + 5;
+            b.readerIndex(start);
+            return b.readUtf(WorldObjectEntry.MAX_TEXT);
+        }
     }
     static void page(RegistryFriendlyByteBuf b, WorldObjectPage p) {
         b.writeLong(p.requestId()); b.writeBoolean(p.truncated()); b.writeUtf(p.message(), WorldObjectEntry.MAX_TEXT);
@@ -159,7 +200,7 @@ final class WorldObjectPacketCodecs {
         n = count(b, WorldObjectQuery.MAX_RESULTS); List<WorldObjectEntry> entries = new ArrayList<>(n);
         long bytes = 0;
         for (int i = 0; i < n; i++) {
-            var entry = entry(b); bytes += entry.estimatedBytes();
+            var entry = entry(b, WorldObjectPage.MAX_ENTRY_BYTES - (int) bytes); bytes += entry.estimatedBytes();
             if (bytes > WorldObjectPage.MAX_ENTRY_BYTES) throw new IllegalArgumentException("World query byte limit exceeded");
             entries.add(entry);
         }

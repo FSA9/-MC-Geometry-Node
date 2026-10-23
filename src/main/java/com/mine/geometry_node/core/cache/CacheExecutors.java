@@ -23,9 +23,8 @@ public final class CacheExecutors {
                 try { future.complete(task.call()); }
                 catch (Throwable failure) {
                     future.completeExceptionally(failure);
-                    // Preserve fatal JVM/thread termination semantics after notifying waiters.
+                    // Propagate fatal JVM errors after notifying waiters.
                     if (failure instanceof VirtualMachineError fatal) throw fatal;
-                    if (failure instanceof ThreadDeath fatal) throw fatal;
                 }
             });
         } catch (RejectedExecutionException failure) { future.completeExceptionally(failure); }

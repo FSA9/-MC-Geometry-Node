@@ -54,7 +54,7 @@ public final class ViewportSceneMath {
 
     /** Frame object geometry, not its effect radius. Point lights use their one-block helper bounds. */
     public static AABB focusBounds(SceneObject object) {
-        return com.mine.geometry_node.core.engine.system.scene.SceneTransforms.bounds(object,com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(object.typeId()).bounds().apply(object));
+        return com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.bounds(object,com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(object.typeId()).bounds().apply(object));
     }
 
     /** Distance from the visible near plane, or infinity. Works for signed orthographic near planes. */

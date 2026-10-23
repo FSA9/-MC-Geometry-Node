@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.worldquery;
 
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

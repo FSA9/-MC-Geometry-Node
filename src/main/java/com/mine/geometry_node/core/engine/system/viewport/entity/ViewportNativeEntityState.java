@@ -1,6 +1,9 @@
 package com.mine.geometry_node.core.engine.system.viewport.entity;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneChange;
+import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
 import com.mine.geometry_node.core.utils.nbt.EntityNbtCompat;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;

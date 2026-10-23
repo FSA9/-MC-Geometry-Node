@@ -1,9 +1,9 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeDefinition;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeDefinition;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewSourceChangedException;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.PreviewUnavailableException;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGenerator;

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.datalibrary;
 
 import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryValueCodec;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryValueCodec;
 import net.minecraft.client.Minecraft;
 
 /**

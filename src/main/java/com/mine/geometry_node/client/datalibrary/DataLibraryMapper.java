@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.datalibrary;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryDocument;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryEntry;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryFolder;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectKey;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryLoadResult;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryDocument;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryEntry;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryFolder;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectKey;
+import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibraryLoadResult;
 
 import java.util.ArrayList;
 import java.util.List;

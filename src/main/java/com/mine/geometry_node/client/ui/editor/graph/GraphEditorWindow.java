@@ -121,6 +121,10 @@ public class GraphEditorWindow extends LinearLayout
         return mGraphViewportPanel.currentSession();
     }
 
+    public void openGraphSession(GraphSession session) {
+        mGraphViewportPanel.openGraphSession(session);
+    }
+
     @Override
     public List<GraphSession> openGraphSessions() {
         return DocumentManager.INSTANCE.getSessions().stream()

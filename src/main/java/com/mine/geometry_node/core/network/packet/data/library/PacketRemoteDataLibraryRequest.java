@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network.packet.data.library;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectKey;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectFingerprint;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectKey;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectFingerprint;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

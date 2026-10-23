@@ -2,9 +2,9 @@ package com.mine.geometry_node.core.engine.system.entityeditor;
 
 import com.mine.geometry_node.core.engine.metadata.*;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.entitypreview.EntityAppearanceCapture;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.entitypreview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
 import com.mine.geometry_node.core.metadata.*;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.*;
@@ -106,6 +106,9 @@ public final class ServerEntityEditorService {
     private static Map<String, Object> snapshot(ServerPlayer player, Entity entity, EntityEditorAdapter adapter) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("attributes", adapter.attributes(entity));
+        values.put("registryType", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        values.put("dimension", entity.level().dimension().identifier().toString());
+        values.put("position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ()));
         values.put("tags", EntityMetadataAdapter.tags(entity).values());
         values.put("data", EntityMetadataAdapter.data(entity).values());
         List<EquipmentSlot> slots = equipmentSlots(entity, adapter);

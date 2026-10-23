@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
 import com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository;
 import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
 import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.metadata.DataDictionary;
 import net.minecraft.network.chat.Component;
 

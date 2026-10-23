@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElem
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
 import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -121,7 +121,7 @@ final class DebugSourceStore {
                 if (!visitor.test(new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(),
                         entry.dimension(), entry.position().add(offset), entry.bounds().move(offset),
                         source.customMetadata.tagSnapshot(), entry.source(), entry.lifetime(),
-                        entry.sceneObjectId(), entry.entityId(), references))) return;
+                        entry.sceneObjectId(), entry.entityId(), references, entry.graphs()))) return;
             }
         }
     }

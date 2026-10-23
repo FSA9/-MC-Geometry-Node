@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.data.library;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryObjectKey;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectKey;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
 import java.util.LinkedHashSet;

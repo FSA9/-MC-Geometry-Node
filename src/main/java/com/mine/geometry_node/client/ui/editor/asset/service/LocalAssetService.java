@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.asset.file.AssetFileOperations;
 import com.mine.geometry_node.client.asset.file.AssetFileTransactionManager;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
 import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskContext;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
 import java.io.File;
 import java.io.IOException;

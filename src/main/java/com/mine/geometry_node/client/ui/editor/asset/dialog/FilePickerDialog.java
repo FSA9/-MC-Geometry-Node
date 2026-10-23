@@ -1,66 +1,34 @@
 package com.mine.geometry_node.client.ui.editor.asset.dialog;
 
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
-import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
+import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.ui.components.integration.asset.AssetPickerDialog;
+import com.mine.geometry_node.client.ui.components.integration.asset.AssetPickerOptions;
 import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
-import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetTypeAction;
-import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
-import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
-import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.editor.asset.repository.AssetLocation;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewGroup;
-import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.TextView;
+
 import java.io.File;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoordinator {
-    private static final float WINDOW_WIDTH = 920.0f;
-    private static final float BROWSER_HEIGHT = 430.0f;
-
-    private final AssetNavigationPanel mLeftPanel;
-    private final AssetFileBrowserPanel mBrowser;
-    private final Consumer<String> mOnPick;
-    private final TextView mStatus;
-    private String mPendingRemoteInitialDirectory;
-    private int mCapabilityRequestId;
-    private final CapabilityRequests mCapabilityRequests;
-
-    interface CapabilityRequests {
-        void request(int id, Consumer<Boolean> available, Runnable unavailable);
-        void cancel(int id);
-    }
-
-    private static final CapabilityRequests REMOTE_CAPABILITIES = new CapabilityRequests() {
-        @Override public void request(int id, Consumer<Boolean> available, Runnable unavailable) {
-            RemoteAssetClient.requestCapabilities(id, response -> available.accept(response.canBrowse()), unavailable);
-        }
-        @Override public void cancel(int id) { RemoteAssetClient.cancel(id); }
-    };
+/** Compatibility adapter for path-valued callers. New callers should use AssetPickerDialog. */
+public class FilePickerDialog extends AssetPickerDialog {
+    interface CapabilityRequests extends AssetPickerDialog.CapabilityRequests { }
 
     public static FilePickerDialog path(Context context, String title, String initialPath, Consumer<String> onPick) {
-        return new FilePickerDialog(context, title, initialPath, onPick);
+        return new FilePickerDialog(context, title, initialPath, onPick, REMOTE_CAPABILITIES);
     }
 
     public static FilePickerDialog schematic(Context context, String title, File initialDirectory, Consumer<String> onPick) {
-        return new FilePickerDialog(context, title, initialDirectory == null ? "" : initialDirectory.getAbsolutePath(), onPick);
+        return path(context, title, initialDirectory == null ? "" : initialDirectory.getAbsolutePath(), onPick);
     }
 
     public static FilePickerDialog showPath(View anchor, String initialPath, Consumer<String> onPick) {
-        if (anchor == null) {
-            return null;
-        }
+        if (anchor == null) return null;
         FilePickerDialog dialog = path(anchor.getContext(), "选择路径", initialPath, onPick);
         dialog.show(anchor);
         return dialog;
@@ -70,180 +38,31 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
         return showPath(anchor, initialDirectory == null ? "" : initialDirectory.getAbsolutePath(), onPick);
     }
 
-    private FilePickerDialog(Context context, String title, String initialPath, Consumer<String> onPick) {
-        this(context, title, initialPath, onPick, REMOTE_CAPABILITIES);
-    }
-
     FilePickerDialog(Context context, String title, String initialPath, Consumer<String> onPick,
                      CapabilityRequests capabilityRequests) {
-        super(context, title);
-        mCapabilityRequests = capabilityRequests;
-        setWindowSizeDp(WINDOW_WIDTH, 0);
-        mOnPick = onPick;
-
-        LinearLayout browserArea = new LinearLayout(context);
-        browserArea.setOrientation(LinearLayout.HORIZONTAL);
-        browserArea.setBackground(rect(UiThemes.EDITOR.surface().root(), UiMetrics.RADIUS_INPUT));
-
-        mBrowser = AssetFileBrowserPanel.picker(context, this);
-        mBrowser.setPickFileAction(this::chooseEntry);
-        mBrowser.setPickCurrentDirectoryAction(this::chooseCurrentDirectory);
-
-        mLeftPanel = new AssetNavigationPanel(context, this);
-        browserArea.addView(mLeftPanel, new LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0.22f
-        ));
-
-        browserArea.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
-
-        browserArea.addView(mBrowser, new LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0.78f
-        ));
-
-        mPanel.addView(browserArea, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(BROWSER_HEIGHT)
-        ));
-
-        mStatus = label(context, "", 12, UiThemes.EDITOR.status().warning());
-        mPanel.addView(mStatus, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(22)
-        ));
-
-        LinearLayout actions = new LinearLayout(context);
-        actions.setGravity(Gravity.RIGHT);
-        UiActionButton cancel = actionButton(context, "取消", UiActionButton.Role.SECONDARY);
-        cancel.setOnClickListener(v -> requestClose());
-        UiActionButton chooseDirectory = actionButton(context, "选择当前文件夹", UiActionButton.Role.QUIET);
-        chooseDirectory.setOnClickListener(v -> chooseCurrentDirectory());
-        UiActionButton choose = actionButton(context, "选择路径", UiActionButton.Role.PRIMARY);
-        choose.setOnClickListener(v -> chooseSelectedFile());
-        actions.addView(cancel, new LinearLayout.LayoutParams(UIUtils.dp2pxInt(92), UIUtils.dp2pxInt(32)));
-        LinearLayout.LayoutParams chooseDirectoryLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(126), UIUtils.dp2pxInt(32));
-        chooseDirectoryLp.leftMargin = UIUtils.dp2pxInt(8);
-        actions.addView(chooseDirectory, chooseDirectoryLp);
-        LinearLayout.LayoutParams chooseLp = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(100), UIUtils.dp2pxInt(32));
-        chooseLp.leftMargin = UIUtils.dp2pxInt(8);
-        actions.addView(choose, chooseLp);
-        setActions(actions);
-
-        navigateInitial(initialPath);
-        // Initial fallback is not user navigation. Every subsequent browser location change
-        // (including path input, up, and double-click) supersedes the deferred remote restore.
-        mBrowser.setLocationChangedListener(() -> mPendingRemoteInitialDirectory = null);
-        requestRemoteCapabilities();
+        this(context, title, initialPath, onPick, (AssetPickerDialog.CapabilityRequests) capabilityRequests);
     }
 
-    private void chooseSelectedFile() {
-        List<AssetEntry> selected = mBrowser.getSelectedEntriesSnapshot();
-        for (AssetEntry entry : selected) {
-            if (isPickableFile(entry)) {
-                chooseEntry(entry);
-                return;
-            }
-        }
-        mStatus.setText("请选择一个支持的文件。");
+    private FilePickerDialog(Context context, String title, String initialPath, Consumer<String> onPick,
+                             AssetPickerDialog.CapabilityRequests capabilityRequests) {
+        super(context, title, options(initialPath), entry -> {
+            if (onPick != null) onPick.accept(toPath(entry));
+        }, capabilityRequests);
     }
 
-    private void chooseEntry(AssetEntry entry) {
-        if (!isPickableFile(entry)) {
-            mStatus.setText("请选择一个支持的文件。");
-            return;
-        }
-        if (requestClose() && mOnPick != null) {
-            mOnPick.accept(toNodePath(entry));
-        }
+    private static AssetPickerOptions options(String initialPath) {
+        String remote = initialRemoteDirectory(initialPath);
+        AssetLocation initial = remote != null ? new AssetLocation.Remote(remote, false)
+                : new AssetLocation.Local(initialLocalDirectory(initialPath), false, List.of());
+        return new AssetPickerOptions(AssetPickerOptions.Sources.BOTH, AssetPickerOptions.Target.FILE_OR_FOLDER,
+                entry -> entry.supports(AssetTypeAction.PICK), initial);
     }
 
-    private boolean isPickableFile(AssetEntry entry) {
-        return entry != null
-                && !entry.isDirectory()
-                && entry.supports(AssetTypeAction.PICK)
-                && (entry.sourceKind() == AssetSourceKind.REMOTE || entry.localFile() != null);
-    }
-
-    private void chooseCurrentDirectory() {
-        String selectedPath = currentDirectoryPath();
-        if (selectedPath.isEmpty()) {
-            mStatus.setText("当前没有可选择的文件夹。");
-            return;
-        }
-        if (requestClose() && mOnPick != null) {
-            mOnPick.accept(selectedPath);
-        }
-    }
-
-    private String currentDirectoryPath() {
-        if (mBrowser.getSourceKind() == AssetSourceKind.REMOTE) {
-            return AssetPathUtils.formatRemotePath(mBrowser.getRemoteDirectory());
-        }
-        File directory = mBrowser.getCurrentDirectory();
-        return directory == null ? "" : absolutePath(directory);
-    }
-
-    private static String toNodePath(AssetEntry entry) {
-        if (entry == null) return "";
-        if (entry.sourceKind() == AssetSourceKind.REMOTE) {
-            return AssetPathUtils.formatRemotePath(entry.path());
-        }
-        return absolutePath(entry.localFile());
-    }
-
-    private static String absolutePath(File file) {
-        if (file == null) return "";
-        try {
-            return file.getCanonicalPath();
-        } catch (Exception ignored) {
-            return file.getAbsolutePath();
-        }
-    }
-
-    private void navigateInitial(String initialPath) {
-        String remoteDirectory = initialRemoteDirectory(initialPath);
-        File localDirectory = initialLocalDirectory(initialPath);
-        if (remoteDirectory != null
-                && mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
-            mBrowser.navigateToRemote(remoteDirectory);
-            return;
-        }
-        mPendingRemoteInitialDirectory = remoteDirectory;
-        mBrowser.navigateTo(localDirectory != null ? localDirectory : AssetBrowserPathPolicy.getLocalDraftsDir());
-    }
-
-    private void requestRemoteCapabilities() {
-        int requestId = RemoteAssetClient.nextRequestId();
-        mCapabilityRequestId = requestId;
-        try {
-            mCapabilityRequests.request(requestId, canBrowse -> post(() -> {
-                if (mCapabilityRequestId != requestId) return;
-                mCapabilityRequestId = 0;
-                mLeftPanel.buildSidebar();
-                if (canBrowse && mPendingRemoteInitialDirectory != null) {
-                    String target = mPendingRemoteInitialDirectory;
-                    mPendingRemoteInitialDirectory = null;
-                    mBrowser.navigateToRemote(target);
-                }
-            }), () -> post(() -> {
-                if (mCapabilityRequestId == requestId) mCapabilityRequestId = 0;
-            }));
-        } catch (RuntimeException failure) {
-            mCapabilityRequestId = 0;
-            mStatus.setText("远端资源暂不可用: " + failure.getMessage());
-        }
-    }
-
-    @Override
-    protected void onAssetDialogDestroyed() {
-        mPendingRemoteInitialDirectory = null;
-        if (mCapabilityRequestId != 0) {
-            mCapabilityRequests.cancel(mCapabilityRequestId);
-            mCapabilityRequestId = 0;
-        }
+    private static String toPath(AssetEntry entry) {
+        if (entry.sourceKind() == AssetSourceKind.REMOTE) return AssetPathUtils.formatRemotePath(entry.path());
+        File file = entry.localFile();
+        try { return file.getCanonicalPath(); }
+        catch (Exception ignored) { return file.getAbsolutePath(); }
     }
 
     private static File initialLocalDirectory(String currentPath) {
@@ -294,42 +113,6 @@ public class FilePickerDialog extends AssetDialogBase implements AssetBrowserCoo
             return null;
         }
         return file.isDirectory() ? file : file.getParentFile();
-    }
-
-    @Override
-    public void dispatchNavigateTo(File directory) {
-        mBrowser.navigateTo(directory);
-    }
-
-    @Override
-    public void dispatchNavigateToFavorites() {
-        mBrowser.navigateToFavorites();
-    }
-
-    @Override
-    public void dispatchNavigateToRemoteRoot() {
-        if (mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
-            mBrowser.navigateToRemoteRoot();
-        }
-    }
-
-    @Override
-    public boolean canBrowseRemote() {
-        return mBrowser != null
-                && mBrowser.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
-    }
-
-    @Override
-    public void showUploadDialog(List<File> selectedFiles) {
-    }
-
-    @Override
-    public void showDownloadDialog(List<AssetEntry> remoteEntries) {
-    }
-
-    @Override
-    public void notifySidebarChanged() {
-        mLeftPanel.buildSidebar();
     }
 
 }

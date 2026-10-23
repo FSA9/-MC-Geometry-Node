@@ -37,7 +37,7 @@ import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.document.GraphSession;
 import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetConflict;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;

@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.entityeditor.ClientEntityEditor;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryEditor;
 import com.mine.geometry_node.client.ui.components.integration.equipment.EntityEquipmentView;
 import com.mine.geometry_node.client.ui.editor.entity.graph.EntityGraphsView;
@@ -11,11 +12,20 @@ import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.text.TextUtils;
+import icyllis.modernui.text.SpannableString;
+import icyllis.modernui.text.Spanned;
+import icyllis.modernui.text.style.ForegroundColorSpan;
+import icyllis.modernui.text.style.RelativeSizeSpan;
+import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
@@ -39,6 +49,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     };
     private final UUID entity;
     private final String dimension;
+    private final String initialName;
     private final UiTheme theme;
     private final EntityEditSession session;
     private final LinearLayout tabs;
@@ -48,14 +59,18 @@ public final class EntityEditorWindow extends ModalWindowView {
     private final UiActionButton reload, close;
     private final List<View> pageViews = new ArrayList<>();
     private final List<UiActionButton> tabButtons = new ArrayList<>();
+    private final Map<UiActionButton, TabPresentation> tabPresentations = new LinkedHashMap<>();
+    private record TabPresentation(String key, View underline) {}
     private EntityEditDraft draft;
     private EntityAttributesView attributes;
+    private EntityTagsView tags;
     private EntityEquipmentView equipment;
     private EntityGraphsView graphs;
     private UiDataDictionaryEditor.Embedded data;
     private int selectedTab;
     private long acknowledged;
     private boolean active, changing, inputBlocked;
+    private String registryType = "";
 
     public static void show(View anchor, WorldObjectEntry entry, Runnable applied) {
         Objects.requireNonNull(anchor); Objects.requireNonNull(entry); Objects.requireNonNull(applied);
@@ -83,14 +98,16 @@ public final class EntityEditorWindow extends ModalWindowView {
                        EntityEditSession.Scheduler scheduler, Consumer<EntityEditSession.Failure> failures) {
         super(owner.getContext(), tr("title", name), MovementMode.DRAGGABLE, Style.forTheme(theme));
         bindSessionOwner(owner);
-        this.entity = entity; this.dimension = dimension; this.theme = theme;
+        this.entity = entity; this.dimension = dimension; this.theme = theme; initialName = name;
         session = new EntityEditSession(dimension, entity, gateway, scheduler, uiQueue, applied, failures);
-        setPreferredSizeDp(1040, 670); setMinimumSizeDp(640, 460);
+        setPreferredSizeDp(1120, 750); setMinimumSizeDp(640, 460);
         titleView().setSingleLine(true); titleView().setEllipsize(TextUtils.TruncateAt.END);
+        UIUtils.setLockedTextSize(titleView(), 15);
         contentHost().setPadding(0, 0, 0, 0);
         LinearLayout root = column(getContext());
-        tabs = row(getContext()); tabs.setPadding(px(14), px(8), px(14), px(8));
-        root.addView(tabs, size(-1, 48)); root.addView(divider(getContext(), theme), size(-1, 1));
+        tabs = row(getContext()); tabs.setPadding(px(20), 0, px(20), 0);
+        tabs.setBackground(fill(theme.surface().header()));
+        root.addView(tabs, size(-1, 44)); root.addView(divider(getContext(), theme), size(-1, 1));
         pages = new FrameLayout(getContext()); root.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         blocker = new View(getContext()); blocker.setClickable(true); blocker.setFocusable(true);
         blocker.setBackground(fill(UiTheme.withAlpha(theme.surface().panel(), 150)));
@@ -123,10 +140,10 @@ public final class EntityEditorWindow extends ModalWindowView {
         // Disarm blur handlers before removing controls. Closing never completes raw input.
         if (attributes != null) attributes.dispose();
         if (data != null) data.dispose();
-        if (graphs != null) graphs.dismissMenus();
+        if (graphs != null) graphs.dispose();
         session.close();
-        pages.removeAllViews(); pageViews.clear(); tabs.removeAllViews(); tabButtons.clear();
-        attributes = null; data = null; equipment = null; graphs = null;
+        pages.removeAllViews(); pageViews.clear(); tabs.removeAllViews(); tabButtons.clear(); tabPresentations.clear();
+        attributes = null; tags = null; data = null; equipment = null; graphs = null;
     }
     @Override public boolean canClose(OverlayCloseReason reason) { return true; }
     private void renderSession() {
@@ -151,9 +168,10 @@ public final class EntityEditorWindow extends ModalWindowView {
         try {
             if (attributes != null) attributes.dispose();
             if (data != null) data.dispose();
-            if (graphs != null) graphs.dismissMenus();
-            pages.removeAllViews(); tabs.removeAllViews(); pageViews.clear(); tabButtons.clear();
+            if (graphs != null) graphs.dispose();
+            pages.removeAllViews(); tabs.removeAllViews(); pageViews.clear(); tabButtons.clear(); tabPresentations.clear();
             draft = next;
+            registryType = String.valueOf(draft.snapshot().getOrDefault("registryType", ""));
             attributes = new EntityAttributesView(getContext(), theme, draft, entity, dimension, this::changed);
             addPage("tab.attributes", attributes);
             equipment = null;
@@ -167,11 +185,15 @@ public final class EntityEditorWindow extends ModalWindowView {
                 else equipment.setPreviewReference(entity, dimension);
                 addPage("tab.equipment", equipment);
             }
-            addPage("tab.tags", new EntityTagsView(getContext(), theme, draft));
-            data = UiDataDictionaryEditor.createEmbedded(this, draft.dataBinding(), theme);
+            tags = new EntityTagsView(getContext(), theme, draft);
+            addPage("tab.tags", tags);
+            data = UiDataDictionaryEditor.createEmbedded(this, draft.dataBinding(), theme, UiMetrics.TEXT_BODY);
             data.setOnPendingChangesChanged(this::changed); addPage("tab.data", data.view());
-            graphs = new EntityGraphsView(getContext(), theme, draft.graphs("graphs"),
-                    draft.graphs("availableGraphs"), bindings -> draft.set("graphs", bindings));
+            EntityEditDraft graphDraft = draft;
+            graphs = new EntityGraphsView(getContext(), theme, graphDraft.graphs("graphs"),
+                    graphDraft.graphs("availableGraphs"), bindings -> graphDraft.set("graphs", bindings),
+                    () -> active && !session.closed() && !session.blocked() && !session.loading()
+                            && session.draft() == graphDraft, this::requestClose);
             addPage("tab.graphs", graphs);
             pages.addView(blocker, new FrameLayout.LayoutParams(-1, -1));
             selectedTab = Math.min(selectedTab, pageViews.size() - 1); selectTab(selectedTab);
@@ -180,9 +202,29 @@ public final class EntityEditorWindow extends ModalWindowView {
     private void addPage(String label, View page) {
         int index = pageViews.size(); pageViews.add(page); page.setVisibility(GONE);
         pages.addView(page, new FrameLayout.LayoutParams(-1, -1));
-        UiActionButton tab = button(getContext(), theme, label, () -> switchTab(index));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, px(32), 1); lp.rightMargin = px(4);
-        tabs.addView(tab, lp); tabButtons.add(tab);
+        UiActionButton tab = UiTableStyle.rowButton(getContext(), theme);
+        UIUtils.setLockedTextSize(tab, UiMetrics.TEXT_BODY);
+        tab.setSingleLine(true); tab.setEllipsize(TextUtils.TruncateAt.END);
+        tab.setPadding(px(12), 0, px(12), 0);
+        tab.setOnClickListener(view -> switchTab(index));
+        FrameLayout host = new FrameLayout(getContext()) {
+            @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                // Only the caption determines a compact tab's width. The match-parent
+                // underline must follow that width, not expand it to the whole tab bar.
+                View caption = getChildAt(0);
+                measureChildWithMargins(caption, widthSpec, 0, heightSpec, 0);
+                setMeasuredDimension(resolveSize(caption.getMeasuredWidth(), widthSpec),
+                        resolveSize(caption.getMeasuredHeight(), heightSpec));
+                getChildAt(1).measure(MeasureSpec.makeMeasureSpec(getMeasuredWidth(), MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(px(2), MeasureSpec.EXACTLY));
+            }
+        };
+        host.addView(tab, new FrameLayout.LayoutParams(-2, -1));
+        View underline = divider(getContext(), theme);
+        underline.setBackground(fill(theme.selection().outline()));
+        host.addView(underline, new FrameLayout.LayoutParams(-1, px(2), Gravity.BOTTOM));
+        tabs.addView(host, new LinearLayout.LayoutParams(-2, -1));
+        tabButtons.add(tab); tabPresentations.put(tab, new TabPresentation(label, underline));
     }
     private void switchTab(int index) {
         if (session.loading() || index == selectedTab) return;
@@ -197,9 +239,45 @@ public final class EntityEditorWindow extends ModalWindowView {
         selectedTab = index;
         for (int i = 0; i < pageViews.size(); i++) {
             pageViews.get(i).setVisibility(i == index ? VISIBLE : GONE);
-            tabButtons.get(i).setPalette(UiActionButton.Palette.forRole(theme,
-                    i == index ? UiActionButton.Role.PRIMARY : UiActionButton.Role.QUIET));
         }
+        updateTabs();
+    }
+    private void updateTabs() {
+        for (int i = 0; i < tabButtons.size(); i++) {
+            UiActionButton button = tabButtons.get(i);
+            TabPresentation tab = tabPresentations.get(button);
+            boolean selected = i == selectedTab;
+            String label = tr(tab.key());
+            int count = draft == null ? -1 : switch (tab.key()) {
+                case "tab.tags" -> draft.tags().size();
+                case "tab.data" -> draft.dictionary("data").size();
+                case "tab.graphs" -> draft.graphs("graphs").size();
+                default -> -1;
+            };
+            CharSequence caption = label;
+            if (count >= 0) {
+                SpannableString counted = new SpannableString(label + "  " + count);
+                counted.setSpan(new ForegroundColorSpan(theme.text().muted()), label.length(), counted.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                counted.setSpan(new RelativeSizeSpan(.85f), label.length(), counted.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                caption = counted;
+            }
+            if (!button.getText().toString().contentEquals(caption)) button.setText(caption);
+            button.setPalette(new UiActionButton.Palette(theme.surface().header(), theme.control().iconHover(),
+                    theme.control().iconPressed(), selected ? theme.text().strong() : theme.text().muted()));
+            tab.underline().setVisibility(selected ? VISIBLE : INVISIBLE);
+        }
+    }
+    private void updateTitle() {
+        String heading = tr("heading");
+        String name = draft == null ? initialName : RichTextValue.from(draft.dictionary("attributes").get("name")).plain();
+        if (name.isBlank()) name = initialName;
+        String detail = name + (registryType.isBlank() ? "" : " · " + registryType);
+        if (titleView().getText().toString().equals(heading + "   " + detail)) return;
+        SpannableString caption = new SpannableString(heading + "   " + detail);
+        int start = heading.length() + 3;
+        caption.setSpan(new ForegroundColorSpan(theme.text().muted()), start, caption.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        caption.setSpan(new RelativeSizeSpan(.85f), start, caption.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        setTitle(caption);
     }
     private void changed() {
         if (changing || !active || session.reconciling()) return;
@@ -214,7 +292,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     private boolean equipmentChanged() {
         if (equipment == null || draft == null) return false;
         return !equipment.dropped().isEmpty()
-                || !com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues.equivalent(
+                || !com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues.equivalent(
                 Map.of("equipment", draft.dictionary("equipment"), "inventory", draft.snapshot().get("inventory")),
                 Map.of("equipment", equipment.equipment(), "inventory", equipment.inventory()));
     }
@@ -234,6 +312,8 @@ public final class EntityEditorWindow extends ModalWindowView {
         changing = true;
         try {
             if (attributes != null) attributes.refreshConfirmedValues();
+            if (tags != null) tags.refreshConfirmed();
+            if (graphs != null) graphs.refreshConfirmed(draft.graphs("graphs"), draft.graphs("availableGraphs"));
             if (equipment != null && equipment.isCommitReady() && !equipmentPending()) equipment.acceptCommitted(
                     (Map<String, ItemStack>)(Map<?, ?>)draft.dictionary("equipment"),
                     (List<ItemStack>)draft.snapshot().get("inventory"), draft.flag("equipmentCreative"));
@@ -242,6 +322,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     }
     private void updateState() {
         if (status == null) return;
+        updateTabs(); updateTitle();
         boolean block = session.loading();
         blocker.setVisibility(block ? VISIBLE : GONE);
         if (block != inputBlocked) {
@@ -252,6 +333,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         for (UiActionButton tab : tabButtons) tab.setEnabled(!session.loading());
         reload.setEnabled(active && !session.loading() && !session.saving()
                 && (session.blocked() || draft == null || !draft.dirty())); close.setEnabled(active);
+        reload.setVisibility(session.blocked() || !session.error().isEmpty() ? VISIBLE : GONE);
         if (equipment != null) equipment.setInputBlocked(session.blocked()
                 || equipment.isCommitReady() && (session.saving() || equipmentPending()));
         String error = session.error().isEmpty() ? "" : message(session.error())

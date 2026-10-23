@@ -1,7 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entityeditor;
 
 import net.minecraft.core.Holder;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.*;
 import net.minecraft.world.item.ItemStack;
@@ -34,7 +33,7 @@ public final class EntityEditorAdapters {
         @Override public boolean supports(Entity entity) { return true; }
         @Override public Map<String, Object> attributes(Entity entity) {
             Map<String, Object> values = new LinkedHashMap<>();
-            values.put("name", entity.getCustomName() == null ? "" : entity.getCustomName().getString());
+            values.put("name", EntityEditorNames.snapshot(entity.getCustomName(), entity.registryAccess()));
             values.put("nameVisible", entity.isCustomNameVisible()); values.put("silent", entity.isSilent());
             values.put("invulnerable", entity.isInvulnerable()); values.put("gravity", !entity.isNoGravity());
             if (entity instanceof LivingEntity living) {
@@ -52,6 +51,7 @@ public final class EntityEditorAdapters {
         }
         @Override public void validateAttributes(Entity entity, Map<String, Object> changes) {
             validateValues(attributes(entity), changes);
+            if (changes.containsKey("name")) EntityEditorNames.component(changes.get("name"), entity.registryAccess());
             if (entity instanceof LivingEntity living) {
                 for (String field : List.of("maxHealth", "speed", "attack")) {
                     if (!changes.containsKey(field)) continue;
@@ -77,7 +77,7 @@ public final class EntityEditorAdapters {
                 if (changes.containsKey("health")) living.setHealth((float) number(changes.get("health")));
             }
             for (var field : changes.entrySet()) switch (field.getKey()) {
-                case "name" -> { String name = (String) field.getValue(); entity.setCustomName(name.isEmpty() ? null : Component.literal(name)); }
+                case "name" -> entity.setCustomName(EntityEditorNames.decode(field.getValue(), entity.registryAccess()));
                 case "nameVisible" -> entity.setCustomNameVisible((Boolean) field.getValue());
                 case "silent" -> entity.setSilent((Boolean) field.getValue());
                 case "invulnerable" -> entity.setInvulnerable((Boolean) field.getValue());
@@ -105,8 +105,9 @@ public final class EntityEditorAdapters {
             if (!supported.containsKey(key)) throw new IllegalArgumentException("Unsupported attribute");
             switch (key) {
                 case "name" -> {
-                    if (!(value instanceof String text) || text.length() > 256 || text.codePoints().anyMatch(Character::isISOControl))
-                        throw new IllegalArgumentException("Invalid name");
+                    if (supported.get(key) instanceof String && !(value instanceof String))
+                        throw new IllegalArgumentException("Adapter only supports plain names");
+                    EntityEditorNames.validate(value);
                 }
                 case "nameVisible", "noAI", "persistent", "silent", "invulnerable", "gravity" -> {
                     if (!(value instanceof Boolean)) throw new IllegalArgumentException("Expected boolean");

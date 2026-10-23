@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.model.runtime;
 import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
 import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.runtime.ModelLease;
-import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionCache;
+import com.mine.geometry_node.core.engine.system.model.collision.generation.ModelCollisionCache;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionSettings;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionTransforms;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;

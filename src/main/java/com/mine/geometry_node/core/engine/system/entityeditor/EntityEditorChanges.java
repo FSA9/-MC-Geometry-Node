@@ -1,12 +1,13 @@
 package com.mine.geometry_node.core.engine.system.entityeditor;
 
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
 import java.util.*;
 
 /** Computes edits against the read baseline, then compares only the state the user actually edited. */
 public final class EntityEditorChanges {
     public static final Set<String> EDITABLE = Set.of("attributes", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
-    private static final Set<String> READ_ONLY = Set.of("living", "equipmentSupported", "equipmentCreative", "availableGraphs", "preview");
+    private static final Set<String> READ_ONLY = Set.of("living", "equipmentSupported", "equipmentCreative", "availableGraphs", "preview",
+            "registryType", "dimension", "position");
     private EntityEditorChanges() {}
 
     public static Map<String, Object> between(Map<String, Object> baseline, Map<String, Object> replacement) {

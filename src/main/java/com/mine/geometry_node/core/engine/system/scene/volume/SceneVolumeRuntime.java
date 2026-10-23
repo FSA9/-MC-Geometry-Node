@@ -1,6 +1,11 @@
 package com.mine.geometry_node.core.engine.system.scene.volume;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneChange;
+import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
+import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
+import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import com.mine.geometry_node.core.engine.system.scene.geometry.ScenePrimitiveTypes;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import net.minecraft.server.level.ServerLevel;

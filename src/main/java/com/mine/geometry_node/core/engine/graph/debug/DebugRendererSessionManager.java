@@ -516,7 +516,7 @@ public final class DebugRendererSessionManager {
 
     /** Real retained server geometry resources, independent of per-player debug visibility/radius. */
     public static void visitWorldQuery(ServerLevel level,
-            java.util.function.Predicate<com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry> visitor) {
+            java.util.function.Predicate<com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry> visitor) {
         var state = getState(level.getServer());
         if (state != null) state.sources.visitWorldQuery(level, level.getGameTime(), visitor);
     }

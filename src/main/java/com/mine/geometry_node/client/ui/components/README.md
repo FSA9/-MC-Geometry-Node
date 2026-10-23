@@ -72,10 +72,20 @@
 
 ### integration：Minecraft 与运行时适配
 
+资产选择使用 [AssetPickerDialog](integration/asset/AssetPickerDialog.java)：
+`show(anchor, title, new AssetPickerOptions(sources, target, fileFilter, initialDirectory), onPick)`
+通过 `MainUiServices` 的模态栈挂载，绑定锚点的 retained window 生命周期，结果为单个 `AssetEntry`，取消不回调。
+`sources` 支持 `LOCAL / REMOTE / BOTH`，`target` 支持 `FILE / FOLDER / FILE_OR_FOLDER`；初始目录使用 `AssetLocation`。
+复用已有异步 `AssetFileBrowserPanel`，文件谓词只筛文件、目录始终可导航，确认时再次检查来源、目标与谓词。
+远端当前目录须收到该位置的成功浏览响应才可选择，等待／失败时不可提交；收藏集合不能作为当前目录提交。
+允许文件夹选择时仅启用显式新建文件夹，文件创建与传输保持关闭。可选末尾 `UiTheme` 控制模态外观和操作按钮，浏览器沿用现有编辑器样式。
+旧 `FilePickerDialog / FolderPickerDialog` 为兼容适配器；图绑定规则留给调用方。详见 [API 契约](integration/asset/README.md)。
+
 | 分类 | 类 | 职责 |
 | --- | --- | --- |
 | `nativepreview` | [NativePreviewHost](integration/nativepreview/NativePreviewHost.java)、[ViewportNativePreview](integration/nativepreview/ViewportNativePreview.java)、[ViewportNativePreviewLayer](integration/nativepreview/ViewportNativePreviewLayer.java)、[ViewportNativePreviewView](integration/nativepreview/ViewportNativePreviewView.java) | 共享原生渲染 surface、注册协议、坐标变换、裁剪、attach/detach 和独立 surface 回退。 |
 | `overlay` | [InventoryItemPickerOverlay](integration/overlay/InventoryItemPickerOverlay.java)、[ItemStackTooltipOverlay](integration/overlay/ItemStackTooltipOverlay.java) | 读取客户端背包的选择器与从 ItemStack 获取内容的提示层。 |
+| `equipment` | [EntityEquipmentView](integration/equipment/EntityEquipmentView.java) | 可复用的实体装备与玩家背包工作区；输入手势、物品草稿及原生预览独立于窗口提交；内部 `EquipmentPageLayout` 只负责左右分栏、正方形预览、槽位几何与独立滚动。 |
 | `valuepreview` | [EntityPreviewCell](integration/valuepreview/EntityPreviewCell.java)、[EntityTemplatePreviewView](integration/valuepreview/EntityTemplatePreviewView.java)、[ItemPreviewCell](integration/valuepreview/ItemPreviewCell.java)、[ItemSlotView](integration/valuepreview/ItemSlotView.java)、[MarkerTypePreview](integration/valuepreview/MarkerTypePreview.java)、[PreviewZoomController](integration/valuepreview/PreviewZoomController.java)、[ValuePreviewStyle](integration/valuepreview/ValuePreviewStyle.java) | 物品、实体和表格预览单元格；标记预览适配项目运行时注册表，缩放与样式辅助类跟随预览。 |
 
 `InventoryItemPickerOverlay.ItemStackView` 当前是公开嵌套展示组件，背包选择器、`ShopMenuFragment` 和 `ShopEditorOverlay` 都在使用。它随外层文件归入 `integration/overlay`；复用时应识别它是物品展示能力，不能因嵌套在选择器中就下沉到 base。原生桥接只认识 `NativePreviewHost` 协议，由 Graph 的 `Viewport` 实现宿主，不依赖具体编辑器类。
@@ -259,3 +269,7 @@ preview.zoom().reset();        // 回到 1，受当前范围约束
 编辑器组合公共 `ModalWindowView`、`UiContextMenu`、`UiTextInput`、`UiSelectButton`、按钮与滚动容器，不再创建独立弹层体系。下拉选择复用 `UiContextMenu.showBelow(anchor, contentHost())`，挂在模态窗口内部，不能加到低于 modal layer 的全局根节点；Esc 先关闭菜单。顶部统一放置搜索、类型筛选和新增；左侧按20条分页并显示条目类型；右侧键与类型并排，布尔值复用复选框，字典与列表切换 JSON 编辑和有上限的结构预览。标题与对象说明在同一文本基线，底栏显示草稿状态和等距操作；还原条目只撤销当前表单，保存条目只更新草稿，应用才写入业务仓库。整数及其他数值使用普通文本输入，无上下微调按钮。编辑保留 Integer／Long／Float／Double 精度；重复键、溢出、非有限数和超限结构不能提交。未知注册类型与包含它们的复杂值保持只读，编辑其他条目不会把原值字符串化。
 
 草稿只在应用时提交；取消与关闭确认不修改仓库。重新加载在存在草稿时先用弹窗内的丢弃确认，确认后重新取得数据并建立新的比较基线，可恢复版本冲突；取消确认会保留当前输入。组件自己的监听在 detach／modal close 时解除；异步通知和完成回调 post 回 UI 线程，并拒绝旧绑定／关闭后的回调。组件**不关闭共享 binding/session**，由业务 owner 负责。侧栏只在挂载且可见时主动请求读取；表格优先使用 summary-only API。管理弹窗的 anchor 应为稳定 editor／面板，避免刷新表格重建行时把弹窗误关掉。
+
+实体装备组件由宿主传入装备、背包快照、能力、预览来源和变更回调，不依赖实体编辑窗口或网络。`equipment()`、`inventory()`、`dropped()` 返回分离快照；`isCommitReady()` 表示一次装备操作是否完成。宿主负责在操作完成时成批提交并以 `acceptCommitted()` 接收确认。切页保留手持与输入状态，真正关闭由宿主决定丢弃；组件不自行修改实体。
+
+实体预览的 `EntityPreviewCell.Layout.SQUARE` 适用于独立属性栏，边框充满方框且不附加表格行留白；默认 `TABLE` 继续使用原有行间距。`UiTagChip`／`UiTagStrip` 可通过带 `textSizeDp` 的构造器选择实例字号；字典 `createEmbedded(owner,binding,theme,textSizeDp)` 同样允许宿主指定字号，不改变其他实例的默认值。

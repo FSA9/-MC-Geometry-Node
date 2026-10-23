@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
+import com.mine.geometry_node.core.engine.system.scene.property.SceneProperty;
+
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;

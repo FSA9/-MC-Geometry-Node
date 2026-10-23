@@ -256,7 +256,7 @@ final class AssetBrowserActionController {
     }
 
     void triggerNewItem(boolean isFolder) {
-        if (mPanel.isFavoritesMode()
+        if (!mPanel.creationAllowed(isFolder) || mPanel.isFavoritesMode()
                 || !mPanel.repositorySupports(mPanel.getSourceKind(), AssetRepositoryOperation.CREATE)) return;
         mPanel.clearSearch();
         if (mPanel.getSourceKind() == AssetSourceKind.REMOTE) {
@@ -291,7 +291,7 @@ final class AssetBrowserActionController {
     }
 
     void createRemoteDirectory(String path, boolean navigateAfterCreation) {
-        if (mPanel.getSourceKind() != AssetSourceKind.REMOTE
+        if (!mPanel.creationAllowed(true) || mPanel.getSourceKind() != AssetSourceKind.REMOTE
                 || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.CREATE)) return;
         sendRemoteFileOperation(PacketRemoteAssetFileOperationRequest.Operation.CREATE_DIRECTORY,
                 List.of(), path, navigateAfterCreation ? () -> mPanel.navigateToRemote(path) : null);
@@ -488,8 +488,8 @@ final class AssetBrowserActionController {
         }
         if (!mPanel.isFavoritesMode()
                 && mPanel.repositorySupports(mPanel.getSourceKind(), AssetRepositoryOperation.CREATE)) {
-            menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
-            if (mPanel.getSourceKind() == AssetSourceKind.LOCAL || mCoordinator != null) {
+            if (mPanel.creationAllowed(true)) menu.addMenuItem("新建文件夹", () -> triggerNewItem(true));
+            if (mPanel.creationAllowed(false) && (mPanel.getSourceKind() == AssetSourceKind.LOCAL || mCoordinator != null)) {
                 menu.addMenuItem("新建文件", () -> triggerNewItem(false));
             }
         }

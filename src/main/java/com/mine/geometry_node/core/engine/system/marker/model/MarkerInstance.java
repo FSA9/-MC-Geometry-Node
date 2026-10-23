@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.marker.model;
 
-import com.mine.geometry_node.core.engine.system.marker.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
 
 import java.util.Objects;
 

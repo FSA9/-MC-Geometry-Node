@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionMeshB
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
-import com.mine.geometry_node.core.engine.system.scene.SceneTransforms;
+import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import com.mine.geometry_node.core.engine.system.scene.geometry.ScenePrimitiveTypes;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneNodeInputs;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;

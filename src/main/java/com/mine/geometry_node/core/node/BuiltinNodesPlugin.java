@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.node;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.api.GeometryNodePlugin;
 import com.mine.geometry_node.api.MarkerRegistrationContext;
-import com.mine.geometry_node.core.engine.system.marker.BuiltinMarkerTypes;
+import com.mine.geometry_node.core.engine.system.marker.type.BuiltinMarkerTypes;
 import com.mine.geometry_node.api.NodeRegistrationContext;
 import com.mine.geometry_node.core.node.nodes.actions.block.*;
 import com.mine.geometry_node.core.node.nodes.actions.area.*;

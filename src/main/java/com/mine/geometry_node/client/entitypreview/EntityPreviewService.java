@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.entitypreview;
 
 import com.mine.geometry_node.core.cache.*;
-import com.mine.geometry_node.core.engine.system.entitypreview.EntityPreviewLimits;
-import com.mine.geometry_node.core.engine.system.entitypreview.EntityPreviewTarget;
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewLimits;
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewTarget;
 
 import java.time.Duration;
 import java.util.*;

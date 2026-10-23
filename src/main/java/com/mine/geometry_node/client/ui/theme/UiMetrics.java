@@ -6,6 +6,8 @@ public final class UiMetrics {
     public static final float TEXT_COMPACT = 10.0f;
     public static final float TEXT_CONTROL = 10.5f;
     public static final float TEXT_SEARCH = 14.0f;
+    public static final float TEXT_BODY = 14.0f;
+    public static final float TEXT_CAPTION = 12.0f;
     public static final float RADIUS_SMALL = 2.0f;
     public static final float RADIUS_INPUT = 3.0f;
     public static final float BORDER = 1.0f;

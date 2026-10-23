@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.entity;
 
 import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
 import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;

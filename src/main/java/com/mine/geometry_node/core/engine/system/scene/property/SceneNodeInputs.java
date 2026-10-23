@@ -3,7 +3,11 @@ package com.mine.geometry_node.core.engine.system.scene.property;
 import com.mine.geometry_node.core.cache.*;
 import java.util.concurrent.CompletionStage;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneNativeInteractions;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectCapabilities;
+
+import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionTransforms;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSchemas.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaShape;

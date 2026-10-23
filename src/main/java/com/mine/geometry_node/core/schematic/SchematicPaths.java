@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.schematic;
 
-import com.mine.geometry_node.core.engine.system.asset.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
 import net.minecraft.server.MinecraftServer;
 
 import java.io.IOException;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entityeditor;
 
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.function.LongSupplier;

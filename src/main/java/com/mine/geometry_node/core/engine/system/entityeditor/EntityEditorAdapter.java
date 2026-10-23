@@ -9,6 +9,8 @@ import java.util.*;
  */
 public interface EntityEditorAdapter {
     boolean supports(Entity entity);
+    /** String names retain the legacy inline-only contract. Rich names use EntityEditorNames
+     * carriers (including the complete Component) and accept RichTextValue on completed edits. */
     Map<String, Object> attributes(Entity entity);
     void validateAttributes(Entity entity, Map<String, Object> changes);
     void applyAttributes(Entity entity, Map<String, Object> changes);

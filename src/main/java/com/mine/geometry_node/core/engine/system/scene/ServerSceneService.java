@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneEdit;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneSnapshot;

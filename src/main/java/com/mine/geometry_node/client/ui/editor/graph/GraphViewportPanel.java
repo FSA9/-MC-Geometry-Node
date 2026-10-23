@@ -175,6 +175,16 @@ public class GraphViewportPanel extends LinearLayout {
         return mViewport.getController().getCurrentSession();
     }
 
+    /** Routes an external open request to this existing panel, including after manual tab selection. */
+    public void openGraphSession(GraphSession session) {
+        if (mDisposed) throw new IllegalStateException("Graph editor is disposed");
+        if (session == null || session.fileReference().isDeleted())
+            throw new IllegalArgumentException("Graph document is unavailable");
+        markFocused();
+        DocumentManager.INSTANCE.openSession(session);
+        selectSession(session);
+    }
+
     public void saveCurrentSession() {
         mViewport.getController().performAction(ViewportActionId.SAVE, ViewportActionRequest.EMPTY);
     }

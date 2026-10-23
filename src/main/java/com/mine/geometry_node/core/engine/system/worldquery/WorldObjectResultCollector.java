@@ -1,5 +1,11 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectCategories;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
+
 import java.util.*;
 import java.util.function.Predicate;
 

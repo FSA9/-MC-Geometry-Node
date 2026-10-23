@@ -1,12 +1,12 @@
 package com.mine.geometry_node.client.ui.components.integration.equipment;
 
 import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStackTooltipOverlay;
-import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.PreviewZoomController;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
@@ -14,14 +14,11 @@ import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.graphics.Rect;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
-import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.KeyMapping;
@@ -37,7 +34,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /** Reusable equipment editor backed exclusively by detached authoritative snapshot stacks.
- * Call {@link #returnCarried()} before leaving/applying; on false retain this tab and draft.
+ * Hosts may retain this view and unfinished carried-stack operations across tab switches.
+ * Commit only when {@link #isCommitReady()}; {@link #returnCarried()} is an optional explicit action.
  * All methods and the changed callback belong to the UI thread. Preview sources can arrive later.
  * Host commits copies from equipment()/inventory()/dropped() through its own transaction.
  * Creative cloning defaults off; only enable it from an authoritative capability snapshot. */
@@ -50,9 +48,6 @@ public final class EntityEquipmentView extends FrameLayout {
     private final Map<EntityEquipmentDraft.Slot, EquipmentItemSlotView> slots = new LinkedHashMap<>();
     private final EquipmentEntityPreviewView preview;
     private final TextView previewStatus;
-    private final LinearLayout panels;
-    private final LinearLayout workbench;
-    private final LinearLayout playerInventory;
     private final ItemSlotView cursor;
     private final TextView error;
     private final EquipmentInventoryInteraction interaction;
@@ -82,84 +77,45 @@ public final class EntityEquipmentView extends FrameLayout {
         this.interaction = new EquipmentInventoryInteraction(draft, this::completed, this::refresh);
         setBackground(background(theme.surface().panel(), theme.border().subtle(), false));
 
-        UiScrollView scroll = new UiScrollView(context, theme.scroll());
-        scroll.setFillViewport(true);
-        scroll.setBackground(background(theme.surface().panel(), theme.border().subtle(), false));
-        panels = column();
-        scroll.addView(panels, new ScrollView.LayoutParams(-1, -2));
-        addView(scroll, new FrameLayout.LayoutParams(-1, -1));
-
-        workbench = column();
-        workbench.setPadding(px(24), px(20), px(24), px(20));
-        workbench.addView(text("title", 14, theme.text().strong()), wrap());
-
-        LinearLayout outfit = new LinearLayout(context);
-        outfit.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout armor = column();
-        for (String name : List.of("head", "chest", "legs", "feet")) {
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(px(56), -2);
-            params.bottomMargin = px(8);
-            armor.addView(equipmentSlot(name), params);
-        }
-        outfit.addView(armor, new LinearLayout.LayoutParams(px(56), -2));
-        LinearLayout previewColumn = column();
-        previewColumn.setGravity(Gravity.CENTER);
         preview = new EquipmentEntityPreviewView(context, theme);
         preview.setFullVisibilityAnchor(preview);
         preview.zoom().setWheelMode(PreviewZoomController.WheelMode.DISABLED);
         FrameLayout previewFrame = new FrameLayout(context);
         previewFrame.addView(preview, new FrameLayout.LayoutParams(-1, -1));
-        previewStatus = UIUtils.createLockedTextView(context, "", 11, theme.text().muted());
+        previewStatus = UIUtils.createLockedTextView(context, "", UiMetrics.TEXT_CAPTION, theme.text().muted());
         previewStatus.setTextColor(theme.text().muted());
         previewStatus.setGravity(Gravity.CENTER);
         previewStatus.setEnabled(false);
         previewFrame.addView(previewStatus, new FrameLayout.LayoutParams(-1, -1));
         preview.setOnPreviewStatusChanged(this::showPreviewStatus);
-        previewColumn.addView(previewFrame, new LinearLayout.LayoutParams(-1, px(286)));
-        TextView caption = text("preview", 10, theme.text().muted());
-        caption.setGravity(Gravity.CENTER);
-        previewColumn.addView(caption, new LinearLayout.LayoutParams(-1, px(24)));
-        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(0, -2, 1);
-        previewParams.leftMargin = px(16);
-        outfit.addView(previewColumn, previewParams);
-        LinearLayout.LayoutParams outfitParams = new LinearLayout.LayoutParams(-1, -2);
-        outfitParams.topMargin = px(18);
-        workbench.addView(outfit, outfitParams);
+        EquipmentPageLayout.Square previewSquare = new EquipmentPageLayout.Square(context, 280);
+        previewSquare.addView(previewFrame, new FrameLayout.LayoutParams(-1, -1));
+        EquipmentPageLayout.Groups groups = new EquipmentPageLayout.Groups(context,
+                equipmentGroup("armor", List.of("head", "chest", "legs", "feet")),
+                equipmentGroup("hands", List.of("mainhand", "offhand")));
+        EquipmentPageLayout.Workbench workbench = new EquipmentPageLayout.Workbench(context, previewSquare, groups);
 
-        LinearLayout hands = new LinearLayout(context);
-        hands.setGravity(Gravity.CENTER);
-        for (String name : List.of("mainhand", "offhand")) {
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(px(64), -2);
-            params.leftMargin = px(10);
-            params.rightMargin = px(10);
-            hands.addView(equipmentSlot(name), params);
-        }
-        workbench.addView(hands, new LinearLayout.LayoutParams(-1, -2));
-
-        playerInventory = column();
-        playerInventory.setPadding(px(24), px(20), px(24), px(20));
-        playerInventory.setBackground(background(theme.surface().sidebar(), theme.border().divider(), true));
-        playerInventory.addView(text("player_inventory", 14, theme.text().strong()), wrap());
-        addText(playerInventory, "main_inventory", 10, theme.text().muted(), 22);
-        InventoryGrid main = new InventoryGrid(context, 9, 27);
+        LinearLayout playerInventory = column();
+        playerInventory.addView(groupLabel("main_inventory"), wrap());
+        EquipmentPageLayout.SlotGrid main = inventoryGrid(9, 27);
         LinearLayout.LayoutParams gridParams = new LinearLayout.LayoutParams(-1, -2);
-        gridParams.topMargin = px(8);
+        gridParams.topMargin = px(12);
         playerInventory.addView(main, gridParams);
-        addText(playerInventory, "hotbar", 10, theme.text().muted(), 16);
-        divider(playerInventory, 8);
-        InventoryGrid hotbar = new InventoryGrid(context, 0, 9);
+        divider(playerInventory, 25);
+        addLabel(playerInventory, "hotbar", 19);
+        EquipmentPageLayout.SlotGrid hotbar = inventoryGrid(0, 9);
         LinearLayout.LayoutParams hotbarParams = new LinearLayout.LayoutParams(-1, -2);
-        hotbarParams.topMargin = px(10);
+        hotbarParams.topMargin = px(12);
         playerInventory.addView(hotbar, hotbarParams);
 
-        error = text("", 11, theme.status().error());
+        error = text("", UiMetrics.TEXT_BODY, theme.status().error());
         error.setText("");
         LinearLayout.LayoutParams errorParams = new LinearLayout.LayoutParams(-1, -2);
-        errorParams.topMargin = px(10);
-        error.setMinHeight(px(22));
+        errorParams.topMargin = px(16);
+        error.setMinHeight(px(18));
         playerInventory.addView(error, errorParams);
-        panels.addView(workbench, new LinearLayout.LayoutParams(-1, -2));
-        panels.addView(playerInventory, new LinearLayout.LayoutParams(-1, -2));
+        addView(new EquipmentPageLayout(context, theme, workbench, playerInventory),
+                new FrameLayout.LayoutParams(-1, -1));
 
         // Last child inside this modal's content, not OverlayMount.tooltip (modal hosts may reject it).
         // Pass through all input so the cursor never obscures the destination slot's hit target.
@@ -422,25 +378,6 @@ public final class EntityEquipmentView extends FrameLayout {
         cursor.setY(Math.max(0, Math.min(pointerY - height / 2, getHeight() - height)));
     }
 
-    @Override protected void onMeasure(int widthSpec, int heightSpec) {
-        boolean sideBySide = MeasureSpec.getSize(widthSpec) >= px(780);
-        int orientation = sideBySide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL;
-        if (panels.getOrientation() != orientation) panels.setOrientation(orientation);
-        int inventoryWidth = sideBySide ? Math.min(px(490), MeasureSpec.getSize(widthSpec) / 2) : -1;
-        setPanelParams(workbench, sideBySide ? 0 : -1, sideBySide ? 1 : 0);
-        setPanelParams(playerInventory, inventoryWidth, 0);
-        super.onMeasure(widthSpec, heightSpec);
-    }
-
-    private static void setPanelParams(View panel, int width, float weight) {
-        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) panel.getLayoutParams();
-        if (params.width != width || params.weight != weight) {
-            params.width = width;
-            params.weight = weight;
-            panel.setLayoutParams(params);
-        }
-    }
-
     @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
         updateCursor();
@@ -494,16 +431,33 @@ public final class EntityEquipmentView extends FrameLayout {
         previewStatus.setVisibility(key == null ? GONE : VISIBLE);
     }
 
-    private LinearLayout equipmentSlot(String name) {
-        LinearLayout wrapper = column();
-        wrapper.setGravity(Gravity.CENTER_HORIZONTAL);
-        wrapper.addView(itemSlot(EntityEquipmentDraft.Slot.equipment(name)), new LinearLayout.LayoutParams(px(48), px(48)));
-        TextView label = text("slot." + name, 10, theme.text().muted());
-        label.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-1, -2);
-        labelParams.topMargin = px(4);
-        wrapper.addView(label, labelParams);
-        return wrapper;
+    private LinearLayout equipmentGroup(String key, List<String> names) {
+        LinearLayout group = column();
+        group.addView(groupLabel(key), wrap());
+        EquipmentPageLayout.SlotGrid row = new EquipmentPageLayout.SlotGrid(getContext(), names.size(), 8, false);
+        for (String name : names) {
+            LinearLayout wrapper = column();
+            wrapper.setGravity(Gravity.CENTER_HORIZONTAL);
+            EquipmentPageLayout.Square square = new EquipmentPageLayout.Square(getContext(), 52);
+            square.addView(itemSlot(EntityEquipmentDraft.Slot.equipment(name)), new FrameLayout.LayoutParams(-1, -1));
+            wrapper.addView(square, new LinearLayout.LayoutParams(-2, -2));
+            TextView label = text("slot." + name, UiMetrics.TEXT_CAPTION, theme.text().muted());
+            label.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-1, -2);
+            labelParams.topMargin = px(7);
+            wrapper.addView(label, labelParams);
+            row.addView(wrapper);
+        }
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.topMargin = px(12);
+        group.addView(row, rowParams);
+        return group;
+    }
+
+    private EquipmentPageLayout.SlotGrid inventoryGrid(int first, int count) {
+        EquipmentPageLayout.SlotGrid grid = new EquipmentPageLayout.SlotGrid(getContext(), 9, 5, true);
+        for (int i = 0; i < count; i++) grid.addView(itemSlot(EntityEquipmentDraft.Slot.inventory(first + i)));
+        return grid;
     }
 
     private ItemSlotView passiveItem(Context context) {
@@ -523,16 +477,21 @@ public final class EntityEquipmentView extends FrameLayout {
         result.setOrientation(LinearLayout.VERTICAL);
         return result;
     }
-    private TextView text(String key, int size, int color) {
+    private TextView text(String key, float size, int color) {
         TextView result = UIUtils.createLockedTextView(getContext(), key.isEmpty() ? "" : tr(key), size, color);
         result.setTextColor(color);
         result.setSingleLine(false);
         return result;
     }
-    private void addText(LinearLayout column, String key, int size, int color, int margin) {
+    private TextView groupLabel(String key) {
+        TextView label = text(key, UiMetrics.TEXT_BODY, theme.text().muted());
+        label.setSingleLine(true);
+        return label;
+    }
+    private void addLabel(LinearLayout column, String key, int margin) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.topMargin = px(margin);
-        column.addView(text(key, size, color), params);
+        column.addView(groupLabel(key), params);
     }
     private void divider(LinearLayout column, int margin) {
         View line = new View(getContext());
@@ -600,29 +559,4 @@ public final class EntityEquipmentView extends FrameLayout {
         public static KeyAction hotbar(int index) { return new KeyAction(Action.HOTBAR, index); }
     }
 
-    /** Three rows of nine main slots, or one row of nine native hotbar slots. */
-    private final class InventoryGrid extends ViewGroup {
-        private final int count;
-        private int cell;
-        InventoryGrid(Context context, int first, int count) {
-            super(context);
-            this.count = count;
-            for (int i = 0; i < count; i++)
-                addView(itemSlot(EntityEquipmentDraft.Slot.inventory(first + i)), new LayoutParams(-2, -2));
-        }
-        @Override protected void onMeasure(int widthSpec, int heightSpec) {
-            int width = resolveSize(px(9 * 42 + 8 * 4), widthSpec);
-            cell = Math.max(0, Math.min(px(42), (width - px(4) * 8) / 9));
-            int exact = MeasureSpec.makeMeasureSpec(cell, MeasureSpec.EXACTLY);
-            for (int i = 0; i < count; i++) getChildAt(i).measure(exact, exact);
-            setMeasuredDimension(width, resolveSize(count / 9 * (cell + px(4)) - px(4), heightSpec));
-        }
-        @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
-            for (int i = 0; i < count; i++) {
-                int x = i % 9 * (cell + px(4)), y = i / 9 * (cell + px(4));
-                getChildAt(i).layout(x, y, x + cell, y + cell);
-            }
-        }
-        @Override protected LayoutParams generateDefaultLayoutParams() { return new LayoutParams(-2, -2); }
-    }
 }

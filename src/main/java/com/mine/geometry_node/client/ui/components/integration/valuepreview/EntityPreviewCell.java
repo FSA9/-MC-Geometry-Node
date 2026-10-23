@@ -15,11 +15,13 @@ import java.util.UUID;
 
 /** Read-only square preview cell. Pointer selection and ordinary scrolling belong to its row. */
 public final class EntityPreviewCell extends ViewGroup {
+    public enum Layout { TABLE, SQUARE }
     public static final int PREVIEW_SIZE_DP = 64;
     public static final int VERTICAL_PADDING_DP = 12;
     private final EntityTemplatePreviewView preview;
     private final UiDisplayText placeholder;
     private final int preferredSizeDp;
+    private final Layout layout;
     private int previewSize;
 
     public EntityPreviewCell(Context context) {
@@ -32,7 +34,13 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     public EntityPreviewCell(Context context, int preferredSizeDp, UiTheme theme) {
+        this(context, preferredSizeDp, theme, Layout.TABLE);
+    }
+
+    /** Standalone squares fill their bounds; table cells retain row padding and alignment. */
+    public EntityPreviewCell(Context context, int preferredSizeDp, UiTheme theme, Layout layout) {
         super(context);
+        this.layout = java.util.Objects.requireNonNull(layout, "layout");
         if (preferredSizeDp <= 0) throw new IllegalArgumentException("Preview size must be positive");
         this.preferredSizeDp = preferredSizeDp;
         preview = new EntityTemplatePreviewView(context, EntityTemplatePreviewView.RotationMode.FIXED,
@@ -71,6 +79,17 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
+        if (layout == Layout.SQUARE) {
+            int side = resolveSize(px(preferredSizeDp), widthSpec);
+            if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED)
+                side = Math.min(side, MeasureSpec.getSize(heightSpec));
+            previewSize = side;
+            int square = MeasureSpec.makeMeasureSpec(side, MeasureSpec.EXACTLY);
+            preview.measure(square, square);
+            placeholder.measure(square, square);
+            setMeasuredDimension(side, side);
+            return;
+        }
         int width = resolveSize(px(preferredSizeDp + 15), widthSpec);
         int desiredSize = Math.min(px(preferredSizeDp), Math.max(0, width - px(15)));
         int height = resolveSize(desiredSize + px(VERTICAL_PADDING_DP * 2), heightSpec);
@@ -82,7 +101,7 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        int x = Math.min(px(9), getWidth());
+        int x = layout == Layout.SQUARE ? 0 : Math.min(px(9), getWidth());
         int y = (getHeight() - previewSize) / 2;
         preview.layout(x, y, x + previewSize, y + previewSize);
         placeholder.layout(x, y, x + previewSize, y + previewSize);

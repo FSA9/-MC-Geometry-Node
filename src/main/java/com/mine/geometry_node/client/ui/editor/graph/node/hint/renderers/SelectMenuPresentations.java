@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.components.composite.menu.UiGridMenu;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.MarkerTypePreview;
-import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;

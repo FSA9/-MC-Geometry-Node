@@ -1,6 +1,6 @@
 package com.mine.geometry_node.api;
 
-import com.mine.geometry_node.core.engine.system.marker.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
 
 /**
  * Common-side marker type registration exposed to GeometryNode addons.

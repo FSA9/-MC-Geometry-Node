@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.scene.ClientSceneService;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import net.minecraft.world.phys.AABB;
 import java.util.*;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;

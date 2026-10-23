@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.entityeditor;
 
-import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest;

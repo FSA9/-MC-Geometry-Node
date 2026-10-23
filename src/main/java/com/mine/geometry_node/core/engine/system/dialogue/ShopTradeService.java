@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue;
 
+import com.mine.geometry_node.core.engine.system.dialogue.storage.ShopTradeUseStore;
+
 import com.mine.geometry_node.api.EventPayload;
 import com.mine.geometry_node.api.GeometryNodeEvents;
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayload;

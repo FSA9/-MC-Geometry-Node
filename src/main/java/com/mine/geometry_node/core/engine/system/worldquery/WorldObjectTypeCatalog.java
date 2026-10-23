@@ -1,11 +1,20 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
+
 import java.util.*;
 
 /** Bounded display metadata, independent of object collection and its completeness. */
 final class WorldObjectTypeCatalog {
     record Result(List<WorldObjectType> types, boolean partial, List<String> failures) {}
     private WorldObjectTypeCatalog() {}
+    static String resultMessage(boolean objectsIncomplete, boolean metadataIncomplete) {
+        return objectsIncomplete ? "partial_results" : metadataIncomplete ? "partial_metadata" : "";
+    }
     static Result collect(List<WorldObjectProvider> providers, WorldObjectQuery query) {
         Map<String, List<WorldObjectType>> catalogs = new LinkedHashMap<>();
         List<String> failures = new ArrayList<>();

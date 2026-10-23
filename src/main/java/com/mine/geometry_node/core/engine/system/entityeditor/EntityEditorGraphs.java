@@ -9,12 +9,19 @@ import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.storage.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.*;
-import java.nio.charset.StandardCharsets;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.metadata.TagPolicy;
+import com.mine.geometry_node.core.metadata.TagSet;
+import io.netty.handler.codec.EncoderException;
+import net.minecraft.core.HolderLookup;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.*;
 
-/** Entity binding changes only; picker data comes from the published server repository, never client asset names. */
+/** Entity binding validation and bounded presentation from the published server repository. */
 final class EntityEditorGraphs {
     private static final int MAX_BINDINGS = 256, MAX_AVAILABLE = 256;
+    private static final int MAX_PICKER_BYTES = 48 * 1024;
     private static final Comparator<GraphBindingKey> ORDER = Comparator.comparing((GraphBindingKey key) -> key.kind().name()).thenComparing(GraphBindingKey::graphId);
     private EntityEditorGraphs() {}
     static Set<GraphBindingKey> bindings(Entity entity) { return Set.copyOf(entity.getData(GeometryNode.GRAPH_DATA_ATTACHMENT).getBindings()); }
@@ -22,19 +29,49 @@ final class EntityEditorGraphs {
         return bindings.stream().sorted(ORDER).map(key -> Map.<String, Object>of("id", key.graphId(), "kind", key.kind().name())).toList();
     }
     static List<Map<String, Object>> available(Entity entity, EntityEditorAdapter adapter) {
-        MinecraftServer server = entity.level().getServer(); List<Map<String, Object>> result = new ArrayList<>();
-        int pickerBytes = 0;
-        for (String id : new TreeSet<>(ServerGraphRepository.INSTANCE.getGraphIds(server))) {
+        MinecraftServer server = entity.level().getServer();
+        return available(bindings(entity), ServerGraphRepository.INSTANCE.getGraphIds(server),
+                id -> ServerGraphRepository.INSTANCE.getGraph(server, id),
+                graph -> supported(entity, adapter, graph.runtimeKind())
+                        && (graph.runtimeKind() != GraphKind.BLUEPRINT
+                        || BlueprintRuntime.INSTANCE.getGraphIndex(server, graph.graphId()) != null),
+                server.registryAccess());
+    }
+
+    /** Bound presentations take priority over addable choices; binding snapshots stay strictly id/kind. */
+    static List<Map<String, Object>> available(Set<GraphBindingKey> bound, Set<String> graphIds,
+                                             Function<String, GraphAssetDescriptor> lookup,
+                                             Predicate<GraphAssetDescriptor> addable,
+                                             HolderLookup.Provider registries) {
+        Set<String> ordered = new LinkedHashSet<>();
+        bound.stream().sorted(ORDER).map(GraphBindingKey::graphId).forEach(ordered::add);
+        ordered.addAll(new TreeSet<>(graphIds));
+        List<Map<String, Object>> result = new ArrayList<>();
+        int envelopeBytes = WorldObjectDataValues.encode(Map.of("availableGraphs", List.of()), registries, MAX_PICKER_BYTES).length;
+        int pickerBytes = envelopeBytes;
+        for (String id : ordered) {
             if (result.size() == MAX_AVAILABLE) break;
             if (id.length() > 1024) continue;
-            GraphAssetDescriptor graph = ServerGraphRepository.INSTANCE.getGraph(server, id);
-            if (graph == null || !supported(entity, adapter, graph.runtimeKind())) continue;
-            if (graph.runtimeKind() == GraphKind.BLUEPRINT && BlueprintRuntime.INSTANCE.getGraphIndex(server, id) == null) continue;
-            int entryBytes = 2 * id.getBytes(StandardCharsets.UTF_8).length + 128;
-            if (pickerBytes + entryBytes > 48 * 1024) break;
-            pickerBytes += entryBytes;
-            // Compiled descriptors have no display-name field; the canonical asset id is the picker label.
-            result.add(Map.of("id", id, "kind", graph.runtimeKind().name(), "name", id));
+            GraphAssetDescriptor graph = lookup.apply(id);
+            if (graph == null) continue;
+            GraphBindingKey key = new GraphBindingKey(graph.runtimeKind(), id);
+            boolean bindable = addable.test(graph);
+            if (!bound.contains(key) && !bindable) continue;
+            Map<String, Object> entry = Map.of("id", id, "kind", graph.runtimeKind().name(),
+                    "name", graph.name(), "graphType", graph.type().id(), "tags", graph.tags());
+            try {
+                // Presentation tags must also fit the shared tag-reader contract. Never shorten a tag list.
+                TagSet.normalize(graph.tags(), TagPolicy.EXACT);
+                // The common wire encoder accounts for modified UTF, nested lists/maps and type labels.
+                // Each list element adds the same bytes whether encoded alone or in the complete list.
+                int entryBytes = WorldObjectDataValues.encode(Map.of("availableGraphs", List.of(entry)),
+                        registries, MAX_PICKER_BYTES).length - envelopeBytes;
+                if (entryBytes > MAX_PICKER_BYTES - pickerBytes) continue;
+                pickerBytes += entryBytes;
+                result.add(entry);
+            } catch (IllegalArgumentException | EncoderException tooLarge) {
+                // Omit the entire unrepresentable presentation; later smaller entries may still fit.
+            }
         }
         return List.copyOf(result);
     }

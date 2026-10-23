@@ -88,7 +88,16 @@ public final class UiPopover extends UiPopupOverlay {
     }
 
     @Override protected boolean containsPopup(float x, float y) {
+        // A nested menu owns outside clicks until it closes, including beyond this panel's bounds.
+        for (int i = 0; i < getChildCount(); i++)
+            if (getChildAt(i) instanceof UiPopupOverlay nested && nested.isOpen()) return true;
         return x >= panel.getLeft() && x < panel.getRight() && y >= panel.getTop() && y < panel.getBottom();
+    }
+
+    @Override protected void onDismissRequested() {
+        for (int i = getChildCount() - 1; i >= 0; i--)
+            if (getChildAt(i) instanceof UiPopupOverlay nested) nested.dismiss();
+        super.onDismissRequested();
     }
 
     @Override protected void onSizeChanged(int w, int h, int oldW, int oldH) {

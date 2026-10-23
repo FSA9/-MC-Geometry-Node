@@ -21,6 +21,7 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
 import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
@@ -33,7 +34,15 @@ import com.mine.geometry_node.client.ui.editor.entity.EntityEditorWindow;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.system.worldquery.*;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectCategories;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
@@ -80,6 +89,7 @@ public final class WorldObjectsView extends FrameLayout {
     private final TextView status;
     private final UiActionButton focusButton;
     private ColumnFilters columnFilters = ColumnFilters.empty();
+    private WorldObjectGraphFilter graphFilter = WorldObjectGraphFilter.empty();
     private String registryTypeFilter = "";
     private final Map<String, UiTableFilterHeader> filterHeaders = new LinkedHashMap<>();
     private final UiStateContext uiState;
@@ -90,6 +100,9 @@ public final class WorldObjectsView extends FrameLayout {
     private final Map<String, RowBinding> rowBindings = new LinkedHashMap<>();
     private record RowBinding(UiActionButton button, UiCheckBox checkbox, View stripe,
                               UiTableRow cells, int baseColor, WorldObjectEntry entry) {}
+    private static final int ROW_NUMBER_COLUMN = 0, NAME_COLUMN = 2, TYPE_COLUMN = 3,
+            REGISTRY_TYPE_COLUMN = 4, VALUE_COLUMN = 5, DIMENSION_COLUMN = 6, POSITION_COLUMN = 7,
+            LIFETIME_COLUMN = 8, TAGS_COLUMN = 9, DATA_COLUMN = 10, GRAPHS_COLUMN = 11;
     private final UiTableColumns columns = new UiTableColumns(List.of(
             UiTableStyle.rowNumberColumn(),
             UiTableStyle.selectionColumn(),
@@ -101,7 +114,8 @@ public final class WorldObjectsView extends FrameLayout {
             UiTableStyle.column("position", 180),
             UiTableStyle.column("lifetime", 100),
             UiTableStyle.column("tags", 180),
-            UiTableStyle.column("data", 220)), UiTableColumns.Sizing.INDEPENDENT);
+            UiTableStyle.column("data", 220),
+            UiTableStyle.column("graphs", 220)), UiTableColumns.Sizing.INDEPENDENT);
     private final LinearLayout table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
@@ -206,6 +220,7 @@ public final class WorldObjectsView extends FrameLayout {
         for(String key:List.of("name","type","registry_type","value","dimension","position","lifetime","tags")) addHeader(key);
         tableHeader.addView(UiTableStyle.cell(context, tr("data.title"), UiThemes.EDITOR.text().normal()),
                 new ViewGroup.LayoutParams(-1, -1));
+        addHeader("graphs");
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,px(UiTableStyle.HEADER_HEIGHT)));
         UiScrollView scroll=new UiScrollView(context); scroll.setFillViewport(true);
@@ -284,15 +299,29 @@ public final class WorldObjectsView extends FrameLayout {
         applyColumns(next, nextRange, registryTypeFilter);
     }
     private void applyColumns(ColumnFilters next, WorldObjectQuery.Range nextRange, String nextRegistryType) {
+        applyColumns(next, nextRange, nextRegistryType, graphFilter);
+    }
+    private void applyColumns(ColumnFilters next, WorldObjectQuery.Range nextRange, String nextRegistryType,
+                              WorldObjectGraphFilter nextGraphFilter) {
         if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
         // Let the popover report validation errors while keeping every committed field intact.
-        WorldObjectQuery nextQuery = buildQuery(next, nextRange, nextRegistryType);
+        WorldObjectQuery nextQuery = buildQuery(next, nextRange, nextRegistryType, nextGraphFilter, category, provider);
         cancelMount();
         columnFilters = next;
         registryTypeFilter = nextRegistryType;
+        graphFilter = nextGraphFilter;
         range = nextRange;
         selected.clear(); anchorKey = null; resetDoubleClick();
         saveState(); updateFilters(); updateSelection(); submitQuery(nextQuery);
+    }
+    private void applyGraphs(String type, String name) {
+        applyColumns(columnFilters, range, registryTypeFilter, new WorldObjectGraphFilter(type, name));
+    }
+    private LinkedHashMap<String, String> graphTypeOptions() {
+        LinkedHashMap<String, String> options = new LinkedHashMap<>();
+        for (var type : GraphTypeRegistry.INSTANCE.all())
+            options.put(type.id(), Component.translatable(type.translationKey()).getString());
+        return options;
     }
     private void applyDimensions(ColumnFilters.Choice choice, boolean loaded) {
         ColumnFilters nextColumns = columnFilters.withDimensions(choice);
@@ -339,6 +368,8 @@ public final class WorldObjectsView extends FrameLayout {
                 filterPopover.showChoices(anchor, tr("lifetime"), options, columnFilters.lifetimes(), v -> applyColumns(columnFilters.withLifetimes(v)));
             }
             case "tags" -> filterPopover.showTags(anchor, columnFilters.includedTags(), columnFilters.excludedTags(), (include, exclude) -> applyColumns(columnFilters.withTags(include, exclude)));
+            case "graphs" -> filterPopover.showTypeAndName(anchor, tr("graphs"), graphTypeOptions(),
+                    graphFilter.type(), graphFilter.name(), this::applyGraphs);
         }
     }
     private void queryNow() { if (restoringState) return; saveState(); query(); }
@@ -357,6 +388,11 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String nextRegistryType,
                                         WorldObjectCategories.Category nextCategory, String nextProvider) {
+        return buildQuery(filters, nextRange, nextRegistryType, graphFilter, nextCategory, nextProvider);
+    }
+    private WorldObjectQuery buildQuery(ColumnFilters filters, WorldObjectQuery.Range nextRange, String nextRegistryType,
+                                        WorldObjectGraphFilter nextGraphFilter,
+                                        WorldObjectCategories.Category nextCategory, String nextProvider) {
         ColumnFilters effectiveFilters = filters;
         if (nextCategory != null) {
             String id = "category:" + nextCategory.id();
@@ -367,7 +403,7 @@ public final class WorldObjectsView extends FrameLayout {
         return new WorldObjectQuery(nextRange, "", one(nextProvider), Set.of(), "",
                 Set.of(), Set.of(), Set.of(),
                 128, WorldObjectQuery.MAX_RESULTS, effectiveFilters, Set.of(), compileNameFallbacks(filters.name()),
-                nextRegistryType);
+                nextRegistryType, nextGraphFilter);
     }
     private Set<String> compileNameFallbacks(String keyword) {
         if (keyword.isEmpty()) return Set.of();
@@ -468,6 +504,7 @@ public final class WorldObjectsView extends FrameLayout {
             case "position" -> columnFilters.x().active() || columnFilters.y().active() || columnFilters.z().active();
             case "lifetime" -> columnFilters.lifetimes().active();
             case "tags" -> !columnFilters.includedTags().isEmpty() || !columnFilters.excludedTags().isEmpty();
+            case "graphs" -> graphFilter.active();
             default -> false;
         }));
     }
@@ -493,6 +530,7 @@ public final class WorldObjectsView extends FrameLayout {
             case "dimension" -> Comparator.comparing(WorldObjectEntry::dimension);
             case "lifetime" -> Comparator.comparing(WorldObjectEntry::lifetime);
             case "tags" -> Comparator.comparing(entry -> String.join(",",entry.tags()));
+            case "graphs" -> Comparator.comparing(entry -> String.join(",", graphNames(entry)), String.CASE_INSENSITIVE_ORDER);
             case "position" -> Comparator.comparing(WorldObjectEntry::dimension)
                     .thenComparingDouble(entry -> entry.position().x)
                     .thenComparingDouble(entry -> entry.position().y)
@@ -503,6 +541,7 @@ public final class WorldObjectsView extends FrameLayout {
         return snapshot.entries().stream().filter(e -> category == null || category.matches(e))
                 .filter(e -> provider.isEmpty() || provider.equals(e.provider()))
                 .filter(e -> WorldObjectQuery.matchesRegistryType(e, registryTypeFilter))
+                .filter(e -> graphFilter.matches(e.graphs()))
                 .filter(e -> columnFilters.matches(displayName(e), WorldObjectQuery.filterType(e), WorldObjectQuery.numericValue(e),
                         e.dimension(), e.position().x, e.position().y, e.position().z, e.lifetime(), e.tags())).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
     }
@@ -511,6 +550,9 @@ public final class WorldObjectsView extends FrameLayout {
         return presentation == null ? typeLabel(entry.provider(), entry.type()) : Component.translatable(presentation.labelKey()).getString();
     }
     private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.provider(), entry.type()) : entry.name(); }
+    private static List<String> graphNames(WorldObjectEntry entry) {
+        return entry.graphs().stream().map(graph -> graph.name().isEmpty() ? graph.id() : graph.name()).toList();
+    }
     private void rebuildRows() {
         List<WorldObjectEntry> entries = sortedEntries();
         if (entries.equals(mountedEntries) && typeCatalog.equals(mountedTypes)) {
@@ -567,30 +609,31 @@ public final class WorldObjectsView extends FrameLayout {
         String key = entry.key();
         RowBinding binding = rowBindings.remove(key);
         UiTableRow cells = binding.cells();
-        updateText(cells, 0, Integer.toString(index + 1));
-        updateText(cells, 2, displayName(entry));
-        updateText(cells, 3, displayType(entry));
-        updateText(cells, 4, WorldObjectEntries.registryType(entry));
+        updateText(cells, ROW_NUMBER_COLUMN, Integer.toString(index + 1));
+        updateText(cells, NAME_COLUMN, displayName(entry));
+        updateText(cells, TYPE_COLUMN, displayType(entry));
+        updateText(cells, REGISTRY_TYPE_COLUMN, WorldObjectEntries.registryType(entry));
         binding.checkbox().setContentDescription(displayName(entry));
-        View value = cells.getChildAt(5);
+        View value = cells.getChildAt(VALUE_COLUMN);
         if (hasEntityPreview(entry)) {
             if (!(value instanceof EntityPreviewCell)) {
-                cells.removeViewAt(5);
+                cells.removeViewAt(VALUE_COLUMN);
                 value = createValueCell(entry, cells);
-                cells.addView(value, 5, new ViewGroup.LayoutParams(-1, -1));
+                cells.addView(value, VALUE_COLUMN, new ViewGroup.LayoutParams(-1, -1));
             } else bindPreview((EntityPreviewCell) value, entry);
         } else if (value instanceof EntityPreviewCell) {
-            cells.removeViewAt(5);
-            cells.addView(createValueCell(entry, cells), 5, new ViewGroup.LayoutParams(-1, -1));
+            cells.removeViewAt(VALUE_COLUMN);
+            cells.addView(createValueCell(entry, cells), VALUE_COLUMN, new ViewGroup.LayoutParams(-1, -1));
         }
-        updateText(cells, 6, entry.dimension());
-        updateText(cells, 7, position(entry));
-        updateText(cells, 8, lifetimeLabel(entry.lifetime()));
-        ((UiTagStrip) cells.getChildAt(9)).setTags(entry.tags());
+        updateText(cells, DIMENSION_COLUMN, entry.dimension());
+        updateText(cells, POSITION_COLUMN, position(entry));
+        updateText(cells, LIFETIME_COLUMN, lifetimeLabel(entry.lifetime()));
+        ((UiTagStrip) cells.getChildAt(TAGS_COLUMN)).setTags(entry.tags());
+        ((UiTagStrip) cells.getChildAt(GRAPHS_COLUMN)).setTags(graphNames(entry));
         WorldObjectEntry previous = binding.entry();
         if (dataCount(previous) != dataCount(entry) || !previous.references().equals(entry.references())
                 || isNativeEntity(previous) != isNativeEntity(entry))
-            bindDataSummary((UiDataSummaryCell) cells.getChildAt(10), entry);
+            bindDataSummary((UiDataSummaryCell) cells.getChildAt(DATA_COLUMN), entry);
         int baseColor = UiTableStyle.rowColor(index % 2 != 0);
         binding.button().setPalette(rowPalette(selected.contains(key), baseColor));
         rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), cells, baseColor, entry));
@@ -625,7 +668,7 @@ public final class WorldObjectsView extends FrameLayout {
                 !isNativeEntity(entry) && entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
                         ? () -> {
                             RowBinding live = rowBindings.get(entry.key());
-                            if (live != null && live.cells().getChildAt(10) == cell) openDataEditor(live.entry());
+                            if (live != null && live.cells().getChildAt(DATA_COLUMN) == cell) openDataEditor(live.entry());
                         } : null);
     }
     private void cancelMount() {
@@ -658,6 +701,9 @@ public final class WorldObjectsView extends FrameLayout {
         UiDataSummaryCell dataCell = new UiDataSummaryCell(getContext());
         bindDataSummary(dataCell, entry);
         line.addView(dataCell, new ViewGroup.LayoutParams(-1, -1));
+        UiTagStrip graphCell = new UiTagStrip(getContext());
+        graphCell.setTags(graphNames(entry));
+        line.addView(graphCell, new ViewGroup.LayoutParams(-1, -1));
 
         // Cells determine height; background and selection overlays follow without stretching the row.
         FrameLayout host = new UiTableRowFrame(getContext(), line, row);
@@ -896,6 +942,7 @@ public final class WorldObjectsView extends FrameLayout {
     private void saveState() {
         if (restoringState || stateScope == null) return;
         uiState.write(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope, columnFilters);
+        uiState.write(DatabaseViewState.WORLD_GRAPH_FILTER, stateScope, graphFilter);
         uiState.write(DatabaseViewState.WORLD, stateScope, new DatabaseViewState.World(
                 "", "", range.name(),
                 "", provider, "", "", "", category == null ? "" : category.id(),
@@ -924,6 +971,7 @@ public final class WorldObjectsView extends FrameLayout {
         restoringState = true;
         try {
             columnFilters = uiState.read(DatabaseViewState.WORLD_COLUMN_FILTERS, stateScope);
+            graphFilter = uiState.read(DatabaseViewState.WORLD_GRAPH_FILTER, stateScope);
             registryTypeFilter = value.registryType();
             try { range = WorldObjectQuery.Range.valueOf(value.range()); }
             catch (IllegalArgumentException ignored) { range = WorldObjectQuery.Range.GLOBAL; }

@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.runtime.marker;
 
-import com.mine.geometry_node.core.engine.system.marker.MarkerType;
-import com.mine.geometry_node.core.engine.system.marker.BuiltinMarkerTypes;
-import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.type.BuiltinMarkerTypes;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 import com.mine.geometry_node.core.network.packet.marker.MarkerPayload;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview.store;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.*;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
 import net.minecraft.server.MinecraftServer;

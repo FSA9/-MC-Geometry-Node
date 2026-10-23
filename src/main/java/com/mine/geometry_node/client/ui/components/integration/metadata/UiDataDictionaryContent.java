@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.metadata;
 
 import com.mine.geometry_node.client.ui.theme.UiTheme;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
@@ -31,6 +32,7 @@ import static com.mine.geometry_node.client.ui.components.integration.metadata.M
 final class UiDataDictionaryContent extends FrameLayout {
     private static final int PAGE_SIZE = 20;
     private final UiTheme theme;
+    private final float textSizeDp;
     private final DataDictionarySession session;
     private final String initialKey;
     private final UiTextInput search;
@@ -55,7 +57,7 @@ final class UiDataDictionaryContent extends FrameLayout {
     private final UiScrollView treeScroll;
     private final UiActionButton previous;
     private final UiActionButton next;
-    private final UiActionButton add;
+    private final UiIconButton add;
     private final UiIconButton deleteSelected;
     private final UiCheckBox selectAll;
     private final UiDisplayText selectedCount;
@@ -83,7 +85,14 @@ final class UiDataDictionaryContent extends FrameLayout {
 
     UiDataDictionaryContent(Context context, View owner, DataDictionaryBinding binding, String initialKey,
                             UiTheme theme, boolean embedded, Runnable close, ViewGroup popupHost) {
+        this(context, owner, binding, initialKey, theme, embedded, close, popupHost, 11);
+    }
+
+    UiDataDictionaryContent(Context context, View owner, DataDictionaryBinding binding, String initialKey,
+                            UiTheme theme, boolean embedded, Runnable close, ViewGroup popupHost, float textSizeDp) {
         super(context);
+        if (!Float.isFinite(textSizeDp) || textSizeDp <= 0) throw new IllegalArgumentException("Invalid text size");
+        this.textSizeDp = textSizeDp;
         this.theme = Objects.requireNonNull(theme, "theme");
         Objects.requireNonNull(owner, "owner");
         Looper looper = Looper.myLooper();
@@ -97,14 +106,16 @@ final class UiDataDictionaryContent extends FrameLayout {
         LinearLayout root = column(context);
         LinearLayout toolbar = row(context); toolbar.setPadding(px(16), px(10), px(16), px(10));
         search = input(context, "search", true, theme); toolbar.addView(search, new LinearLayout.LayoutParams(0, px(30), 1));
-        filterButton = new UiSelectButton(context, tr("all_types"), 11, () -> 2, theme);
+        filterButton = new UiSelectButton(context, tr("all_types"), textSizeDp, () -> 2, theme);
         LinearLayout.LayoutParams filterParams = params(104, 30); filterParams.leftMargin = px(6);
         toolbar.addView(filterButton, filterParams);
         filterButton.setOnClickListener(view -> choose(filterButton, true, type -> {
             filter = type; page = 0; filterButton.setValue(type == null ? tr("all_types") : typeLabel(type)); renderList();
         }));
-        add = themedButton(context, "add", this::newEntry);
-        LinearLayout.LayoutParams addParams = params(64, 30); addParams.leftMargin = px(6); toolbar.addView(add, addParams);
+        add = UiIconButton.createThemed(context, theme,
+                new SvgIconView(context, SvgIconView.Icon.PLUS, theme.text().secondary())).tooltip(tr("add"));
+        add.setOnClickListener(view -> newEntry());
+        LinearLayout.LayoutParams addParams = params(30, 30); addParams.leftMargin = px(6); toolbar.addView(add, addParams);
         deleteSelected = UiIconButton.createThemed(context, theme,
                 new SvgIconView(context, SvgIconView.Icon.CLEAR, theme.text().secondary())).tooltip(tr("remove"));
         deleteSelected.setOnClickListener(view -> removeSelected());
@@ -158,7 +169,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         meta.addView(keyColumn, keyParams);
         LinearLayout typeColumn = column(context);
         typeColumn.addView(text(context, tr("type"), theme.text().muted()), params(-1, 24));
-        valueType = new UiSelectButton(context, typeLabel(selectedType), 11, () -> 2, theme);
+        valueType = new UiSelectButton(context, typeLabel(selectedType), textSizeDp, () -> 2, theme);
         typeColumn.addView(valueType, params(-1, 30)); meta.addView(typeColumn, params(108, -2));
         form.addView(meta, params(-1, -2));
         LinearLayout valueHeading = row(context);
@@ -198,8 +209,9 @@ final class UiDataDictionaryContent extends FrameLayout {
         stage = themedButton(context, "stage", this::saveEntry);
         restore = themedButton(context, "restore", this::restoreForm);
         edits.addView(new View(context), new LinearLayout.LayoutParams(0, 1, 1));
-        edits.addView(restore, params(72, 28));
-        LinearLayout.LayoutParams stageParams = params(72, 28); stageParams.leftMargin = px(6); edits.addView(stage, stageParams);
+        int entryActionWidth = Math.max(72, Math.round(textSizeDp * 4 + 24));
+        edits.addView(restore, params(entryActionWidth, 28));
+        LinearLayout.LayoutParams stageParams = params(entryActionWidth, 28); stageParams.leftMargin = px(6); edits.addView(stage, stageParams);
         LinearLayout.LayoutParams editsParams = params(-1, 28); editsParams.topMargin = px(12); form.addView(edits, editsParams);
         UiScrollView rightScroll = new UiScrollView(context, theme.scroll()); rightScroll.setHorizontalScrollBarEnabled(false);
         rightScroll.addView(right, new FrameLayout.LayoutParams(-1, -2));
@@ -500,7 +512,19 @@ final class UiDataDictionaryContent extends FrameLayout {
         ShapeDrawable background = new ShapeDrawable(); background.setColor(color); return background;
     }
     private UiActionButton themedButton(Context context, String key, Runnable action) {
-        return button(context, key, action, theme);
+        UiActionButton button = button(context, key, action, theme);
+        UIUtils.setLockedTextSize(button, textSizeDp);
+        return button;
+    }
+    private UiDisplayText text(Context context, String value, int color) {
+        UiDisplayText text = MetadataViews.text(context, value, color);
+        UIUtils.setLockedTextSize(text, textSizeDp);
+        return text;
+    }
+    private UiTextInput input(Context context, String hint, boolean singleLine, UiTheme theme) {
+        UiTextInput input = MetadataViews.input(context, hint, singleLine, theme);
+        UIUtils.setLockedTextSize(input, textSizeDp);
+        return input;
     }
     private View divider(Context context) {
         View view = new View(context); view.setBackground(fill(theme.border().divider())); return view;

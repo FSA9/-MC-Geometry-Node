@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.scene.volume;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import com.mine.geometry_node.core.engine.system.scene.geometry.ScenePrimitiveTypes;
 import com.mine.geometry_node.core.engine.system.scene.geometry.SceneGeometryTypes;
 import com.mine.geometry_node.core.engine.system.scene.property.SceneNodeInputs;

@@ -1,8 +1,13 @@
 package com.mine.geometry_node.core.engine.system.viewport.entity;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.scene.SceneChange;
+import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
+import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
+import com.mine.geometry_node.core.engine.system.scene.SceneNativeInteractions;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneEdit;

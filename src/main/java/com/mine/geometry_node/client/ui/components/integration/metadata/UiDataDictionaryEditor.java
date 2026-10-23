@@ -53,9 +53,14 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
     /** Create a logical child session. Completed operations submit through the supplied binding;
      * unfinished forms remain local until explicitly saved. The parent owns the shared binding. */
     public static Embedded createEmbedded(View owner, DataDictionaryBinding binding, UiTheme theme) {
+        return createEmbedded(owner, binding, theme, 11);
+    }
+
+    /** The host may choose its body text size without changing the shared editor defaults. */
+    public static Embedded createEmbedded(View owner, DataDictionaryBinding binding, UiTheme theme, float textSizeDp) {
         Objects.requireNonNull(owner, "owner");
         UiDataDictionaryContent content = new UiDataDictionaryContent(owner.getContext(), owner, binding,
-                null, theme, true, () -> {}, null);
+                null, theme, true, () -> {}, null, textSizeDp);
         content.start();
         return new Embedded(content);
     }

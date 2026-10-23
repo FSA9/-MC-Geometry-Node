@@ -1,6 +1,13 @@
 package com.mine.geometry_node.client.worldquery;
 
-import com.mine.geometry_node.core.engine.system.worldquery.*;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.worldquery.*;
 import net.minecraft.client.Minecraft;
@@ -425,7 +432,7 @@ public final class ClientWorldObjectRepository {
                 refs.put(WorldObjectDataEdits.SUMMARY_REFERENCE, WorldObjectDataValues.summary(slot.values));
                 if (refs.equals(row.references())) return row;
                 return new WorldObjectEntry(row.key(), row.provider(), row.type(), row.name(), row.dimension(), row.position(), row.bounds(),
-                        row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs);
+                        row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs, row.graphs());
             }).toList();
             if (rows.equals(page.entries())) return;
             try {

@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.model.render.pipeline.ModelStaticRenderer;
 import com.mine.geometry_node.client.model.runtime.ClientModelCollisions;
 import com.mine.geometry_node.client.model.runtime.ClientModelService;
 import com.mine.geometry_node.core.cache.*;
-import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionCache;
+import com.mine.geometry_node.core.engine.system.model.collision.generation.ModelCollisionCache;
 import net.minecraft.client.Minecraft;
 
 import java.nio.file.Path;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.graph.persistence;
 
 import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 

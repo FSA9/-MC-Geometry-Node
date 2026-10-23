@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.config;
 
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewServerConfig;
-import com.mine.geometry_node.core.engine.system.visual.image.RuntimeImageServerConfig;
+import com.mine.geometry_node.core.engine.system.image.RuntimeImageServerConfig;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /** Composes server settings while feature modules retain ownership of their entries. */

@@ -109,6 +109,10 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private Runnable mPickCurrentDirectoryAction;
     private Consumer<AssetEntry> mPickFileAction;
     private Predicate<AssetEntry> mEntryFilter;
+    private Set<AssetSourceKind> mAllowedSources = Set.of(AssetSourceKind.LOCAL, AssetSourceKind.REMOTE);
+    private boolean mAllowCreateFolders = true;
+    private boolean mAllowCreateFiles = true;
+    private boolean mVerifiedCurrentDirectory;
 
     private static final float NAV_BAR_HEIGHT = 76.0f;
     private static final float NAV_ROW_HEIGHT = 32.0f;
@@ -125,7 +129,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public static AssetFileBrowserPanel picker(Context context, AssetBrowserCoordinator coordinator) {
-        return new AssetFileBrowserPanel(context, coordinator, false, false, false, false, true);
+        AssetFileBrowserPanel panel = new AssetFileBrowserPanel(context, coordinator, false, false, false, false, true);
+        panel.setCreationAllowed(false, false);
+        return panel;
     }
 
     private AssetFileBrowserPanel(
@@ -370,6 +376,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void deactivatePanel() {
+        mVerifiedCurrentDirectory = false;
         mIoTasks.deactivate();
         dismissTransientUi();
         mKeyManager.dispose();
@@ -433,6 +440,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void navigateTo(File directory) {
+        if (!mAllowedSources.contains(AssetSourceKind.LOCAL)) return;
         if (directory == null || !directory.exists() || !directory.isDirectory()) return;
         mFavoritesMode = false;
         mSourceKind = AssetSourceKind.LOCAL;
@@ -455,6 +463,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void navigateToRemote(String directory, boolean createIfMissing) {
+        if (!mAllowedSources.contains(AssetSourceKind.REMOTE)) return;
         mFavoritesMode = false;
         mSourceKind = AssetSourceKind.REMOTE;
         mRemoteDirectory = AssetPathUtils.normalizeRemoteDirectory(directory);
@@ -465,6 +474,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public void navigateToFavorites() {
+        if (!mAllowedSources.contains(AssetSourceKind.LOCAL)) return;
         mFavoritesMode = true;
         mSourceKind = AssetSourceKind.LOCAL;
         mPathInput.setText("我的收藏");
@@ -541,6 +551,37 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void setEntryFilter(Predicate<AssetEntry> filter) {
         mEntryFilter = filter;
+        renderEntries(mCurrentListing);
+    }
+
+    /** Applies at the navigation boundary, including path input, favorites and keyboard actions. */
+    public void setAllowedSources(Set<AssetSourceKind> sources) {
+        Set<AssetSourceKind> allowed = Set.copyOf(sources);
+        if (allowed.isEmpty()) throw new IllegalArgumentException("At least one asset source is required");
+        mAllowedSources = allowed;
+        if (!allowed.contains(mSourceKind)) {
+            mVerifiedCurrentDirectory = false;
+            cancelBrowseRequest();
+            mCurrentDirectory = null;
+            mFavoritesMode = false;
+            mPathInput.setText("");
+            clearSelection();
+            renderEntries(AssetListing.empty(null));
+        }
+    }
+
+    public void setCreationAllowed(boolean folders, boolean files) {
+        mAllowCreateFolders = folders;
+        mAllowCreateFiles = files;
+    }
+
+    boolean creationAllowed(boolean folder) {
+        return folder ? mAllowCreateFolders : mAllowCreateFiles;
+    }
+
+    /** False while browsing, after a failed listing, or when no concrete directory is selected. */
+    public boolean hasVerifiedCurrentDirectory() {
+        return mVerifiedCurrentDirectory && !mFavoritesMode && mAllowedSources.contains(mSourceKind);
     }
 
     private void navigateUp() {
@@ -581,12 +622,14 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void refreshFileList(boolean createIfMissing, Runnable afterRender) {
         cancelBrowseRequest();
+        mVerifiedCurrentDirectory = false;
         mFileContent.setEntries(List.of());
         mItemViews.clear();
         mVisibleEntries.clear();
         mCurrentListing = AssetListing.empty(currentLocation(createIfMissing));
 
-        if (mSourceKind == AssetSourceKind.LOCAL && !mFavoritesMode && mCurrentDirectory == null) return;
+        if (!mAllowedSources.contains(mSourceKind)
+                || mSourceKind == AssetSourceKind.LOCAL && !mFavoritesMode && mCurrentDirectory == null) return;
         AssetLocation location = currentLocation(createIfMissing);
         AssetRepository repository = AssetRepositoryRegistry.INSTANCE.get(location.sourceKind());
         if (repository == null
@@ -601,6 +644,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mActiveBrowseRequest = repository.browse(request, result -> post(() -> {
             if (generation != mBrowseGeneration || result == null || !matchesCurrentLocation(result.location())) return;
             mActiveBrowseRequest = AssetRequest.NONE;
+            mVerifiedCurrentDirectory = result.success() && !mFavoritesMode;
             if (result.location() instanceof AssetLocation.Remote remote && result.success()) {
                 mRemoteDirectory = remote.directory();
                 mPathInput.setText(AssetPathUtils.formatRemotePath(mRemoteDirectory));
@@ -643,6 +687,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         Set<String> visibleKeys = new LinkedHashSet<>();
 
         for (AssetEntry entry : entries) {
+            if (!mAllowedSources.contains(entry.sourceKind())) continue;
             if (mEntryFilter != null && !mEntryFilter.test(entry)) {
                 continue;
             }
@@ -970,6 +1015,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public boolean repositorySupports(AssetSourceKind source, AssetRepositoryOperation operation) {
+        if (!mAllowedSources.contains(source)) return false;
         AssetRepository repository = AssetRepositoryRegistry.INSTANCE.get(source);
         return repository != null && repository.supports(operation);
     }

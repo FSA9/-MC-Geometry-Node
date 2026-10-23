@@ -1,6 +1,14 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProviders;
+
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.worldquery.*;
@@ -202,6 +210,6 @@ public final class ServerWorldObjectQueries {
         entries.sort(Comparator.comparing(WorldObjectEntry::key));
         return new WorldObjectPage(request.requestId(), entries, collector.truncated,
                 dimensions.stream().sorted().toList(), catalog.types(), coverage,
-                WorldObjectPage.resultMessage(collector.truncated, metadataTruncated), collector.counts());
+                WorldObjectTypeCatalog.resultMessage(collector.truncated, metadataTruncated), collector.counts());
     }
 }

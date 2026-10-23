@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview.generator;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetFileService;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewFormat;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits;

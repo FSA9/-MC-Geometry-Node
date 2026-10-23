@@ -1,6 +1,9 @@
 package com.mine.geometry_node.core.engine.system.entitypreview;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.entitypreview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewTarget;
+
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entitypreview.*;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;

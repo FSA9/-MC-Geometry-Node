@@ -10,7 +10,7 @@ import java.util.concurrent.CompletionStage;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeCatalog;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListResponse;
 

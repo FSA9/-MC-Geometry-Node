@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview.generator;
 
-import com.mine.geometry_node.core.engine.system.asset.AssetTypeDefinition;
+import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeDefinition;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
 
 import java.util.Map;

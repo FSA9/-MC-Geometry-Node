@@ -30,7 +30,12 @@ public final class UiTagChip extends LinearLayout {
     }
 
     public UiTagChip(Context context, String tag, UiTheme theme) {
+        this(context, tag, theme, UiMetrics.TEXT_COMPACT);
+    }
+
+    public UiTagChip(Context context, String tag, UiTheme theme, float textSizeDp) {
         super(context);
+        if (!Float.isFinite(textSizeDp) || textSizeDp <= 0) throw new IllegalArgumentException("Invalid text size");
         this.theme = Objects.requireNonNull(theme, "theme");
         this.tag = Objects.requireNonNull(tag, "tag");
         setOrientation(HORIZONTAL);
@@ -39,7 +44,7 @@ public final class UiTagChip extends LinearLayout {
         setPadding(px(6), 0, px(6), 0);
         fill.setCornerRadius(UIUtils.dp2px(UiMetrics.RADIUS_SMALL));
         setBackground(fill);
-        label = new UiDisplayText(context, tag, UiMetrics.TEXT_COMPACT, theme.text().secondary());
+        label = new UiDisplayText(context, tag, textSizeDp, theme.text().secondary());
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setSingleLine(true);
         label.setEllipsize(TextUtils.TruncateAt.END);

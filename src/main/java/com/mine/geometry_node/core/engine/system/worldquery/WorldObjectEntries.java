@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.graph.debug.*;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.*;
@@ -22,15 +24,14 @@ public final class WorldObjectEntries {
      * does not change provider, type, entity identity, or category semantics.
      */
     public static String registryType(WorldObjectEntry entry) {
-        if (!entry.provider().equals("native")) return "";
-        return entry.type().equals("minecraft:item") ? entry.references().getOrDefault("itemId", "") : entry.type();
+        return entry.registryType();
     }
 
     /** Query bounds use the same transformed extent as the runtime and editor. */
     public static AABB sceneBounds(com.mine.geometry_node.core.engine.system.scene.SceneObject object) {
         if (Set.of("area/cube", "area/cylinder", "area/uv_sphere").contains(object.typeId()))
             return com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime.resolved(object).bounds();
-        return com.mine.geometry_node.core.engine.system.scene.SceneTransforms.bounds(object,
+        return com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.bounds(object,
                 com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes.require(object.typeId()).bounds().apply(object));
     }
 
@@ -70,7 +71,7 @@ public final class WorldObjectEntries {
     public static WorldObjectEntry withTags(WorldObjectEntry entry, List<String> tags) {
         return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
                 entry.position(), entry.bounds(), tags, entry.source(), entry.lifetime(), entry.sceneObjectId(),
-                entry.entityId(), entry.references());
+                entry.entityId(), entry.references(), entry.graphs());
     }
 
     /** AABB enclosing a rotated local box, with the same Y-X-Z convention used by areas. */

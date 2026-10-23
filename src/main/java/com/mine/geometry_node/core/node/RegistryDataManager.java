@@ -4,7 +4,7 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
-import com.mine.geometry_node.core.engine.system.marker.MarkerTypeRegistry;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;

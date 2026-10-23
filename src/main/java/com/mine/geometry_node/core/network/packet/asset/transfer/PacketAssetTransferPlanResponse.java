@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.asset.transfer;
 
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetConflict;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetConflict;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketCodecs;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;

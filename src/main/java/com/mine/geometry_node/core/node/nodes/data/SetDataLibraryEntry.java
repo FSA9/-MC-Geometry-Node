@@ -2,9 +2,9 @@ package com.mine.geometry_node.core.node.nodes.data;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRequest;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryWriteRuntime;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryTypes;
+import com.mine.geometry_node.core.engine.system.datalibrary.runtime.DataLibraryWriteRequest;
+import com.mine.geometry_node.core.engine.system.datalibrary.runtime.DataLibraryWriteRuntime;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;

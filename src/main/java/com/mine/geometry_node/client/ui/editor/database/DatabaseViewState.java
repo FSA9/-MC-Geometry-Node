@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.database;
 
 import com.mine.geometry_node.client.ui.workspace.state.*;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
 import java.util.Map;
 
 /** Presentation preferences only: never query results, selections or business objects. */
@@ -8,6 +9,9 @@ public final class DatabaseViewState {
     private DatabaseViewState() {}
     public static final String GLOBAL = "global";
     public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> WORLD_COLUMN_FILTERS = columnFilters("database:world.column_filters");
+    public static final UiStateKey<WorldObjectGraphFilter> WORLD_GRAPH_FILTER = new UiStateKey<>(
+            "database:world.graph_filter", 1, UiStateLifetime.MEMORY, WorldObjectGraphFilter.class,
+            WorldObjectGraphFilter::empty, value -> value);
     public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> LIBRARY_COLUMN_FILTERS = columnFilters("database:library.column_filters");
     private static UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> columnFilters(String id) {
         return new UiStateKey<>(id, 1, UiStateLifetime.MEMORY,
@@ -24,7 +28,7 @@ public final class DatabaseViewState {
             extraProvider = text(extraProvider); sort = text(sort);
             registryType = text(registryType);
             if (!java.util.Set.of("GLOBAL", "LOADED").contains(range)) range = "GLOBAL";
-            if (!java.util.Set.of("name", "type", "registry_type", "dimension", "position", "lifetime", "tags").contains(sort)) sort = "name";
+            if (!java.util.Set.of("name", "type", "registry_type", "dimension", "position", "lifetime", "tags", "graphs").contains(sort)) sort = "name";
         }
         public World(String tags, String source, String range, String dimension,
                      String provider, String type, String typeProvider, String lifetime,

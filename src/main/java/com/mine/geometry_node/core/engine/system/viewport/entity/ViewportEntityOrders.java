@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.viewport.entity;
 
 import com.mine.geometry_node.core.engine.behavior.runtime.ExternalMovementLease;
 import com.mine.geometry_node.core.engine.behavior.runtime.navigation.BehaviorNavigationService;
-import com.mine.geometry_node.core.engine.system.asset.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.viewport.*;

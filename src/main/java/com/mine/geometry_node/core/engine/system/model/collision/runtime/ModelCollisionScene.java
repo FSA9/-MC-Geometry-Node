@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import net.minecraft.server.level.ServerLevel;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
-import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionBuilder;
+import com.mine.geometry_node.core.engine.system.model.collision.generation.ModelCollisionBuilder;
 import com.mine.geometry_node.core.engine.system.model.diagnostic.ModelProblem;
 import com.mine.geometry_node.core.engine.system.model.io.ModelCancellation;
 import net.minecraft.world.level.Level;

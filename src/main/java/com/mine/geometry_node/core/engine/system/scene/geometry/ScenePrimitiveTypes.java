@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.engine.system.scene.geometry;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.scene.SceneObject;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
+import com.mine.geometry_node.core.engine.system.scene.property.SceneProperty;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;
 import net.minecraft.world.phys.*;
 import java.util.*;

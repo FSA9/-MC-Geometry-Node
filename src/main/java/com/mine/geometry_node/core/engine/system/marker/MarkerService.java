@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.system.marker;
 
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
+import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAnchor;

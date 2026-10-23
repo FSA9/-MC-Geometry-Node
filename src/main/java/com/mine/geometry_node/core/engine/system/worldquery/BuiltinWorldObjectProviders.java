@@ -1,6 +1,14 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
-import com.mine.geometry_node.core.engine.system.scene.*;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
+import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProviders;
+
+import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
+import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
+import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
@@ -9,6 +17,7 @@ import com.mine.geometry_node.core.engine.graph.debug.DebugRendererSessionManage
 import com.mine.geometry_node.core.engine.graph.light.GraphLightService;
 import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionService;
 import com.mine.geometry_node.core.engine.graph.resource.*;
+import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -174,15 +183,19 @@ final class BuiltinWorldObjectProviders {
                     var stack = itemEntity.getItem();
                     if (!stack.isEmpty()) references.put("itemId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
                 }
+                var attachment = entity.hasData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
+                        ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT) : null;
+                var graphs = attachment == null ? List.<WorldObjectGraph>of()
+                        : WorldObjectGraphMetadata.collect(attachment.getBindings(),
+                            id -> ServerGraphRepository.INSTANCE.getGraph(c.server(), id));
                 if (!sink.emit(new WorldObjectEntry(WorldObjectEntry.key("native", "", entity.getUUID().toString()), "native",
                         BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(),
                         entity.hasCustomName() ? entity.getCustomName().getString() : "", dim,
                         entity.position(), entity.getBoundingBox(),
-                        entity.hasData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
-                                ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT).customTags() : List.of(),
+                        attachment == null ? List.of() : attachment.customTags(),
                         "", "loaded",
                         (entity instanceof net.minecraft.world.entity.Interaction || SceneNativeEntities.eligible(entity)) ? entity.getUUID() : null,
-                        entity.getId(), references))) return;
+                        entity.getId(), references, graphs))) return;
             }
         });
     }

@@ -157,7 +157,6 @@ public final class BoundedCache<K, V> implements AutoCloseable {
     }
     private static void rethrowFatal(Throwable error) {
         if (error instanceof VirtualMachineError fatal) throw fatal;
-        if (error instanceof ThreadDeath fatal) throw fatal;
     }
     private record Value<V>(V value, long weight, long written) {}
 }

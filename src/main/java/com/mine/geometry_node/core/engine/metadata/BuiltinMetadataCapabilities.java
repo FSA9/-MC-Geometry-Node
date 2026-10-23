@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.metadata;
 
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryMetadata;
+import com.mine.geometry_node.core.engine.system.datalibrary.service.DataLibraryMetadata;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 
 /** Common-side bootstrap; client-only document adapters are registered by the client. */

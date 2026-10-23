@@ -8,6 +8,8 @@ import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
+import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.layout.TagFlowLayout;
 import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
@@ -31,6 +33,7 @@ public final class UiColumnFilterPopover {
     private final Context context;
     private final View owner;
     private UiPopover popup;
+    private UiPopover typeMenu;
     private long generation;
 
     public UiColumnFilterPopover(Context context, View host) {
@@ -45,6 +48,7 @@ public final class UiColumnFilterPopover {
 
     public void dismiss() {
         generation++;
+        dismissTypeMenu();
         UiPopover previous = popup;
         popup = null;
         if (previous != null) previous.dismiss();
@@ -56,6 +60,53 @@ public final class UiColumnFilterPopover {
         content.addView(input, params(-1, 30));
         actions(content, () -> apply.accept(input.getText().toString().trim()), () -> apply.accept(""), input);
         show(anchor, content);
+    }
+
+    /** Exact type IDs and a name keyword share one draft; validation belongs to the caller. */
+    public void showTypeAndName(View anchor, String title, Map<String, String> typeLabels,
+                                String currentType, String currentName, BiConsumer<String, String> apply) {
+        LinearLayout content = content(title);
+        LinkedHashMap<String, String> labels = new LinkedHashMap<>();
+        labels.put("", tr("all_types"));
+        typeLabels.forEach((id, label) -> { if (!id.isEmpty()) labels.put(id, label); });
+        String[] draftType = {Objects.requireNonNullElse(currentType, "")};
+        content.addView(label(tr("type")), params(-1, 24));
+        UiSelectButton type = new UiSelectButton(context, labels.getOrDefault(draftType[0], draftType[0]),
+                UiTableStyle.CELL_TEXT_SIZE_DP, () -> 2, theme);
+        type.setContentDescription(tr("type"));
+        content.addView(type, params(-1, 30));
+        content.addView(label(tr("name")), params(-1, 24));
+        UiTextInput name = input(currentName, tr("keyword"));
+        content.addView(name, params(-1, 30));
+        long token = generation;
+        type.setOnClickListener(view -> {
+            if (token != generation || popup == null || !popup.isOpen()) return;
+            if (typeMenu != null && typeMenu.isOpen()) { dismissTypeMenu(); return; }
+            LinearLayout options = column();
+            UiPopover menu = new UiPopover(context, options, 280, 240, theme);
+            labels.forEach((id, text) -> options.addView(UiMenuItems.row(context, text,
+                    id.equals(draftType[0]), true, () -> {
+                        if (token != generation || popup == null || !popup.isOpen()
+                                || typeMenu != menu || !menu.isOpen()) return;
+                        draftType[0] = id;
+                        type.setValue(text);
+                        dismissTypeMenu();
+                    }, theme), params(-1, 30)));
+            typeMenu = menu;
+            // Keeping the menu inside its editor also closes it when the editor is detached.
+            typeMenu.showBelow(type, popup);
+        });
+        actions(content, () -> {
+            if (!labels.containsKey(draftType[0])) throw new IllegalArgumentException("Unknown filter type");
+            apply.accept(draftType[0], name.getText().toString().trim());
+        }, () -> apply.accept("", ""), name);
+        show(anchor, content);
+    }
+
+    private void dismissTypeMenu() {
+        UiPopover previous = typeMenu;
+        typeMenu = null;
+        if (previous != null) previous.dismiss();
     }
 
     public void showChoices(View anchor, String title, Map<String, String> options,

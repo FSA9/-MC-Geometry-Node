@@ -36,7 +36,7 @@ import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragService;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
-import com.mine.geometry_node.core.engine.system.data.library.DataLibraryTypes;
+import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryTypes;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
