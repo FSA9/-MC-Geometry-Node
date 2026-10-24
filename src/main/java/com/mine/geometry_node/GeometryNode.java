@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.system.datalibrary.runtime.DataLibraryWriteRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
+import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraitOverrides;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
@@ -91,6 +92,14 @@ public class GeometryNode {
                             return !tag.isEmpty();
                         }
                     }).build());
+
+    public static final Supplier<AttachmentType<EntityTypeTraitOverrides>> ENTITY_TYPE_TRAITS =
+            ATTACHMENT_TYPES.register("entity_type_traits", () -> AttachmentType.builder(
+                            () -> EntityTypeTraitOverrides.EMPTY)
+                    .serialize(EntityTypeTraitOverrides.CODEC,
+                            value -> !value.values().isEmpty())
+                    .sync(EntityTypeTraitOverrides.STREAM_CODEC)
+                    .build());
 
     public static final Supplier<AttachmentType<EntityImmunityAttachment>> IMMUNITY_ATTACHMENT =
             ATTACHMENT_TYPES.register("immunities", () -> AttachmentType.builder(EntityImmunityAttachment::new)

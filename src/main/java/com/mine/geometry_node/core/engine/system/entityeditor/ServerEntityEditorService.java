@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.engine.system.entityeditor;
 
 import com.mine.geometry_node.core.engine.metadata.*;
+import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraits;
+import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraitOverrides;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.system.entitypreview.appearance.EntityAppearanceCapture;
@@ -106,9 +108,14 @@ public final class ServerEntityEditorService {
     private static Map<String, Object> snapshot(ServerPlayer player, Entity entity, EntityEditorAdapter adapter) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("attributes", adapter.attributes(entity));
+        List<Map<String, Object>> attributeFields = adapter.attributeFields(entity);
+        // An old extension adapter has no schema. Absence preserves the client's legacy field fallback.
+        if (!attributeFields.isEmpty()) values.put("attributeFields", attributeFields);
         values.put("registryType", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         values.put("dimension", entity.level().dimension().identifier().toString());
         values.put("position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ()));
+        values.put("biologicalTypes", EntityTypeTraits.overrides(entity).values());
+        values.put("biologicalTypeDefaults", EntityTypeTraits.defaults(entity));
         values.put("tags", EntityMetadataAdapter.tags(entity).values());
         values.put("data", EntityMetadataAdapter.data(entity).values());
         List<EquipmentSlot> slots = equipmentSlots(entity, adapter);
@@ -149,6 +156,8 @@ public final class ServerEntityEditorService {
                               Map<String, Object> current, Map<String, Object> changes) {
         Map<String, Object> attributes = changes.containsKey("attributes") ? EntityEditorChanges.dictionary(changes.get("attributes")) : Map.of();
         adapter.validateAttributes(entity, attributes);
+        EntityTypeTraitOverrides biologicalTypes = changes.containsKey("biologicalTypes")
+                ? new EntityTypeTraitOverrides(EntityTypeTraits.validate(EntityEditorChanges.dictionary(changes.get("biologicalTypes")))) : null;
         List<String> tags = null;
         if (changes.containsKey("tags")) {
             if (!(changes.get("tags") instanceof List<?> raw) || raw.stream().anyMatch(value -> !(value instanceof String)))
@@ -177,10 +186,17 @@ public final class ServerEntityEditorService {
                 Map<String, Object> previous = new LinkedHashMap<>();
                 Map<String, Object> old = EntityEditorChanges.dictionary(current.get("attributes"));
                 attributes.keySet().forEach(key -> previous.put(key, old.get(key)));
-                if (attributes.containsKey("maxHealth")) previous.put("health", old.get("health"));
+                EntityEditorAttributes.CAPACITY_STATES.forEach((maximum, state) -> {
+                    if (attributes.containsKey(maximum) && old.containsKey(state)) previous.put(state, old.get(state));
+                });
                 var previousName = entity.getCustomName();
                 undo.push(() -> { adapter.applyAttributes(entity, previous); if (attributes.containsKey("name")) entity.setCustomName(previousName); });
                 adapter.applyAttributes(entity, attributes);
+            }
+            if (biologicalTypes != null) {
+                var before = EntityTypeTraits.overrides(entity);
+                undo.push(() -> EntityTypeTraits.replace(entity, before));
+                EntityTypeTraits.replace(entity, biologicalTypes);
             }
             if (tags != null) {
                 var access = EntityMetadataAdapter.tags(entity); List<String> before = access.values();

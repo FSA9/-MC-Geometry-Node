@@ -172,7 +172,9 @@ public final class EntityEditorWindow extends ModalWindowView {
             pages.removeAllViews(); tabs.removeAllViews(); pageViews.clear(); tabButtons.clear(); tabPresentations.clear();
             draft = next;
             registryType = String.valueOf(draft.snapshot().getOrDefault("registryType", ""));
-            attributes = new EntityAttributesView(getContext(), theme, draft, entity, dimension, this::changed);
+            EntityEditDraft attributesDraft = draft;
+            attributes = new EntityAttributesView(getContext(), theme, attributesDraft, entity, dimension, this::changed,
+                    () -> active && !session.closed() && !session.blocked() && !session.loading() && session.draft() == attributesDraft);
             addPage("tab.attributes", attributes);
             equipment = null;
             if (draft.flag("equipmentSupported")) {
@@ -331,6 +333,7 @@ public final class EntityEditorWindow extends ModalWindowView {
             if (block) { pages.clearFocus(); requestFocus(); }
         }
         for (UiActionButton tab : tabButtons) tab.setEnabled(!session.loading());
+        if (attributes != null) attributes.refreshInputState();
         reload.setEnabled(active && !session.loading() && !session.saving()
                 && (session.blocked() || draft == null || !draft.dirty())); close.setEnabled(active);
         reload.setVisibility(session.blocked() || !session.error().isEmpty() ? VISIBLE : GONE);

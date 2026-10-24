@@ -115,10 +115,10 @@ public final class ValueTagUtils {
         } else if (value instanceof Block block) {
             addBlock(subjects, block);
         } else if (value instanceof Entity entity) {
-            addEntityType(subjects, entity.getType());
+            addEntity(subjects, entity);
         } else if (value instanceof UUID entityId) {
             Entity entity = GraphEntityReferenceResolver.resolve(entityId, context);
-            if (entity != null) addEntityType(subjects, entity.getType());
+            if (entity != null) addEntity(subjects, entity);
         } else if (value instanceof EntityType<?> entityType) {
             addEntityType(subjects, entityType);
         } else if (value instanceof DamageSource source) {
@@ -180,6 +180,12 @@ public final class ValueTagUtils {
                 holder,
                 key.identifier().toString()
         )));
+    }
+
+    private static void addEntity(List<TagSubject<?>> subjects, Entity entity) {
+        Holder<EntityType<?>> holder = entity.typeHolder();
+        holder.unwrapKey().ifPresent(key -> subjects.add(new TagSubject<>(
+                Registries.ENTITY_TYPE, holder, key.identifier().toString())));
     }
 
     private static void addEntityType(List<TagSubject<?>> subjects, EntityType<?> entityType) {

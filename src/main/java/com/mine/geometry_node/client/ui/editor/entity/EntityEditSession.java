@@ -123,14 +123,21 @@ final class EntityEditSession {
             return;
         }
         revision = reply.revision();
+        boolean unavailableAttributeEdit;
         reconciling = true;
-        try { draft.acknowledge(normalize(reply.values()), sentSnapshot); }
+        try { unavailableAttributeEdit = draft.acknowledge(normalize(reply.values()), sentSnapshot); }
         finally { reconciling = false; }
         acknowledged++;
+        if (unavailableAttributeEdit) {
+            blocked = true;
+            error = "geometry_node.entity_editor.error.capability_changed";
+            failure = new Failure(FailureKind.REJECTED, error);
+        }
         // Schedule before invoking presentation or external refresh callbacks.
         requestCommit();
         listener.run();
         applied.run();
+        if (unavailableAttributeEdit) failures.accept(failure);
     }
     private static String reason(ClientEntityEditor.Reply reply, Throwable failed) {
         return failed == null && reply != null ? reply.message() : "geometry_node.entity_editor.error.failed";

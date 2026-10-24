@@ -12,6 +12,8 @@ public interface EntityEditorAdapter {
     /** String names retain the legacy inline-only contract. Rich names use EntityEditorNames
      * carriers (including the complete Component) and accept RichTextValue on completed edits. */
     Map<String, Object> attributes(Entity entity);
+    /** Ordered, read-only field descriptions; extensions may opt into categorized property editors without breaking old adapters. */
+    default List<Map<String, Object>> attributeFields(Entity entity) { return List.of(); }
     void validateAttributes(Entity entity, Map<String, Object> changes);
     void applyAttributes(Entity entity, Map<String, Object> changes);
     List<EquipmentSlot> equipmentSlots(Entity entity);

@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "entitypreview.EntityAppearanceInvoker",
+    "entityclassification.EntityTypeTraitsMixin",
     "resource.EntityResourceLifecycleMixin",
     "viewport.CameraChunkMapAccess",
     "viewport.CameraChunkMapMixin",

@@ -49,9 +49,10 @@ final class EntityEditDraft {
         changed.run();
     }
     /** Accept a full reply without publishing another edit. sentSnapshot is the full local state sent. */
-    void acknowledge(Map<String, Object> authoritative, Map<String, Object> sentSnapshot) {
+    boolean acknowledge(Map<String, Object> authoritative, Map<String, Object> sentSnapshot) {
         Map<String, Object> confirmed = WorldObjectDataValues.snapshot(authoritative);
         Map<String, Object> merged = new LinkedHashMap<>(confirmed);
+        boolean unavailableAttributeEdit = false;
         for (var entry : values.entrySet()) {
             String key = entry.getKey();
             if (!EntityEditorChanges.EDITABLE.contains(key)) continue;
@@ -68,6 +69,12 @@ final class EntityEditDraft {
                 for (String field : fields) {
                     if (current.containsKey(field) == sent.containsKey(field)
                             && EntityEditorChanges.same(current.get(field), sent.get(field))) continue;
+                    // A capability can disappear while a previous write is in flight. Never
+                    // recreate it from a queued edit; the session requests explicit recovery.
+                    if (!attributes.containsKey(field) && current.containsKey(field)) {
+                        unavailableAttributeEdit = true;
+                        continue;
+                    }
                     if (current.containsKey(field)) attributes.put(field, current.get(field));
                     else attributes.remove(field);
                 }
@@ -80,6 +87,7 @@ final class EntityEditDraft {
         baseline = confirmed;
         values.clear(); values.putAll(detached);
         data.notifyChanged();
+        return unavailableAttributeEdit;
     }
     void attribute(String key, Object value) {
         var attributes = new LinkedHashMap<>(dictionary("attributes")); attributes.put(key, value); set("attributes", attributes);

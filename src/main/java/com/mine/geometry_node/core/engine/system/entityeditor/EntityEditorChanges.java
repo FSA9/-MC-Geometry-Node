@@ -5,9 +5,9 @@ import java.util.*;
 
 /** Computes edits against the read baseline, then compares only the state the user actually edited. */
 public final class EntityEditorChanges {
-    public static final Set<String> EDITABLE = Set.of("attributes", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
+    public static final Set<String> EDITABLE = Set.of("attributes", "biologicalTypes", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
     private static final Set<String> READ_ONLY = Set.of("living", "equipmentSupported", "equipmentCreative", "availableGraphs", "preview",
-            "registryType", "dimension", "position");
+            "registryType", "dimension", "position", "attributeFields", "biologicalTypeDefaults");
     private EntityEditorChanges() {}
 
     public static Map<String, Object> between(Map<String, Object> baseline, Map<String, Object> replacement) {
@@ -56,9 +56,12 @@ public final class EntityEditorChanges {
                 Map<String, Object> before = dictionary(baseline.get(key)), now = dictionary(current.get(key));
                 for (String field : dictionary(changes.get(key)).keySet())
                     if (!now.containsKey(field) || !same(before.get(field), now.get(field))) return true;
-                // Changing max health can clamp health; that dependent state must also be current.
-                if (dictionary(changes.get(key)).containsKey("maxHealth") && !same(before.get("health"), now.get("health"))) return true;
-                if (dictionary(changes.get(key)).containsKey("health") && !same(before.get("maxHealth"), now.get("maxHealth"))) return true;
+                // Native maximum callbacks can clamp their current state; compare dependencies in both directions.
+                Map<String, Object> edited = dictionary(changes.get(key));
+                for (var pair : EntityEditorAttributes.CAPACITY_STATES.entrySet()) {
+                    if (edited.containsKey(pair.getKey()) && !same(before.get(pair.getValue()), now.get(pair.getValue()))) return true;
+                    if (edited.containsKey(pair.getValue()) && !same(before.get(pair.getKey()), now.get(pair.getKey()))) return true;
+                }
             } else if (!same(baseline.get(key), current.get(key))) return true;
         }
         return false;

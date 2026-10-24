@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.entity;
 
+import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -12,112 +13,200 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges;
 import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorNames;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.utils.UIUtils;
+import net.minecraft.network.chat.Component;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.Typeface;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.*;
+import java.util.function.BooleanSupplier;
+import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraits;
 import static com.mine.geometry_node.client.ui.editor.entity.EntityEditorViews.*;
 
 /** Only advertised fields are editable. Enter completes text edits; navigation preserves raw input. */
-final class EntityAttributesView extends UiScrollView {
+final class EntityAttributesView extends LinearLayout {
+    private static final List<String> CATEGORIES = java.util.stream.Stream.concat(
+            EntityAttributeFields.CATEGORIES.stream(), java.util.stream.Stream.of("types")).toList();
     private final EntityEditDraft draft;
+    private final EntityTypesView biologicalTypes;
     private final Map<String, UiTextInput> numbers = new LinkedHashMap<>();
     private final Map<String, UiTextInput> inputs = new LinkedHashMap<>();
     private final Map<String, UiCheckBox> flags = new LinkedHashMap<>();
     private final Map<String, String> stagedText = new HashMap<>();
     private final Map<String, Object> stagedValues = new HashMap<>();
     private final Runnable changed;
+    private final UiTheme theme;
+    private final Map<String, EntityAttributeFields.Field> fields = new LinkedHashMap<>();
+    private final Map<String, LinearLayout> fieldRows = new LinkedHashMap<>();
+    private final Map<String, UiDisplayText> fieldLabels = new LinkedHashMap<>();
+    private final Map<String, LinearLayout> categoryPages = new LinkedHashMap<>();
+    private final Map<String, UiActionButton> categoryButtons = new LinkedHashMap<>();
+    private final Map<String, UiDisplayText> categoryCounts = new LinkedHashMap<>();
+    private final UiScrollView fieldScroll;
+    private String selectedCategory;
     private final UiDisplayText registryValue, dimensionValue, positionValue;
     private final String dimension;
     private boolean updating;
     private boolean disposed;
     private RichTextValue unfinishedName;
 
-    EntityAttributesView(Context context, UiTheme theme, EntityEditDraft draft, UUID entity, String dimension, Runnable changed) {
-        super(context, theme.scroll()); this.draft = draft; this.changed = changed; this.dimension = dimension;
-        setHorizontalScrollBarEnabled(false);
-        LinearLayout body = row(context); body.setPadding(px(20), px(18), px(20), px(20));
-        body.setGravity(Gravity.TOP);
-        LinearLayout summary = column(context); summary.setPadding(0, 0, px(24), 0);
-        body.addView(summary, size(248, -2));
+    EntityAttributesView(Context context, UiTheme theme, EntityEditDraft draft, UUID entity, String dimension, Runnable changed,
+                         BooleanSupplier editable) {
+        super(context);
+        this.draft = draft; this.changed = changed; this.dimension = dimension; this.theme = theme;
+        biologicalTypes = draft.snapshot().containsKey("biologicalTypeDefaults")
+                ? new EntityTypesView(context, theme, draft, () -> !disposed && editable.getAsBoolean()) : null;
+        setOrientation(HORIZONTAL);
+        setGravity(Gravity.TOP);
+        UiScrollView summaryScroll = new UiScrollView(context, theme.scroll());
+        summaryScroll.setFillViewport(true);
+        LinearLayout summary = column(context); summary.setPadding(px(20), px(18), px(20), px(20));
         EntityPreviewCell preview = new EntityPreviewCell(context, 224, theme, EntityPreviewCell.Layout.SQUARE);
         preview.setReference(entity, dimension);
-        summary.addView(preview, size(-1, 224));
+        summary.addView(preview, size(-1, -2));
         registryValue = metadata(context, theme);
         LinearLayout.LayoutParams registryParams = size(-1, -2); registryParams.topMargin = px(12);
         summary.addView(registryValue, registryParams);
-        summary.addView(text(context, tr("attributes.dimension"), theme.text().muted()), size(-1, 32));
+        summary.addView(text(context, tr("attributes.dimension"), theme.text().muted()), size(-1, 30));
         dimensionValue = metadata(context, theme); summary.addView(dimensionValue, size(-1, -2));
-        summary.addView(text(context, tr("attributes.position"), theme.text().muted()), size(-1, 32));
+        summary.addView(text(context, tr("attributes.position"), theme.text().muted()), size(-1, 30));
         positionValue = metadata(context, theme); summary.addView(positionValue, size(-1, -2));
-        LinearLayout fields = column(context); fields.setPadding(px(24), 0, 0, 0);
-        body.addView(divider(context, theme), size(1, -1));
-        body.addView(fields, new LinearLayout.LayoutParams(0, -2, 1));
-        Map<String, Object> attrs = draft.dictionary("attributes");
-        if (attrs.containsKey("name")) {
-            fields.addView(text(context, tr("attributes.names"), theme.text().normal()), size(-1, 30));
-            fields.addView(text(context, tr("attributes.name"), theme.text().muted()), size(-1, 26));
-            LinearLayout nameRow = row(context);
-            UiTextInput name = input(context, theme); name.setText(RichTextValue.from(attrs.get("name")).plain());
-            name.setContentDescription(tr("attributes.name"));
-            nameRow.addView(name, new LinearLayout.LayoutParams(0, px(34), 1));
-            UiIconButton rich = UiIconButton.createThemed(context, theme,
-                    new SvgIconView(context, SvgIconView.Icon.MORE_HORIZONTAL, theme.text().normal()))
-                    .tooltip(tr("attributes.edit_rich_name"));
-            rich.setEnabled(EntityEditorNames.supportsRichText(attrs.get("name")));
-            rich.setOnClickListener(view -> openRichName(theme, name));
-            LinearLayout.LayoutParams action = size(34, 34); action.leftMargin = px(8);
-            nameRow.addView(rich, action); fields.addView(nameRow, size(-1, 34));
-            bindInput("name", name, attrs.get("name"));
+        LinearLayout.LayoutParams separator = size(-1, 1); separator.topMargin = px(20); separator.bottomMargin = px(14);
+        summary.addView(divider(context, theme), separator);
+        summaryScroll.addView(summary, new FrameLayout.LayoutParams(-1, -2));
+        addView(summaryScroll, size(248, -1));
+        addView(divider(context, theme), size(1, -1));
+        fieldScroll = new UiScrollView(context, theme.scroll());
+        fieldScroll.setFillViewport(true);
+        LinearLayout pages = column(context); pages.setPadding(px(24), px(22), px(24), px(24));
+        fieldScroll.addView(pages, new FrameLayout.LayoutParams(-1, -2));
+        addView(fieldScroll, new LinearLayout.LayoutParams(0, -1, 1));
+        for (String category : CATEGORIES) {
+            UiActionButton button = button(context, theme, "attributes.category." + category,
+                    UiActionButton.Role.QUIET, () -> selectCategory(category));
+            button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+            button.setPadding(px(10), 0, px(10), 0);
+            button.setMinHeight(0); button.setMinimumHeight(0); button.setMinWidth(0); button.setMinimumWidth(0);
+            button.setSingleLine(true);
+            button.setStyle(new UiActionButton.Style(0, 0, theme.border().subtle(),
+                    UiMetrics.DISABLED_ALPHA, theme.border().focus()));
+            categoryButtons.put(category, button);
+            LinearLayout.LayoutParams navParams = size(-1, 38); navParams.bottomMargin = px(3);
+            summary.addView(button, navParams);
+            LinearLayout page = column(context);
+            LinearLayout heading = row(context);
+            UiDisplayText title = text(context, tr("attributes.category." + category), theme.text().normal());
+            UIUtils.setLockedTextSize(title, UiMetrics.TEXT_BODY);
+            heading.addView(title, new LinearLayout.LayoutParams(0, px(34), 1));
+            UiDisplayText count = text(context, "", theme.text().muted());
+            count.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            heading.addView(count, size(-2, 34)); categoryCounts.put(category, count);
+            page.addView(heading, size(-1, 42));
+            LinearLayout.LayoutParams line = size(-1, 1); line.bottomMargin = px(8);
+            page.addView(divider(context, theme), line);
+            categoryPages.put(category, page); pages.addView(page, size(-1, -2));
         }
-        addFlags(fields, context, theme, attrs, List.of("nameVisible"));
-        if (List.of("health", "maxHealth", "speed", "attack").stream().anyMatch(key -> attrs.get(key) instanceof Number))
-            section(fields, context, theme, "attributes.living");
-        LinearLayout numberRow = null; int index = 0;
-        for (String key : List.of("health", "maxHealth", "speed", "attack")) {
-            if (!(attrs.get(key) instanceof Number number)) continue;
-            if (index++ % 2 == 0) { numberRow = row(context); fields.addView(numberRow, size(-1, -2)); }
-            LinearLayout field = column(context); field.setPadding(0, px(10), px(12), 0);
-            field.addView(text(context, tr("attributes." + key), theme.text().muted()), size(-1, 25));
-            UiTextInput input = input(context, theme); input.setText(String.valueOf(number));
-            input.setContentDescription(tr("attributes." + key)); field.addView(input, size(-1, 36));
-            numbers.put(key, input); bindInput(key, input, number);
-            numberRow.addView(field, new LinearLayout.LayoutParams(0, -2, 1));
-        }
-        List<String> behavior = List.of("noAI", "persistent", "silent", "invulnerable", "gravity");
-        if (behavior.stream().anyMatch(key -> attrs.get(key) instanceof Boolean))
-            section(fields, context, theme, "attributes.behavior");
-        addFlags(fields, context, theme, attrs, behavior);
+        if (biologicalTypes != null) categoryPages.get("types").addView(biologicalTypes, size(-1, -2));
+        reconcileFields();
         refreshSummary();
-        addView(body, new FrameLayout.LayoutParams(-1, -2));
     }
     private static UiDisplayText metadata(Context context, UiTheme theme) {
         UiDisplayText value = text(context, "", theme.text().secondary());
         value.setTypeface(Typeface.MONOSPACED); value.setMinHeight(px(24)); return value;
     }
-    private static void section(LinearLayout fields, Context context, UiTheme theme, String key) {
-        LinearLayout.LayoutParams line = size(-1, 1); line.topMargin = px(24); line.bottomMargin = px(14);
-        fields.addView(divider(context, theme), line);
-        fields.addView(text(context, tr(key), theme.text().normal()), size(-1, 30));
+    private void selectCategory(String category) {
+        if (categoryButtons.get(category).getVisibility() != VISIBLE) return;
+        if (!Objects.equals(selectedCategory, category)) fieldScroll.scrollTo(0, 0);
+        selectedCategory = category;
+        categoryPages.forEach((key, page) -> page.setVisibility(key.equals(category) ? VISIBLE : GONE));
+        categoryButtons.forEach((key, button) -> button.setPalette(UiActionButton.Palette.row(theme,
+                key.equals(category), theme.surface().panel())));
     }
-    private void addFlags(LinearLayout fields, Context context, UiTheme theme, Map<String, Object> attrs, List<String> keys) {
-        LinearLayout flagRow = null; int index = 0;
-        for (String key : keys) {
-            if (!(attrs.get(key) instanceof Boolean value)) continue;
-            if (index++ % 2 == 0) { flagRow = row(context); fields.addView(flagRow, size(-1, 40)); }
-            LinearLayout flag = row(context); UiCheckBox checkbox = UiCheckBox.createThemed(context, theme);
-            checkbox.setChecked(value); checkbox.setContentDescription(tr("attributes." + key));
-            flags.put(key, checkbox);
-            checkbox.setOnCheckedChangeListener((view, checked) -> { if (!updating) draft.attribute(key, checked); });
-            flag.addView(checkbox, size(16, 16));
-            var label = text(context, tr("attributes." + key), theme.text().normal());
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -1, 1); lp.leftMargin = px(9);
-            flag.addView(label, lp); label.setOnClickListener(view -> checkbox.performClick());
-            flagRow.addView(flag, new LinearLayout.LayoutParams(0, px(32), 1));
+    /** Reconcile advertised capabilities in place: an acknowledgement must not discard raw forms. */
+    private void reconcileFields() {
+        Map<String, Object> attributes = draft.dictionary("attributes");
+        List<EntityAttributeFields.Field> advertised = EntityAttributeFields.from(draft.snapshot(), attributes);
+        fields.clear();
+        Map<String, Integer> counts = new HashMap<>();
+        if (biologicalTypes != null) counts.put("types", EntityTypeTraits.IDS.size());
+        for (EntityAttributeFields.Field field : advertised) {
+            fields.put(field.key(), field);
+            LinearLayout fieldRow = fieldRows.get(field.key());
+            if (fieldRow == null) {
+                fieldRow = createFieldRow(field, attributes.get(field.key()));
+                fieldRows.put(field.key(), fieldRow);
+            }
+            LinearLayout parent = categoryPages.get(field.category());
+            if (fieldRow.getParent() != parent) {
+                if (fieldRow.getParent() instanceof LinearLayout previous) previous.removeView(fieldRow);
+                parent.addView(fieldRow, size(-1, 66));
+            }
+            fieldRow.setVisibility(VISIBLE);
+            String label = Component.translatable(field.labelKey()).getString();
+            fieldLabels.get(field.key()).setText(label);
+            View control = inputs.containsKey(field.key()) ? inputs.get(field.key()) : flags.get(field.key());
+            if (control != null) control.setContentDescription(label);
+            counts.merge(field.category(), 1, Integer::sum);
         }
-        if (index % 2 != 0) flagRow.addView(new LinearLayout(context), new LinearLayout.LayoutParams(0, px(32), 1));
+        fieldRows.forEach((key, row) -> row.setVisibility(fields.containsKey(key) ? VISIBLE : GONE));
+        categoryButtons.forEach((category, button) -> {
+            int count = counts.getOrDefault(category, 0);
+            button.setVisibility(count > 0 ? VISIBLE : GONE);
+            categoryCounts.get(category).setText(tr("attributes.count", count));
+        });
+        if (selectedCategory == null || counts.getOrDefault(selectedCategory, 0) == 0) {
+            selectedCategory = CATEGORIES.stream().filter(counts::containsKey).findFirst().orElse(null);
+        }
+        if (selectedCategory != null) selectCategory(selectedCategory);
+        else categoryPages.values().forEach(page -> page.setVisibility(GONE));
+    }
+    private LinearLayout createFieldRow(EntityAttributeFields.Field field, Object value) {
+        Context context = getContext();
+        String label = Component.translatable(field.labelKey()).getString();
+        LinearLayout row = row(context);
+        UiDisplayText caption = text(context, label, theme.text().normal());
+        fieldLabels.put(field.key(), caption);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, px(44), 1);
+        labelParams.rightMargin = px(20); row.addView(caption, labelParams);
+        LinearLayout control = row(context);
+        row.addView(control, new LinearLayout.LayoutParams(0, px(36), 1));
+        switch (field.kind()) {
+            case BOOLEAN -> {
+                UiCheckBox checkbox = UiCheckBox.createThemed(context, theme);
+                checkbox.setChecked(Boolean.TRUE.equals(value)); checkbox.setContentDescription(label);
+                flags.put(field.key(), checkbox); control.addView(checkbox, size(18, 18));
+                checkbox.setOnCheckedChangeListener((view, checked) -> {
+                    if (!updating && !disposed && fields.containsKey(field.key())) draft.attribute(field.key(), checked);
+                });
+                caption.setOnClickListener(view -> checkbox.performClick());
+            }
+            case NAME -> {
+                UiTextInput name = input(context, theme); name.setText(RichTextValue.from(value).plain());
+                control.addView(name, new LinearLayout.LayoutParams(0, -1, 1));
+                UiIconButton rich = UiIconButton.createThemed(context, theme,
+                        new SvgIconView(context, SvgIconView.Icon.MORE_HORIZONTAL, theme.text().normal()))
+                        .tooltip(tr("attributes.edit_rich_name"));
+                rich.setEnabled(EntityEditorNames.supportsRichText(value));
+                rich.setOnClickListener(view -> openRichName(theme, name));
+                LinearLayout.LayoutParams action = size(36, 36); action.leftMargin = px(8);
+                control.addView(rich, action); bindInput(field.key(), name, value);
+            }
+            case NUMBER -> {
+                UiTextInput input = input(context, theme); input.setText(field.display((Number) value));
+                control.addView(input, new LinearLayout.LayoutParams(0, -1, 1));
+                if (field.percentage()) {
+                    UiDisplayText unit = text(context, "%", theme.text().muted());
+                    LinearLayout.LayoutParams unitParams = size(-2, -1); unitParams.leftMargin = px(8);
+                    control.addView(unit, unitParams);
+                }
+                numbers.put(field.key(), input); bindInput(field.key(), input, value);
+            }
+        }
+        return row;
     }
     private void refreshSummary() {
         Map<String, Object> snapshot = draft.snapshot();
@@ -129,13 +218,13 @@ final class EntityAttributesView extends UiScrollView {
                 ? String.format(Locale.ROOT, "%.1f, %.1f, %.1f", x.doubleValue(), y.doubleValue(), z.doubleValue()) : "");
     }
     private void openRichName(UiTheme theme, UiTextInput name) {
-        if (disposed) return;
+        if (disposed || !fields.containsKey("name")) return;
         Object original = draft.dictionary("attributes").get("name");
         String raw = name.getText().toString();
         RichTextValue initial = unfinishedName != null ? unfinishedName : raw.equals(RichTextValue.from(original).plain())
                 ? RichTextValue.from(original) : RichTextValue.plain(raw);
         ExpandedTextInputOverlay.showRichText(getContext(), name, initial, rich -> {
-            if (disposed) return;
+            if (disposed || !fields.containsKey("name")) return;
             Object confirmed = draft.dictionary("attributes").get("name");
             if (!EntityEditorNames.sameAfterConfirmation(original, confirmed)
                     || !raw.equals(name.getText().toString())) {
@@ -176,7 +265,7 @@ final class EntityAttributesView extends UiScrollView {
                 || !inputs.get(key).getText().toString().equals(stagedText.get(key));
     }
     boolean hasPendingChanges() {
-        return inputs.keySet().stream().anyMatch(this::pending);
+        return fields.keySet().stream().filter(inputs::containsKey).anyMatch(this::pending);
     }
     /** Prevent teardown blur from publishing unfinished input. */
     void dispose() { disposed = true; updating = true; }
@@ -186,7 +275,7 @@ final class EntityAttributesView extends UiScrollView {
         for (String key : keys) {
             // Base attributes do not describe the effective value after modifiers. Unedited
             // numbers must not block an unrelated tag/data edit or be rewritten by parsing.
-            if (!pending(key)) continue;
+            if (!fields.containsKey(key) || !pending(key)) continue;
             UiTextInput input = inputs.get(key);
             if (key.equals("name")) {
                 String raw = input.getText().toString();
@@ -197,21 +286,12 @@ final class EntityAttributesView extends UiScrollView {
                 catch (IllegalArgumentException bad) { input.setErrorMessage(tr("error.invalid_name")); valid = false; }
                 continue;
             }
-            String raw = input.getText().toString().trim();
             try {
-                double number = Double.parseDouble(raw);
-                if (!Double.isFinite(number) || number < 0
-                        || (key.equals("maxHealth") || key.equals("health")) && number <= 0)
-                    throw new IllegalArgumentException();
+                EntityAttributeFields.Field field = fields.get(key);
                 Object original = draft.dictionary("attributes").get(key);
-                Number value;
-                if (original instanceof Float) {
-                    float v = Float.parseFloat(raw);
-                    if (!Float.isFinite(v) || (key.equals("health") || key.equals("maxHealth")) && v <= 0)
-                        throw new IllegalArgumentException();
-                    value = v;
-                }
-                else value = number;
+                if (field == null || field.kind() != EntityAttributeFields.Kind.NUMBER || !(original instanceof Number number))
+                    throw new IllegalArgumentException();
+                Number value = field.parse(input.getText().toString(), number);
                 parsed.put(key, value); input.setErrorMessage(null);
             } catch (IllegalArgumentException bad) { input.setErrorMessage(tr("error.invalid_number")); valid = false; }
         }
@@ -230,18 +310,25 @@ final class EntityAttributesView extends UiScrollView {
         if (!different) changed.run(); // A textual edit can finish without changing its numeric value.
         return true;
     }
+    void refreshInputState() {
+        if (!disposed && biologicalTypes != null) biologicalTypes.refreshConfirmed();
+    }
     /** Reconcile existing controls without replacing focused views or uncommitted text. */
     void refreshConfirmedValues() {
         if (disposed) return;
         Map<String, Object> attributes = draft.dictionary("attributes");
         updating = true;
         try {
+            reconcileFields();
             for (var entry : inputs.entrySet()) {
                 String key = entry.getKey(); UiTextInput input = entry.getValue();
                 if (pending(key) || !attributes.containsKey(key)) continue;
                 Object value = attributes.get(key);
                 if (EntityEditorChanges.same(stagedValues.get(key), value)) continue;
-                String text = key.equals("name") ? RichTextValue.from(value).plain() : String.valueOf(value);
+                EntityAttributeFields.Field field = fields.get(key);
+                if (field == null) continue;
+                String text = key.equals("name") ? RichTextValue.from(value).plain()
+                        : value instanceof Number number ? field.display(number) : String.valueOf(value);
                 int start = input.getSelectionStart(), end = input.getSelectionEnd();
                 if (!input.getText().toString().equals(text)) {
                     input.setText(text);
@@ -253,6 +340,7 @@ final class EntityAttributesView extends UiScrollView {
                 if (attributes.get(key) instanceof Boolean value && checkbox.isChecked() != value) checkbox.setChecked(value);
             });
             refreshSummary();
+            refreshInputState();
         } finally { updating = false; }
     }
 }
