@@ -58,7 +58,7 @@ public final class WorldObjectTagEdits {
     private static WorldObjectEntry withToken(WorldObjectEntry entry, String token) {
         Map<String, String> refs = new LinkedHashMap<>(entry.references()); refs.put(TARGET_REFERENCE, token);
         return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
-                entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(), entry.sceneObjectId(), entry.entityId(), refs, entry.graphs());
+                entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(), entry.sceneObjectId(), entry.entityId(), refs, entry.graphs(), entry.entityState());
     }
 
     /** Permission is checked before reading or mutating any owner. Expected tags compare as an exact ordered snapshot. */

@@ -50,6 +50,21 @@ public class UiContextMenu extends UiPopupOverlay {
         addMenuItem(text, null, action);
     }
 
+    /** A single-choice option, including styled labels supplied by rich-text fields. */
+    public void addChoiceItem(CharSequence text, boolean selected, Runnable action) {
+        TextView item = UiMenuItems.row(getContext(), "", selected, true, () -> {
+            if (mDismissed || !rootMenu().isOpen()) return;
+            action.run();
+            dismissRoot();
+        }, theme);
+        item.setText(text);
+        item.setOnHoverListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) dismissChildMenu();
+            return false;
+        });
+        mContentLayout.addView(item, menuItemLayoutParams());
+    }
+
     public void addMenuItem(String text, String shortcut, Runnable action) {
         LinearLayout row = createMenuRow();
         TextView label = createMenuText(text, theme.text().secondary(), Gravity.LEFT | Gravity.CENTER_VERTICAL, 12.0f);

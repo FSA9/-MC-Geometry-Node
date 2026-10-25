@@ -29,7 +29,7 @@ public final class GlobalDataView extends LinearLayout {
         public Navigation { extent = Float.isFinite(extent) ? Math.max(120, Math.min(600, extent)) : 160; }
     }
     private static final UiStateKey<Page> PAGE = new UiStateKey<>("globaldata:page", 1, UiStateLifetime.MEMORY,
-            Page.class, () -> new Page("factions"), value -> new Page(value.section() == null ? "" : value.section()));
+            Page.class, () -> new Page("entities"), value -> new Page(value.section() == null ? "" : value.section()));
     private static final UiStateKey<Navigation> NAVIGATION = new UiStateKey<>("globaldata:navigation", 1, UiStateLifetime.PERSISTENT,
             Navigation.class, () -> new Navigation(160), value -> value);
     private final UiStateContext state;
@@ -44,7 +44,9 @@ public final class GlobalDataView extends LinearLayout {
     private boolean shown, disposed;
 
     public GlobalDataView(Context context, UiStateContext state) {
-        this(context, state, List.of(new Section("factions", "geometry_node.faction.factions", FactionCatalogView::new)));
+        this(context, state, List.of(
+                new Section("entities", "geometry_node.database.entities", EntityCatalogView::new),
+                new Section("factions", "geometry_node.faction.factions", FactionCatalogView::new)));
     }
     public GlobalDataView(Context context, UiStateContext state, List<Section> definitions) {
         super(context); this.state = Objects.requireNonNull(state); setOrientation(VERTICAL);

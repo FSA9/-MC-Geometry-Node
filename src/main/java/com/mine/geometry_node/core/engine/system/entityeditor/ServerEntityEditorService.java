@@ -244,6 +244,13 @@ public final class ServerEntityEditorService {
                 System.getLogger(ServerEntityEditorService.class.getName()).log(System.Logger.Level.WARNING, "Inventory commit notification failed", notification);
             }
         }
+        // Directory snapshots are updated only after the edit has passed the rollback boundary.
+        try {
+            com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService.INSTANCE.refresh(level.getServer(), entity.getUUID());
+        } catch (RuntimeException failure) {
+            System.getLogger(ServerEntityEditorService.class.getName()).log(System.Logger.Level.WARNING,
+                    "Committed entity edit could not refresh its directory snapshot", failure);
+        }
         return committed;
     }
 

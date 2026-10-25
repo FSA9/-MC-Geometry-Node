@@ -9,7 +9,7 @@ final class FactionViewState {
     record Page(String selected, String section, String query, Set<String> checked) {
         Page {
             selected = selected == null ? "" : selected;
-            section = Set.of("info", "relations", "ranks").contains(section) ? section : "info";
+            section = Set.of("info", "relations", "ranks", "members").contains(section) ? section : "info";
             query = query == null ? "" : query.substring(0, Math.min(1024, query.length()));
             checked = checked == null ? Set.of() : Collections.unmodifiableSet(new LinkedHashSet<>(checked));
         }

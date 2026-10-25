@@ -9,7 +9,8 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
                                String name, Set<String> tags, Set<String> sources, Set<String> lifetimes,
                                double radius, int limit, ColumnFilters columns,
                                Set<String> searchFallbackTypes, Set<String> columnNameFallbackTypes,
-                               String registryType, WorldObjectGraphFilter graphFilter) {
+                               String registryType, WorldObjectGraphFilter graphFilter,
+                               WorldObjectEntityFilter entityFilter) {
     public enum Range { GLOBAL, CURRENT_DIMENSION, LOADED, NEARBY }
     public static final int MAX_RESULTS = 256, MAX_FILTERS = 16, MAX_FILTER_TEXT = 1024;
     // Vanilla ServerboundCustomPayloadPacket.MAX_PAYLOAD_SIZE is 32767 bytes.
@@ -19,6 +20,7 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
     public WorldObjectQuery {
         Objects.requireNonNull(columns); Objects.requireNonNull(range); check(dimension); check(name); check(registryType);
         Objects.requireNonNull(graphFilter);
+        Objects.requireNonNull(entityFilter);
         providers = filters(providers); types = filters(types); tags = filters(tags);
         sources = filters(sources); lifetimes = filters(lifetimes);
         searchFallbackTypes = fallbackTypes(searchFallbackTypes);
@@ -40,6 +42,15 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
         if (textBudget > 4096) throw new IllegalArgumentException("World query request text budget exceeded");
         if (!Double.isFinite(radius) || radius < 0 || radius > MAX_RADIUS || limit < 1 || limit > MAX_RESULTS)
             throw new IllegalArgumentException("Invalid world query limits");
+    }
+    /** Existing callers retain the combined world/entity scope. */
+    public WorldObjectQuery(Range range, String dimension, Set<String> providers, Set<String> types,
+                            String name, Set<String> tags, Set<String> sources, Set<String> lifetimes,
+                            double radius, int limit, ColumnFilters columns,
+                            Set<String> searchFallbackTypes, Set<String> columnNameFallbackTypes,
+                            String registryType, WorldObjectGraphFilter graphFilter) {
+        this(range, dimension, providers, types, name, tags, sources, lifetimes, radius, limit, columns,
+                searchFallbackTypes, columnNameFallbackTypes, registryType, graphFilter, WorldObjectEntityFilter.empty());
     }
     /** Compatibility constructor for requests without bound graph predicates. */
     public WorldObjectQuery(Range range, String dimension, Set<String> providers, Set<String> types,
@@ -87,6 +98,10 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
         return new WorldObjectQuery(Range.GLOBAL, "", Set.of(), Set.of(), "", Set.of(),
                 Set.of(), Set.of(), 128, MAX_RESULTS);
     }
+    public WorldObjectQuery withEntityFilter(WorldObjectEntityFilter filter) {
+        return new WorldObjectQuery(range, dimension, providers, types, name, tags, sources, lifetimes,
+                radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType, graphFilter, filter);
+    }
     /** Empty means every dimension, except for the explicit current/nearby protocol ranges. */
     public String selectedDimension(String currentDimension) {
         return dimension.isEmpty() && (range == Range.CURRENT_DIMENSION || range == Range.NEARBY)
@@ -112,7 +127,8 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
         String rawType = rawType(entry);
         String effectiveName = entry.name().isEmpty() && columnNameFallbackTypes.contains(rawType)
                 ? columns.name() : entry.name();
-        return (providers.isEmpty() || providers.contains(entry.provider()))
+        return entityFilter.matches(entry)
+                && (providers.isEmpty() || providers.contains(entry.provider()))
                 && (types.isEmpty() || types.contains(entry.type()))
                 && (name.isEmpty() || (entry.name().isEmpty() ? searchFallbackTypes.contains(rawType)
                     : entry.name().toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT))))

@@ -1,12 +1,14 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityState;
+import com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
 import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProviders;
 
-import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
 import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
 import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime;
@@ -23,7 +25,6 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.*;
 import java.util.*;
 import com.mine.geometry_node.core.engine.metadata.*;
@@ -39,14 +40,17 @@ final class BuiltinWorldObjectProviders {
         initialized = true;
         METADATA.put("scene", (c, e) -> SceneMetadataTargets.access(c.server(), e.dimension(), e.sceneObjectId()));
         METADATA.put("native", (c, e) -> {
+            if (e.entityState() != null && !e.entityState().loaded()) return registeredSnapshotData(c, e);
+            if (e.entityState() != null && !e.entityState().alive()) return null;
             ServerLevel level = level(c, e.dimension());
             var entity = level.getEntity(UUID.fromString(e.references().get("entityUuid")));
-            if (entity == null || entity.isRemoved() || !Objects.equals(entity.getId(), e.entityId())) return null;
+            if (entity == null || entity.isRemoved() || !entity.isAlive() || !Objects.equals(entity.getId(), e.entityId())) return null;
             var access = MetadataCapabilities.GLOBAL.resolve("geometry_node:entity", new EntityMetadataAdapter.Target(entity));
             // In-place player dimension transfer can keep the entity alive: the queried native identity includes its level.
             Integer expectedEntityId = e.entityId();
             Runnable current = () -> {
-                if (entity.level() != level || level.getEntity(entity.getUUID()) != entity || !Objects.equals(entity.getId(), expectedEntityId))
+                if (entity.isRemoved() || !entity.isAlive() || entity.level() != level
+                        || level.getEntity(entity.getUUID()) != entity || !Objects.equals(entity.getId(), expectedEntityId))
                     throw new IllegalStateException("Native world query target moved or was replaced");
             };
             TagAccess tags = access.requireTags();
@@ -166,23 +170,41 @@ final class BuiltinWorldObjectProviders {
                         Map.of("forceFieldId", field.address().id(), "areaId", field.area().id())),
                         ForceFieldResourceStore.INSTANCE.metadata(c.server(), field.address()).requireTags().values()));
             }));
-        register("native", "loaded_native_entities_only", () -> {
+        register("native", "loaded_entities_and_registered_snapshots", () -> {
             List<WorldObjectType> result = new ArrayList<>();
             for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE)
                 result.add(new WorldObjectType("native", BuiltInRegistries.ENTITY_TYPE.getKey(type).toString(), type.getDescriptionId()));
             return result;
         }, (c, sink) -> {
+            if (c.entityFilter().scope() != WorldObjectEntityFilter.Scope.WORLD_OBJECTS) {
+                boolean[] continuing = {true};
+                // The directory merges by UUID across all server dimensions before applying this scope.
+                ServerEntityIndexService.INSTANCE.visit(c.server(), indexed -> {
+                    if (!sink.scan()) return continuing[0] = false;
+                    WorldObjectEntry entry = indexed.entry();
+                    if (!c.acceptsDimension().test(entry.dimension())) return true;
+                    UUID uuid = UUID.fromString(entry.references().get("entityUuid"));
+                    var state = new WorldObjectEntityState(uuid, indexed.loaded(), indexed.registered(), indexed.alive(),
+                            indexed.capturedAtMillis(), indexed.revision(), indexed.factions());
+                    Map<String, String> refs = new LinkedHashMap<>(entry.references());
+                    if (!indexed.loaded() || !indexed.alive()) {
+                        refs.remove(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits.TARGET_REFERENCE);
+                        refs.remove(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits.TARGET_REFERENCE);
+                    }
+                    return continuing[0] = sink.emit(new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(),
+                            entry.dimension(), entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(),
+                            indexed.loaded() ? entry.sceneObjectId() : null, indexed.loaded() ? entry.entityId() : null,
+                            refs, entry.graphs(), state));
+                });
+                if (!continuing[0]) return;
+            }
+            if (c.entityFilter().scope() == WorldObjectEntityFilter.Scope.ENTITIES) return;
             for (ServerLevel level : c.levels()) for (var entity : level.getAllEntities()) {
                 if (!sink.scan()) return;
-                if (entity.isRemoved()) continue;
+                if (entity.isRemoved() || !(entity instanceof net.minecraft.world.entity.Interaction)) continue;
                 String dim = dimension(level);
-                // Server snapshot metadata: type remains the entity registry ID; itemId describes the carried item.
                 Map<String, String> references = new LinkedHashMap<>();
                 references.put("entityUuid", entity.getUUID().toString());
-                if (entity instanceof ItemEntity itemEntity) {
-                    var stack = itemEntity.getItem();
-                    if (!stack.isEmpty()) references.put("itemId", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-                }
                 var attachment = entity.hasData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
                         ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT) : null;
                 var graphs = attachment == null ? List.<WorldObjectGraph>of()
@@ -194,10 +216,28 @@ final class BuiltinWorldObjectProviders {
                         entity.position(), entity.getBoundingBox(),
                         attachment == null ? List.of() : attachment.customTags(),
                         "", "loaded",
-                        (entity instanceof net.minecraft.world.entity.Interaction || SceneNativeEntities.eligible(entity)) ? entity.getUUID() : null,
+                        entity.getUUID(),
                         entity.getId(), references, graphs))) return;
             }
         });
+    }
+    private static MetadataCapabilities.Access registeredSnapshotData(WorldObjectProvider.Context context, WorldObjectEntry entry) {
+        var state = entry.entityState();
+        if (state == null || !state.registered()) return null;
+        var index = ServerEntityIndexService.INSTANCE;
+        var expected = index.record(context.server(), state.entityUuid()).orElse(null);
+        if (expected == null || expected.revision() != state.revision()) return null;
+        return new MetadataCapabilities.Access(null, new DataAccess(new MetadataStore<>() {
+            public Map<String, Object> read() {
+                var current = index.record(context.server(), state.entityUuid()).orElse(null);
+                if (current == null || !current.equals(expected) || index.findLoaded(context.server(), state.entityUuid()).isPresent())
+                    throw new IllegalStateException("Registered entity snapshot is no longer current");
+                return current.metadata().data(context.server().registryAccess());
+            }
+            public boolean update(UnaryOperator<Map<String, Object>> change) {
+                throw new UnsupportedOperationException("Registered entity snapshots are read only");
+            }
+        }, GraphMetadataValuePolicy.of(context.server().registryAccess())));
     }
     private static ServerLevel level(WorldObjectProvider.Context context, String dimension) {
         return context.levels().stream().filter(l -> dimension(l).equals(dimension)).findFirst()

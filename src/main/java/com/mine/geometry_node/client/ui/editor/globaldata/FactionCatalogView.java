@@ -39,7 +39,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     private final UiFixedSplitLayout factionSplit;
     private final UiSearchInput search;
     private final UiCheckBox selectAll;
-    private final UiIconButton add, remove, reload;
+    private final UiIconButton add, remove;
     private final UiDisplayText count, status;
     private final LinearLayout list;
     private final FrameLayout details;
@@ -83,12 +83,8 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         factionSplit = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
                 UiFixedSplitLayout.Edge.FIRST, 260, 180, 300, theme); factionSplit.setPanes(catalog, details);
         addView(factionSplit, new LayoutParams(-1, 0, 1));
-        LinearLayout footer = row(context); footer.setPadding(px(12), 0, px(12), 0);
-        status = new UiDisplayText(context, "", 12, theme.text().muted()); status.setGravity(Gravity.CENTER_VERTICAL);
-        footer.addView(status, new LayoutParams(0, -1, 1));
-        reload = icon(context, SvgIconView.Icon.RESET, "reload"); footer.addView(reload, actionParams());
-        reload.setOnClickListener(view -> { if (shown && !disposed) { localError = ""; repository.refresh(); } });
-        addView(footer, new LayoutParams(-1, px(34)));
+        status = UiTableStyle.statusBar(context, "", theme);
+        addView(status, new LayoutParams(-1, px(UiTableStyle.STATUS_BAR_HEIGHT)));
         add.setOnClickListener(view -> create()); remove.setOnClickListener(view -> confirmDelete());
         subscription = new FactionCatalogSubscription(this, repository, this::refresh);
         factionSplit.addUserStateListener(this::saveSplit);
@@ -98,7 +94,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     @Override public View view() { return this; }
     @Override public void onShow() {
         if (disposed || shown) return;
-        shown = true; restoreScope(); subscription.open(); refresh();
+        shown = true; localError = ""; restoreScope(); subscription.open(); refresh();
     }
     @Override public void onHide() {
         if (!shown) return;
@@ -144,10 +140,16 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         }
         for (UUID id : List.copyOf(rows.keySet())) if (!displayed.contains(id)) list.removeView(rows.remove(id).view());
         showDetail(); updateSelection();
-        boolean editable = canEdit(); add.setEnabled(editable); remove.setEnabled(editable && !checked.isEmpty()); reload.setEnabled(shown && !repository.loading() && !writing);
+        boolean editable = canEdit(); add.setEnabled(editable); remove.setEnabled(editable && !checked.isEmpty());
+    }
+    private void refreshStatus() {
         String error = localError.isEmpty() ? repository.error() : localError;
-        status.setText(!error.isEmpty() ? Component.translatable(error).getString()
-                : repository.loading() || writing ? tr("saving") : tr("saved"));
+        // The members page already owns the shared entity table's result footer.
+        status.setVisibility(error.isEmpty() && section.equals("members") && selected != null
+                && repository.snapshot().find(selected).isPresent() ? GONE : VISIBLE);
+        String results = Component.translatable("geometry_node.database.result_count", visible().size(), checked.size()).getString();
+        status.setText(results + (!error.isEmpty() ? " · " + Component.translatable(error).getString()
+                : repository.loading() || writing ? " · " + tr("saving") : ""));
         status.setTextColor(error.isEmpty() ? theme.text().muted() : theme.status().error());
     }
     private Row createRow(UUID id) {
@@ -172,12 +174,13 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
             row.name().setPalette(UiTableStyle.rowPalette(id.equals(selected), theme.surface().root(), theme));
         });
         remove.setEnabled(canEdit() && !checked.isEmpty());
+        refreshStatus();
     }
     private void showDetail() {
         if (selected != null && repository.snapshot().find(selected).isPresent()) {
             FactionEditorView current = editors.computeIfAbsent(selected, id -> {
                 var editor = new FactionEditorView(getContext(), theme, id, repository, state, scope, this::canEdit,
-                        this::submit, next -> { section = next; savePage(); });
+                        this::submit, next -> { section = next; savePage(); refreshStatus(); });
                 details.addView(editor, new FrameLayout.LayoutParams(-1, -1)); return editor;
             });
             editors.forEach((id, editor) -> { boolean active = id.equals(selected); editor.setActive(shown && active); editor.setVisibility(active ? VISIBLE : GONE); });

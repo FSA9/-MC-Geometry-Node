@@ -1,10 +1,21 @@
-# Global data: faction UI
+# Global data UI
 
 `GlobalDataView` owns category navigation, factories and section lifecycle only. Its `Section`
 descriptors create implementations of `GlobalDataSection`; adding a category does not change faction code.
 `FactionCatalogView` owns faction search, batch checks/deletion and the list/detail split.
 `FactionEditorView` owns retained forms for one stable faction UUID; `FactionRanksView` only interprets rank labels.
 Repository snapshots and commands remain in `client/faction`, never in `UiStateContext`.
+
+Entities are the first navigation category and the initial page. `EntityCatalogView` hosts
+`WorldObjectsView.Mode.ENTITIES` and the shared `DatabaseDetailsPanel`; world objects use
+`Mode.WORLD`. Both modes share the same table, preview cells, metadata controls and theme.
+Queries set `WorldObjectEntityFilter.Scope` before the server result limit. Entity filters,
+selection and column widths use independent `globaldata:entities.*` state keys.
+`EntityRegistrationView` shares asynchronous read/write controls between directory cells and
+the editor's General category. Registration never enters the entity attributes draft.
+Unloaded entries retain UUID/dimension previews and read-only metadata; editing additionally
+requires a loaded, alive entity. A completed metadata read is identified by `fetched()`, not
+by whether the source permits editing.
 
 Shared integration controls are in `components/integration/faction`:
 

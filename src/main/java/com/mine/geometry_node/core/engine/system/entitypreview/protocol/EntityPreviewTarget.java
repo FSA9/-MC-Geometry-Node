@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.entitypreview.protocol;
 import java.util.Objects;
 import java.util.UUID;
 
-/** A loaded entity's identity in an explicitly selected dimension. */
+/** Entity identity and dimension hint for a live appearance or registered unloaded snapshot. */
 public record EntityPreviewTarget(UUID entityId, String dimension) {
     public static final int MAX_DIMENSION_LENGTH = 256;
     public EntityPreviewTarget {

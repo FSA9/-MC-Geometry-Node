@@ -8,6 +8,7 @@ import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
+import com.mine.geometry_node.client.ui.components.integration.entity.EntityRegistrationView;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges;
@@ -33,6 +34,7 @@ final class EntityAttributesView extends LinearLayout {
             EntityAttributeFields.CATEGORIES.stream(), java.util.stream.Stream.of("types")).toList();
     private final EntityEditDraft draft;
     private final EntityTypesView biologicalTypes;
+    private final EntityRegistrationView registration;
     private final Map<String, UiTextInput> numbers = new LinkedHashMap<>();
     private final Map<String, UiTextInput> inputs = new LinkedHashMap<>();
     private final Map<String, UiCheckBox> flags = new LinkedHashMap<>();
@@ -56,8 +58,17 @@ final class EntityAttributesView extends LinearLayout {
 
     EntityAttributesView(Context context, UiTheme theme, EntityEditDraft draft, UUID entity, String dimension, Runnable changed,
                          BooleanSupplier editable) {
+        this(context, theme, draft, entity, dimension, changed, editable, null);
+    }
+
+    EntityAttributesView(Context context, UiTheme theme, EntityEditDraft draft, UUID entity, String dimension, Runnable changed,
+                         BooleanSupplier editable, Runnable registrationApplied) {
         super(context);
         this.draft = draft; this.changed = changed; this.dimension = dimension; this.theme = theme;
+        String registryType = String.valueOf(draft.snapshot().getOrDefault("registryType", ""));
+        registration = registrationApplied != null && !registryType.isEmpty() && !registryType.equals("minecraft:interaction")
+                ? new EntityRegistrationView(context, theme, entity, dimension, false,
+                        () -> !disposed && editable.getAsBoolean(), registrationApplied) : null;
         biologicalTypes = draft.snapshot().containsKey("biologicalTypeDefaults")
                 ? new EntityTypesView(context, theme, draft, () -> !disposed && editable.getAsBoolean()) : null;
         setOrientation(HORIZONTAL);
@@ -86,14 +97,8 @@ final class EntityAttributesView extends LinearLayout {
         fieldScroll.addView(pages, new FrameLayout.LayoutParams(-1, -2));
         addView(fieldScroll, new LinearLayout.LayoutParams(0, -1, 1));
         for (String category : CATEGORIES) {
-            UiActionButton button = button(context, theme, "attributes.category." + category,
-                    UiActionButton.Role.QUIET, () -> selectCategory(category));
-            button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            button.setPadding(px(10), 0, px(10), 0);
-            button.setMinHeight(0); button.setMinimumHeight(0); button.setMinWidth(0); button.setMinimumWidth(0);
-            button.setSingleLine(true);
-            button.setStyle(new UiActionButton.Style(0, 0, theme.border().subtle(),
-                    UiMetrics.DISABLED_ALPHA, theme.border().focus()));
+            UiActionButton button = categoryButton(context, theme, tr("attributes.category." + category),
+                    () -> selectCategory(category));
             categoryButtons.put(category, button);
             LinearLayout.LayoutParams navParams = size(-1, 38); navParams.bottomMargin = px(3);
             summary.addView(button, navParams);
@@ -111,6 +116,14 @@ final class EntityAttributesView extends LinearLayout {
             categoryPages.put(category, page); pages.addView(page, size(-1, -2));
         }
         if (biologicalTypes != null) categoryPages.get("types").addView(biologicalTypes, size(-1, -2));
+        if (registration != null) {
+            LinearLayout line = row(context);
+            line.addView(text(context, Component.translatable("geometry_node.entity_registration.register").getString(),
+                    theme.text().normal()), new LinearLayout.LayoutParams(0, px(44), 1));
+            line.addView(registration, new LinearLayout.LayoutParams(0, px(44), 1));
+            categoryPages.get("general").addView(line, size(-1, 66));
+            registration.refresh();
+        }
         reconcileFields();
         refreshSummary();
     }
@@ -132,6 +145,7 @@ final class EntityAttributesView extends LinearLayout {
         List<EntityAttributeFields.Field> advertised = EntityAttributeFields.from(draft.snapshot(), attributes);
         fields.clear();
         Map<String, Integer> counts = new HashMap<>();
+        if (registration != null) counts.put("general", 1);
         if (biologicalTypes != null) counts.put("types", EntityTypeTraits.IDS.size());
         for (EntityAttributeFields.Field field : advertised) {
             fields.put(field.key(), field);
@@ -268,7 +282,10 @@ final class EntityAttributesView extends LinearLayout {
         return fields.keySet().stream().filter(inputs::containsKey).anyMatch(this::pending);
     }
     /** Prevent teardown blur from publishing unfinished input. */
-    void dispose() { disposed = true; updating = true; }
+    void dispose() {
+        disposed = true; updating = true;
+        if (registration != null) registration.dispose();
+    }
     private boolean commitFields(Collection<String> keys) {
         if (disposed) return false;
         Map<String, Object> parsed = new LinkedHashMap<>(); boolean valid = true;
@@ -312,6 +329,7 @@ final class EntityAttributesView extends LinearLayout {
     }
     void refreshInputState() {
         if (!disposed && biologicalTypes != null) biologicalTypes.refreshConfirmed();
+        if (registration != null) registration.refreshInputState();
     }
     /** Reconcile existing controls without replacing focused views or uncommitted text. */
     void refreshConfirmedValues() {

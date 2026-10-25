@@ -19,6 +19,7 @@ public final class UiTableStyle {
     public static final int CELL_TEXT_SIZE_DP = 12;
     public static final int RESULT_BAR_HEIGHT = 38;
     public static final int STATUS_BAR_HEIGHT = 28;
+    public static final int STATUS_TEXT_SIZE_DP = 11;
     public static final int CHECKBOX_SIZE = 16;
     public static final int SELECTION_COLUMN_WIDTH = 32;
     public static final int ROW_HEIGHT = 44;
@@ -57,6 +58,18 @@ public final class UiTableStyle {
     }
 
     private UiTableStyle() {}
+
+    /** Table footer shared by query results and catalog pages. Height is STATUS_BAR_HEIGHT. */
+    public static UiDisplayText statusBar(Context context, String text, UiTheme theme) {
+        UiDisplayText status = new UiDisplayText(context, text, STATUS_TEXT_SIZE_DP, theme.text().muted());
+        status.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        status.setPadding(UIUtils.dp2pxInt(14), 0, UIUtils.dp2pxInt(14), 0);
+        status.setSingleLine(true);
+        status.setEllipsize(TextUtils.TruncateAt.END);
+        ShapeDrawable background = new ShapeDrawable(); background.setColor(theme.surface().panel());
+        status.setBackground(background);
+        return status;
+    }
 
     public static UiTableColumns.Column column(String id, float preferredDp) {
         return new UiTableColumns.Column(id, preferredDp, MIN_COLUMN_WIDTH, true);

@@ -5,7 +5,8 @@ import java.util.*;
 /**
  * Truncated describes incomplete object collection only. Incomplete type/dimension catalogs instead use
  * metadata:partial coverage and partial_metadata (or partial_results when objects are also incomplete).
- * Coverage never claims unloaded native entities were searched. Null counts mean no statistics update
+ * Coverage distinguishes loaded entities and actively registered snapshots; it never claims all unloaded
+ * entities were searched. Null counts mean no statistics update
  * (for example an error response); empty counts are an authoritative zero for the queried scope.
  */
 public record WorldObjectPage(long requestId, List<WorldObjectEntry> entries, boolean truncated,

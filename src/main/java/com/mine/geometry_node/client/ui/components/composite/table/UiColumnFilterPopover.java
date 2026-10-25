@@ -114,6 +114,27 @@ public final class UiColumnFilterPopover {
         showChoices(anchor, title, options, selected, null, false, (choice, scope) -> apply.accept(choice));
     }
 
+    /** Small fixed sets need only checkboxes; each toggle commits without search or action rows. */
+    public void showToggleChoices(View anchor, Map<String, String> options,
+                                  ColumnFilters.Choice selected, Consumer<ColumnFilters.Choice> apply) {
+        dismiss();
+        LinearLayout content = column();
+        LinkedHashMap<String, String> labels = new LinkedHashMap<>(options);
+        LinkedHashSet<String> draft = new LinkedHashSet<>();
+        labels.keySet().stream().filter(selected::matches).forEach(draft::add);
+        long token = generation;
+        labels.forEach((id, text) -> {
+            UiCheckBox check = checkRow(content, text, draft.contains(id));
+            check.setOnCheckedChangeListener((view, checked) -> {
+                if (token != generation || popup == null || !popup.isOpen()) return;
+                if (checked) draft.add(id); else draft.remove(id);
+                apply.accept(draft.equals(labels.keySet()) ? ColumnFilters.Choice.all()
+                        : new ColumnFilters.Choice(true, draft));
+            });
+        });
+        show(anchor, content);
+    }
+
     /** Optional independent scope toggle, e.g. loaded chunks; it is committed with the choices. */
     public void showChoices(View anchor, String title, Map<String, String> options,
                             ColumnFilters.Choice selected, String scopeLabel, boolean scope,

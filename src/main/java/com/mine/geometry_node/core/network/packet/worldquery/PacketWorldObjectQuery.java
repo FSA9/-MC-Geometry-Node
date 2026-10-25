@@ -11,7 +11,11 @@ public record PacketWorldObjectQuery(long sessionId, long requestId, WorldObject
     public static final Type<PacketWorldObjectQuery> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "world_object_query"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketWorldObjectQuery> STREAM_CODEC = StreamCodec.of(
             (b, p) -> { b.writeLong(p.sessionId); b.writeLong(p.requestId); WorldObjectPacketCodecs.query(b, p.query); },
-            b -> new PacketWorldObjectQuery(b.readLong(), b.readLong(), WorldObjectPacketCodecs.query(b)));
+            b -> {
+                if (b.readableBytes() > WorldObjectQuery.MAX_REQUEST_BYTES)
+                    throw new IllegalArgumentException("World query request too large");
+                return new PacketWorldObjectQuery(b.readLong(), b.readLong(), WorldObjectPacketCodecs.query(b));
+            });
     /** Legacy callers represent independent requests, not a shared window session. */
     public PacketWorldObjectQuery(long requestId, WorldObjectQuery query) { this(requestId, requestId, query); }
     public PacketWorldObjectQuery { Objects.requireNonNull(query); }

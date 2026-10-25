@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.entity;
 import com.mine.geometry_node.client.faction.ClientFactionRepository;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
-import com.mine.geometry_node.client.ui.components.composite.navigation.UiSubTabs;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.integration.faction.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
@@ -27,7 +27,6 @@ final class EntityFactionsView extends LinearLayout {
     private final BooleanSupplier editable, catalogLoaded;
     private final Supplier<FactionCatalog> catalog;
     private final Runnable changed;
-    private final UiSubTabs tabs;
     private final UiActionButton membershipTab, relationsTab;
     private final UiDisplayText status;
     private final FactionMembershipsView memberships;
@@ -44,14 +43,24 @@ final class EntityFactionsView extends LinearLayout {
     EntityFactionsView(Context context, UiTheme theme, EntityEditDraft draft, BooleanSupplier editable, Runnable changed,
                        Supplier<FactionCatalog> catalog, BooleanSupplier catalogLoaded) {
         super(context); this.theme = theme; this.draft = draft; this.editable = editable; this.changed = changed;
-        this.catalog = catalog; this.catalogLoaded = catalogLoaded; setOrientation(VERTICAL); setPadding(px(18), px(8), px(18), px(18));
+        this.catalog = catalog; this.catalogLoaded = catalogLoaded; setOrientation(HORIZONTAL);
         setBackground(fill(theme.surface().panel()));
-        tabs = new UiSubTabs(context, theme);
-        membershipTab = tabs.addTab("membership", FactionUi.tr("membership"), () -> selectPage("membership"));
-        relationsTab = tabs.addTab("relations", FactionUi.tr("relations"), () -> selectPage("relations"));
-        addView(tabs, size(-1, UiSubTabs.HEIGHT));
-        status = text(context, "", theme.text().muted()); status.setSingleLine(true); status.setEllipsize(TextUtils.TruncateAt.END); addView(status, size(-1, 30));
-        FrameLayout pages = new FrameLayout(context); addView(pages, new LayoutParams(-1, 0, 1));
+        UiScrollView navigationScroll = new UiScrollView(context, theme.scroll());
+        navigationScroll.setFillViewport(true);
+        LinearLayout navigation = column(context); navigation.setPadding(px(20), px(18), px(20), px(20));
+        membershipTab = categoryButton(context, theme, FactionUi.tr("membership"), () -> selectPage("membership"));
+        relationsTab = categoryButton(context, theme, FactionUi.tr("relations"), () -> selectPage("relations"));
+        for (UiActionButton button : List.of(membershipTab, relationsTab)) {
+            LayoutParams params = size(-1, 38); params.bottomMargin = px(3);
+            navigation.addView(button, params);
+        }
+        navigationScroll.addView(navigation, new FrameLayout.LayoutParams(-1, -2));
+        addView(navigationScroll, size(248, -1));
+        addView(divider(context, theme), size(1, -1));
+        LinearLayout content = column(context); content.setPadding(px(24), px(22), px(24), px(24));
+        addView(content, new LayoutParams(0, -1, 1));
+        status = text(context, "", theme.text().muted()); status.setSingleLine(true); status.setEllipsize(TextUtils.TruncateAt.END); content.addView(status, size(-1, 30));
+        FrameLayout pages = new FrameLayout(context); content.addView(pages, new LayoutParams(-1, 0, 1));
         memberships = new FactionMembershipsView(context, theme, catalog, () -> profile().memberships(), catalogLoaded, this::setJoined, this::setRank);
         memberships.setEditable(() -> !disposed && editable.getAsBoolean());
         relations = new FactionRelationsView(context, theme, catalog, () -> profile().relations(), this::setRelation); relations.setEditable(this::canEditCatalog);
@@ -70,7 +79,8 @@ final class EntityFactionsView extends LinearLayout {
         if (disposed) return;
         suspend(); selectedPage = page; boolean membership = page.equals("membership");
         memberships.setVisibility(membership ? VISIBLE : GONE); relations.setVisibility(membership ? GONE : VISIBLE);
-        tabs.setSelectedTab(page);
+        membershipTab.setPalette(UiActionButton.Palette.row(theme, membership, theme.surface().panel()));
+        relationsTab.setPalette(UiActionButton.Palette.row(theme, !membership, theme.surface().panel()));
     }
     private void setJoined(UUID id, boolean joined) {
         EntityFactionProfile current = profile();

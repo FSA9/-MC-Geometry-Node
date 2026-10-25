@@ -11,8 +11,9 @@ import java.util.function.LongSupplier;
 public final class WorldObjectDataEdits {
     public static final String TARGET_REFERENCE = "dataEditTarget";
     public static final String COUNT_REFERENCE = "data_count", SUMMARY_REFERENCE = "data_summary";
+    public static final String READ_ONLY_REFERENCE = "dataReadOnly";
     public static final String PREFIX = "database.data_update_";
-    private record Lease(String key, DataAccess data, long touched) {}
+    private record Lease(String key, DataAccess data, long touched, boolean editable) {}
     public record Result(Map<String, Object> values, String revision, String message) {
         public static Result error(String reason) { return new Result(Map.of(), "", PREFIX + reason); }
     }
@@ -24,12 +25,18 @@ public final class WorldObjectDataEdits {
     public WorldObjectDataEdits(HolderLookup.Provider registries) { this(registries, System::nanoTime); }
     WorldObjectDataEdits(HolderLookup.Provider registries, LongSupplier clock) { this.registries = registries; this.clock = clock; }
     public WorldObjectEntry advertise(WorldObjectEntry entry, MetadataCapabilities.Access access) {
+        return advertise(entry, access, true);
+    }
+    public WorldObjectEntry advertise(WorldObjectEntry entry, MetadataCapabilities.Access access, boolean editable) {
         if (access == null || !access.supports(MetadataCapabilities.Capability.DATA)
-                || entry.references().size() > WorldObjectEntry.MAX_REFERENCES - 3) return entry;
+                || entry.references().size() > WorldObjectEntry.MAX_REFERENCES - (editable ? 3 : 4)) return entry;
         DataAccess data = access.requireData();
         Map<String, Object> values = null;
         long now = clock.getAsLong(); String token = tokensByKey.get(entry.key());
         Lease previous = leases.get(token);
+        if (previous != null && previous.editable() != editable) {
+            leases.remove(token); tokensByKey.remove(entry.key()); previous = null; token = null;
+        }
         if (previous != null) {
             try { values = previous.data().values(); data = previous.data(); }
             catch (IllegalStateException | UnsupportedOperationException stale) {
@@ -51,12 +58,13 @@ public final class WorldObjectDataEdits {
         while (leases.size() >= WorldObjectTagEdits.MAX_LEASES) {
             String oldest = leases.keySet().iterator().next(); tokensByKey.remove(leases.remove(oldest).key(), oldest);
         }
-        leases.put(token, new Lease(entry.key(), data, now)); tokensByKey.put(entry.key(), token);
+        leases.put(token, new Lease(entry.key(), data, now, editable)); tokensByKey.put(entry.key(), token);
         Map<String, String> refs = new LinkedHashMap<>(entry.references());
         refs.put(TARGET_REFERENCE, token); refs.put(COUNT_REFERENCE, Integer.toString(values.size()));
         refs.put(SUMMARY_REFERENCE, WorldObjectDataValues.summary(values));
+        if (!editable) refs.put(READ_ONLY_REFERENCE, "true"); else refs.remove(READ_ONLY_REFERENCE);
         return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
-                entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(), entry.sceneObjectId(), entry.entityId(), refs, entry.graphs());
+                entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(), entry.sceneObjectId(), entry.entityId(), refs, entry.graphs(), entry.entityState());
     }
     public Result read(boolean permitted, String token, String key) {
         if (!permitted) return Result.error("forbidden");
@@ -75,6 +83,7 @@ public final class WorldObjectDataEdits {
         if (!permitted) return Result.error("forbidden");
         Lease lease = current(token, key);
         if (lease == null) return Result.error("unavailable");
+        if (!lease.editable()) return Result.error("forbidden");
         long now = clock.getAsLong();
         if (lastEdit != Long.MIN_VALUE && now - lastEdit < 100_000_000L) return Result.error("failed");
         lastEdit = now;
@@ -100,7 +109,7 @@ public final class WorldObjectDataEdits {
         return lease != null && lease.key().equals(key) && clock.getAsLong() - lease.touched() < WorldObjectTagEdits.LEASE_NANOS ? lease : null;
     }
     private void renew(String token, Lease lease) {
-        leases.remove(token); leases.put(token, new Lease(lease.key(), lease.data(), clock.getAsLong()));
+        leases.remove(token); leases.put(token, new Lease(lease.key(), lease.data(), clock.getAsLong(), lease.editable()));
     }
     private static final class Conflict extends RuntimeException {}
 }

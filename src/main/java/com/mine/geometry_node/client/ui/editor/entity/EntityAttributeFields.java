@@ -9,7 +9,7 @@ import java.util.Set;
 
 /** Client presentation metadata, advertised by the server; never discovers or changes capabilities. */
 final class EntityAttributeFields {
-    static final List<String> CATEGORIES = List.of("life", "defense", "attack", "movement", "survival", "appearance", "behavior");
+    static final List<String> CATEGORIES = List.of("general", "life", "defense", "attack", "movement", "survival", "appearance", "behavior");
     private static final String LABEL_PREFIX = "geometry_node.entity_editor.attributes.";
 
     private EntityAttributeFields() {}

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.network.packet.worldquery;
 
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityState;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
@@ -10,6 +12,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.phys.*;
 import java.util.*;
 import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
 
 final class WorldObjectPacketCodecs {
     private WorldObjectPacketCodecs() {}
@@ -37,6 +40,11 @@ final class WorldObjectPacketCodecs {
         b.writeUtf(q.registryType(), WorldObjectQuery.MAX_FILTER_TEXT);
         b.writeUtf(q.graphFilter().type(), WorldObjectQuery.MAX_FILTER_TEXT);
         b.writeUtf(q.graphFilter().name(), WorldObjectQuery.MAX_FILTER_TEXT);
+        b.writeVarInt(q.entityFilter().scope().ordinal());
+        b.writeVarInt(q.entityFilter().load().ordinal());
+        b.writeVarInt(q.entityFilter().registration().ordinal());
+        b.writeBoolean(q.entityFilter().faction() != null);
+        if (q.entityFilter().faction() != null) b.writeUUID(q.entityFilter().faction());
     }
     static WorldObjectQuery query(RegistryFriendlyByteBuf b) {
         DecodeBudget budget = new DecodeBudget();
@@ -53,8 +61,13 @@ final class WorldObjectPacketCodecs {
         var graphFilter = new WorldObjectGraphFilter(
                 budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.GRAPH),
                 budget.text(b, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.GRAPH));
+        var entityFilter = new WorldObjectEntityFilter(
+                WorldObjectEntityFilter.Scope.values()[count(b, WorldObjectEntityFilter.Scope.values().length - 1)],
+                WorldObjectEntityFilter.Load.values()[count(b, WorldObjectEntityFilter.Load.values().length - 1)],
+                WorldObjectEntityFilter.Registration.values()[count(b, WorldObjectEntityFilter.Registration.values().length - 1)],
+                b.readBoolean() ? b.readUUID() : null);
         return new WorldObjectQuery(WorldObjectQuery.Range.values()[range], dimension, providers, types, name,
-                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType, graphFilter);
+                tags, sources, lifetimes, radius, limit, columns, searchFallbackTypes, columnNameFallbackTypes, registryType, graphFilter, entityFilter);
     }
     private static Set<String> filters(RegistryFriendlyByteBuf b, DecodeBudget budget) {
         return budget.set(b, WorldObjectQuery.MAX_FILTERS, WorldObjectQuery.MAX_FILTER_TEXT, TextScope.LEGACY);
@@ -137,6 +150,14 @@ final class WorldObjectPacketCodecs {
             b.writeUtf(graph.type(), WorldObjectEntry.MAX_TEXT);
             b.writeUtf(graph.name(), WorldObjectEntry.MAX_TEXT);
         }
+        var state = e.entityState();
+        b.writeBoolean(state != null);
+        if (state != null) {
+            b.writeUUID(state.entityUuid()); b.writeBoolean(state.loaded()); b.writeBoolean(state.registered());
+            b.writeBoolean(state.alive()); b.writeLong(state.capturedAtMillis()); b.writeLong(state.revision());
+            b.writeVarInt(state.factions().size());
+            state.factions().stream().sorted().forEach(b::writeUUID);
+        }
     }
     static WorldObjectEntry entry(RegistryFriendlyByteBuf b) {
         return entry(b, WorldObjectPage.MAX_ENTRY_BYTES);
@@ -161,7 +182,19 @@ final class WorldObjectPacketCodecs {
         List<WorldObjectGraph> graphs = new ArrayList<>(graphCount);
         for (int i = 0; i < graphCount; i++)
             graphs.add(new WorldObjectGraph(budget.text(b), budget.text(b), budget.text(b)));
-        return new WorldObjectEntry(key, provider, type, name, dimension, pos, bounds, tags, source, lifetime, scene, entity, refs, graphs);
+        WorldObjectEntityState state = null;
+        if (b.readBoolean()) {
+            UUID uuid = b.readUUID(); boolean loaded = b.readBoolean(), registered = b.readBoolean(), alive = b.readBoolean();
+            long captured = b.readLong(), revision = b.readLong();
+            int n = count(b, FactionRules.MAX_ENTITY_REFERENCES);
+            if (53 + 16 * n > budget.remaining || 16 * n > b.readableBytes())
+                throw new IllegalArgumentException("World query entity faction byte limit exceeded");
+            Set<UUID> factions = new LinkedHashSet<>();
+            for (int i = 0; i < n; i++) if (!factions.add(b.readUUID()))
+                throw new IllegalArgumentException("Duplicate entity faction membership");
+            state = new WorldObjectEntityState(uuid, loaded, registered, alive, captured, revision, factions);
+        }
+        return new WorldObjectEntry(key, provider, type, name, dimension, pos, bounds, tags, source, lifetime, scene, entity, refs, graphs, state);
     }
     /** Apply the remaining page budget before allocating each graph text body. */
     private static final class GraphMetadataBudget {

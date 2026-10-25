@@ -198,6 +198,7 @@ public class GeometryNode {
         // 初始化图运行时注册表
         com.mine.geometry_node.core.engine.resource.residency.ResourceResidency.init();
         ServerEngineDriver.init();
+        ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GeometryCollisionService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.graph.light.GraphLightService.INSTANCE);

@@ -41,6 +41,19 @@ final class EntityEditorViews {
         UIUtils.setLockedTextSize(v, UiMetrics.TEXT_BODY);
         v.setOnClickListener(ignored -> action.run()); return v;
     }
+    static UiActionButton categoryButton(Context context, UiTheme theme, String label, Runnable action) {
+        UiActionButton button = new UiActionButton(context, theme, label, UiActionButton.Role.QUIET,
+                UiActionButton.Density.NORMAL, UiActionButton.Style.forTheme(theme));
+        UIUtils.setLockedTextSize(button, UiMetrics.TEXT_BODY);
+        button.setOnClickListener(ignored -> action.run());
+        button.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        button.setPadding(px(10), 0, px(10), 0);
+        button.setMinHeight(0); button.setMinimumHeight(0); button.setMinWidth(0); button.setMinimumWidth(0);
+        button.setSingleLine(true);
+        button.setStyle(new UiActionButton.Style(0, 0, theme.border().subtle(),
+                UiMetrics.DISABLED_ALPHA, theme.border().focus()));
+        return button;
+    }
     static UiTextInput input(Context c, UiTheme theme) {
         UiTextInput v = new UiTextInput(c, UiTextInput.Style.forTheme(theme, UiMetrics.TEXT_BODY)); v.setSingleLine(true); return v;
     }

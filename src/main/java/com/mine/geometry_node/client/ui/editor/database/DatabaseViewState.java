@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.ui.editor.database;
 
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import java.util.Map;
 
 /** Presentation preferences only: never query results, selections or business objects. */
@@ -9,6 +10,15 @@ public final class DatabaseViewState {
     private DatabaseViewState() {}
     public static final String GLOBAL = "global";
     public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> WORLD_COLUMN_FILTERS = columnFilters("database:world.column_filters");
+    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> ENTITY_COLUMN_FILTERS = columnFilters("globaldata:entities.column_filters");
+    public static final UiStateKey<WorldObjectGraphFilter> ENTITY_GRAPH_FILTER = new UiStateKey<>(
+            "globaldata:entities.graph_filter", 1, UiStateLifetime.MEMORY, WorldObjectGraphFilter.class,
+            WorldObjectGraphFilter::empty, value -> value);
+    public static final UiStateKey<WorldObjectEntityFilter> ENTITY_FILTER = new UiStateKey<>(
+            "globaldata:entities.entity_filter", 1, UiStateLifetime.MEMORY, WorldObjectEntityFilter.class,
+            () -> new WorldObjectEntityFilter(WorldObjectEntityFilter.Scope.ENTITIES,
+                    WorldObjectEntityFilter.Load.ANY, WorldObjectEntityFilter.Registration.ANY),
+            value -> new WorldObjectEntityFilter(WorldObjectEntityFilter.Scope.ENTITIES, value.load(), value.registration()));
     public static final UiStateKey<WorldObjectGraphFilter> WORLD_GRAPH_FILTER = new UiStateKey<>(
             "database:world.graph_filter", 1, UiStateLifetime.MEMORY, WorldObjectGraphFilter.class,
             WorldObjectGraphFilter::empty, value -> value);
@@ -28,7 +38,7 @@ public final class DatabaseViewState {
             extraProvider = text(extraProvider); sort = text(sort);
             registryType = text(registryType);
             if (!java.util.Set.of("GLOBAL", "LOADED").contains(range)) range = "GLOBAL";
-            if (!java.util.Set.of("name", "type", "registry_type", "dimension", "position", "lifetime", "tags", "graphs").contains(sort)) sort = "name";
+            if (!java.util.Set.of("name", "type", "registry_type", "dimension", "position", "lifetime", "tags", "graphs", "registered", "loaded", "updated").contains(sort)) sort = "name";
         }
         public World(String tags, String source, String range, String dimension,
                      String provider, String type, String typeProvider, String lifetime,
@@ -57,6 +67,10 @@ public final class DatabaseViewState {
     }
     public static final UiStateKey<Split> WORLD_SPLIT = split("database:world.navigation");
     public static final UiStateKey<Split> LIBRARY_SPLIT = split("database:library.navigation");
+    public static final UiStateKey<Sidebar> ENTITY_SIDEBAR = new UiStateKey<>("globaldata:entities.sidebar", 1,
+            UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, false), value -> value);
+    public static final UiStateKey<Sidebar> FACTION_MEMBERS_SIDEBAR = new UiStateKey<>("globaldata:factions.members.sidebar", 1,
+            UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, false), value -> value);
     public static final UiStateKey<Split> LIBRARY_TREE_SPLIT = new UiStateKey<>("database:library.tree", 1,
             UiStateLifetime.PERSISTENT, Split.class, () -> new Split(360), value -> value);
     public static final UiStateKey<Sidebar> SIDEBAR = new UiStateKey<>("database:sidebar", 1,
@@ -90,6 +104,15 @@ public final class DatabaseViewState {
     public static final UiStateKey<Library> LIBRARY = new UiStateKey<>("database:library.filters", 1,
             UiStateLifetime.MEMORY, Library.class,
             () -> new Library("", "", false, "", ""), value -> value);
+    public static final UiStateKey<World> ENTITIES = new UiStateKey<>("globaldata:entities.filters", 1,
+            UiStateLifetime.MEMORY, World.class,
+            () -> new World("", "", "GLOBAL", "", "", "", "", "", "", "", "registry_type", true), value -> value);
+    public record EntitySelection(java.util.Set<String> keys) {
+        public EntitySelection { keys = keys == null ? java.util.Set.of() : java.util.Set.copyOf(keys); }
+    }
+    public static final UiStateKey<EntitySelection> ENTITY_SELECTION = new UiStateKey<>("globaldata:entities.selection", 1,
+            UiStateLifetime.MEMORY, EntitySelection.class, () -> new EntitySelection(java.util.Set.of()), value -> value);
+    public static final UiStateKey<Widths> ENTITY_WIDTHS = widths("globaldata:entities.columns");
     public static final UiStateKey<Widths> WORLD_WIDTHS = widths("database:world.columns");
     public static final UiStateKey<Widths> LIBRARY_WIDTHS = widths("database:library.columns");
     private static UiStateKey<Widths> widths(String id) {

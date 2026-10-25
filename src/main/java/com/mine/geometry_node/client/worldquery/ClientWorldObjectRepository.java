@@ -35,8 +35,12 @@ public final class ClientWorldObjectRepository {
         public boolean truncated() { return page.truncated(); }
     }
     public record DataSnapshot(Map<String, Object> values, boolean loading, boolean available,
-                               boolean editable, boolean pending, String message) {
+                               boolean editable, boolean pending, String message, boolean fetched) {
         public DataSnapshot { values = WorldObjectDataValues.snapshot(values); }
+        public DataSnapshot(Map<String, Object> values, boolean loading, boolean available,
+                            boolean editable, boolean pending, String message) {
+            this(values, loading, available, editable, pending, message, editable);
+        }
     }
     private static final class DataSlot {
         final String key, token;
@@ -341,7 +345,9 @@ public final class ClientWorldObjectRepository {
                 if (slot == null || !Objects.equals(slot.token, entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE)))
                     return new DataSnapshot(Map.of(), false, available, false, false, "");
                 return new DataSnapshot(slot.values, slot.loading, available, available && !slot.revision.isEmpty()
-                        && !slot.message.endsWith("forbidden") && !slot.message.endsWith("unavailable"), slot.pending, slot.message);
+                        && !entry.references().containsKey(WorldObjectDataEdits.READ_ONLY_REFERENCE)
+                        && !slot.message.endsWith("forbidden") && !slot.message.endsWith("unavailable"),
+                        slot.pending, slot.message, !slot.revision.isEmpty());
             }
         }
         private boolean dataTarget(WorldObjectEntry entry) {
@@ -378,6 +384,7 @@ public final class ClientWorldObjectRepository {
                 DataSlot slot = dataSlots.get(entry.key());
                 if (slot != null && !slot.token.equals(token)) { dataSlots.remove(entry.key()); slot = null; }
                 boolean edit = replacement != null;
+                if (edit && entry.references().containsKey(WorldObjectDataEdits.READ_ONLY_REFERENCE)) return false;
                 if (!edit && slot != null && (slot.loading || slot.pending || !reload && !slot.revision.isEmpty())) return true;
                 if (edit && (slot == null || slot.loading || slot.pending || slot.revision.isEmpty()
                         || !WorldObjectDataValues.equivalent(slot.values, expected))) return false;
@@ -432,7 +439,7 @@ public final class ClientWorldObjectRepository {
                 refs.put(WorldObjectDataEdits.SUMMARY_REFERENCE, WorldObjectDataValues.summary(slot.values));
                 if (refs.equals(row.references())) return row;
                 return new WorldObjectEntry(row.key(), row.provider(), row.type(), row.name(), row.dimension(), row.position(), row.bounds(),
-                        row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs, row.graphs());
+                        row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs, row.graphs(), row.entityState());
             }).toList();
             if (rows.equals(page.entries())) return;
             try {

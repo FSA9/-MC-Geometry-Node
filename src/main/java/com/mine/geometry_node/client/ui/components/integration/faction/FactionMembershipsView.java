@@ -3,9 +3,8 @@ package com.mine.geometry_node.client.ui.components.integration.faction;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
-import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -18,7 +17,6 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-import icyllis.modernui.widget.TextView;
 
 import java.util.*;
 import java.util.function.*;
@@ -50,7 +48,7 @@ public final class FactionMembershipsView extends LinearLayout {
     private ColumnFilters.NumberRange rankFilter = ColumnFilters.NumberRange.unbounded();
     private String query = "", sort = "name";
     private int direction;
-    private UiPopover rankMenu;
+    private UiContextMenu rankMenu;
     private long menuGeneration;
     private FactionCatalog displayedCatalog;
     private boolean disposed;
@@ -170,20 +168,17 @@ public final class FactionMembershipsView extends LinearLayout {
         FactionDefinition definition = catalog.get().find(id).orElseThrow();
         if (definition.ranks().isEmpty()) return;
         FrameLayout host = menuHost(); if (host == null) return;
-        LinearLayout content = new LinearLayout(getContext()); content.setOrientation(VERTICAL);
         long generation = menuGeneration;
-        UiPopover menu = new UiPopover(getContext(), content, 300, 360, theme); rankMenu = menu;
+        UiContextMenu menu = new UiContextMenu(getContext(), theme); rankMenu = menu;
         new TreeMap<>(definition.ranks()).forEach((level, name) -> {
-            TextView option = UiMenuItems.row(getContext(), "", Objects.equals(memberships.get().get(id), level), true, () -> {
+            var label = new icyllis.modernui.text.SpannableStringBuilder();
+            label.append(level + " · ").append(FactionTextViews.display(name));
+            menu.addChoiceItem(label, Objects.equals(memberships.get().get(id), level), () -> {
                 if (disposed || generation != menuGeneration || rankMenu != menu || !menu.isOpen()
                         || !canEdit() || !exists(id) || !memberships.get().containsKey(id)
                         || catalog.get().find(id).filter(f -> f.ranks().containsKey(level)).isEmpty()) return;
                 dismissRankMenu(); rank.accept(id, level);
-            }, theme);
-            var label = new icyllis.modernui.text.SpannableStringBuilder();
-            label.append(level + " · ").append(FactionTextViews.display(name)); option.setText(label);
-            UIUtils.setLockedTextSize(option, UiMetrics.TEXT_BODY);
-            content.addView(option, new LayoutParams(-1, px(32)));
+            });
         });
         menu.showBelow(rows.get(id).rank(), host);
     }
@@ -210,7 +205,7 @@ public final class FactionMembershipsView extends LinearLayout {
     private void filterName() { suspend(); filters.showText(nameHeader.filterButton(), tr("faction"), query, value -> { query = value; refresh(); }); }
     private void filterMember() {
         suspend(); LinkedHashMap<String, String> choices = new LinkedHashMap<>(); choices.put("true", tr("joined")); choices.put("false", tr("not_joined"));
-        filters.showChoices(memberHeader.filterButton(), tr("membership_state"), choices, memberFilter, value -> { memberFilter = value; refresh(); });
+        filters.showToggleChoices(memberHeader.filterButton(), choices, memberFilter, value -> { memberFilter = value; refresh(); });
     }
     private void filterRank() {
         suspend(); filters.showNumber(rankHeader.filterButton(), tr("level"), rankFilter, value -> {
@@ -219,7 +214,7 @@ public final class FactionMembershipsView extends LinearLayout {
         });
     }
     private static boolean validBound(Double value) { return value == null || Double.isFinite(value) && value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE && value == Math.rint(value); }
-    private void dismissRankMenu() { menuGeneration++; UiPopover previous = rankMenu; rankMenu = null; if (previous != null) previous.dismiss(); }
+    private void dismissRankMenu() { menuGeneration++; UiContextMenu previous = rankMenu; rankMenu = null; if (previous != null) previous.dismiss(); }
     public void suspend() { dismissRankMenu(); filters.dismiss(); }
     public void dispose() { if (disposed) return; disposed = true; suspend(); rows.clear(); }
     @Override protected void onDetachedFromWindow() { suspend(); super.onDetachedFromWindow(); }

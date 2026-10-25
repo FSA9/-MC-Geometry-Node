@@ -155,7 +155,7 @@ public final class ServerWorldObjectQueries {
             allLevels.put(dim, level);
         }
         List<ServerLevel> levels = allLevels.entrySet().stream().filter(e -> acceptsDimension.test(e.getKey())).map(Map.Entry::getValue).toList();
-        var context = new WorldObjectProvider.Context(server, levels, acceptsDimension);
+        var context = new WorldObjectProvider.Context(server, levels, acceptsDimension, query.entityFilter());
         Vec3 camera = EditCameraChunkService.position(player);
         Vec3 origin = camera != null && player.isAlive() ? camera : player.position();
         List<String> coverage = new ArrayList<>();
@@ -165,6 +165,7 @@ public final class ServerWorldObjectQueries {
         metadataTruncated |= catalog.partial();
         coverage.addAll(catalog.failures());
         WorldObjectResultCollector collector = new WorldObjectResultCollector(query, entry -> {
+            if (!query.entityFilter().matchesScope(entry)) return false;
             if (!acceptsDimension.test(entry.dimension())) return false;
             if (query.range() == WorldObjectQuery.Range.NEARBY && !query.withinRadius(entry, origin)) return false;
             if (query.range() == WorldObjectQuery.Range.LOADED) {
@@ -181,7 +182,7 @@ public final class ServerWorldObjectQueries {
                 WorldObjectEntry advertised = TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
                 try {
                     return DATA_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectDataEdits(server.registryAccess()))
-                            .advertise(advertised, access);
+                            .advertise(advertised, access, entry.entityState() == null || entry.entityState().loaded());
                 } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException unavailable) {
                     // A DATA codec/owner failure must not discard otherwise valid query rows or TAG support.
                     return advertised;
@@ -194,6 +195,8 @@ public final class ServerWorldObjectQueries {
             collector.countsPartial = collector.truncated = true; coverage.add("levels:partial");
         }
         for (WorldObjectProvider provider : providers) {
+            if (query.entityFilter().scope() == com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter.Scope.ENTITIES
+                    && !provider.id().equals("native")) continue;
             if (collector.stopped) { coverage.add(provider.id() + ":not_scanned"); continue; }
             collector.provider = provider.id(); collector.ownerProvider = provider;
             try {

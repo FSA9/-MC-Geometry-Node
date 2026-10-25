@@ -71,7 +71,7 @@ public final class WorldObjectEntries {
     public static WorldObjectEntry withTags(WorldObjectEntry entry, List<String> tags) {
         return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
                 entry.position(), entry.bounds(), tags, entry.source(), entry.lifetime(), entry.sceneObjectId(),
-                entry.entityId(), entry.references(), entry.graphs());
+                entry.entityId(), entry.references(), entry.graphs(), entry.entityState());
     }
 
     /** AABB enclosing a rotated local box, with the same Y-X-Z convention used by areas. */

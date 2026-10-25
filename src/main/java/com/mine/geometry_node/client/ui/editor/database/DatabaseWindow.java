@@ -31,7 +31,7 @@ import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*;
 
 /** Database pages share one Area, while global data owns its own navigation and details. */
-public final class DatabaseWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware {
+public final class DatabaseWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware, DatabaseSelectionSource {
     private final DataLibraryRepository repository;
     private final DataLibraryWindow library;
     private final WorldObjectsView world;

@@ -7,6 +7,7 @@ import com.mine.geometry_node.client.ui.components.composite.navigation.UiSubTab
 import com.mine.geometry_node.client.ui.components.integration.faction.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
+import com.mine.geometry_node.client.ui.workspace.state.UiStateScopes;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionDefinition;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
@@ -32,6 +33,11 @@ final class FactionEditorView extends LinearLayout {
     private final UiDisplayText heading;
     private final FactionRelationsView relations;
     private final FactionRanksView ranks;
+    private final UiStateContext state;
+    private final String scope;
+    private final FrameLayout membersHost;
+    private EntityCatalogView members;
+    private boolean membersShown, disposed;
     private final Set<String> initializedSections = new HashSet<>();
     private String section = "info";
     private boolean active;
@@ -40,6 +46,7 @@ final class FactionEditorView extends LinearLayout {
                       UiStateContext state, String scope, BooleanSupplier editable,
                       Consumer<Supplier<CompletableFuture<Void>>> submit, Consumer<String> changedTab) {
         super(context); this.id = id; this.theme = theme; this.repository = repository;
+        this.state = state; this.scope = scope;
         this.editable = editable; this.submit = submit; this.changedTab = changedTab; setOrientation(VERTICAL);
         setBackground(fill(theme.surface().sidebar()));
         LinearLayout identity = new LinearLayout(context); identity.setOrientation(VERTICAL); identity.setPadding(px(18), px(17), px(18), px(17));
@@ -48,7 +55,7 @@ final class FactionEditorView extends LinearLayout {
         addView(identity, new LayoutParams(-1, -2));
         addDivider();
         tabs = new UiSubTabs(context, theme);
-        for (String key : List.of("info", "relations", "ranks")) {
+        for (String key : List.of("info", "relations", "ranks", "members")) {
             tabs.addTab(key, tr(key), () -> { showSection(key); changedTab.accept(key); });
         }
         addView(tabs, new LayoutParams(-1, px(UiSubTabs.HEIGHT)));
@@ -82,6 +89,8 @@ final class FactionEditorView extends LinearLayout {
         });
         ranks.setPadding(px(18), px(18), px(18), px(18));
         pages.put("ranks", ranks);
+        membersHost = new FrameLayout(context);
+        pages.put("members", membersHost);
         pages.values().forEach(page -> host.addView(page, new FrameLayout.LayoutParams(-1, -1)));
         showSection("info");
     }
@@ -99,7 +108,10 @@ final class FactionEditorView extends LinearLayout {
         ranks.setActive(value && section.equals("ranks")); refresh();
     }
     void refresh() {
+        if (disposed) return;
         FactionDefinition faction = current(); if (faction == null) { deactivate(); return; }
+        syncMembers(active && section.equals("members") && repository.loaded()
+                && Objects.equals(scope, UiStateScopes.current()));
         heading.setText(FactionTextViews.display(faction.name())); name.refresh(faction.name()); description.refresh(faction.description());
         name.setEditable(canEdit() && section.equals("info")); description.setEditable(canEdit() && section.equals("info"));
         relations.setEditable(() -> canEdit() && section.equals("relations"));
@@ -112,8 +124,21 @@ final class FactionEditorView extends LinearLayout {
             initializedSections.add(section);
         }
     }
-    private void deactivate() { name.setEditable(false); description.setEditable(false); ranks.setActive(false); relations.setEditable(() -> false); relations.suspend(); }
-    void dispose() { active = false; deactivate(); relations.dispose(); }
+    private void syncMembers(boolean show) {
+        if (show && members == null) {
+            members = new EntityCatalogView(getContext(), state, id);
+            membersHost.addView(members, new FrameLayout.LayoutParams(-1, -1));
+        }
+        if (show == membersShown) return;
+        membersShown = show;
+        if (show) members.onShow(); else if (members != null) members.onHide();
+    }
+    private void deactivate() { syncMembers(false); name.setEditable(false); description.setEditable(false); ranks.setActive(false); relations.setEditable(() -> false); relations.suspend(); }
+    void dispose() {
+        if (disposed) return;
+        active = false; deactivate(); disposed = true; relations.dispose();
+        if (members != null) members.onDispose();
+    }
     private boolean canEdit() { return active && editable.getAsBoolean() && current() != null; }
     private FactionDefinition current() { return repository.snapshot().find(id).orElse(null); }
     private UiDisplayText label(String text) { return new UiDisplayText(getContext(), text, 13, theme.text().muted()); }

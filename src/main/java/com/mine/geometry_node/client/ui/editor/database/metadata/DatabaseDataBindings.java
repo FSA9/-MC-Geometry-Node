@@ -80,7 +80,7 @@ public final class DatabaseDataBindings {
                 var source = source();
                 if (source == null) return new State(Map.of(), false, false, false, false, "");
                 var state = source.dataSnapshot(expected);
-                boolean unread = state.available() && !state.editable() && !state.loading() && state.message().isEmpty();
+                boolean unread = state.available() && !state.fetched() && !state.loading() && state.message().isEmpty();
                 return new State(state.values(), state.loading() || unread, state.available(), state.editable(),
                         state.pending(), localized(state.message()));
             }

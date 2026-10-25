@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.editor.database.DatabaseSelection;
-import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
+import com.mine.geometry_node.client.ui.editor.database.DatabaseSelectionSource;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Set;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.px;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.tr;
@@ -29,10 +30,11 @@ import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.t
 public final class DatabaseDetailsPanel extends LinearLayout implements SidebarPanel {
     public static final String PANEL_ID = "database_details";
     public static final SidebarPanelDefinition DEFINITION = new SidebarPanelDefinition(
-            PANEL_ID, "geometry_node.database.details", 100, Set.of(SidebarPanelScope.DATA_LIBRARY),
-            context -> new DatabaseDetailsPanel(context.uiContext(), context.requireOwner(DatabaseWindow.class)),
+            PANEL_ID, "geometry_node.database.details", 100,
+            Set.of(SidebarPanelScope.DATA_LIBRARY, SidebarPanelScope.GLOBAL_ENTITIES),
+            context -> new DatabaseDetailsPanel(context.uiContext(), context.requireOwner(DatabaseSelectionSource.class)::selection),
             SvgIconView.Icon.PROPERTIES);
-    private final DatabaseWindow owner;
+    private final Supplier<DatabaseSelection> selection;
     private final LinearLayout content;
     private final LinearLayout tabs;
     private final UiActionButton propertiesTab, dataTab;
@@ -47,9 +49,9 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
     private View previewView;
     private List<View> sectionViews = List.of();
 
-    private DatabaseDetailsPanel(Context context, DatabaseWindow owner) {
+    public DatabaseDetailsPanel(Context context, Supplier<DatabaseSelection> selection) {
         super(context);
-        this.owner = owner;
+        this.selection = Objects.requireNonNull(selection);
         setOrientation(VERTICAL);
         tabs = new LinearLayout(context);
         propertiesTab = com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.button(context,
@@ -89,7 +91,7 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
     }
 
     public void refresh() {
-        DatabaseSelection selection = owner.selection();
+        DatabaseSelection selection = this.selection.get();
         boolean unchanged = initialized && (current == null ? selection == null : current.hasSamePresentation(selection));
         DatabaseSelection previous = current;
         current = selection;

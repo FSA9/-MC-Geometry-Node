@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.system.entitypreview.appearance;
 
 import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewLimits;
 import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewNbt;
+import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 
 import com.mine.geometry_node.mixin.entitypreview.EntityAppearanceInvoker;
 import com.mojang.datafixers.util.Pair;
@@ -29,6 +30,23 @@ import java.util.stream.*;
 /** Filters before invoking field codecs, never materializing the original saved entity NBT. */
 public final class EntityAppearanceCapture {
     private EntityAppearanceCapture() {}
+
+    /** Shared preview policy for both live replies and persistent directory observations. */
+    public static String unsupportedReason(Entity entity) {
+        if (entity instanceof net.minecraft.world.entity.player.Player) return "unsupported_player";
+        if (entity instanceof Interaction) return "no_appearance";
+        if (!entity.getType().canSerialize() || !entity.getType().canSummon()) return "unsupported_type";
+        var id = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        // Unknown mod serializers cannot safely be invoked using the vanilla appearance schema.
+        return id == null || !id.getNamespace().equals("minecraft")
+                || !entity.getClass().getName().startsWith("net.minecraft.world.entity.")
+                || id.getPath().equals("mannequin") ? "unsupported_type" : "";
+    }
+
+    public static EntityTemplateValue template(Entity entity) {
+        if (!unsupportedReason(entity).isEmpty()) return EntityTemplateValue.EMPTY;
+        return new EntityTemplateValue(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), capture(entity));
+    }
 
     public static CompoundTag capture(Entity entity) {
         var output = new AppearanceOutput(entity.registryAccess());

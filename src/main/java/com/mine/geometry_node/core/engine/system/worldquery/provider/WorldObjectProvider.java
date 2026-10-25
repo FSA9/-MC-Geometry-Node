@@ -19,8 +19,13 @@ public interface WorldObjectProvider {
     default com.mine.geometry_node.core.metadata.MetadataCapabilities.Access resolveMetadata(Context context, WorldObjectEntry entry) {
         return null;
     }
-    record Context(MinecraftServer server, List<ServerLevel> levels, Predicate<String> acceptsDimension) {
+    record Context(MinecraftServer server, List<ServerLevel> levels, Predicate<String> acceptsDimension,
+                   com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter entityFilter) {
         public Context { levels = List.copyOf(levels); }
+        public Context(MinecraftServer server, List<ServerLevel> levels, Predicate<String> acceptsDimension) {
+            this(server, levels, acceptsDimension,
+                    com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter.empty());
+        }
     }
     interface Sink {
         boolean scan();

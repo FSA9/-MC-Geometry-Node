@@ -10,11 +10,20 @@ import java.util.*;
 public record WorldObjectEntry(String key, String provider, String type, String name, String dimension,
                                Vec3 position, AABB bounds, List<String> tags, String source, String lifetime,
                                @Nullable UUID sceneObjectId, @Nullable Integer entityId,
-                               Map<String, String> references, List<WorldObjectGraph> graphs) {
+                               Map<String, String> references, List<WorldObjectGraph> graphs,
+                               @Nullable WorldObjectEntityState entityState) {
     public static final int MAX_TEXT = 8192;
     public static final int MAX_TAGS = 1024;
     public static final int MAX_REFERENCES = 16;
     public static final int MAX_GRAPHS = 256;
+    /** Compatibility constructor for providers without entity state. */
+    public WorldObjectEntry(String key, String provider, String type, String name, String dimension,
+                            Vec3 position, AABB bounds, List<String> tags, String source, String lifetime,
+                            @Nullable UUID sceneObjectId, @Nullable Integer entityId,
+                            Map<String, String> references, List<WorldObjectGraph> graphs) {
+        this(key, provider, type, name, dimension, position, bounds, tags, source, lifetime,
+                sceneObjectId, entityId, references, graphs, null);
+    }
     /** Compatibility constructor for providers without bound graph metadata. */
     public WorldObjectEntry(String key, String provider, String type, String name, String dimension,
                             Vec3 position, AABB bounds, List<String> tags, String source, String lifetime,
@@ -54,6 +63,7 @@ public record WorldObjectEntry(String key, String provider, String type, String 
         for (String value : tags) size += bytes(value);
         for (var entry : references.entrySet()) size += bytes(entry.getKey()) + bytes(entry.getValue());
         for (var graph : graphs) size += graph.estimatedBytes();
+        if (entityState != null) size += 53 + 16 * entityState.factions().size();
         return size;
     }
     private static int bytes(String value) { return 5 + value.getBytes(StandardCharsets.UTF_8).length; }

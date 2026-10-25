@@ -60,6 +60,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     private final UiTheme theme;
     private final EntityEditSession session;
     private final FactionsFactory factionsFactory;
+    private final Runnable registrationApplied;
     private final LinearLayout tabs;
     private final FrameLayout pages;
     private final View blocker;
@@ -85,8 +86,9 @@ public final class EntityEditorWindow extends ModalWindowView {
         Objects.requireNonNull(anchor); Objects.requireNonNull(entry); Objects.requireNonNull(applied);
         OverlayHost host = OverlayHost.find(anchor);
         if (host == null || !entry.provider().equals("native")) return;
+        if (entry.entityState() != null && (!entry.entityState().loaded() || !entry.entityState().alive())) return;
         UUID entity;
-        try { entity = UUID.fromString(entry.references().getOrDefault("entityUuid", "")); }
+        try { entity = entry.entityState() == null ? UUID.fromString(entry.references().getOrDefault("entityUuid", "")) : entry.entityState().entityUuid(); }
         catch (IllegalArgumentException invalid) { return; }
         UiTheme theme = UiThemes.EDITOR;
         EntityEditorWindow window = new EntityEditorWindow(anchor, entry.name(), entity, entry.dimension(),
@@ -118,6 +120,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         bindSessionOwner(owner);
         this.entity = entity; this.dimension = dimension; this.theme = theme; initialName = name;
         session = new EntityEditSession(dimension, entity, gateway, scheduler, uiQueue, applied, failures);
+        registrationApplied = applied;
         this.factionsFactory = Objects.requireNonNull(factionsFactory);
         setPreferredSizeDp(1120, 750); setMinimumSizeDp(640, 460);
         titleView().setSingleLine(true); titleView().setEllipsize(TextUtils.TruncateAt.END);
@@ -196,7 +199,8 @@ public final class EntityEditorWindow extends ModalWindowView {
             registryType = String.valueOf(draft.snapshot().getOrDefault("registryType", ""));
             EntityEditDraft attributesDraft = draft;
             attributes = new EntityAttributesView(getContext(), theme, attributesDraft, entity, dimension, this::changed,
-                    () -> active && !session.closed() && !session.blocked() && !session.loading() && session.draft() == attributesDraft);
+                    () -> active && !session.closed() && !session.blocked() && !session.loading() && session.draft() == attributesDraft,
+                    registrationApplied);
             addPage("tab.attributes", attributes);
             equipment = null;
             if (draft.flag("equipmentSupported")) {
