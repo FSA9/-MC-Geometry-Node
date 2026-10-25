@@ -13,6 +13,7 @@ public final class AssetTypeRegistry {
     public static final String GRAPH_ID = AssetTypeCatalog.GRAPH_TYPE_ID;
     public static final String SCHEMATIC_ID = AssetTypeCatalog.SCHEMATIC_TYPE_ID;
     public static final String IMAGE_ID = AssetTypeCatalog.IMAGE_TYPE_ID;
+    public static final String VIDEO_ID = AssetTypeCatalog.VIDEO_TYPE_ID;
     public static final String FILE_ID = "file";
 
     public static final AssetTypeRegistry INSTANCE = new AssetTypeRegistry();
@@ -42,6 +43,13 @@ public final class AssetTypeRegistry {
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
         register(assetType(
                 IMAGE_ID, 0xFF77C99D, false, true,
+                EnumSet.allOf(AssetSourceKind.class),
+                EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
+                        AssetTypeAction.COPY,
+                        AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
+        register(assetType(
+                VIDEO_ID, 0xFFB58CFF, false, true,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.PREVIEW, AssetTypeAction.FAVORITE,
                         AssetTypeAction.COPY,

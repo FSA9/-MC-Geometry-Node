@@ -296,9 +296,8 @@ public final class CacheSettingsPage implements SettingsPage {
                     : Component.translatable(KEY + "size_breakdown", formatBytes(stats.memoryBytes()),
                             formatBytes(stats.diskBytes())).getString());
             row.addView(size);
-            UiIconButton clear = new UiIconButton(context.uiContext(),
-                    new SvgIconView(context.uiContext(), SvgIconView.Icon.CLEAR, COLOR_MUTED))
-                    .tooltip(tr(KEY + "clear"));
+            UiIconButton clear = UiIconButton.createThemed(context.uiContext(), UiThemes.EDITOR,
+                    SvgIconView.Icon.CLEAR, tr(KEY + "clear"), UiIconButton.Preset.INLINE);
             clear.setTag(report.clearable());
             clear.setEnabled(!clearing && report.clearable());
             clear.setOnClickListener(view -> runClear(() ->

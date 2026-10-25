@@ -66,9 +66,7 @@ public final class UiTagChip extends LinearLayout {
     public void setOnRemove(CharSequence description, Runnable action) {
         onRemove = action;
         if (action != null && removeButton == null) {
-            var style = new UiIconButton.Style(1, 0, 0, theme.control().iconHover(),
-                    theme.control().iconPressed(), 0, 0, 0, theme.text().secondary(),
-                    theme.text().disabled(), 20, 20, 12, UiMetrics.DISABLED_ALPHA, theme.border().focus());
+            var style = UiIconButton.Style.forPreset(theme, UiIconButton.Preset.INLINE).withSize(20, 20, 12);
             removeButton = new UiIconButton(getContext(),
                     new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, theme.text().secondary()), style);
             removeButton.setOnClickListener(view -> {

@@ -101,6 +101,14 @@ public class GeometryNode {
                     .sync(EntityTypeTraitOverrides.STREAM_CODEC)
                     .build());
 
+    public static final Supplier<AttachmentType<com.mine.geometry_node.core.engine.system.faction.model.EntityFactionProfile>> ENTITY_FACTIONS =
+            ATTACHMENT_TYPES.register("entity_factions", () -> AttachmentType.builder(
+                            () -> com.mine.geometry_node.core.engine.system.faction.model.EntityFactionProfile.EMPTY)
+                    .serialize(com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.CODEC,
+                            value -> !value.isEmpty())
+                    .copyOnDeath()
+                    .build());
+
     public static final Supplier<AttachmentType<EntityImmunityAttachment>> IMMUNITY_ATTACHMENT =
             ATTACHMENT_TYPES.register("immunities", () -> AttachmentType.builder(EntityImmunityAttachment::new)
                     .serialize(new IAttachmentSerializer<EntityImmunityAttachment>() {
@@ -178,6 +186,7 @@ public class GeometryNode {
                 "geometry/geometry_node-server.toml");
 
         com.mine.geometry_node.core.engine.metadata.BuiltinMetadataCapabilities.init();
+        com.mine.geometry_node.core.engine.system.faction.service.ServerFactionService.INSTANCE.init();
 
         // 初始化网络包
         NetworkHandler.init();

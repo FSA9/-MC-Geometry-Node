@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.runtime.render.image;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.image.ImageAssetValidator;
 import com.mine.geometry_node.core.engine.system.asset.reference.AssetReference;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetResolutionContext;
+import net.minecraft.world.level.storage.LevelResource;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -124,23 +126,19 @@ public final class ClientImageAssetManager {
                 return null;
             }
         }
-        if (!("local".equals(source) || "pack".equals(source)) || reference == null || reference.isBlank()) {
+        if (!("local".equals(source) || "pack".equals(source) || "worldpack".equals(source)) || reference == null || reference.isBlank()) {
             return null;
         }
 
         try {
-            AssetReference assetReference = "pack".equals(source)
-                    ? AssetReference.parse(reference)
-                    : AssetReference.parse("local:" + reference);
-            Path path = assetReference.resolvePath(Minecraft.getInstance().gameDirectory.toPath());
+            AssetReference assetReference = AssetReference.parse(source + ':' + reference);
+            Minecraft minecraft = Minecraft.getInstance();
+            var server = minecraft.getSingleplayerServer();
+            AssetResolutionContext resolutionContext = new AssetResolutionContext(
+                    minecraft.gameDirectory.toPath(), server == null ? null : server.getWorldPath(LevelResource.ROOT));
+            Path path = assetReference.resolvePath(resolutionContext);
             if (path == null || !path.isAbsolute()) throw new IOException("asset path is not absolute");
             path = path.toAbsolutePath().normalize();
-            Path packRoot = "pack".equals(source)
-                    ? Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize()
-                    .resolve("geometry_nodes").resolve("packs").normalize() : null;
-            if (packRoot != null && !path.startsWith(packRoot)) {
-                throw new IOException("pack image escapes the pack root");
-            }
             if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(path)) {
                 throw new IOException(source + " image does not exist: " + path);
             }
@@ -148,7 +146,7 @@ public final class ClientImageAssetManager {
             long size = Files.size(path);
             if (size <= 0 || size > 16 * 1024 * 1024) throw new IOException(source + " image exceeds 16 MiB byte budget");
             FileTime modified = Files.getLastModifiedTime(path);
-            Map<Path, LocalAsset> sourceTextures = "pack".equals(source) ? PACK_TEXTURES : LOCAL_TEXTURES;
+            Map<Path, LocalAsset> sourceTextures = "local".equals(source) ? LOCAL_TEXTURES : PACK_TEXTURES;
             LocalAsset cached = sourceTextures.get(path);
             if (cached != null && cached.size == size && cached.modified.equals(modified)) {
                 TextureEntry entry = TEXTURES.get(cached.cacheKey);

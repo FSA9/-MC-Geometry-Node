@@ -12,6 +12,7 @@ public final class AssetPreviewKind {
     public static final AssetPreviewKind NONE = register("none", false);
     public static final AssetPreviewKind IMAGE = register("image", true);
     public static final AssetPreviewKind SCHEMATIC = register("schematic", true);
+    public static final AssetPreviewKind VIDEO = register("video", true);
 
     private final String id;
     private final boolean concrete;

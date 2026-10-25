@@ -237,10 +237,9 @@ public final class ScenePropertiesPanel extends UiScrollView implements SidebarP
             label.setSingleLine(true);
             label.setEllipsize(TextUtils.TruncateAt.END);
             label.setTooltipText(field.label().getString());
-            UiIconButton copy = new UiIconButton(getContext(),
-                    new SvgIconView(getContext(), SvgIconView.Icon.COPY, UiThemes.EDITOR.text().secondary()),
-                    new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(), 0))
-                    .tooltip(Component.translatable("geometry_node.game_view.scene.copy_value").getString());
+            UiIconButton copy = UiIconButton.createThemed(getContext(), UiThemes.EDITOR,
+                    SvgIconView.Icon.COPY, Component.translatable("geometry_node.game_view.scene.copy_value").getString(),
+                    UiIconButton.Preset.INLINE);
             copy.setOnClickListener(v -> {
                 if (controls.get(field.key()) != control) return;
                 String value = control.value();

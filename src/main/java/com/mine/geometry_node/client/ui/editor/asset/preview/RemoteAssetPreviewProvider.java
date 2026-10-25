@@ -33,7 +33,8 @@ final class RemoteAssetPreviewProvider implements AssetPreviewProvider {
                 new ClientAssetPreviewService.Listener() {
                     @Override
                     public void available(AssetPreviewDescriptor descriptor, java.nio.file.Path localArtifact) {
-                        listener.available(localArtifact.toFile());
+                        listener.available(new AssetPreviewArtifact(localArtifact.toFile(),
+                                entry.type().previewKind(), descriptor.format() == null ? "" : descriptor.format().extension()));
                     }
 
                     @Override

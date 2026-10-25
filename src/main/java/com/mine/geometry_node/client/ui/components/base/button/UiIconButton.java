@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.icon.UiIconColors;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -13,6 +14,9 @@ import icyllis.modernui.view.Gravity;
 
 /** Shared icon-only action control with bounded visual and hit areas. */
 public class UiIconButton extends FrameLayout {
+    /** Placement controls chrome; the owning page supplies the action and its meaning. */
+    public enum Preset { TOOLBAR, INLINE }
+
     private final Style style;
     private final View icon;
     private Integer callerIconColor;
@@ -24,7 +28,22 @@ public class UiIconButton extends FrameLayout {
     }
 
     public static UiIconButton createThemed(Context context, UiTheme theme, View icon) {
-        return new UiIconButton(context, icon, Style.forTheme(theme));
+        return createThemed(context, theme, icon, Preset.TOOLBAR);
+    }
+
+    public static UiIconButton createThemed(Context context, UiTheme theme, View icon, Preset preset) {
+        return new UiIconButton(context, icon, Style.forPreset(theme, preset));
+    }
+
+    public static UiIconButton createThemed(Context context, UiTheme theme, SvgIconView.Icon icon,
+                                           CharSequence description) {
+        return createThemed(context, theme, icon, description, Preset.TOOLBAR);
+    }
+
+    public static UiIconButton createThemed(Context context, UiTheme theme, SvgIconView.Icon icon,
+                                           CharSequence description, Preset preset) {
+        return createThemed(context, theme, new SvgIconView(context, icon, theme.text().secondary()), preset)
+                .tooltip(description);
     }
 
     public UiIconButton(Context context, View icon, Style style) {
@@ -132,12 +151,30 @@ public class UiIconButton extends FrameLayout {
         public static final Style DEFAULT = forTheme(UiThemes.EDITOR);
 
         public static Style forTheme(UiTheme theme) {
+            return forPreset(theme, Preset.TOOLBAR);
+        }
+
+        public static Style forPreset(UiTheme theme, Preset preset) {
+            if (preset == Preset.INLINE) {
+                // Inline actions keep their supplied tint, including status and selection colors.
+                return new Style(1.0f, 0, 0, theme.control().iconHover(), theme.control().iconPressed(),
+                        0, 0, 0, 0, theme.text().disabled(), UiMetrics.ICON_BUTTON_SIZE,
+                        UiMetrics.ICON_BUTTON_SIZE, UiMetrics.ICON_SIZE, UiMetrics.DISABLED_ALPHA,
+                        theme.border().focus());
+            }
             return new Style(1.0f, UiMetrics.BORDER,
                     theme.control().icon(), theme.control().iconHover(), theme.control().iconPressed(),
                     theme.control().disabledBackground(), theme.control().iconBorder(), theme.control().iconDisabledBorder(),
                     theme.text().strong(), theme.text().disabled(), UiMetrics.ICON_BUTTON_SIZE,
                     UiMetrics.ICON_BUTTON_SIZE, UiMetrics.ICON_SIZE, UiMetrics.DISABLED_ALPHA,
                     theme.border().focus());
+        }
+
+        /** Adapt compact layouts without duplicating their state palette. */
+        public Style withSize(float minimumWidthDp, float minimumHeightDp, float iconSizeDp) {
+            return new Style(cornerRadiusDp, strokeWidthDp, normalColor, hoverColor, pressedColor,
+                    disabledColor, strokeColor, disabledStrokeColor, iconColor, disabledIconColor,
+                    minimumWidthDp, minimumHeightDp, iconSizeDp, disabledAlpha, focusColor);
         }
 
         public Style(float cornerRadiusDp, float strokeWidthDp, int normalColor, int hoverColor,

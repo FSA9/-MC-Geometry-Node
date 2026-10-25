@@ -59,10 +59,10 @@ public class FilePickerDialog extends AssetPickerDialog {
     }
 
     private static String toPath(AssetEntry entry) {
-        if (entry.sourceKind() == AssetSourceKind.REMOTE) return AssetPathUtils.formatRemotePath(entry.path());
+        if (entry.sourceKind() == AssetSourceKind.REMOTE) return "remote:" + AssetPathUtils.formatRemotePath(entry.path());
         File file = entry.localFile();
-        try { return file.getCanonicalPath(); }
-        catch (Exception ignored) { return file.getAbsolutePath(); }
+        try { return "local:" + file.getCanonicalPath(); }
+        catch (Exception ignored) { return "local:" + file.getAbsolutePath(); }
     }
 
     private static File initialLocalDirectory(String currentPath) {

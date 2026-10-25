@@ -53,7 +53,6 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     private static final int COLOR_DOWNLOAD = UiThemes.EDITOR.status().success();
     private static final int COLOR_ERROR = UiThemes.EDITOR.status().error();
     private static final int COLOR_WARNING = UiThemes.EDITOR.status().warning();
-    private static final int COLOR_HOVER = UiThemes.EDITOR.control().iconHover();
     private static final long UI_UPDATE_DELAY_MS = 100L;
 
     private final ScrollView scroll;
@@ -294,10 +293,8 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private View iconButton(SvgIconView.Icon icon, int color, String tooltip, Runnable action) {
-        // Transparent chrome and zero icon overrides preserve the caller-supplied status tint.
-        UiIconButton.Style style = new UiIconButton.Style(0.0f, 0.0f, 0x00000000,
-                COLOR_HOVER, COLOR_HOVER, 0x00000000, 0, 14.0f, 0.5f);
-        UiIconButton button = new UiIconButton(getContext(), new SvgIconView(getContext(), icon, color), style)
+        UiIconButton button = UiIconButton.createThemed(getContext(), UiThemes.EDITOR,
+                new SvgIconView(getContext(), icon, color), UiIconButton.Preset.INLINE)
                 .tooltip(tooltip);
         button.setOnClickListener(view -> action.run());
         return button;

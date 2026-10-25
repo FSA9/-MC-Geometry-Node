@@ -63,8 +63,8 @@ final class DataLibraryEntryCard {
         check.setOnCheckedChangeListener((button, checked) -> selectionChanged.accept(checked));
         header.addView(UiTableStyle.selectionCell(context, check), new ViewGroup.LayoutParams(-1, -1));
         disclosure = new SvgIconView(context, SvgIconView.Icon.forExpandedState(false), UiThemes.EDITOR.text().secondary());
-        UiIconButton toggle = new UiIconButton(context, disclosure,
-                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(), 0));
+        UiIconButton toggle = UiIconButton.createThemed(context, UiThemes.EDITOR,
+                disclosure, UiIconButton.Preset.INLINE);
         toggle.setContentDescription(tr("geometry_node.data_library.expand_entry"));
         toggle.setOnClickListener(view -> toggleExpanded.run());
         header.addView(toggle, new ViewGroup.LayoutParams(-1, px(24)));

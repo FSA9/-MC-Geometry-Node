@@ -16,7 +16,7 @@ final class LocalAssetPreviewProvider implements AssetPreviewProvider {
     public Subscription subscribe(AssetEntry entry, Listener listener) {
         ClientAssetCallbacks.execute(() -> {
             if (!supports(entry) || !entry.localFile().isFile()) listener.unavailable();
-            else listener.available(entry.localFile());
+            else listener.available(new AssetPreviewArtifact(entry.localFile(), entry.type().previewKind(), ""));
         });
         return Subscription.NONE;
     }

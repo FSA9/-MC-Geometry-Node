@@ -10,7 +10,9 @@ import com.mine.geometry_node.core.engine.graph.storage.GraphPathMapper;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerImagePreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerSchematicPreviewGenerator;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerVideoPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.image.ImageAssetFormats;
+import com.mine.geometry_node.core.engine.system.video.VideoAssetFormats;
 
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +29,7 @@ public final class AssetTypeCatalog {
     public static final String GRAPH_TYPE_ID = "graph";
     public static final String SCHEMATIC_TYPE_ID = "schematic";
     public static final String IMAGE_TYPE_ID = "image";
+    public static final String VIDEO_TYPE_ID = "video";
 
     private static final Map<String, AssetTypeDefinition> DEFINITIONS = new LinkedHashMap<>();
     private static volatile Map<String, AssetTypeDefinition> DEFINITION_BY_ID = Map.of();
@@ -47,6 +50,17 @@ public final class AssetTypeCatalog {
                 return file != null && Files.isRegularFile(file) ? "" : null;
             }
         }, AssetPreviewKind.IMAGE, Optional.empty(), Optional.of(ServerImagePreviewGenerator::new)));
+        register(new AssetTypeDefinition(VIDEO_TYPE_ID, new AssetTypeRecognizer() {
+            @Override
+            public boolean supportsCandidatePath(String normalizedPath) {
+                return VideoAssetFormats.isSupportedPath(normalizedPath);
+            }
+
+            @Override
+            public String inspectVariant(Path file, String normalizedPath) {
+                return file != null && Files.isRegularFile(file) ? "" : null;
+            }
+        }, AssetPreviewKind.VIDEO, Optional.empty(), Optional.of(ServerVideoPreviewGenerator::new)));
         register(new AssetTypeDefinition(GRAPH_TYPE_ID, new AssetTypeRecognizer() {
             @Override
             public boolean supportsCandidatePath(String normalizedPath) {

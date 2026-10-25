@@ -1023,8 +1023,7 @@ public final class DataLibraryWindow extends LinearLayout implements AreaEditorW
     private UiIconButton disclosureButton(boolean expanded, int color) {
         UiIconButton button = new UiIconButton(getContext(),
                 new SvgIconView(getContext(), SvgIconView.Icon.forExpandedState(expanded), color),
-                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(),
-                        UiThemes.EDITOR.control().iconPressed(), 0, 0, 12, UiMetrics.DISABLED_ALPHA));
+                UiIconButton.Style.forPreset(UiThemes.EDITOR, UiIconButton.Preset.INLINE).withSize(0, 0, 12));
         button.setContentDescription(tr(expanded ? "geometry_node.data_library.collapse_entry"
                 : "geometry_node.data_library.expand_entry"));
         return button;

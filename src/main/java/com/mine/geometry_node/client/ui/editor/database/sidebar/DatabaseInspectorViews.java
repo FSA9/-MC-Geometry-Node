@@ -342,7 +342,7 @@ final class DatabaseInspectorViews {
     private static UiIconButton copy(Context context, String value) {
         UiIconButton copy = new UiIconButton(context,
                 new SvgIconView(context, SvgIconView.Icon.COPY, UiThemes.EDITOR.text().muted()),
-                new UiIconButton.Style(1, 0, 0, UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(), 0, 0, 12, .48f))
+                UiIconButton.Style.forPreset(UiThemes.EDITOR, UiIconButton.Preset.INLINE).withSize(24, 24, 12))
                 .tooltip(tr("copy_value"));
         copy.setOnClickListener(view -> copyValue(value));
         return copy;

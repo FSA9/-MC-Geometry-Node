@@ -161,7 +161,7 @@ public final class ViewportSceneMenus {
     private View iconToggle(SvgIconView.Icon kind,BooleanSupplier value,BooleanSupplier enabled,Consumer<Boolean> change,java.util.List<Runnable> refresh){
         long token=epoch;
         SvgIconView icon=new SvgIconView(owner.getContext(),kind,UiThemes.EDITOR.text().strong());
-        UiIconButton button=new UiIconButton(owner.getContext(),icon,new UiIconButton.Style(2,0,0,UiThemes.EDITOR.control().iconHover(),0));
+        UiIconButton button=UiIconButton.createThemed(owner.getContext(),UiThemes.EDITOR,icon,UiIconButton.Preset.INLINE);
         Runnable update = () -> {
             button.setEnabled(enabled.getAsBoolean());
             boolean selected = value.getAsBoolean();

@@ -31,13 +31,7 @@ public final class UiSearchBar extends LinearLayout {
         input = UiSearchInput.createThemed(context, theme);
         input.setHint(hint);
         addView(input, new LayoutParams(0, size, 1));
-        submit = new UiIconButton(context, new SvgIconView(context, SvgIconView.Icon.SEARCH, theme.text().secondary()),
-                new UiIconButton.Style(0, 1, theme.control().icon(),
-                        theme.control().iconHover(), theme.control().iconPressed(),
-                        theme.control().icon(), theme.border().strong(), theme.border().strong(),
-                        0, 0, 0, 0, 14, .5f,
-                        theme.border().focus()));
-        submit.setContentDescription(actionName);
+        submit = UiIconButton.createThemed(context, theme, SvgIconView.Icon.SEARCH, actionName);
         UiSearchSubmit.bind(submit, action, input);
         LayoutParams params = new LayoutParams(size, size);
         params.leftMargin = UIUtils.dp2pxInt(6);

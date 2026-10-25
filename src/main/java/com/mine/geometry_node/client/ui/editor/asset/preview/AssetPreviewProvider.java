@@ -11,6 +11,11 @@ public interface AssetPreviewProvider {
 
     interface Listener {
         void available(File localSource);
+
+        default void available(AssetPreviewArtifact artifact) {
+            if (artifact != null) available(artifact.file());
+        }
+
         void unavailable();
     }
 

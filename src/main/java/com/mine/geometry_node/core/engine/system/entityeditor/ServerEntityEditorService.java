@@ -116,6 +116,7 @@ public final class ServerEntityEditorService {
         values.put("position", Map.of("x", entity.getX(), "y", entity.getY(), "z", entity.getZ()));
         values.put("biologicalTypes", EntityTypeTraits.overrides(entity).values());
         values.put("biologicalTypeDefaults", EntityTypeTraits.defaults(entity));
+        values.put("factions", com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.snapshot(entity));
         values.put("tags", EntityMetadataAdapter.tags(entity).values());
         values.put("data", EntityMetadataAdapter.data(entity).values());
         List<EquipmentSlot> slots = equipmentSlots(entity, adapter);
@@ -158,6 +159,8 @@ public final class ServerEntityEditorService {
         adapter.validateAttributes(entity, attributes);
         EntityTypeTraitOverrides biologicalTypes = changes.containsKey("biologicalTypes")
                 ? new EntityTypeTraitOverrides(EntityTypeTraits.validate(EntityEditorChanges.dictionary(changes.get("biologicalTypes")))) : null;
+        var factions = changes.containsKey("factions")
+                ? com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.validate(entity, changes.get("factions")) : null;
         List<String> tags = null;
         if (changes.containsKey("tags")) {
             if (!(changes.get("tags") instanceof List<?> raw) || raw.stream().anyMatch(value -> !(value instanceof String)))
@@ -197,6 +200,11 @@ public final class ServerEntityEditorService {
                 var before = EntityTypeTraits.overrides(entity);
                 undo.push(() -> EntityTypeTraits.replace(entity, before));
                 EntityTypeTraits.replace(entity, biologicalTypes);
+            }
+            if (factions != null) {
+                var before = com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.read(entity);
+                undo.push(() -> com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.replace(entity, before));
+                com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.replace(entity, factions);
             }
             if (tags != null) {
                 var access = EntityMetadataAdapter.tags(entity); List<String> before = access.values();

@@ -17,6 +17,8 @@ public final class UiTableRow extends ViewGroup {
     private final UiTheme theme;
     private final UiTableColumns columns;
     private boolean header;
+    private boolean dataStyle, alternate, pointerInside;
+    private final icyllis.modernui.graphics.drawable.ShapeDrawable dataBackground = new icyllis.modernui.graphics.drawable.ShapeDrawable();
     private int dragging = -1;
     private int hovered = -1;
     private float lastRawX, lastRawY;
@@ -37,6 +39,19 @@ public final class UiTableRow extends ViewGroup {
         this.header = header;
         if (!header) finishDrag();
         invalidate();
+    }
+
+    /** Opt-in detailed rows; existing compact tables retain their own presentation. */
+    public void setDataStyle(boolean alternate) {
+        this.dataStyle = true;
+        this.alternate = alternate;
+        if (getBackground() != dataBackground) setBackground(dataBackground);
+        updateDataBackground();
+    }
+
+    private void updateDataBackground() {
+        if (dataStyle) dataBackground.setColor(pointerInside ? theme.surface().header()
+                : alternate ? theme.control().input() : theme.surface().panel());
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -157,15 +172,25 @@ public final class UiTableRow extends ViewGroup {
     }
 
     @Override public boolean dispatchHoverEvent(MotionEvent event) {
+        pointerInside = event.getActionMasked() != MotionEvent.ACTION_HOVER_EXIT
+                && event.getX() >= 0 && event.getX() < getWidth()
+                && event.getY() >= 0 && event.getY() < getHeight();
         int next = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? -1 : boundary(event.getX());
         if (hovered != next) { hovered = next; invalidate(); }
-        return super.dispatchHoverEvent(event);
+        boolean handled = super.dispatchHoverEvent(event);
+        updateDataBackground();
+        return handled;
     }
 
     @Override protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
-        if (!header) return;
+        if (!header && !dataStyle) return;
         Paint paint = Paint.obtain();
+        if (dataStyle) {
+            paint.setColor(UiTableStyle.dividerColor(theme));
+            canvas.drawRect(0, getHeight() - Math.max(1, UIUtils.dp2px(1)), getWidth(), getHeight(), paint);
+        }
+        if (!header) { paint.recycle(); return; }
         int x = 0;
         for (int i = 0; i < columns.size(); i++) {
             x += columns.width(i);
@@ -180,6 +205,8 @@ public final class UiTableRow extends ViewGroup {
     @Override protected void onDetachedFromWindow() {
         finishDrag();
         hovered = -1;
+        pointerInside = false;
+        updateDataBackground();
         super.onDetachedFromWindow();
     }
 }

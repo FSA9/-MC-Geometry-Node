@@ -1,16 +1,13 @@
 package com.mine.geometry_node.core.engine.system.asset.reference;
 
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Objects;
 
 /**
  * A normalized, source-qualified asset reference.
  *
- * <p>Unqualified absolute paths are local assets and unqualified relative paths
- * are pack assets. The only explicit user source currently supported is
- * {@code remote:}. Internal runtime sources such as {@code resource:} and
- * {@code server:} intentionally remain outside this parser.</p>
+ * <p>Unqualified paths require a source chosen by the caller. Internal runtime
+ * sources such as {@code resource:} and {@code server:} remain outside this parser.</p>
  */
 public record AssetReference(AssetSource source, String location) {
     public AssetReference {
@@ -23,6 +20,10 @@ public record AssetReference(AssetSource source, String location) {
 
     public static AssetReference parse(String raw) {
         return AssetSourceRegistry.parse(raw);
+    }
+
+    public static AssetReference parse(String raw, AssetSource defaultSource) {
+        return AssetSourceRegistry.parse(raw, defaultSource);
     }
 
     public String serialize() {
@@ -41,9 +42,13 @@ public record AssetReference(AssetSource source, String location) {
         return source == AssetSourceRegistry.REMOTE;
     }
 
+    public boolean isWorldPack() {
+        return source == AssetSourceRegistry.WORLD_PACK;
+    }
+
     /** Resolves filesystem-backed sources using the default registry. */
-    public Path resolvePath(Path gameDirectory) {
-        return source.resolver().resolve(this, gameDirectory);
+    public Path resolvePath(AssetResolutionContext context) {
+        return source.resolver().resolve(this, context);
     }
 
     static String normalizeRelative(String value, String label, boolean requirePackSegment) {
@@ -60,8 +65,8 @@ public record AssetReference(AssetSource source, String location) {
             if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) {
                 throw new IllegalArgumentException("invalid " + label + " path segment");
             }
-            if (segment.indexOf('\0') >= 0) {
-                throw new IllegalArgumentException(label + " contains NUL");
+            if (segment.indexOf('\0') >= 0 || segment.indexOf(':') >= 0) {
+                throw new IllegalArgumentException(label + " contains an invalid character");
             }
             if (result.length() > 0) result.append('/');
             result.append(segment);
@@ -80,7 +85,4 @@ public record AssetReference(AssetSource source, String location) {
         return value.startsWith("//") || value.startsWith("\\\\");
     }
 
-    static String lower(String value) {
-        return value.toLowerCase(Locale.ROOT);
-    }
 }

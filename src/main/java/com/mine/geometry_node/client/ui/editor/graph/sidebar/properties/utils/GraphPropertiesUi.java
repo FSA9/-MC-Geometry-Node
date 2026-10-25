@@ -13,7 +13,6 @@ import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
@@ -28,8 +27,7 @@ public final class GraphPropertiesUi {
     public static final int ACTION_PRESSED = UiThemes.EDITOR.control().iconPressed();
 
     public static UiIconButton.Style actionStyle(float iconSizeDp) {
-        return new UiIconButton.Style(3, 0, ACTION_BACKGROUND, ACTION_HOVER,
-                ACTION_PRESSED, UiThemes.EDITOR.surface().panel(), 0, iconSizeDp, UiMetrics.DISABLED_ALPHA);
+        return UiIconButton.Style.forTheme(UiThemes.EDITOR).withSize(0, 0, iconSizeDp);
     }
 
     public static UiIconButton actionIcon(Context context, SvgIconView.Icon icon, String tooltipKey) {
@@ -99,20 +97,6 @@ public final class GraphPropertiesUi {
         button.setSingleLine(true);
         button.setTooltipText(tooltip);
         return button;
-    }
-
-    public static FrameLayout iconButton(
-            Context context,
-            VectorIconView.Kind kind,
-            String tooltip,
-            int iconSizeDp,
-            int iconColor,
-            int normalColor,
-            int hoverColor) {
-        UiIconButton.Style style = new UiIconButton.Style(3.0f, 0.0f, normalColor,
-                hoverColor, hoverColor, normalColor, 0, iconSizeDp, 0.5f);
-        VectorIconView icon = new VectorIconView(context, kind, iconColor);
-        return new UiIconButton(context, icon, style).tooltip(tooltip);
     }
 
     /** Two half-height controls share one square toolbar slot. */

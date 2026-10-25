@@ -12,19 +12,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class AssetSourceRegistry {
     private static final Map<String, AssetSource> SOURCES = new ConcurrentHashMap<>();
 
-    public static final AssetSource LOCAL = registerBuiltin("local", (reference, gameDirectory) ->
+    public static final AssetSource LOCAL = registerBuiltin("local", (reference, context) ->
             Path.of(reference.location()).toAbsolutePath().normalize());
-    public static final AssetSource PACK = registerBuiltin("pack", (reference, gameDirectory) -> {
-        Objects.requireNonNull(gameDirectory, "gameDirectory");
-        Path root = gameDirectory.toAbsolutePath().normalize()
-                .resolve("geometry_nodes").resolve("packs").normalize();
-        Path candidate = root.resolve(reference.location().replace('/', java.io.File.separatorChar)).normalize();
-        if (!candidate.startsWith(root) || !isContainedRealPath(root, candidate)) {
-            throw new IllegalArgumentException("pack reference escapes the pack root");
-        }
-        return candidate;
-    });
-    public static final AssetSource REMOTE = registerBuiltin("remote", (reference, gameDirectory) -> null);
+    public static final AssetSource PACK = registerBuiltin("pack", (reference, context) ->
+            resolvePack(reference, context.gameDirectory()));
+    public static final AssetSource WORLD_PACK = registerBuiltin("worldpack", (reference, context) ->
+            resolvePack(reference, context.requireWorldDirectory()));
+    public static final AssetSource REMOTE = registerBuiltin("remote", (reference, context) -> null);
 
     private AssetSourceRegistry() {
     }
@@ -47,33 +41,43 @@ public final class AssetSourceRegistry {
     }
 
     public static AssetReference parse(String raw) {
+        return parse(raw, null);
+    }
+
+    public static AssetReference parse(String raw, AssetSource defaultSource) {
         if (raw == null || raw.isBlank()) throw new IllegalArgumentException("asset reference must not be empty");
         String value = raw.trim();
         if (value.length() > 4096) throw new IllegalArgumentException("asset reference is too long");
 
-        // Check absolute paths before looking for a scheme so Windows drive letters
-        // (for example C:/image.png) are never mistaken for a source id.
-        if (isAbsolute(value)) {
-            return new AssetReference(LOCAL, value);
-        }
-
         int separator = value.indexOf(':');
-        if (separator > 0 && isScheme(value.substring(0, separator))) {
+        if (!isAbsolute(value) && separator > 0 && isScheme(value.substring(0, separator))) {
             String id = normalizeId(value.substring(0, separator));
             AssetSource source = find(id);
             if (source == null) throw new IllegalArgumentException("unknown asset source: " + id);
-            String location = value.substring(separator + 1);
-            if (source == PACK) location = AssetReference.normalizeRelative(location, "pack", true);
-            else if (source == REMOTE) {
-                location = location.replace('\\', '/');
-                while (location.startsWith("/")) location = location.substring(1);
-                location = AssetReference.normalizeRelative(location, "remote", false);
-            }
-            else if (source == LOCAL && !isAbsolute(location)) throw new IllegalArgumentException("local reference must be absolute");
-            return new AssetReference(source, location);
+            return reference(source, value.substring(separator + 1));
         }
+        if (defaultSource == null) throw new IllegalArgumentException("asset reference requires an explicit source");
+        return reference(defaultSource, value);
+    }
 
-        return new AssetReference(PACK, AssetReference.normalizeRelative(value, "pack", true));
+    private static AssetReference reference(AssetSource source, String location) {
+        if (source == PACK || source == WORLD_PACK) {
+            location = AssetReference.normalizeRelative(location, source.id(), true);
+        } else if (source == REMOTE) {
+            location = AssetReference.normalizeRelative(location, "remote", false);
+        } else if (source == LOCAL && !isAbsolute(location)) {
+            throw new IllegalArgumentException("local reference must be absolute");
+        }
+        return new AssetReference(source, location);
+    }
+
+    private static Path resolvePack(AssetReference reference, Path baseDirectory) {
+        Path root = baseDirectory.toAbsolutePath().normalize().resolve("geometry_nodes").resolve("packs");
+        Path candidate = root.resolve(AssetReference.normalizeRelative(reference.location(), reference.source().id(), true)).normalize();
+        if (!candidate.startsWith(root) || !isContainedRealPath(root, candidate)) {
+            throw new IllegalArgumentException("pack reference escapes the pack root");
+        }
+        return candidate;
     }
 
     private static boolean isScheme(String value) {

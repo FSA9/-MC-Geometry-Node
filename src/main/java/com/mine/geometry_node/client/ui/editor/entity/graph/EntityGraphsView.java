@@ -476,8 +476,7 @@ public final class EntityGraphsView extends FrameLayout {
         return new UiSelectButton(getContext(), label, UiMetrics.TEXT_BODY, () -> 2, theme);
     }
     private UiIconButton icon(SvgIconView.Icon svg, String label, Runnable action) {
-        UiIconButton view = UiIconButton.createThemed(getContext(), theme,
-                new SvgIconView(getContext(), svg, theme.text().secondary())).tooltip(tr(label));
+        UiIconButton view = UiIconButton.createThemed(getContext(), theme, svg, tr(label));
         view.setOnClickListener(ignored -> action.run()); return view;
     }
     private static LinearLayout.LayoutParams spaced(int width, int height) {

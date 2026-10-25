@@ -5,7 +5,7 @@ import java.util.*;
 
 /** Computes edits against the read baseline, then compares only the state the user actually edited. */
 public final class EntityEditorChanges {
-    public static final Set<String> EDITABLE = Set.of("attributes", "biologicalTypes", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
+    public static final Set<String> EDITABLE = Set.of("attributes", "biologicalTypes", "factions", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
     private static final Set<String> READ_ONLY = Set.of("living", "equipmentSupported", "equipmentCreative", "availableGraphs", "preview",
             "registryType", "dimension", "position", "attributeFields", "biologicalTypeDefaults");
     private EntityEditorChanges() {}

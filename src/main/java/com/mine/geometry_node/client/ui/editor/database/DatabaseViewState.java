@@ -49,15 +49,27 @@ public final class DatabaseViewState {
     public record Sidebar(float extentDp, boolean visible) {
         public Sidebar { extentDp = Float.isFinite(extentDp) ? Math.max(180, Math.min(4096, extentDp)) : 320; }
     }
-    public record Tab(boolean world) {}
+    public enum Page { WORLD, LIBRARY, GLOBAL_DATA }
+    public record Tab(Page page) {
+        public Tab { if (page == null) page = Page.WORLD; }
+        public Tab(boolean world) { this(world ? Page.WORLD : Page.LIBRARY); }
+        public boolean world() { return page == Page.WORLD; }
+    }
     public static final UiStateKey<Split> WORLD_SPLIT = split("database:world.navigation");
     public static final UiStateKey<Split> LIBRARY_SPLIT = split("database:library.navigation");
     public static final UiStateKey<Split> LIBRARY_TREE_SPLIT = new UiStateKey<>("database:library.tree", 1,
             UiStateLifetime.PERSISTENT, Split.class, () -> new Split(360), value -> value);
     public static final UiStateKey<Sidebar> SIDEBAR = new UiStateKey<>("database:sidebar", 1,
             UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, true), value -> value);
-    public static final UiStateKey<Tab> TAB = new UiStateKey<>("database:tab", 1,
-            UiStateLifetime.MEMORY, Tab.class, () -> new Tab(true), value -> value);
+    public static final UiStateKey<Tab> TAB = new UiStateKey<>("database:tab", 2,
+            UiStateLifetime.MEMORY, Tab.class, () -> new Tab(Page.WORLD), value -> value,
+            (version, payload) -> {
+                if (version != 1 || !payload.isJsonObject()) return null;
+                var migrated = new com.google.gson.JsonObject();
+                migrated.addProperty("page", payload.getAsJsonObject().has("world")
+                        && !payload.getAsJsonObject().get("world").getAsBoolean() ? "LIBRARY" : "WORLD");
+                return migrated;
+            });
     private static UiStateKey<Split> split(String id) {
         return new UiStateKey<>(id, 1, UiStateLifetime.PERSISTENT, Split.class, () -> new Split(216), value -> value);
     }

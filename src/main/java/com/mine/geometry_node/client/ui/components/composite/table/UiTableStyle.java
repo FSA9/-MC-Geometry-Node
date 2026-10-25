@@ -22,6 +22,8 @@ public final class UiTableStyle {
     public static final int CHECKBOX_SIZE = 16;
     public static final int SELECTION_COLUMN_WIDTH = 32;
     public static final int ROW_HEIGHT = 44;
+    public static final int DETAILED_HEADER_HEIGHT = 36;
+    public static final int DETAILED_ROW_HEIGHT = 66;
     public static final int MIN_COLUMN_WIDTH = 24;
     public static final int ROW_NUMBER_WIDTH = 36;
 

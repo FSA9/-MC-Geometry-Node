@@ -6,8 +6,7 @@ import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.composite.navigation.UiSubTabs;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
@@ -15,6 +14,7 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.editor.database.sidebar.DatabaseDetailsPanel;
 import com.mine.geometry_node.client.ui.editor.database.world.WorldObjectsView;
 import com.mine.geometry_node.client.ui.editor.datalibrary.*;
+import com.mine.geometry_node.client.ui.editor.globaldata.GlobalDataView;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;
@@ -26,20 +26,18 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.List;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import icyllis.modernui.view.Gravity;
 import net.minecraft.network.chat.Component;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import static com.mine.geometry_node.client.ui.editor.database.DatabaseWidgets.*;
 
-/** Two database views inside the existing Area; neither owns an independent workspace header. */
+/** Database pages share one Area, while global data owns its own navigation and details. */
 public final class DatabaseWindow extends LinearLayout implements AreaEditorWindow, SurfaceRegistrationAware {
     private final DataLibraryRepository repository;
     private final DataLibraryWindow library;
     private final WorldObjectsView world;
-    private final UiActionButton worldTab, libraryTab;
-    private final Map<UiActionButton,View> tabUnderlines = new LinkedHashMap<>();
+    private final UiActionButton worldTab, libraryTab, globalTab;
+    private final GlobalDataView global;
+    private final UiSubTabs tabs;
     private final SidebarLayoutController sidebarLayout;
     private final DatabaseDetailsPanel details;
     private final UiStateContext uiState;
@@ -52,7 +50,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     private final Runnable libraryDetailsTask = this::refreshLibraryDetails;
     private final Runnable libraryChanged = () -> { removeCallbacks(libraryDetailsTask); post(libraryDetailsTask); };
     private DatabaseSelection selection;
-    private boolean worldSelected = true;
+    private DatabaseViewState.Page selectedPage = DatabaseViewState.Page.WORLD;
     private boolean shown, disposed;
     private UiSurfaceRegistry.Registration registration;
 
@@ -66,17 +64,15 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     public DatabaseWindow(Context context, DataLibraryRepository repository, UiStateContext state) {
         super(context); uiState = java.util.Objects.requireNonNull(state); this.repository = repository == null ? DataLibraryRepository.EMPTY : repository;
         setOrientation(VERTICAL); setBackground(background(UiThemes.EDITOR.surface().root()));
-        LinearLayout tabs = new LinearLayout(context);
-        tabs.setBackground(background(UiThemes.EDITOR.surface().panel()));
-        worldTab = tab(context, tr("world"), true);
-        libraryTab = tab(context, tr("library"), false);
-        addTab(tabs, worldTab);
-        addTab(tabs, libraryTab);
-        addView(tabs, new LayoutParams(-1, px(36)));
+        tabs = new UiSubTabs(context, UiThemes.EDITOR);
+        worldTab = tabs.addTab(DatabaseViewState.Page.WORLD.name(), tr("world"), () -> showPage(DatabaseViewState.Page.WORLD));
+        libraryTab = tabs.addTab(DatabaseViewState.Page.LIBRARY.name(), tr("library"), () -> showPage(DatabaseViewState.Page.LIBRARY));
+        globalTab = tabs.addTab(DatabaseViewState.Page.GLOBAL_DATA.name(), tr("global_data"), () -> showPage(DatabaseViewState.Page.GLOBAL_DATA));
+        addView(tabs, new LayoutParams(-1, px(UiSubTabs.HEIGHT)));
 
         FrameLayout main = new FrameLayout(context);
         world = new WorldObjectsView(context, value -> {
-            if (!disposed && worldSelected) setSelection(value);
+            if (!disposed && selectedPage == DatabaseViewState.Page.WORLD) setSelection(value);
         }, state);
         library = new DataLibraryWindow(context, this.repository, state);
         library.onHide(); library.setVisibility(GONE);
@@ -94,8 +90,12 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
         sidebarLayout = new SidebarLayoutController(workspace, sidebar, visible -> saveSidebar());
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
         sidebarLayout.initialize(savedSidebar.visible()); sidebarLayout.onOwnerHidden();
-        addView(workspace, new LayoutParams(-1, 0, 1));
-        library.setSelectionListener(entries -> { if (!disposed && !worldSelected) setSelection(librarySelection(entries)); });
+        FrameLayout pageHost = new FrameLayout(context);
+        pageHost.addView(workspace, new FrameLayout.LayoutParams(-1, -1));
+        global = new GlobalDataView(context, state); global.setVisibility(GONE);
+        pageHost.addView(global, new FrameLayout.LayoutParams(-1, -1));
+        addView(pageHost, new LayoutParams(-1, 0, 1));
+        library.setSelectionListener(entries -> { if (!disposed && selectedPage == DatabaseViewState.Page.LIBRARY) setSelection(librarySelection(entries)); });
         this.repository.addChangeListener(libraryChanged);
         restoreTabScope();
         UiStateScopes.addChangeListener(scopeChanged);
@@ -107,57 +107,63 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                 new DatabaseViewState.Sidebar(workspace.preferredExtentDp(), sidebarLayout.isVisible()));
     }
     private void saveTab() {
-        if (stateScope != null) uiState.write(DatabaseViewState.TAB, stateScope, new DatabaseViewState.Tab(worldSelected));
+        if (stateScope != null) uiState.write(DatabaseViewState.TAB, stateScope, new DatabaseViewState.Tab(selectedPage));
     }
     private void restoreTabScope() {
         String next = UiStateScopes.current();
         if (java.util.Objects.equals(stateScope, next)) return;
         saveTab(); stateScope = next;
-        showWorld(uiState.read(DatabaseViewState.TAB, next).world());
+        showPage(uiState.read(DatabaseViewState.TAB, next).page());
     }
     public DatabaseSelection selection() { return selection; }
     private void refreshLibraryDetails() {
-        if (!disposed && shown && !worldSelected) setSelection(librarySelection(library.selectedEntries()));
+        if (!disposed && shown && selectedPage == DatabaseViewState.Page.LIBRARY) setSelection(librarySelection(library.selectedEntries()));
     }
     private void setSelection(DatabaseSelection selection) {
         this.selection = selection;
         if (details != null) details.refresh();
     }
     public void showWorld(boolean value) {
-        if (disposed || worldSelected == value) return;
-        if (shown) { if (worldSelected) world.onHide(); else library.onHide(); }
-        worldSelected = value;
+        showPage(value ? DatabaseViewState.Page.WORLD : DatabaseViewState.Page.LIBRARY);
+    }
+    public DatabaseViewState.Page selectedPage() { return selectedPage; }
+    public void showPage(DatabaseViewState.Page page) {
+        java.util.Objects.requireNonNull(page);
+        if (disposed || selectedPage == page) return;
+        if (shown) hideCurrentPage();
+        selectedPage = page;
         saveTab();
-        world.setVisibility(value ? VISIBLE : GONE); library.setVisibility(value ? GONE : VISIBLE);
-        if (shown) { if (value) world.onShow(); else library.onShow(); }
-        setSelection(value ? world.presentationSelection() : librarySelection(library.selectedEntries()));
+        world.setVisibility(page == DatabaseViewState.Page.WORLD ? VISIBLE : GONE);
+        library.setVisibility(page == DatabaseViewState.Page.LIBRARY ? VISIBLE : GONE);
+        workspace.setVisibility(page == DatabaseViewState.Page.GLOBAL_DATA ? GONE : VISIBLE);
+        global.setVisibility(page == DatabaseViewState.Page.GLOBAL_DATA ? VISIBLE : GONE);
+        if (shown) showCurrentPage();
+        setSelection(switch (page) {
+            case WORLD -> world.presentationSelection();
+            case LIBRARY -> librarySelection(library.selectedEntries());
+            case GLOBAL_DATA -> null;
+        });
         if (registration != null) registration.markInteracted();
         updateTabs();
     }
-    private UiActionButton tab(Context context, String text, boolean world) {
-        UiActionButton tab = UiTableStyle.rowButton(context);
-        tab.setText(text);
-        tab.setSingleLine(true);
-        UIUtils.setLockedTextSize(tab, 12);
-        tab.setOnClickListener(view -> showWorld(world));
-        return tab;
+    private void hideCurrentPage() {
+        sidebarLayout.onOwnerHidden();
+        switch (selectedPage) {
+            case WORLD -> world.onHide();
+            case LIBRARY -> library.onHide();
+            case GLOBAL_DATA -> global.onHide();
+        }
     }
-    private void addTab(LinearLayout tabs, UiActionButton tab) {
-        FrameLayout host = new FrameLayout(getContext());
-        tab.setPadding(px(16), 0, px(16), 0);
-        host.addView(tab, new FrameLayout.LayoutParams(-1, -1));
-        View underline = new View(getContext()); underline.setBackground(background(UiThemes.EDITOR.selection().outline()));
-        host.addView(underline, new FrameLayout.LayoutParams(-1, px(2), Gravity.BOTTOM));
-        tabUnderlines.put(tab, underline);
-        tabs.addView(host, new LayoutParams(px(124), -1));
+    private void showCurrentPage() {
+        if (selectedPage != DatabaseViewState.Page.GLOBAL_DATA) sidebarLayout.onOwnerShown();
+        switch (selectedPage) {
+            case WORLD -> world.onShow();
+            case LIBRARY -> library.onShow();
+            case GLOBAL_DATA -> global.onShow();
+        }
     }
     private void updateTabs() {
-        for (UiActionButton tab : List.of(worldTab, libraryTab)) {
-            boolean active = tab == worldTab ? worldSelected : !worldSelected;
-            tab.setPalette(new UiActionButton.Palette(active ? UiThemes.EDITOR.surface().header() : UiThemes.EDITOR.surface().panel(),
-                    UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(), active ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted()));
-            tabUnderlines.get(tab).setVisibility(active ? VISIBLE : INVISIBLE);
-        }
+        tabs.setSelectedTab(selectedPage.name());
     }
     private DatabaseSelection librarySelection(List<DataLibraryRepository.Entry> entries) {
         if (entries.isEmpty()) return null;
@@ -196,7 +202,7 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
                                 repository, entry.id(), () -> java.util.Objects.equals(selectionScope, UiStateScopes.current()))));
     }
     private void submitLibraryTagEdit(DataLibraryRepository.Entry expected, String scope, String tag, boolean add) {
-        if (disposed || !shown || worldSelected || !sidebarLayout.isVisible()
+        if (disposed || !shown || selectedPage != DatabaseViewState.Page.LIBRARY || !sidebarLayout.isVisible()
                 || !java.util.Objects.equals(scope, stateScope)
                 || !java.util.Objects.equals(scope, UiStateScopes.current()))
             throw new IllegalStateException("Inactive library tag editor");
@@ -226,19 +232,18 @@ public final class DatabaseWindow extends LinearLayout implements AreaEditorWind
     @Override public void onShow() {
         if (disposed || shown) return;
         restoreTabScope();
-        shown = true; sidebarLayout.onOwnerShown();
-        if (worldSelected) world.onShow(); else library.onShow();
-        if (!worldSelected) setSelection(librarySelection(library.selectedEntries()));
+        shown = true; showCurrentPage();
+        if (selectedPage == DatabaseViewState.Page.LIBRARY) setSelection(librarySelection(library.selectedEntries()));
     }
     @Override public void onHide() {
         saveTab(); saveSidebar();
-        shown = false; sidebarLayout.onOwnerHidden(); world.onHide(); library.onHide();
+        shown = false; sidebarLayout.onOwnerHidden(); world.onHide(); library.onHide(); global.onHide();
     }
     @Override public void onDispose() {
         if (disposed) return;
         onHide(); disposed = true;
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         repository.removeChangeListener(libraryChanged); removeCallbacks(libraryDetailsTask);
-        world.onDispose(); library.onDispose();
+        world.onDispose(); library.onDispose(); global.onDispose();
     }
 }

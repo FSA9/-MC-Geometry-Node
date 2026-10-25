@@ -20,6 +20,8 @@
 
 传入的任意子 View 不会自动换色，例如网格菜单的业务预览与表格的外部单元格；调用方仍需使用对应主题创建它们。颜色编辑内容、图标原色与业务分类颜色不随 UI 主题替换。`UiIconButton.Style` 的图标颜色 `0` 表示保留调用方原色，重新启用或移除图标会解除状态着色覆盖，避免禁用色残留。具体参数与示例见各组件源码及 [主题说明](../../../../../../../../../docs/ui/themes.md)。
 
+常规图标动作使用 `UiIconButton.createThemed(context, theme, icon, description)`，统一采用 `TOOLBAR` 预设；表格行、标签删除、复制等透明背景动作传入 `Preset.INLINE`。预设统一背景、边框、焦点、禁用状态及图标大小，`INLINE` 保留调用方图标颜色。紧凑控件可通过 `Style.forPreset(theme, preset).withSize(width, height, iconSize)` 调整最小命中尺寸及图标尺寸；不再复制整套状态颜色。组件只负责展示和交互状态，清除、删除、重置等回调及启用条件由所属业务页面维护。
+
 ## 层级与选择规则
 
 | 层级 | 职责 | 选用边界 |

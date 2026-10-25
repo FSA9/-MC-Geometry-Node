@@ -112,12 +112,10 @@ final class UiDataDictionaryContent extends FrameLayout {
         filterButton.setOnClickListener(view -> choose(filterButton, true, type -> {
             filter = type; page = 0; filterButton.setValue(type == null ? tr("all_types") : typeLabel(type)); renderList();
         }));
-        add = UiIconButton.createThemed(context, theme,
-                new SvgIconView(context, SvgIconView.Icon.PLUS, theme.text().secondary())).tooltip(tr("add"));
+        add = UiIconButton.createThemed(context, theme, SvgIconView.Icon.PLUS, tr("add"));
         add.setOnClickListener(view -> newEntry());
         LinearLayout.LayoutParams addParams = params(30, 30); addParams.leftMargin = px(6); toolbar.addView(add, addParams);
-        deleteSelected = UiIconButton.createThemed(context, theme,
-                new SvgIconView(context, SvgIconView.Icon.CLEAR, theme.text().secondary())).tooltip(tr("remove"));
+        deleteSelected = UiIconButton.createThemed(context, theme, SvgIconView.Icon.CLEAR, tr("remove"));
         deleteSelected.setOnClickListener(view -> removeSelected());
         LinearLayout.LayoutParams deleteParams = params(30, 30); deleteParams.leftMargin = px(6);
         toolbar.addView(deleteSelected, deleteParams);

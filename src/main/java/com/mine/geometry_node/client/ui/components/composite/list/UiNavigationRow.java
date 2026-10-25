@@ -23,6 +23,15 @@ public final class UiNavigationRow extends FrameLayout {
     }
 
     public UiNavigationRow(Context context, String title, long count, UiTheme theme) {
+        this(context, title, Long.valueOf(count), theme);
+    }
+
+    /** Category navigation without a quantitative badge uses the same typography and hit target. */
+    public UiNavigationRow(Context context, String title, UiTheme theme) {
+        this(context, title, null, theme);
+    }
+
+    private UiNavigationRow(Context context, String title, Long count, UiTheme theme) {
         super(context);
         java.util.Objects.requireNonNull(theme, "theme");
         button = new UiActionButton(context, theme, "", UiActionButton.Role.QUIET,
@@ -33,7 +42,7 @@ public final class UiNavigationRow extends FrameLayout {
         button.setMinimumWidth(0);
         button.setMinimumHeight(0);
         button.setPadding(0, 0, 0, 0);
-        button.setContentDescription(title + ": " + count);
+        button.setContentDescription(count == null ? title : title + ": " + count);
         setContentDescription(button.getContentDescription());
         addView(button, new FrameLayout.LayoutParams(-1, -1));
 
@@ -47,9 +56,11 @@ public final class UiNavigationRow extends FrameLayout {
         name.setEllipsize(TextUtils.TruncateAt.END);
         name.setPadding(0, 0, UIUtils.dp2pxInt(6), 0);
         cells.addView(name, new LinearLayout.LayoutParams(0, -1, 1));
-        TextView total = UIUtils.createLockedTextView(context, Long.toString(count), 10, theme.text().muted());
-        total.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-        cells.addView(total, new LinearLayout.LayoutParams(-2, -1));
+        if (count != null) {
+            TextView total = UIUtils.createLockedTextView(context, Long.toString(count), 10, theme.text().muted());
+            total.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            cells.addView(total, new LinearLayout.LayoutParams(-2, -1));
+        }
         addView(cells, new FrameLayout.LayoutParams(-1, -1));
     }
 

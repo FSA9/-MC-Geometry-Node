@@ -1,10 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.asset.preview;
 
-import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
 import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.schematic.SchematicThumbnailView;
-import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewKind;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -54,10 +50,15 @@ public final class AssetPreviewView extends FrameLayout {
         mSubscription = mProvider.subscribe(mEntry, new AssetPreviewProvider.Listener() {
             @Override
             public void available(File localSource) {
+                available(AssetPreviewArtifact.file(localSource));
+            }
+
+            @Override
+            public void available(AssetPreviewArtifact artifact) {
                 // Providers deliver on the MC thread. Read UI-owned state only after posting;
                 // detach may invalidate this generation while the callback is queued.
                 post(() -> {
-                    if (generation == mGeneration) showResolved(localSource);
+                    if (generation == mGeneration) showResolved(artifact);
                 });
             }
 
@@ -70,15 +71,11 @@ public final class AssetPreviewView extends FrameLayout {
         });
     }
 
-    private void showResolved(File localSource) {
+    private void showResolved(AssetPreviewArtifact artifact) {
         clearResolvedView();
-        if (localSource == null || !localSource.isFile()) return;
-        if (mEntry.sourceKind() == AssetSourceKind.LOCAL
-                && mEntry.type().previewKind().equals(AssetPreviewKind.SCHEMATIC)) {
-            mResolvedView = new SchematicThumbnailView(getContext(), localSource);
-        } else {
-            mResolvedView = new ImageThumbnailView(getContext(), localSource);
-        }
+        if (artifact == null || !artifact.file().isFile()) return;
+        mResolvedView = AssetPreviewRenderers.create(getContext(), mEntry, artifact);
+        if (mResolvedView == null) return;
         mFallbackView.setVisibility(View.GONE);
         addView(mResolvedView, matchParent());
     }

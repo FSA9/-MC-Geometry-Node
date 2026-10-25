@@ -1061,10 +1061,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private UiIconButton createIconButton(Context context, View icon, String description) {
-        UiIconButton.Style style = new UiIconButton.Style(UiMetrics.RADIUS_INPUT, 0,
-                UiThemes.EDITOR.control().icon(), UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconPressed(),
-                UiThemes.EDITOR.surface().panel(), 0, 16.0f, UiMetrics.DISABLED_ALPHA);
-        return new UiIconButton(context, icon, style).tooltip(description);
+        return UiIconButton.createThemed(context, UiThemes.EDITOR, icon).tooltip(description);
     }
 
     private static String tr(String translationKey) {

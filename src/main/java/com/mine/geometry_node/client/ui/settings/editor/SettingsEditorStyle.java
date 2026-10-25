@@ -49,9 +49,6 @@ final class SettingsEditorStyle {
     }
 
     static FrameLayout iconButton(Context context, SvgIconView.Icon iconType, String tooltip) {
-        UiIconButton.Style style = new UiIconButton.Style(2.0f, 0.0f, CONTROL,
-                CONTROL_HOVER, CONTROL_HOVER, CONTROL, 0, 14.0f, 0.5f);
-        return new UiIconButton(context, new SvgIconView(context, iconType, MUTED), style)
-                .tooltip(tooltip);
+        return UiIconButton.createThemed(context, UiThemes.EDITOR, iconType, tooltip);
     }
 }

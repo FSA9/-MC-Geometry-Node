@@ -7,7 +7,9 @@ import java.nio.file.Path;
 public interface AssetResolver {
     /**
      * Resolves a reference to a filesystem path. Sources that are not backed by the
-     * local filesystem (for example remote assets) return {@code null}.
+     * local filesystem (for example remote assets) return {@code null}. The
+     * context supplies the client game directory and, when available, the
+     * current save directory.
      */
-    Path resolve(AssetReference reference, Path gameDirectory);
+    Path resolve(AssetReference reference, AssetResolutionContext context);
 }

@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.asset.browser;
 
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -185,9 +184,8 @@ final class AssetFileItemView extends LinearLayout {
         star.setGravity(Gravity.CENTER);
         star.setSingleLine(true);
         star.setPadding(0, 0, 0, 0);
-        UiIconButton button = new UiIconButton(getContext(), star, new UiIconButton.Style(
-                UiMetrics.RADIUS_SMALL, 0, 0, UiThemes.EDITOR.control().iconHover(),
-                UiThemes.EDITOR.control().iconPressed(), 0, 0, 20, UiMetrics.DISABLED_ALPHA))
+        UiIconButton button = new UiIconButton(getContext(), star,
+                UiIconButton.Style.forPreset(UiThemes.EDITOR, UiIconButton.Preset.INLINE).withSize(0, 0, 20))
                 .tooltip(Component.translatable("geometry_node.asset_library.action.favorite_toggle").getString());
         button.setOnClickListener(view -> mListener.onFavoriteToggled(mEntry));
         button.setOnHoverListener((view, event) -> {

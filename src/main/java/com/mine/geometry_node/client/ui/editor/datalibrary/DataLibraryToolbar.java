@@ -44,10 +44,7 @@ final class DataLibraryToolbar {
     }
 
     private static UiIconButton icon(Context context, SvgIconView.Icon icon, String key) {
-        UiIconButton button = new UiIconButton(context, new SvgIconView(context, icon, UiThemes.EDITOR.text().secondary()),
-                new UiIconButton.Style(0, 0, UiThemes.EDITOR.control().icon(), UiThemes.EDITOR.control().iconHover(), UiThemes.EDITOR.control().iconBorder()));
-        button.setContentDescription(tr(key));
-        return button;
+        return UiIconButton.createThemed(context, UiThemes.EDITOR, icon, tr(key));
     }
 
     private static String tr(String key) { return Component.translatable(key).getString(); }

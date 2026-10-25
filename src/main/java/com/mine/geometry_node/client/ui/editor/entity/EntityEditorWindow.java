@@ -18,6 +18,7 @@ import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import icyllis.modernui.core.Context;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.text.SpannableString;
@@ -33,6 +34,7 @@ import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,11 @@ import static com.mine.geometry_node.client.ui.editor.entity.EntityEditorViews.*
 /** Direct-edit entity window. Completed operations are serialized through server-owned transactions. */
 public final class EntityEditorWindow extends ModalWindowView {
     interface Gateway extends EntityEditSession.Gateway {}
+    @FunctionalInterface
+    interface FactionsFactory {
+        EntityFactionsView create(Context context, UiTheme theme, EntityEditDraft draft,
+                                  BooleanSupplier editable, Runnable changed);
+    }
     private static final Gateway LIVE = new Gateway() {
         public ClientEntityEditor.Request read(String dimension, UUID entity) { return ClientEntityEditor.INSTANCE.read(dimension, entity); }
         public ClientEntityEditor.Request apply(String dimension, UUID entity, String revision, Map<String, Object> values) {
@@ -52,6 +59,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     private final String initialName;
     private final UiTheme theme;
     private final EntityEditSession session;
+    private final FactionsFactory factionsFactory;
     private final LinearLayout tabs;
     private final FrameLayout pages;
     private final View blocker;
@@ -63,6 +71,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     private record TabPresentation(String key, View underline) {}
     private EntityEditDraft draft;
     private EntityAttributesView attributes;
+    private EntityFactionsView factions;
     private EntityTagsView tags;
     private EntityEquipmentView equipment;
     private EntityGraphsView graphs;
@@ -96,10 +105,20 @@ public final class EntityEditorWindow extends ModalWindowView {
     EntityEditorWindow(View owner, String name, UUID entity, String dimension, UiTheme theme,
                        Gateway gateway, Consumer<Runnable> uiQueue, Runnable applied,
                        EntityEditSession.Scheduler scheduler, Consumer<EntityEditSession.Failure> failures) {
+        this(owner, name, entity, dimension, theme, gateway, uiQueue, applied, scheduler, failures,
+                EntityFactionsView::new);
+    }
+
+    /** Detached faction pages keep window tests independent of the live catalog connection. */
+    EntityEditorWindow(View owner, String name, UUID entity, String dimension, UiTheme theme,
+                       Gateway gateway, Consumer<Runnable> uiQueue, Runnable applied,
+                       EntityEditSession.Scheduler scheduler, Consumer<EntityEditSession.Failure> failures,
+                       FactionsFactory factionsFactory) {
         super(owner.getContext(), tr("title", name), MovementMode.DRAGGABLE, Style.forTheme(theme));
         bindSessionOwner(owner);
         this.entity = entity; this.dimension = dimension; this.theme = theme; initialName = name;
         session = new EntityEditSession(dimension, entity, gateway, scheduler, uiQueue, applied, failures);
+        this.factionsFactory = Objects.requireNonNull(factionsFactory);
         setPreferredSizeDp(1120, 750); setMinimumSizeDp(640, 460);
         titleView().setSingleLine(true); titleView().setEllipsize(TextUtils.TruncateAt.END);
         UIUtils.setLockedTextSize(titleView(), 15);
@@ -125,6 +144,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         active = true; session.observe(this::renderSession); session.start();
     }
     @Override protected void onWindowSuspended() {
+        if (factions != null) factions.suspend();
         if (graphs != null) graphs.dismissMenus();
         if (data != null) data.suspend();
     }
@@ -139,11 +159,12 @@ public final class EntityEditorWindow extends ModalWindowView {
         active = false;
         // Disarm blur handlers before removing controls. Closing never completes raw input.
         if (attributes != null) attributes.dispose();
+        if (factions != null) factions.dispose();
         if (data != null) data.dispose();
         if (graphs != null) graphs.dispose();
         session.close();
         pages.removeAllViews(); pageViews.clear(); tabs.removeAllViews(); tabButtons.clear(); tabPresentations.clear();
-        attributes = null; tags = null; data = null; equipment = null; graphs = null;
+        attributes = null; factions = null; tags = null; data = null; equipment = null; graphs = null;
     }
     @Override public boolean canClose(OverlayCloseReason reason) { return true; }
     private void renderSession() {
@@ -167,6 +188,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         changing = true;
         try {
             if (attributes != null) attributes.dispose();
+            if (factions != null) factions.dispose();
             if (data != null) data.dispose();
             if (graphs != null) graphs.dispose();
             pages.removeAllViews(); tabs.removeAllViews(); pageViews.clear(); tabButtons.clear(); tabPresentations.clear();
@@ -191,6 +213,14 @@ public final class EntityEditorWindow extends ModalWindowView {
             addPage("tab.tags", tags);
             data = UiDataDictionaryEditor.createEmbedded(this, draft.dataBinding(), theme, UiMetrics.TEXT_BODY);
             data.setOnPendingChangesChanged(this::changed); addPage("tab.data", data.view());
+            factions = null;
+            if (draft.snapshot().containsKey("factions")) {
+                EntityEditDraft factionsDraft = draft;
+                factions = factionsFactory.create(getContext(), theme, factionsDraft,
+                        () -> active && !session.closed() && !session.blocked() && !session.loading()
+                                && session.draft() == factionsDraft, this::changed);
+                addPage("tab.factions", factions);
+            }
             EntityEditDraft graphDraft = draft;
             graphs = new EntityGraphsView(getContext(), theme, graphDraft.graphs("graphs"),
                     graphDraft.graphs("availableGraphs"), bindings -> graphDraft.set("graphs", bindings),
@@ -199,6 +229,7 @@ public final class EntityEditorWindow extends ModalWindowView {
             addPage("tab.graphs", graphs);
             pages.addView(blocker, new FrameLayout.LayoutParams(-1, -1));
             selectedTab = Math.min(selectedTab, pageViews.size() - 1); selectTab(selectedTab);
+            if (factions != null) factions.start();
         } finally { changing = false; }
     }
     private void addPage(String label, View page) {
@@ -232,6 +263,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         if (session.loading() || index == selectedTab) return;
         // Page instances own unfinished forms. Navigation never stages or validates them.
         if (data != null) data.suspend();
+        if (factions != null) factions.suspend();
         if (graphs != null) graphs.dismissMenus();
         selectTab(index);
         if (data != null && pageViews.get(index) == data.view()) data.resume();
@@ -253,6 +285,7 @@ public final class EntityEditorWindow extends ModalWindowView {
             int count = draft == null ? -1 : switch (tab.key()) {
                 case "tab.tags" -> draft.tags().size();
                 case "tab.data" -> draft.dictionary("data").size();
+                case "tab.factions" -> factions == null ? -1 : factions.factionCount();
                 case "tab.graphs" -> draft.graphs("graphs").size();
                 default -> -1;
             };
@@ -289,6 +322,7 @@ public final class EntityEditorWindow extends ModalWindowView {
     }
     private boolean dirty() {
         return draft != null && (draft.dirty() || attributes != null && attributes.hasPendingChanges()
+                || factions != null && factions.hasPendingChanges()
                 || data != null && data.hasPendingChanges() || equipmentChanged());
     }
     private boolean equipmentChanged() {
@@ -314,6 +348,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         changing = true;
         try {
             if (attributes != null) attributes.refreshConfirmedValues();
+            if (factions != null) factions.refreshConfirmed();
             if (tags != null) tags.refreshConfirmed();
             if (graphs != null) graphs.refreshConfirmed(draft.graphs("graphs"), draft.graphs("availableGraphs"));
             if (equipment != null && equipment.isCommitReady() && !equipmentPending()) equipment.acceptCommitted(
@@ -334,6 +369,7 @@ public final class EntityEditorWindow extends ModalWindowView {
         }
         for (UiActionButton tab : tabButtons) tab.setEnabled(!session.loading());
         if (attributes != null) attributes.refreshInputState();
+        if (factions != null) factions.refreshInputState();
         reload.setEnabled(active && !session.loading() && !session.saving()
                 && (session.blocked() || draft == null || !draft.dirty())); close.setEnabled(active);
         reload.setVisibility(session.blocked() || !session.error().isEmpty() ? VISIBLE : GONE);

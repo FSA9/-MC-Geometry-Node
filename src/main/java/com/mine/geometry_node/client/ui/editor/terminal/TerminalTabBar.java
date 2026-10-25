@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
@@ -112,8 +111,7 @@ public class TerminalTabBar extends LinearLayout {
 
     private static UiIconButton iconButton(Context context, SvgIconView.Icon icon, String tooltip) {
         return new UiIconButton(context, new SvgIconView(context, icon, UiThemes.EDITOR.text().muted()),
-                new UiIconButton.Style(0, 0, 0, UiThemes.EDITOR.control().iconHover(),
-                        UiThemes.EDITOR.control().iconPressed(), 0, 0, 14, UiMetrics.DISABLED_ALPHA))
+                UiIconButton.Style.forPreset(UiThemes.EDITOR, UiIconButton.Preset.INLINE).withSize(0, 0, 14))
                 .tooltip(TerminalChrome.tr(tooltip));
     }
 
