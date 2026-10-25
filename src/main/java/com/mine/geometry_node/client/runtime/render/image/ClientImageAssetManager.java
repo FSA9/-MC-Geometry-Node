@@ -2,6 +2,7 @@ package com.mine.geometry_node.client.runtime.render.image;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.image.ImageAssetValidator;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetReference;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -20,6 +21,7 @@ import java.util.Map;
 /** Owns runtime image textures used by temporary world visuals. */
 public final class ClientImageAssetManager {
     private static final Map<Path, LocalAsset> LOCAL_TEXTURES = new HashMap<>();
+    private static final Map<Path, LocalAsset> PACK_TEXTURES = new HashMap<>();
     private static final Map<String, String> RESOURCE_TEXTURES = new HashMap<>();
     private static final Map<String, TextureEntry> TEXTURES = new HashMap<>();
     private static final Map<String, PendingContent> PENDING_SERVER_ASSETS = new HashMap<>();
@@ -34,12 +36,13 @@ public final class ClientImageAssetManager {
 
     private static synchronized com.mine.geometry_node.core.cache.CacheStats cacheStats() {
         long retained = TEXTURES.size() + PENDING_SERVER_ASSETS.size() + RETAINED_SERVER_ASSETS.size();
-        return new com.mine.geometry_node.core.cache.CacheStats(retained + LOCAL_TEXTURES.size() + RESOURCE_TEXTURES.size(), -1, 0, retained);
+        return new com.mine.geometry_node.core.cache.CacheStats(retained + LOCAL_TEXTURES.size() + PACK_TEXTURES.size() + RESOURCE_TEXTURES.size(), -1, 0, retained);
     }
 
     /** Lookup reuse is disposable. Texture/source leases and unclaimed network transfers are not. */
     static synchronized void clearCachedLookups() {
         LOCAL_TEXTURES.clear();
+        PACK_TEXTURES.clear();
         RESOURCE_TEXTURES.clear();
         REPORTED_FAILURES.clear();
     }
@@ -121,24 +124,32 @@ public final class ClientImageAssetManager {
                 return null;
             }
         }
-        if (!"local".equals(source) || reference == null || reference.isBlank()) {
+        if (!("local".equals(source) || "pack".equals(source)) || reference == null || reference.isBlank()) {
             return null;
         }
 
         try {
-            Path path = Path.of(reference);
-            if (!path.isAbsolute()) {
-                path = Minecraft.getInstance().gameDirectory.toPath().resolve(path);
-            }
+            AssetReference assetReference = "pack".equals(source)
+                    ? AssetReference.parse(reference)
+                    : AssetReference.parse("local:" + reference);
+            Path path = assetReference.resolvePath(Minecraft.getInstance().gameDirectory.toPath());
+            if (path == null || !path.isAbsolute()) throw new IOException("asset path is not absolute");
             path = path.toAbsolutePath().normalize();
+            Path packRoot = "pack".equals(source)
+                    ? Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath().normalize()
+                    .resolve("geometry_nodes").resolve("packs").normalize() : null;
+            if (packRoot != null && !path.startsWith(packRoot)) {
+                throw new IOException("pack image escapes the pack root");
+            }
             if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(path)) {
-                throw new IOException("local image does not exist: " + path);
+                throw new IOException(source + " image does not exist: " + path);
             }
 
             long size = Files.size(path);
-            if (size <= 0 || size > 16 * 1024 * 1024) throw new IOException("Local image exceeds 16 MiB byte budget");
+            if (size <= 0 || size > 16 * 1024 * 1024) throw new IOException(source + " image exceeds 16 MiB byte budget");
             FileTime modified = Files.getLastModifiedTime(path);
-            LocalAsset cached = LOCAL_TEXTURES.get(path);
+            Map<Path, LocalAsset> sourceTextures = "pack".equals(source) ? PACK_TEXTURES : LOCAL_TEXTURES;
+            LocalAsset cached = sourceTextures.get(path);
             if (cached != null && cached.size == size && cached.modified.equals(modified)) {
                 TextureEntry entry = TEXTURES.get(cached.cacheKey);
                 if (entry != null) {
@@ -151,12 +162,12 @@ public final class ClientImageAssetManager {
             try (var stream = Files.newInputStream(path)) { data = stream.readNBytes(16 * 1024 * 1024 + 1); }
             ImageAssetValidator.validateImage(data, 16 * 1024 * 1024, 8192, 16 * 1024 * 1024);
             String contentId = ImageAssetValidator.contentId(data);
-            String cacheKey = cacheKey("local", contentId);
-            TextureEntry entry = retainTexture(cacheKey, "local", contentId, data);
-            LOCAL_TEXTURES.put(path, new LocalAsset(size, modified, cacheKey));
+            String cacheKey = cacheKey(source, contentId);
+            TextureEntry entry = retainTexture(cacheKey, source, contentId, data);
+            sourceTextures.put(path, new LocalAsset(size, modified, cacheKey));
             return new TextureLease(cacheKey, entry);
         } catch (IOException | RuntimeException exception) {
-            reportOnce("local:" + reference, exception);
+            reportOnce(source + ":" + reference, exception);
             return null;
         }
     }
@@ -167,6 +178,7 @@ public final class ClientImageAssetManager {
             minecraft.getTextureManager().release(entry.texture);
         }
         LOCAL_TEXTURES.clear();
+        PACK_TEXTURES.clear();
         RESOURCE_TEXTURES.clear();
         TEXTURES.clear();
         PENDING_SERVER_ASSETS.clear();
@@ -214,6 +226,10 @@ public final class ClientImageAssetManager {
         Iterator<Map.Entry<Path, LocalAsset>> iterator = LOCAL_TEXTURES.entrySet().iterator();
         while (iterator.hasNext()) {
             if (iterator.next().getValue().cacheKey.equals(cacheKey)) iterator.remove();
+        }
+        Iterator<Map.Entry<Path, LocalAsset>> packIterator = PACK_TEXTURES.entrySet().iterator();
+        while (packIterator.hasNext()) {
+            if (packIterator.next().getValue().cacheKey.equals(cacheKey)) packIterator.remove();
         }
     }
 

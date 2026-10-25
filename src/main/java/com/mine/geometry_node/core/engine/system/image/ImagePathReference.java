@@ -1,31 +1,19 @@
 package com.mine.geometry_node.core.engine.system.image;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetReference;
 
-/** Distinguishes server assets selected through remote:/ from client-local paths. */
+/** Validated image reference used by the image visual node. */
 public record ImagePathReference(Source source, String path) {
     public static ImagePathReference parse(String rawPath) {
         if (rawPath == null || rawPath.isBlank()) {
             throw new IllegalArgumentException("image path must not be empty");
         }
 
-        String value = rawPath.trim();
-        if (value.length() > 4096) {
-            throw new IllegalArgumentException("image path is too long");
-        }
-        String lower = value.toLowerCase(java.util.Locale.ROOT);
-        if (lower.startsWith("remote:")) {
-            String relative = value.substring("remote:".length()).replace('\\', '/');
-            while (relative.startsWith("/")) {
-                relative = relative.substring(1);
-            }
-            relative = ServerAssetPaths.normalizeRelativePath(relative, false);
-            requireSupportedImage(relative);
-            return new ImagePathReference(Source.SERVER, relative);
-        }
-
-        requireSupportedImage(value);
-        return new ImagePathReference(Source.LOCAL, value);
+        AssetReference reference = AssetReference.parse(rawPath);
+        requireSupportedImage(reference.location());
+        if (reference.isRemote()) return new ImagePathReference(Source.SERVER, reference.location());
+        if (reference.isPack()) return new ImagePathReference(Source.PACK, reference.location());
+        return new ImagePathReference(Source.LOCAL, reference.location());
     }
 
     private static void requireSupportedImage(String path) {
@@ -36,7 +24,8 @@ public record ImagePathReference(Source source, String path) {
 
     public enum Source {
         SERVER("server"),
-        LOCAL("local");
+        LOCAL("local"),
+        PACK("pack");
 
         private final String id;
 

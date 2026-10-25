@@ -7,6 +7,7 @@ import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetReference;
 import net.minecraft.resources.Identifier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -177,8 +178,17 @@ public final class ClientLightStore {
         private boolean closed, acquisitionAttempted;
 
         ManagedProjection(String path) {
-            source = path.startsWith("server:") ? "server" : path.startsWith("resource:") ? "resource" : "local";
-            reference = "local".equals(source) ? path : path.substring(source.length() + 1);
+            if (path.startsWith("server:")) {
+                source = "server";
+                reference = path.substring("server:".length());
+            } else if (path.startsWith("resource:")) {
+                source = "resource";
+                reference = path.substring("resource:".length());
+            } else {
+                AssetReference assetReference = AssetReference.parse(path);
+                source = assetReference.source().id();
+                reference = assetReference.location();
+            }
             content = "server".equals(source) ? ClientImageAssetManager.retainServerAsset(reference) : null;
         }
 
