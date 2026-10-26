@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
+
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
@@ -38,7 +40,7 @@ public final class SceneSavedData extends SavedData {
         return changed;
     }
     public synchronized boolean updateMetadata(String dimension, UUID id, UUID incarnation,
-            java.util.function.UnaryOperator<com.mine.geometry_node.core.engine.metadata.OwnerMetadata> transformation) {
+            java.util.function.UnaryOperator<com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata> transformation) {
         if (metadataUpdating) throw new IllegalStateException("Reentrant scene metadata update");
         boolean changed;
         metadataUpdating = true;
@@ -101,7 +103,7 @@ public final class SceneSavedData extends SavedData {
                 required(tag.getBoolean("Enabled"), "Enabled"), required(tag.getLong("Revision"), "Revision"), parameters,
                 new Vec3(required(tag.getDouble("RX"), "RX"),required(tag.getDouble("RY"), "RY"),required(tag.getDouble("RZ"), "RZ")),
                 new Vec3(required(tag.getDouble("SX"), "SX"),required(tag.getDouble("SY"), "SY"),required(tag.getDouble("SZ"), "SZ")),
-                com.mine.geometry_node.core.engine.metadata.OwnerMetadata.load(tag.getCompoundOrEmpty("Metadata")));
+                com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata.load(tag.getCompoundOrEmpty("Metadata")));
     }
     private static <T> T required(Optional<T> value, String field) {
         return value.orElseThrow(() -> new IllegalArgumentException("Missing or invalid scene field: " + field));

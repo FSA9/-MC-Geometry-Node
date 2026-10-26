@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.system.datalibrary.model;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataNbt;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.google.gson.JsonElement;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -14,9 +17,9 @@ public final class DataLibraryValueCodec {
      * and registered values that intentionally have no editable port/JSON representation. */
     public static JsonElement encodeData(java.util.Map<String, Object> data, HolderLookup.Provider registries) {
         var copy = com.mine.geometry_node.core.metadata.DataDictionary.snapshot(data,
-                com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(registries));
+                com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(registries));
         return new com.google.gson.JsonPrimitive(canonical(
-                com.mine.geometry_node.core.engine.metadata.GraphMetadataNbt.encode(copy, registries)).toString());
+                com.mine.geometry_node.core.engine.metadata.value.GraphMetadataNbt.encode(copy, registries)).toString());
     }
 
     public static java.util.Map<String, Object> decodeData(JsonElement value, HolderLookup.Provider registries) {
@@ -24,13 +27,13 @@ public final class DataLibraryValueCodec {
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
             throw new IllegalArgumentException("Metadata data must be a graph NBT string");
         try {
-            Object decoded = com.mine.geometry_node.core.engine.metadata.GraphMetadataNbt.decode(
+            Object decoded = com.mine.geometry_node.core.engine.metadata.value.GraphMetadataNbt.decode(
                     net.minecraft.nbt.TagParser.parseCompoundFully(value.getAsString()), registries);
             if (!(decoded instanceof java.util.Map<?, ?> map))
                 throw new IllegalArgumentException("Metadata data must be a dictionary");
             @SuppressWarnings("unchecked") var typed = (java.util.Map<String, Object>) map;
             return com.mine.geometry_node.core.metadata.DataDictionary.snapshot(typed,
-                    com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(registries));
+                    com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(registries));
         } catch (com.mojang.brigadier.exceptions.CommandSyntaxException malformed) {
             throw new IllegalArgumentException("Malformed metadata data", malformed);
         }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
 import net.minecraft.world.phys.Vec3;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import net.minecraft.core.HolderLookup;
 import java.util.*;
 

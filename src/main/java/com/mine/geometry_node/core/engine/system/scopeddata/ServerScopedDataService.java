@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.scopeddata;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
-import com.mine.geometry_node.core.engine.metadata.ScopedMetadataTargets;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
 import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.metadata.DataAccess;
 import com.mine.geometry_node.core.network.NetworkHandler;

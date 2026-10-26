@@ -1,12 +1,13 @@
 package com.mine.geometry_node.core.engine.graph.debug;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import net.minecraft.server.level.ServerLevel;
@@ -139,13 +140,13 @@ final class DebugSourceStore {
     }
 
     MetadataCapabilities.Access metadata(ServerLevel level, DebugSourceId id) {
-        RuntimeMetadataTargets.requireThread(level.getServer());
+        MetadataOwnerThread.requireCurrent(level.getServer());
         LevelSources sources = levels.get(level);
         Source source = sources == null ? null : sources.sources.get(id);
         if (source == null || !live(level, source)) throw new IllegalStateException("Geometry no longer exists");
         RuntimeMetadata metadata = source.customMetadata;
         return metadata.access(GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
-            RuntimeMetadataTargets.requireThread(level.getServer());
+            MetadataOwnerThread.requireCurrent(level.getServer());
             LevelSources currentSources = levels.get(level);
             Source current = currentSources == null ? null : currentSources.sources.get(id);
             if (current == null || current.customMetadata != metadata || !live(level, current))

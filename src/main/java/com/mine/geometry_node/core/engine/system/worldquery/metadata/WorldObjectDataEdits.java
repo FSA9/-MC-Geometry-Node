@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.worldquery.metadata;
 
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 
 import com.mine.geometry_node.core.metadata.*;

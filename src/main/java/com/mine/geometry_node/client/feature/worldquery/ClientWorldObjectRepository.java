@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.feature.worldquery;
 
 import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;

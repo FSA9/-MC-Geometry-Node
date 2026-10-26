@@ -4,7 +4,7 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryCollision;
 import net.minecraft.client.Minecraft;

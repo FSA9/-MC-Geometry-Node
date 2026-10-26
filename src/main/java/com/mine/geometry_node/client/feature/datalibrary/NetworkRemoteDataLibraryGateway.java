@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.feature.datalibrary;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.platform.ClientThread;
 import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
@@ -106,7 +108,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
                             && java.util.Objects.equals(previous.value(), entry.value())
                             && java.util.Objects.equals(previous.tags(), entry.tags())
                             && com.mine.geometry_node.core.metadata.DataDictionary.equivalent(previous.data(), entry.data(),
-                            com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(null))) {
+                            com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(null))) {
                         refreshNow(generation, finished);
                         return;
                     }

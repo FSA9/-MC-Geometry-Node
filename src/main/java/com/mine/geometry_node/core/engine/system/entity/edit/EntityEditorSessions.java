@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entity.edit;
 
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.function.LongSupplier;

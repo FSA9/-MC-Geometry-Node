@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.network.packet.scene;
 
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
 import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.network.RegistryFriendlyByteBuf;

@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.forceField;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResource;
@@ -64,9 +65,9 @@ public final class ForceFieldResourceStore {
     }
 
     public MetadataCapabilities.Access metadata(MinecraftServer server, ForceFieldAddress address) {
-        RuntimeMetadataTargets.requireThread(server);
+        MetadataOwnerThread.requireCurrent(server);
         return metadata(server, address, GraphMetadataValuePolicy.of(server.registryAccess()),
-                () -> RuntimeMetadataTargets.requireThread(server));
+                () -> MetadataOwnerThread.requireCurrent(server));
     }
 
     synchronized MetadataCapabilities.Access metadata(MinecraftServer server, ForceFieldAddress address,

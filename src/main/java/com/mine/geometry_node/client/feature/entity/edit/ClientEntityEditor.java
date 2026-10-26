@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.feature.entity.edit;
 
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest;

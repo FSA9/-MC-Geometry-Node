@@ -1,15 +1,16 @@
 package com.mine.geometry_node.core.engine.graph.collision;
 
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import net.minecraft.world.phys.AABB;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
@@ -219,14 +220,14 @@ public final class GeometryCollisionService implements ServerEngine {
     }
 
     public MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
-        RuntimeMetadataTargets.requireThread(level.getServer());
+        MetadataOwnerThread.requireCurrent(level.getServer());
         var resources = levels.get(level);
         Resource resource = resources == null ? null : resources.get(id);
         if (resource == null || resource.closed) throw new IllegalStateException("Collision no longer exists");
         return resource.metadataAccess(GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
             var currentResources = levels.get(level);
             return currentResources == null ? null : currentResources.get(id);
-        }, () -> RuntimeMetadataTargets.requireThread(level.getServer()));
+        }, () -> MetadataOwnerThread.requireCurrent(level.getServer()));
     }
 
     public record QuerySnapshot(GraphResourceId id, Vec3 position, AABB bounds, RuntimeMetadata metadata,

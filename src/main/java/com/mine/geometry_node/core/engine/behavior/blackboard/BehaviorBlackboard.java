@@ -18,7 +18,7 @@ import java.util.function.UnaryOperator;
 import com.mine.geometry_node.core.metadata.DataDictionary;
 import com.mine.geometry_node.core.metadata.DataValuePolicy;
 import com.mine.geometry_node.core.metadata.DataAccess;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 
 /** Dynamic scoped blackboard facade. Keys are created by Set and removed by Clear. */
 public final class BehaviorBlackboard {

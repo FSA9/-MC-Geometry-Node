@@ -13,7 +13,7 @@ import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
 import com.mine.geometry_node.core.metadata.DataAccess;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;

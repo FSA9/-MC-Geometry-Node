@@ -1,4 +1,7 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.metadata.state;
+
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataNbt;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodecRegistry;
 import com.mine.geometry_node.core.metadata.*;

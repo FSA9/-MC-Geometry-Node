@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.DataDictionary;
 import com.mine.geometry_node.core.metadata.DataValuePolicy;
 import net.minecraft.core.HolderLookup;

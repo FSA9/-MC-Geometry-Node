@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.node.value.light.LightConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import java.util.function.Predicate;
 import java.util.List;
 import java.util.ArrayList;

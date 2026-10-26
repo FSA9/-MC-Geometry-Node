@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped.storage;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateEntry;
@@ -196,7 +198,7 @@ public final class ServerScopedStateSavedData extends SavedData {
         @Override public String identity() { return storageKey.identity(); }
         @Override public boolean available() { return !level.getServer().isStopped(); }
         @Override public com.mine.geometry_node.core.metadata.DataValuePolicy valuePolicy() {
-            return com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.scoped(registries);
+            return com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.scoped(registries);
         }
 
         @Override

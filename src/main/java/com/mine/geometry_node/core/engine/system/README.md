@@ -14,13 +14,13 @@
 | `datalibrary` | `model` 管文档、目录树、值和指纹；`storage` 管 JSON、诊断和原子文件写入；`service` 管权威快照、元数据及远程仓库；`runtime` 管蓝图写入与等待。 |
 | `dialogue` | 根包管理运行时、会话、等待及交易执行；`model`/`model/shop` 管页面模型；`presenter` 管聊天与网络展示通道；`richtext` 管文本解析；`storage` 管交易次数。 |
 | `entity` | 聚合原生 Minecraft 实体能力，根包保留共享创建入口。具体子域见下表。 |
-| `faction` | `model` 管阵营、关系、职位和成员规则；`storage` 管文件与 JSON；`service` 管编辑、发布和实体成员适配。阵营自身拥有 Metadata。 |
+| `faction` | `model` 管阵营、关系、职位和成员规则；`storage` 管文件与 JSON；`service` 管编辑、发布和实体成员适配。阵营自身拥有 Metadata，`service/FactionMetadataTargets` 负责适配。 |
 | `image` | 运行时图片的格式、校验、引用、配置和服务，与资产缩略图生成不同。当前规模无需额外分层。 |
-| `marker` | 根包管理实例服务与持久化；`model` 管地址、锚点、受众和实例；`type` 管类型契约与注册。 |
+| `marker` | 根包管理实例服务、持久化及 `MarkerMetadataTargets` 所有者适配；`model` 管地址、锚点、受众和实例；`type` 管类型契约与注册。 |
 | `model` | 共享 CPU 模型与碰撞内核，不是通用资产仓库。子包职责见下文。 |
 | `quest` | 根包管理任务、条件与事件；`model` 是不可变领域数据；`graph` 从节点图提取条件概览；`status` 管状态注册；`storage` 管实体任务附件；`screen` 管屏幕会话及视图装配。 |
-| `scene` | 根包管理权威场景文档、服务、类型验证及原生实体适配；`property` 管属性契约、节点输入和检查器 schema；`geometry` 管几何类型及变换；`volume` 管区域和碰撞运行时。属性 schema 也用于服务端校验。 |
-| `schematic` | `execution` 管结构执行请求与任务；`placement` 管放置记录、持久化和调试同步；`projection` 管临时投影定义与运行时。 |
+| `scene` | 根包管理权威场景文档、服务、类型验证、原生实体及 `SceneMetadataTargets` 适配；`property` 管属性契约、节点输入和检查器 schema；`geometry` 管几何类型及变换；`volume` 管区域和碰撞运行时。属性 schema 也用于服务端校验。 |
+| `schematic` | `execution` 管结构执行请求与任务；`placement` 管放置记录、持久化、调试同步和 `PlacementMetadataTargets` 适配；`projection` 管临时投影定义与运行时。 |
 | `scopeddata` | GLOBAL／维度 PUBLIC 数据的远程权限、目录、读取、CAS 与连接限速；复用 scoped state 存储，不再保存一份数据。 |
 | `video` | 视频资源格式契约，目前只有格式表，保留明确的资源类型边界。 |
 | `viewport` | 根包管理编辑相机、观察者、区块追踪和短期租约；`entity` 管视口原生实体编辑、恢复及移动命令。它归视口会话所有，不并入通用实体编辑服务。 |
@@ -50,6 +50,8 @@
 - `runtime`：加载句柄、仓库、租约、实例及姿态的生命周期。
 - `collision`：共享碰撞几何、配置和变换；`generation` 管构建、缓存发布及内部算法；`runtime` 管世界实例、空间查询、运动求解和采样。
 - `capability`、`diagnostic`、`math`：能力证据、结构化错误和公共数学表示。
+
+实体 Metadata 的权威适配器 `EntityMetadataAdapter` 位于 `entity` 根包；它与阵营、场景等领域的适配器共同实现 `core/metadata` 能力契约。共享状态、值规则与跨领域分发的层级见 [engine/metadata](../metadata/README.md)。空间驻留观察归 `engine/residency`，不与实体强加载或资源资产仓库混合。
 
 ## 依赖与扩展规则
 

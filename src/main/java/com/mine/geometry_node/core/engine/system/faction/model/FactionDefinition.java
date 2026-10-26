@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.faction.model;
 
 import com.mine.geometry_node.core.node.value.RichTextValue;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import java.util.*;
 
 /** World-authored identity, directed relations and independent numeric rank labels. */

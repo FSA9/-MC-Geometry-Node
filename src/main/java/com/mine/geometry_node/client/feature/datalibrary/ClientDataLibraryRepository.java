@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.feature.datalibrary;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
 import java.util.List;
@@ -116,7 +118,7 @@ public final class ClientDataLibraryRepository implements DataLibraryRepository 
                 && !expected.tags().equals(replacement.tags());
         boolean dataChanged = expected != null && expected.id().equals(id)
                 && !com.mine.geometry_node.core.metadata.DataDictionary.equivalent(expected.data(), replacement.data(),
-                com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(null));
+                com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(null));
         long generation;
         synchronized (pendingInitialLoad) {
             generation = connectionGeneration;
@@ -145,7 +147,7 @@ public final class ClientDataLibraryRepository implements DataLibraryRepository 
                     Entry current = remote.findEntry(id);
                     if (!remote.hasLoadedSnapshot() || current == null
                             || !com.mine.geometry_node.core.metadata.DataDictionary.equivalent(current.data(), replacement.data(),
-                            com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(null))) {
+                            com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(null))) {
                         dataUpdateMessages.put(id, "database.data_update_failed");
                     } else dataUpdateMessages.remove(id);
                 }
@@ -175,7 +177,7 @@ public final class ClientDataLibraryRepository implements DataLibraryRepository 
     @Override public void replaceData(Entry expected, java.util.Map<String, Object> replacement,
                                       java.util.function.Consumer<String> completion) {
         // Validate and snapshot before publishing a callback or busy state.
-        var policy = com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(null);
+        var policy = com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(null);
         var data = com.mine.geometry_node.core.metadata.DataDictionary.snapshot(replacement, policy);
         boolean unchanged;
         synchronized (pendingInitialLoad) {

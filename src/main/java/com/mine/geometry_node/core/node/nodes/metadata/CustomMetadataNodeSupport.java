@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.node.nodes.metadata;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceReferences;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataTarget;
+import com.mine.geometry_node.core.engine.metadata.target.GraphMetadataTarget;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;

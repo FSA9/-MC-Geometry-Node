@@ -1,4 +1,8 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.metadata.target;
+
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
+import com.mine.geometry_node.core.engine.system.entity.EntityMetadataAdapter;
+import com.mine.geometry_node.core.engine.system.faction.service.FactionMetadataTargets;
 
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;

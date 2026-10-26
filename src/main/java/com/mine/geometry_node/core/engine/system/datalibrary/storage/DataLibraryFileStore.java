@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.system.datalibrary.storage;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryDocument;
 import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryEntry;
 import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectFingerprint;
@@ -111,7 +113,7 @@ public final class DataLibraryFileStore {
                     || !DataLibraryObjectFingerprint.entry(entry, registries).equals(expectedFingerprint)) {
                 throw new IllegalStateException("STALE_OBJECT: " + entryId);
             }
-            var policy = com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.of(registries);
+            var policy = com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.of(registries);
             var data = com.mine.geometry_node.core.metadata.DataDictionary.snapshot(
                     Objects.requireNonNull(transformation.apply(entry.data()), "data"), policy);
             requireAccess.run();

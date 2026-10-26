@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.debug;
 
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
 import com.mine.geometry_node.core.cache.CacheClearRequest;
 import com.mine.geometry_node.core.cache.CacheDescriptor;
 import com.mine.geometry_node.core.cache.CacheRegistry;
@@ -8,16 +10,13 @@ import com.mine.geometry_node.core.cache.ManagedCache;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceRelease;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
@@ -572,7 +571,7 @@ public final class DebugRendererSessionManager {
     }
 
     public static MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
-        RuntimeMetadataTargets.requireThread(level.getServer());
+        MetadataOwnerThread.requireCurrent(level.getServer());
         DebugServerState state = SERVERS.get(level.getServer());
         if (state == null) throw new IllegalStateException("Geometry no longer exists");
         return state.sources.metadata(level, DebugSourceId.graph(DebugRenderChannel.GEOMETRY, id));

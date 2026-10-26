@@ -6,8 +6,8 @@ import java.util.Map;
 import com.mine.geometry_node.core.metadata.MetadataStore;
 import com.mine.geometry_node.core.metadata.DataAccess;
 import com.mine.geometry_node.core.metadata.DataValuePolicy;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
-import com.mine.geometry_node.core.engine.metadata.ScopedMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
 
 /** Storage provider for one resolved scoped-state identity. */
 public interface ScopedStateProvider extends MetadataStore<Map<String, Object>> {

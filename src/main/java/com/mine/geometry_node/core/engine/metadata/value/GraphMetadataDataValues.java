@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.metadata.value;
 
 import com.mine.geometry_node.core.metadata.DataDictionary;
 import com.mine.geometry_node.core.metadata.DataValuePolicy;

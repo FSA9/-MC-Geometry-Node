@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.cache.*;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.engine.system.faction.storage.FactionJsonCodec;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.faction.*;

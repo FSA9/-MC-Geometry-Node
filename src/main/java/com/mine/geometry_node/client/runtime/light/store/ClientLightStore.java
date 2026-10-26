@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.runtime.light.store;
 
 import com.mine.geometry_node.core.engine.graph.light.GraphLightService;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.graph.light.LightDefinition;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceIdCodec;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceTypeRegistry;

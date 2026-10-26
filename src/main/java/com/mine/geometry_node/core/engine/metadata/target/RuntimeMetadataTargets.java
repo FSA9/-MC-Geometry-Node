@@ -1,4 +1,10 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.metadata.target;
+
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+import com.mine.geometry_node.core.engine.system.marker.MarkerMetadataTargets;
+import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
+import com.mine.geometry_node.core.engine.system.schematic.placement.PlacementMetadataTargets;
 
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.*;
 import com.mine.geometry_node.core.engine.blueprint.spatial.forceField.*;
@@ -79,7 +85,7 @@ public final class RuntimeMetadataTargets {
     }
 
     private static MetadataCapabilities.Access area(MetadataCapabilities registry, AreaTarget target) {
-        requireThread(target.server());
+        MetadataOwnerThread.requireCurrent(target.server());
         AreaResource area = AreaResourceStore.INSTANCE.get(target.server(), target.reference());
         if (area == null) throw new IllegalStateException("Area metadata handle is stale");
         if (area.isAuthored())
@@ -100,7 +106,7 @@ public final class RuntimeMetadataTargets {
 
     public static MetadataCapabilities.Access resolve(MetadataCapabilities registry, MinecraftServer server,
                                                        GraphResourceReferences.Reference reference) {
-        requireThread(server);
+        MetadataOwnerThread.requireCurrent(server);
         Objects.requireNonNull(reference);
         return switch (reference) {
             case GraphResourceReferences.GraphReference graph -> {
@@ -131,14 +137,9 @@ public final class RuntimeMetadataTargets {
         };
     }
 
-    public static void requireThread(MinecraftServer server) {
-        Objects.requireNonNull(server);
-        if (!server.isSameThread() || server.isStopped())
-            throw new IllegalStateException("Runtime metadata requires the live server thread");
-    }
 
     private static ServerLevel requireLevel(MinecraftServer server, net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension) {
-        requireThread(server);
+        MetadataOwnerThread.requireCurrent(server);
         ServerLevel level = server.getLevel(dimension);
         if (level == null) throw new IllegalStateException("Resource dimension is not loaded");
         return level;

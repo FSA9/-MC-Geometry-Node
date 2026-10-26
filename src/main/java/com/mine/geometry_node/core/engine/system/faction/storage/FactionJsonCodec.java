@@ -5,7 +5,7 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.node.value.RichTextValue;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import net.minecraft.nbt.*;
 import java.nio.charset.StandardCharsets;
 import java.io.*;

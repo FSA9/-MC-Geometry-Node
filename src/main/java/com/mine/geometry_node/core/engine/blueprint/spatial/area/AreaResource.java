@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeTags;
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeTags;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
@@ -11,7 +11,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.Level;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 import org.jetbrains.annotations.Nullable;

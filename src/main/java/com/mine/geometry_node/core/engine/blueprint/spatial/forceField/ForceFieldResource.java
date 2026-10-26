@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.forceField;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaAddress;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;

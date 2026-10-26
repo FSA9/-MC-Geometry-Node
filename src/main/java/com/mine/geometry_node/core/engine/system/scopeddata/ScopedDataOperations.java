@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.scopeddata;
 
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.metadata.DataAccess;
 import com.mine.geometry_node.core.network.packet.scopeddata.*;
 import net.minecraft.core.RegistryAccess;

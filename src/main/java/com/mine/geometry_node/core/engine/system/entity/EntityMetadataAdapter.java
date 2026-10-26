@@ -1,4 +1,6 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.system.entity;
+
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;

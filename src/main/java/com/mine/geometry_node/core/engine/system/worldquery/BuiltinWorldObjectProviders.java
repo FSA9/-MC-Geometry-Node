@@ -1,5 +1,11 @@
 package com.mine.geometry_node.core.engine.system.worldquery;
 
+import com.mine.geometry_node.core.engine.metadata.target.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.system.entity.EntityMetadataAdapter;
+import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
+import com.mine.geometry_node.core.engine.system.schematic.placement.PlacementMetadataTargets;
+
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityState;
@@ -27,7 +33,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.*;
 import java.util.*;
-import com.mine.geometry_node.core.engine.metadata.*;
 import com.mine.geometry_node.core.metadata.*;
 import java.util.function.*;
 

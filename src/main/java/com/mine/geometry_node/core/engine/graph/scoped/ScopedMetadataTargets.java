@@ -1,4 +1,6 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.graph.scoped;
+
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;

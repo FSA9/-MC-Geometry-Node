@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.scene;
 
 import java.util.*;
 import java.util.function.UnaryOperator;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 
 /** Server-thread logical state; every batch validates completely before publishing any mutation. */
 public final class SceneDocument {

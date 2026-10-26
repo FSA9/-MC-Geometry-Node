@@ -1,5 +1,8 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
+import com.mine.geometry_node.core.engine.metadata.target.GraphMetadataTarget;
+import com.mine.geometry_node.core.engine.metadata.target.GraphMetadataTargets;
+
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import net.minecraft.server.level.ServerLevel;
@@ -73,8 +76,8 @@ public interface GraphDataContext {
 
     /** Owner-backed custom metadata access. Execution callers invalidate their frame after writes. */
     default com.mine.geometry_node.core.metadata.MetadataCapabilities.Access metadata(
-            com.mine.geometry_node.core.engine.metadata.GraphMetadataTarget target) {
-        return com.mine.geometry_node.core.engine.metadata.GraphMetadataTargets.resolve(this, target);
+            com.mine.geometry_node.core.engine.metadata.target.GraphMetadataTarget target) {
+        return com.mine.geometry_node.core.engine.metadata.target.GraphMetadataTargets.resolve(this, target);
     }
 
     @Nullable Object getScopedState(ScopedStateTarget target, String name);

@@ -1,4 +1,8 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.system.marker;
+
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 
 import com.mine.geometry_node.core.engine.system.marker.MarkerStorage;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
@@ -19,7 +23,7 @@ public final class MarkerMetadataTargets {
     }
 
     public static Target target(MinecraftServer server, MarkerAddress address) {
-        Runnable check = () -> RuntimeMetadataTargets.requireThread(server);
+        Runnable check = () -> MetadataOwnerThread.requireCurrent(server);
         check.run();
         return new Target(MarkerStorage.get(server), address, server.registryAccess(), check);
     }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node;
 
+import com.mine.geometry_node.core.engine.metadata.BuiltinMetadataCapabilities;
+
 import com.mojang.serialization.MapCodec;
 import com.mine.geometry_node.core.command.registry.ModServerCommands;
 import com.mine.geometry_node.core.engine.behavior.BehaviorTreeRuntime;
@@ -196,7 +198,7 @@ public class GeometryNode {
 
         GraphEngineServices.INSTANCE.setScopedStateStore(new ServerScopedStateStore());
         // 初始化图运行时注册表
-        com.mine.geometry_node.core.engine.resource.residency.ResourceResidency.init();
+        com.mine.geometry_node.core.engine.residency.ResourceResidency.init();
         ServerEngineDriver.init();
         ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);

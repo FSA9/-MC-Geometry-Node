@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import com.mine.geometry_node.core.engine.system.scene.geometry.ScenePrimitiveTypes;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneCollisionRuntime;
 import com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.graph.debug.CollisionDebugMeshFactory;
 import com.mine.geometry_node.core.engine.graph.debug.DebugRenderShape;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.*;

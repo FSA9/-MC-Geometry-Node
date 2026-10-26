@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.storage.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.*;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;
 import io.netty.handler.codec.EncoderException;

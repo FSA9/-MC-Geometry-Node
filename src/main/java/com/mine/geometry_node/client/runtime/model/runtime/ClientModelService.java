@@ -10,7 +10,7 @@ import com.mine.geometry_node.client.runtime.model.render.resource.ModelUploadQu
 
 import com.mine.geometry_node.client.runtime.model.resource.ResourcePackModelProvider;
 import com.mine.geometry_node.core.engine.system.model.asset.GltfAsset;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionSettings;
 import com.mine.geometry_node.core.engine.system.model.io.FileModelResourceProvider;
 import com.mine.geometry_node.core.engine.system.model.gltf.GltfImporter;

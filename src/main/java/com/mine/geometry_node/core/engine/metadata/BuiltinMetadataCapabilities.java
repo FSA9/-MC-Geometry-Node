@@ -1,5 +1,13 @@
 package com.mine.geometry_node.core.engine.metadata;
 
+import com.mine.geometry_node.core.engine.graph.scoped.ScopedMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.target.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.system.entity.EntityMetadataAdapter;
+import com.mine.geometry_node.core.engine.system.faction.service.FactionMetadataTargets;
+import com.mine.geometry_node.core.engine.system.marker.MarkerMetadataTargets;
+import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
+import com.mine.geometry_node.core.engine.system.schematic.placement.PlacementMetadataTargets;
+
 import com.mine.geometry_node.core.engine.system.datalibrary.service.DataLibraryMetadata;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 

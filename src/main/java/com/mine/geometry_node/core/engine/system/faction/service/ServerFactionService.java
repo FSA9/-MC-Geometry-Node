@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.faction.service;
 
 import com.mine.geometry_node.core.cache.*;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.engine.system.faction.storage.*;
 import net.minecraft.server.MinecraftServer;

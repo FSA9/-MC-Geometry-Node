@@ -91,7 +91,7 @@ public class GeometryNodeClient {
     private void onClientTick(ClientTickEvent.Post event) {
         var residencyLevel = Minecraft.getInstance().level;
         if (residencyLevel != null)
-            com.mine.geometry_node.core.engine.resource.residency.ResourceResidency.tick(residencyLevel);
+            com.mine.geometry_node.core.engine.residency.ResourceResidency.tick(residencyLevel);
         com.mine.geometry_node.client.runtime.game.input.GameViewportInput.tick();
         com.mine.geometry_node.client.runtime.game.scene.ViewportDebugClient.tick();
         while (KeyBindings.OPEN_EDITOR.consumeClick()) {

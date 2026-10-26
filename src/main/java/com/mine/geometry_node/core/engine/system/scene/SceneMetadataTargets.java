@@ -1,4 +1,7 @@
-package com.mine.geometry_node.core.engine.metadata;
+package com.mine.geometry_node.core.engine.system.scene;
+
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 
 import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;

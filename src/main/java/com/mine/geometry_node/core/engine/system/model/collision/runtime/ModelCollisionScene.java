@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.engine.system.model.collision.runtime;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import net.minecraft.server.level.ServerLevel;
 import com.mine.geometry_node.core.engine.system.model.collision.ModelCollisionMesh;
@@ -55,7 +56,7 @@ public final class ModelCollisionScene {
     /** Retained query information owns metadata even when the heavyweight runtime is suspended. */
     public static synchronized void retainDefinition(Level level, Object instanceId, AABB worldBounds,
             double x, double y, double z, UUID excludedEntity) {
-        com.mine.geometry_node.core.engine.resource.residency.ChunkCoverage.of(worldBounds);
+        com.mine.geometry_node.core.engine.residency.ChunkCoverage.of(worldBounds);
         State state = LEVELS.computeIfAbsent(level, ignored -> new State());
         Definition previous = state.definitions.get(instanceId);
         state.definitions.put(instanceId, new Definition(instanceId, worldBounds, x, y, z, excludedEntity,
@@ -144,9 +145,9 @@ public final class ModelCollisionScene {
 
     /** A resolved handle is tied to one live entry lifetime, across position/geometry refreshes. */
     public static MetadataCapabilities.Access metadata(ServerLevel level, Object instanceId) {
-        RuntimeMetadataTargets.requireThread(level.getServer());
+        MetadataOwnerThread.requireCurrent(level.getServer());
         return metadata(level, instanceId, GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
-            RuntimeMetadataTargets.requireThread(level.getServer());
+            MetadataOwnerThread.requireCurrent(level.getServer());
             // Absence of the runtime anchor is dormancy, not destruction of metadata.
         });
     }

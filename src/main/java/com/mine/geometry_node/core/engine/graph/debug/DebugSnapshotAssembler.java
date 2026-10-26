@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.debug;
 
 import com.mine.geometry_node.core.engine.graph.debug.PathfindingDebugProvider.Subject;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugElement;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGeometryDebugSnapshot;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;

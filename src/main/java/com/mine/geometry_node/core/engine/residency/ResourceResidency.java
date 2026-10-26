@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.resource.residency;
+package com.mine.geometry_node.core.engine.residency;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;

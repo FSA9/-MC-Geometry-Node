@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+
 import com.mine.geometry_node.core.config.ScopedStateServerConfig;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResource;
@@ -7,7 +9,7 @@ import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaResourceSto
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.scoped.storage.OwnerScopedStateStore;
 import com.mine.geometry_node.core.engine.graph.scoped.storage.ServerScopedStateSavedData;
-import com.mine.geometry_node.core.engine.metadata.SceneMetadataTargets;
+import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
 import com.mine.geometry_node.core.metadata.DataAccess;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.system.scene.SceneSavedData;
@@ -177,7 +179,7 @@ public final class ScopedStateProviderResolver {
         }
         @Override public Map<String, Object> read() { return store().readValues(namespace, registries()); }
         @Override public com.mine.geometry_node.core.metadata.DataValuePolicy valuePolicy() {
-            return com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.scoped(registries());
+            return com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.scoped(registries());
         }
         @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
             Entity entity = requireOwner();
@@ -296,7 +298,7 @@ public final class ScopedStateProviderResolver {
             return resource().scopedState().readValues(namespace, contextLevel.registryAccess(), location(""));
         }
         @Override public com.mine.geometry_node.core.metadata.DataValuePolicy valuePolicy() {
-            return com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy.scoped(contextLevel.registryAccess());
+            return com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy.scoped(contextLevel.registryAccess());
         }
         @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
             AreaResource current = resource();

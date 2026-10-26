@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entity.edit;
 
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import java.util.*;
 
 /** Computes edits against the read baseline, then compares only the state the user actually edited. */

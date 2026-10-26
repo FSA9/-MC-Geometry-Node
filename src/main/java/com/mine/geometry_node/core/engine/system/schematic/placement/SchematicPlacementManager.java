@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.schematic.placement;
 
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import net.minecraft.core.HolderLookup;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;

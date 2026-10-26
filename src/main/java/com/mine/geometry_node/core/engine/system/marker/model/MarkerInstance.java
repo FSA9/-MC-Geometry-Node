@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.marker.model;
 
 import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 
 import java.util.Objects;
 import java.util.UUID;

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.schematic.placement;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.BlockSnapshot;

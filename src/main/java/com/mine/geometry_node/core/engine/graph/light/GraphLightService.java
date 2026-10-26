@@ -1,12 +1,13 @@
 package com.mine.geometry_node.core.engine.graph.light;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadata;
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+
+import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
-import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
+import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import net.minecraft.world.phys.AABB;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.s2c.PacketGraphLight;
@@ -222,13 +223,13 @@ public final class GraphLightService implements ServerEngine {
     }
 
     public MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
-        RuntimeMetadataTargets.requireThread(level.getServer());
+        MetadataOwnerThread.requireCurrent(level.getServer());
         var resources = levels.get(level);
         Resource resource = resources == null ? null : resources.get(id);
         if (resource == null || !isLive(level, resource)) throw new IllegalStateException("Light no longer exists");
         RuntimeMetadata metadata = resource.metadata;
         return metadata.access(GraphMetadataValuePolicy.of(level.getServer().registryAccess()), () -> {
-            RuntimeMetadataTargets.requireThread(level.getServer());
+            MetadataOwnerThread.requireCurrent(level.getServer());
             var currentResources = levels.get(level);
             Resource current = currentResources == null ? null : currentResources.get(id);
             if (current == null || current.metadata != metadata || !isLive(level, current))

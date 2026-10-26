@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.entity.editor;
 
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
+
 import com.mine.geometry_node.client.feature.entity.edit.ClientEntityEditor;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
@@ -348,7 +350,7 @@ public final class EntityEditorDialog extends ModalWindowView {
     private boolean equipmentChanged() {
         if (equipment == null || draft == null) return false;
         return !equipment.dropped().isEmpty()
-                || !com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues.equivalent(
+                || !com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues.equivalent(
                 Map.of("equipment", draft.dictionary("equipment"), "inventory", draft.snapshot().get("inventory")),
                 Map.of("equipment", equipment.equipment(), "inventory", equipment.inventory()));
     }

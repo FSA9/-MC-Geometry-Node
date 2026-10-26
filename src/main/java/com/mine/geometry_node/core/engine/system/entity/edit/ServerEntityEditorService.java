@@ -1,12 +1,14 @@
 package com.mine.geometry_node.core.engine.system.entity.edit;
 
-import com.mine.geometry_node.core.engine.metadata.*;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.system.entity.EntityMetadataAdapter;
+
 import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraits;
 import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraitOverrides;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
-import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.metadata.*;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.*;

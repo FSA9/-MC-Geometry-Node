@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entity.index;
 
-import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;

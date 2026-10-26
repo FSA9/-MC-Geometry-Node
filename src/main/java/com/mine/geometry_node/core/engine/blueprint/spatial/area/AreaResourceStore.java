@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
-import com.mine.geometry_node.core.engine.metadata.RuntimeMetadataTargets;
+import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
+import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
+
 import com.mine.geometry_node.core.metadata.TagAccess;
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
@@ -114,7 +116,7 @@ public final class AreaResourceStore {
 
     /** Custom tags only; data remains in AreaResource.scopedState(). */
     public TagAccess metadataTags(MinecraftServer server, AreaRef reference) {
-        return metadataTags(server, reference, () -> RuntimeMetadataTargets.requireThread(server));
+        return metadataTags(server, reference, () -> MetadataOwnerThread.requireCurrent(server));
     }
 
     synchronized TagAccess metadataTags(MinecraftServer server, AreaRef reference, Runnable requireThread) {
@@ -122,7 +124,7 @@ public final class AreaResourceStore {
         AreaResource resource = get(server, reference);
         if (resource == null) throw new IllegalStateException("Area no longer exists");
         if (resource.isAuthored())
-            return com.mine.geometry_node.core.engine.metadata.SceneMetadataTargets.access(server,
+            return com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets.access(server,
                     reference.address().dimension().identifier().toString(), resource.authoredObjectId()).requireTags();
         return resource.metadataTags.tags(() -> {
             requireThread.run();
