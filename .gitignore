@@ -29,13 +29,14 @@ logs
 
 docs/tmp
 
-*.md
 
 .config/
 
-!README.md
-!docs/README_CN.md
-docs/
+/docs/*
 tools/
 src/test/
 tmp/
+
+# Markdown: keep only the Chinese project README.
+*.[mM][dD]
+!/docs/README_CN.md
