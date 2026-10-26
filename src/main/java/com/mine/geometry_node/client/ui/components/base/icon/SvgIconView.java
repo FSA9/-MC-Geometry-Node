@@ -48,6 +48,7 @@ public class SvgIconView extends View {
         MORE_HORIZONTAL("actions/more_h.svg"),
         CLEAR("actions/clear.svg"),
         RESET("actions/refresh.svg"),
+        SHUFFLE("actions/shuffle.svg"),
         CLOSE("actions/close.svg"),
         EXPAND("navigation/chevrons-up-down-64px.svg"),
         COLLAPSE("navigation/chevrons-down-up-64px.svg"),

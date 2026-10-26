@@ -15,7 +15,7 @@ import com.mine.geometry_node.client.ui.components.composite.display.UiTagChip;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;

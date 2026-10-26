@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationC
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
 import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindingResolver;
 import com.mine.geometry_node.core.engine.graph.resource.*;
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import com.mine.geometry_node.core.engine.residency.ResourceResidency;
 import com.mine.geometry_node.core.engine.metadata.state.RuntimeMetadata;
 import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.service;
+package com.mine.geometry_node.core.engine.graph.runtime;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateStore;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
@@ -11,9 +11,8 @@ import java.util.Map;
 import java.util.List;
 
 /**
- * Root placeholder for services shared by graph runtimes.
- * Concrete services should live here only when they are not blueprint,
- * dialogue, or behavior-tree specific.
+ * Shared service bindings for graph execution across blueprint, dialogue and behavior runtimes.
+ * Platform bootstrap supplies the scoped state store and visual output sink.
  */
 public final class GraphEngineServices {
     public static final GraphEngineServices INSTANCE = new GraphEngineServices();

@@ -140,6 +140,11 @@ public final class EntityEquipmentView extends FrameLayout {
         preview.setTemplateSource(template);
         showPreviewStatus(preview.getPreviewStatus());
     }
+
+    /** Visual intent remains independent of the real entity template and staged equipment. */
+    public void setAppearanceSpec(com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec appearance) {
+        preview.setAppearanceSpec(appearance);
+    }
     public Map<String, ItemStack> equipment() { return draft.equipment(); }
     public List<ItemStack> inventory() { return draft.inventory(); }
     public List<ItemStack> dropped() { return draft.dropped(); }

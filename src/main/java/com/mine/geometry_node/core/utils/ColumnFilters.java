@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.query;
+package com.mine.geometry_node.core.utils;
 
 import java.util.*;
 

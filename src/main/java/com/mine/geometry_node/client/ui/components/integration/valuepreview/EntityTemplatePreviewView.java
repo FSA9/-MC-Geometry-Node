@@ -2,13 +2,17 @@ package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient;
+import com.mine.geometry_node.client.runtime.entity.appearance.ClientEntityAppearances;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewPayload;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.DeferredEntityPreviewGuard;
+import com.mine.geometry_node.client.ui.components.integration.nativepreview.LivingPreviewGeometry;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -57,6 +61,8 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     public enum Status { EMPTY, LOADING, READY, UNAVAILABLE, NO_APPEARANCE, ERROR }
     private record Reference(UUID id, String dimension) {}
     private volatile Reference mReference;
+    private volatile EntityAppearanceSpec mAppearance;
+    private volatile EntityAppearanceSpec mTemplateAppearance = EntityAppearanceSpec.NONE;
     private volatile Status mStatus = Status.EMPTY;
     private volatile Consumer<Status> mStatusListener;
     private volatile long mSourceRevision;
@@ -64,7 +70,9 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     private boolean mTemplateAttempted;
     private boolean mPreviewAttached;
     private WeakReference<Entity> mFailedRenderEntity = new WeakReference<>(null);
-    private EntityTemplateValue mReferenceTemplate = EntityTemplateValue.EMPTY;
+    private EntityPreviewPayload mReferencePayload = EntityPreviewPayload.EMPTY;
+    private boolean mReferenceUsesDirectAppearance;
+    private long mAppearanceGeneration = -1;
     private Object mReferenceConnection;
     private Status mReferenceStatus = Status.UNAVAILABLE;
     private final Runnable mNotifyStatus = () -> {
@@ -131,7 +139,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             if (revision != mSourceRevision) return;
             if (entity == null) {
                 Status status = mReference != null ? mReferenceStatus
-                        : mDisplayTemplate.isEmpty() ? Status.EMPTY
+                        : mAppearance == null && mDisplayTemplate.isEmpty() ? Status.EMPTY
                         : mTemplateAttempted ? Status.ERROR : Status.UNAVAILABLE;
                 updateStatus(revision, status);
                 return;
@@ -146,7 +154,13 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
                     return;
                 }
             }
-            EntityRenderState state = Minecraft.getInstance().getEntityRenderDispatcher().extractEntity(entity, deltaTick);
+            // Live references use the world appearance hook. Detached snapshots carry explicit intent.
+            EntityAppearanceSpec appearance = mReference != null && entity == mPreviewEntity && !mReferenceUsesDirectAppearance
+                    ? mReferencePayload.appearanceSpec()
+                    : mReference == null && mAppearance == null ? mTemplateAppearance : EntityAppearanceSpec.NONE;
+            var visual = !appearance.isNone() ? ClientEntityAppearances.resolve(entity, appearance, deltaTick) : null;
+            EntityRenderState state = visual != null ? visual.state()
+                    : Minecraft.getInstance().getEntityRenderDispatcher().extractEntity(entity, deltaTick);
             state.shadowPieces.clear();
             state.outlineColor = 0;
 
@@ -171,15 +185,22 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
                 livingState.bodyRot = 180.0f + yaw;
                 livingState.yRot = 0.0f;
                 livingState.xRot = 0.0f;
-                livingState.boundingBoxWidth /= Math.max(0.001f, livingState.scale);
-                livingState.boundingBoxHeight /= Math.max(0.001f, livingState.scale);
-                livingState.scale = 1.0f;
                 rotation.mul(xRotation);
             } else {
                 rotation.rotateY((float) Math.toRadians(yaw)).mul(xRotation);
             }
 
-            Vector3f translation = new Vector3f(0.0f, state.boundingBoxHeight / 2.0f, 0.0f);
+            var renderer = visual != null ? visual.renderer() : ClientEntityAppearances.rendererFor(state);
+            if (renderer == null) renderer = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(entity);
+            EntityPreviewFrame entityFrame = state instanceof LivingEntityRenderState livingState
+                    && renderer instanceof LivingPreviewGeometry geometry
+                    ? EntityPreviewFrame.living(geometry, livingState, rotation) : null;
+            if (entityFrame == null) {
+                entityFrame = EntityPreviewFrame.box(new AABB(-width / 2, 0, -width / 2, width / 2, height, width / 2), rotation);
+            }
+            width = entityFrame.width();
+            height = entityFrame.height();
+            Vector3f translation = entityFrame.translation();
             if (state instanceof ItemEntityRenderState itemState) {
                 DroppedItemFrame frame = frameDroppedItem(itemState, rotation);
                 width = frame.width();
@@ -249,24 +270,72 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     public synchronized void setDisplayTemplate(EntityTemplateValue template) {
+        setDisplayTemplate(template, EntityAppearanceSpec.NONE);
+    }
+
+    /** Retains the original detached template while resolving its explicit visual appearance. */
+    public synchronized void setDisplayTemplate(EntityTemplateValue template, EntityAppearanceSpec appearance) {
         boolean wasReference = mReference != null;
+        boolean wasAppearance = clearAppearancePreview();
+        EntityAppearanceSpec next = appearance == null ? EntityAppearanceSpec.NONE : appearance;
+        boolean appearanceChanged = !next.equals(mTemplateAppearance);
+        if (appearanceChanged) {
+            replacePreviewEntity(null);
+            mTemplateLevel = null;
+            mTemplateAttempted = false;
+            mTemplateAppearance = next;
+        }
         mReference = null;
         if (wasReference) {
             clearReferencePreview();
             mFailedRenderEntity.clear();
         }
         applyTemplate(template != null ? template : EntityTemplateValue.EMPTY);
-        if (wasReference) {
+        if (wasReference || wasAppearance || appearanceChanged) {
             mSourceRevision++;
             updateStatus(mDisplayTemplate.isEmpty() ? Status.EMPTY : Status.UNAVAILABLE);
             requestNativePreviewRender();
+            invalidate();
         }
+    }
+
+    /** Explicit detached appearance. Construction and parameter application run during native rendering. */
+    public synchronized void setAppearance(EntityAppearanceSpec spec) {
+        EntityAppearanceSpec next = spec == null || spec.isNone() ? null : spec;
+        if (Objects.equals(mAppearance, next) && mReference == null && mDisplayTemplate.isEmpty()
+                && mTemplateAppearance.isNone()) return;
+        replacePreviewEntity(null);
+        clearReferencePreview();
+        mReference = null;
+        mDisplayTemplate = EntityTemplateValue.EMPTY;
+        mTemplateAppearance = EntityAppearanceSpec.NONE;
+        mLastRawValue = null;
+        mAppearance = next;
+        mTemplateLevel = null;
+        mTemplateAttempted = false;
+        mSourceRevision++;
+        updateStatus(next == null ? Status.EMPTY : Status.UNAVAILABLE);
+        requestNativePreviewRender();
+        invalidate();
+    }
+
+    private boolean clearAppearancePreview() {
+        if (mAppearance == null) return false;
+        mAppearance = null;
+        replacePreviewEntity(null);
+        mTemplateLevel = null;
+        mTemplateAttempted = false;
+        mLastRawValue = null;
+        return true;
     }
 
     /** Non-owning reference: resolving or detaching this preview never removes a world entity. */
     public synchronized void setDisplayReference(UUID entityId, String dimension) {
         Reference next = entityId == null ? null : new Reference(entityId, dimension == null ? "" : dimension);
-        if (Objects.equals(mReference, next) && mDisplayTemplate.isEmpty()) return;
+        if (Objects.equals(mReference, next) && mAppearance == null && mDisplayTemplate.isEmpty()
+                && mTemplateAppearance.isNone()) return;
+        clearAppearancePreview();
+        mTemplateAppearance = EntityAppearanceSpec.NONE;
         mFailedRenderEntity.clear();
         applyTemplate(EntityTemplateValue.EMPTY);
         clearReferencePreview();
@@ -311,6 +380,13 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             clearReferencePreview();
             return null;
         }
+        long appearanceGeneration = ClientEntityAppearances.generation();
+        if (mAppearanceGeneration != appearanceGeneration
+                || mPreviewEntity != null && mPreviewEntity.isRemoved()) {
+            replacePreviewEntity(null);
+            mTemplateAttempted = false;
+            mAppearanceGeneration = appearanceGeneration;
+        }
         Reference reference = mReference;
         if (reference != null) {
             // Render live client entities when available; never retain or dispose them as owned previews.
@@ -330,15 +406,15 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             // never loads a chunk or creates an entity in a world entity manager.
             EntityPreviewClient.Result result = EntityPreviewClient.INSTANCE.resolve(reference.id(), reference.dimension());
             if (result.state() == EntityPreviewClient.State.READY) {
-                EntityTemplateValue template = result.template();
-                if (!template.equals(mReferenceTemplate)) {
+                EntityPreviewPayload payload = result.payload();
+                if (!payload.equals(mReferencePayload)) {
                     replacePreviewEntity(null);
-                    mReferenceTemplate = template;
+                    mReferencePayload = payload;
                     mTemplateAttempted = false;
                 }
-                if (!mTemplateAttempted && !template.isEmpty()) {
+                if (!mTemplateAttempted && !payload.isEmpty()) {
                     mTemplateAttempted = true;
-                    replacePreviewEntity(createReferenceEntity(template, minecraft.level));
+                    replacePreviewEntity(createReferenceEntity(payload, minecraft.level));
                 }
                 mReferenceStatus = mPreviewEntity == null ? Status.ERROR : Status.READY;
             } else if (result.state() == EntityPreviewClient.State.LOADING) {
@@ -355,14 +431,20 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             mTemplateLevel = minecraft.level;
             mTemplateAttempted = false;
         }
-        if (!mTemplateAttempted && !mDisplayTemplate.isEmpty()) {
+        if (!mTemplateAttempted && (mAppearance != null || !mDisplayTemplate.isEmpty())) {
             mTemplateAttempted = true;
-            replacePreviewEntity(mDisplayTemplate.create(minecraft.level, Vec3.ZERO));
+            replacePreviewEntity(mAppearance != null
+                    ? ClientEntityAppearances.createPreviewEntity(minecraft.level, mAppearance)
+                    : mDisplayTemplate.create(minecraft.level, Vec3.ZERO));
         }
         return mPreviewEntity;
     }
 
-    private static Entity createReferenceEntity(EntityTemplateValue template, Level level) {
+    private Entity createReferenceEntity(EntityPreviewPayload payload, Level level) {
+        EntityTemplateValue template = payload.template();
+        mReferenceUsesDirectAppearance = template.isEmpty();
+        if (mReferenceUsesDirectAppearance)
+            return ClientEntityAppearances.createPreviewEntity(level, payload.appearanceSpec());
         var data = template.data();
         boolean tamed = data.getBooleanOr("Tame", false);
         Entity entity = new EntityTemplateValue(template.entityTypeId(), data).create(level, Vec3.ZERO);
@@ -371,7 +453,7 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             if (entity instanceof TamableAnimal animal) animal.setTame(tamed, false);
             return entity;
         } catch (RuntimeException failure) {
-            if (entity != null) entity.discard();
+            if (entity != null) ClientEntityAppearances.releasePreviewEntity(entity);
             throw failure;
         }
     }
@@ -418,6 +500,12 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     }
 
     protected final synchronized void applyTemplate(Object raw) {
+        if (clearAppearancePreview()) {
+            mSourceRevision++;
+            updateStatus(Status.EMPTY);
+            requestNativePreviewRender();
+            invalidate();
+        }
         if (Objects.equals(raw, mLastRawValue)) return;
         mLastRawValue = raw;
         EntityTemplateValue template = EntityTemplateValue.from(raw);
@@ -467,14 +555,16 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
         mFailedRenderEntity.clear();
         if (previous != null && previous != entity) {
             Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft != null && !minecraft.isSameThread()) minecraft.execute(previous::discard);
-            else previous.discard();
+            if (minecraft != null && !minecraft.isSameThread())
+                minecraft.execute(() -> ClientEntityAppearances.releasePreviewEntity(previous));
+            else ClientEntityAppearances.releasePreviewEntity(previous);
         }
     }
 
     private void clearReferencePreview() {
-        if (!mReferenceTemplate.isEmpty()) replacePreviewEntity(null);
-        mReferenceTemplate = EntityTemplateValue.EMPTY;
+        if (!mReferencePayload.isEmpty()) replacePreviewEntity(null);
+        mReferencePayload = EntityPreviewPayload.EMPTY;
+        mReferenceUsesDirectAppearance = false;
         mReferenceConnection = null;
         mReferenceStatus = Status.UNAVAILABLE;
         mTemplateAttempted = false;
@@ -643,7 +733,8 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
             mTemplateLevel = null;
             mTemplateAttempted = false;
             mSourceRevision++;
-            mStatus = mReference == null && mDisplayTemplate.isEmpty() ? Status.EMPTY : Status.UNAVAILABLE;
+            mStatus = mReference == null && mAppearance == null && mDisplayTemplate.isEmpty()
+                    ? Status.EMPTY : Status.UNAVAILABLE;
         }
         super.onDetachedFromWindow();
     }

@@ -14,7 +14,7 @@ import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.storage.GraphAssetId;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.utils.RateLimitedLog;

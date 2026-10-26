@@ -8,6 +8,9 @@ import com.mine.geometry_node.core.engine.system.entity.classification.EntityTyp
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceAdapters;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearances;
 import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
 import com.mine.geometry_node.core.metadata.*;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -121,6 +124,10 @@ public final class ServerEntityEditorService {
         values.put("factions", com.mine.geometry_node.core.engine.system.faction.service.EntityFactions.snapshot(entity));
         values.put("tags", EntityMetadataAdapter.tags(entity).values());
         values.put("data", EntityMetadataAdapter.data(entity).values());
+        values.put("appearance", EntityEditorAppearance.values(EntityAppearances.get(entity)));
+        values.put("appearanceVariant", com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceVariants
+                .currentVariantId(entity).orElse(""));
+        values.put("appearanceSupported", appearanceSupported(entity));
         List<EquipmentSlot> slots = equipmentSlots(entity, adapter);
         Map<String, Object> equipment = new LinkedHashMap<>();
         if (entity instanceof LivingEntity living)
@@ -147,6 +154,14 @@ public final class ServerEntityEditorService {
         catch (RuntimeException unavailable) { /* Optional appearance support must not disable the editor. */ }
     }
 
+    /** Match the attachment API's owner restrictions, plus the editor's live, loaded identity requirement. */
+    private static boolean appearanceSupported(Entity entity) {
+        return entity != null && !entity.isRemoved() && entity.isAlive()
+                && !(entity instanceof Player) && !(entity instanceof Interaction) && entity.getType() != EntityType.MANNEQUIN
+                && entity.level() instanceof ServerLevel level && level.getServer().isSameThread() && !level.getServer().isStopped()
+                && level.getEntity(entity.getUUID()) == entity;
+    }
+
     private static List<EquipmentSlot> equipmentSlots(Entity entity, EntityEditorAdapter adapter) {
         List<EquipmentSlot> slots = List.copyOf(adapter.equipmentSlots(entity));
         if (!(entity instanceof LivingEntity) && !slots.isEmpty() || new HashSet<>(slots).size() != slots.size()
@@ -157,6 +172,12 @@ public final class ServerEntityEditorService {
 
     private static Map<String, Object> apply(ServerPlayer player, ServerLevel level, Entity entity, EntityEditorAdapter adapter,
                               Map<String, Object> current, Map<String, Object> changes) {
+        EntityAppearanceSpec appearance = changes.containsKey("appearance") ? EntityEditorAppearance.read(changes.get("appearance")) : null;
+        if (appearance != null) {
+            if (!appearanceSupported(entity)) throw new Rejected("unsupported_entity");
+            // EntityAppearances.set also validates, but the complete transaction must validate before its first write.
+            EntityAppearanceAdapters.validate(appearance, level);
+        }
         Map<String, Object> attributes = changes.containsKey("attributes") ? EntityEditorChanges.dictionary(changes.get("attributes")) : Map.of();
         adapter.validateAttributes(entity, attributes);
         EntityTypeTraitOverrides biologicalTypes = changes.containsKey("biologicalTypes")
@@ -181,6 +202,7 @@ public final class ServerEntityEditorService {
         allAttributes.putAll(attributes); projected.put("attributes", allAttributes);
         ensureReadable(projected, level.getServer());
         requireLoaded(level, entity);
+        if (appearance != null && !appearanceSupported(entity)) throw new Rejected("unsupported_entity");
         if (!WorldEditPermissions.canManageWorld(player)) throw new Rejected("permission_denied");
         if (transfer != null) requireInventoryAuthority(player, current);
 
@@ -225,6 +247,11 @@ public final class ServerEntityEditorService {
             if (graphs != null) {
                 Set<GraphBindingKey> before = EntityEditorGraphs.bindings(entity);
                 undo.push(() -> EntityEditorGraphs.replace(entity, before)); EntityEditorGraphs.replace(entity, graphs);
+            }
+            if (appearance != null) {
+                undo.push(EntityAppearances.captureRollback(entity));
+                EntityAppearances.set(entity, appearance);
+                if (!EntityAppearances.get(entity).equals(appearance)) throw new IllegalStateException("Appearance mutation rejected");
             }
             // Response capture/encoding is part of the rollback boundary, so a successful write cannot return an encoding error.
             committed = snapshot(player, entity, adapter);

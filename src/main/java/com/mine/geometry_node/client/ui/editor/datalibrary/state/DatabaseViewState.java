@@ -9,8 +9,8 @@ import java.util.Map;
 public final class DatabaseViewState {
     private DatabaseViewState() {}
     public static final String GLOBAL = "global";
-    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> WORLD_COLUMN_FILTERS = columnFilters("database:world.column_filters");
-    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> ENTITY_COLUMN_FILTERS = columnFilters("globaldata:entities.column_filters");
+    public static final UiStateKey<com.mine.geometry_node.core.utils.ColumnFilters> WORLD_COLUMN_FILTERS = columnFilters("database:world.column_filters");
+    public static final UiStateKey<com.mine.geometry_node.core.utils.ColumnFilters> ENTITY_COLUMN_FILTERS = columnFilters("globaldata:entities.column_filters");
     public static final UiStateKey<WorldObjectGraphFilter> ENTITY_GRAPH_FILTER = new UiStateKey<>(
             "globaldata:entities.graph_filter", 1, UiStateLifetime.MEMORY, WorldObjectGraphFilter.class,
             WorldObjectGraphFilter::empty, value -> value);
@@ -22,11 +22,11 @@ public final class DatabaseViewState {
     public static final UiStateKey<WorldObjectGraphFilter> WORLD_GRAPH_FILTER = new UiStateKey<>(
             "database:world.graph_filter", 1, UiStateLifetime.MEMORY, WorldObjectGraphFilter.class,
             WorldObjectGraphFilter::empty, value -> value);
-    public static final UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> LIBRARY_COLUMN_FILTERS = columnFilters("database:library.column_filters");
-    private static UiStateKey<com.mine.geometry_node.core.query.ColumnFilters> columnFilters(String id) {
+    public static final UiStateKey<com.mine.geometry_node.core.utils.ColumnFilters> LIBRARY_COLUMN_FILTERS = columnFilters("database:library.column_filters");
+    private static UiStateKey<com.mine.geometry_node.core.utils.ColumnFilters> columnFilters(String id) {
         return new UiStateKey<>(id, 1, UiStateLifetime.MEMORY,
-                com.mine.geometry_node.core.query.ColumnFilters.class,
-                com.mine.geometry_node.core.query.ColumnFilters::empty, value -> value);
+                com.mine.geometry_node.core.utils.ColumnFilters.class,
+                com.mine.geometry_node.core.utils.ColumnFilters::empty, value -> value);
     }
     public record World(String tags, String source, String range, String dimension,
                         String provider, String type, String typeProvider, String lifetime,

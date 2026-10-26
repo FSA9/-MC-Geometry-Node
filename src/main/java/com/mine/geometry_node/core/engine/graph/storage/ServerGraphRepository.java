@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.graph.storage;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 

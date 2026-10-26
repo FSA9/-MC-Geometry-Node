@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.runtime;
+package com.mine.geometry_node.core.engine.lifecycle;
 
 import com.mine.geometry_node.GeometryNode;
 import dev.architectury.event.events.common.TickEvent;

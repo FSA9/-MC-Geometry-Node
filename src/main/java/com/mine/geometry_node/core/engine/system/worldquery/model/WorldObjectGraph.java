@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.worldquery.model;
 
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 
 /** Bounded presentation metadata for one existing host binding; no graph contents or tags. */
 public record WorldObjectGraph(String id, String type, String name) {

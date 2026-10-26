@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.entity.index;
 
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.server.MinecraftServer;

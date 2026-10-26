@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.binding;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;

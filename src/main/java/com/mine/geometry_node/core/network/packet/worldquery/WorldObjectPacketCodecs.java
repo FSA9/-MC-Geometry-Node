@@ -11,7 +11,7 @@ import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectTyp
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.phys.*;
 import java.util.*;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
 
 final class WorldObjectPacketCodecs {

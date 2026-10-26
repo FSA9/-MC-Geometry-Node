@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.runtime.light.render;
 
+import com.mine.geometry_node.client.runtime.entity.appearance.ClientEntityAppearances;
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearances;
 
 import com.mine.geometry_node.client.runtime.model.render.bvh.ModelLightOcclusionBvh;
 import com.mine.geometry_node.core.engine.system.model.io.ModelCancellation;
@@ -10,17 +12,20 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
@@ -83,16 +88,30 @@ public final class NodeLightEntityShadows {
             return;
         }
         var candidates = new ArrayList<Candidate>();
+        var dispatcher = mc.getEntityRenderDispatcher();
         for (var entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof LivingEntity living) || entity.isRemoved() || entity.isInvisible() || entity.isSpectator()) continue;
+            if (entity.isRemoved() || entity.isInvisible() || entity.isSpectator()) continue;
             double distance = Double.POSITIVE_INFINITY;
             int excluded = 0;
             // Match LevelRenderer: frozen entities use their frozen pose, while
             // players and entities exempt from the freeze keep interpolating.
             float entityPartialTick = mc.level.tickRateManager().isEntityFrozen(entity)
                     ? mc.getDeltaTracker().getGameTimeDeltaPartialTick(false) : partialTick;
-            var interpolatedBounds = entity.getBoundingBox().move(entity.getPosition(entityPartialTick).subtract(entity.position()));
-            var bounds = entity.getBoundingBox().minmax(interpolatedBounds).inflate(0.5);
+            // Scan visual bounds only. Full extraction belongs inside the capture budget below.
+            final AABB visualBounds;
+            try {
+                boolean hasAppearance = !EntityAppearances.get(entity).isNone();
+                var visualEntity = hasAppearance ? ClientEntityAppearances.visualEntity(entity) : entity;
+                if (!(dispatcher.getRenderer(visualEntity) instanceof LivingEntityRenderer<?, ?, ?>)) continue;
+                visualBounds = hasAppearance ? ClientEntityAppearances.visualBounds(entity) : entity.getBoundingBox();
+            } catch (RuntimeException e) {
+                omitted++;
+                failure = e.getClass().getSimpleName() + ": " + e.getMessage();
+                continue;
+            }
+            var interpolationOffset = entity.getPosition(entityPartialTick).subtract(entity.position());
+            var interpolatedBounds = visualBounds.move(interpolationOffset);
+            var bounds = shadowBounds(visualBounds, interpolationOffset);
             for (int i = 0; i < lights.size(); i++) {
                 var light = lights.get(i);
                 if (!light.definition().config().shadow().enabled()) continue;
@@ -102,10 +121,9 @@ public final class NodeLightEntityShadows {
                 var owner = light.definition().config().transform().entityId();
                 if (entity.getUUID().equals(owner) && interpolatedBounds.inflate(0.15).contains(light.position())) excluded |= 1 << i;
             }
-            if (Double.isFinite(distance)) candidates.add(new Candidate(living, distance, excluded, entityPartialTick));
+            if (Double.isFinite(distance)) candidates.add(new Candidate(entity, distance, excluded, entityPartialTick));
         }
         candidates.sort(Comparator.comparingDouble(Candidate::distance).thenComparingInt(c -> c.entity.getId()));
-        var dispatcher = mc.getEntityRenderDispatcher();
         long captureStarted = System.nanoTime();
         int attempted = 0;
         for (var candidate : candidates) {
@@ -114,13 +132,25 @@ public final class NodeLightEntityShadows {
                 omitted++; frameCaptureBudgetOmissions++; captureBudgetOmissions++;
                 continue;
             }
-            if (!(dispatcher.getRenderer(candidate.entity) instanceof LivingEntityRenderer<?, ?, ?> renderer)) continue;
             attempted++;
             int before = COLLECTOR.vertices.size;
-            var previousModel = renderer.getModel();
+            LivingEntityRenderer<?, ?, ?> renderer = null;
+            EntityModel<?> previousModel = null;
             COLLECTOR.begin(candidate.excluded);
             try {
-                var state = (LivingEntityRenderState) dispatcher.extractEntity(candidate.entity, candidate.partialTick);
+                // Resolve once, after both budget checks. Keep this extraction's exact renderer/state pair.
+                var spec = EntityAppearances.get(candidate.entity);
+                var appearance = spec.isNone() ? null
+                        : ClientEntityAppearances.resolve(candidate.entity, spec, candidate.partialTick);
+                EntityRenderer<?, ?> matchedRenderer = appearance == null
+                        ? dispatcher.getRenderer(candidate.entity) : appearance.renderer();
+                if (!(matchedRenderer instanceof LivingEntityRenderer<?, ?, ?> livingRenderer)
+                        || appearance != null && !(appearance.state() instanceof LivingEntityRenderState)) continue;
+                renderer = livingRenderer;
+                previousModel = renderer.getModel();
+                // NONE/failed appearance uses this native renderer directly, never a second dispatcher extraction.
+                var state = appearance == null ? extractNative(renderer, candidate.entity, candidate.partialTick)
+                        : (LivingEntityRenderState) appearance.state();
                 prepareBody(renderer, state, camera);
                 if (COLLECTOR.vertices.overflow) {
                     COLLECTOR.vertices.size = before;
@@ -137,7 +167,7 @@ public final class NodeLightEntityShadows {
                 omitted++;
                 failure = e.getClass().getSimpleName() + ": " + e.getMessage();
             } finally {
-                ((LivingEntityShadowAccessor) renderer).geometryNode$shadowModel(previousModel);
+                if (renderer != null) ((LivingEntityShadowAccessor) renderer).geometryNode$shadowModel(previousModel);
                 capturingRenderer = null;
                 UNUSED_SUBMITS.clear();
             }
@@ -192,6 +222,16 @@ public final class NodeLightEntityShadows {
         nanos = System.nanoTime() - started;
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static LivingEntityRenderState extractNative(LivingEntityRenderer renderer, Entity entity, float partialTick) {
+        return (LivingEntityRenderState) renderer.createRenderState(entity, partialTick);
+    }
+
+    /** The visual extent is independent of the source entity's physical collision box. */
+    static AABB shadowBounds(AABB visualBounds, Vec3 interpolationOffset) {
+        return visualBounds.minmax(visualBounds.move(interpolationOffset)).inflate(0.5);
+    }
+
     private static void captureBounds(int first, int end) {
         double minX = Double.POSITIVE_INFINITY, minY = minX, minZ = minX;
         double maxX = Double.NEGATIVE_INFINITY, maxY = maxX, maxZ = maxX;
@@ -210,7 +250,7 @@ public final class NodeLightEntityShadows {
         BOUNDS[offset + 3] = (float) (0.5 * Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.002);
     }
 
-    private static boolean intersectsBeam(ClientLightStore.ResolvedLight light,net.minecraft.world.phys.AABB bounds) {
+    static boolean intersectsBeam(ClientLightStore.ResolvedLight light, AABB bounds) {
         if ("point".equals(light.definition().type())) return true;
         Vec3 delta=bounds.getCenter().subtract(light.position());
         double radius=0.5*Math.sqrt(bounds.getXsize()*bounds.getXsize()+bounds.getYsize()*bounds.getYsize()+bounds.getZsize()*bounds.getZsize());
@@ -381,7 +421,7 @@ public final class NodeLightEntityShadows {
         });
     }
 
-    private record Candidate(LivingEntity entity, double distance, int excluded, float partialTick) {}
+    private record Candidate(Entity entity, double distance, int excluded, float partialTick) {}
     private record SavedPart(ModelPart part, PartPose pose, boolean visible, boolean skipDraw) {
         void restore() { part.loadPose(pose); part.visible = visible; part.skipDraw = skipDraw; }
     }

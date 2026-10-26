@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.feature.entity.edit;
 
 import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
+import com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest;
@@ -14,6 +15,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
@@ -21,7 +23,9 @@ import java.util.function.LongSupplier;
 public final class ClientEntityEditor {
     public static final ClientEntityEditor INSTANCE = new ClientEntityEditor(
             ClientEntityEditor::sendChecked, task -> Minecraft.getInstance().execute(task),
-            () -> Minecraft.getInstance().getConnection() != null, System::nanoTime);
+            () -> Minecraft.getInstance().getConnection() != null, System::nanoTime,
+            (request, reply) -> EntityPreviewClient.INSTANCE.rememberEditorSnapshot(
+                    request.dimension(), request.entity(), reply.values()));
     private static final long TIMEOUT_NANOS = 15_000_000_000L;
     private static final int MAX_PENDING = 16;
     private static final long REQUEST_GAP_NANOS = 125_000_000L;
@@ -39,6 +43,7 @@ public final class ClientEntityEditor {
     private final Consumer<Runnable> clientQueue;
     private final BooleanSupplier connected;
     private final LongSupplier clock;
+    private final BiConsumer<PacketEntityEditorRequest, Reply> success;
     private long nextId, generation, inFlight;
     private long nextDispatch;
     private boolean coolingDown;
@@ -64,8 +69,14 @@ public final class ClientEntityEditor {
 
     ClientEntityEditor(Consumer<PacketEntityEditorRequest> transport, Consumer<Runnable> clientQueue,
                        BooleanSupplier connected, LongSupplier clock) {
+        this(transport, clientQueue, connected, clock, (request, reply) -> {});
+    }
+    ClientEntityEditor(Consumer<PacketEntityEditorRequest> transport, Consumer<Runnable> clientQueue,
+                       BooleanSupplier connected, LongSupplier clock,
+                       BiConsumer<PacketEntityEditorRequest, Reply> success) {
         this.transport = Objects.requireNonNull(transport); this.clientQueue = Objects.requireNonNull(clientQueue);
         this.connected = Objects.requireNonNull(connected); this.clock = Objects.requireNonNull(clock);
+        this.success = Objects.requireNonNull(success);
     }
     public synchronized void init() {
         if (initialized) return;
@@ -122,7 +133,17 @@ public final class ClientEntityEditor {
             if (item == null || item.generation != generation) return;
             release(packet.requestId(), true);
         }
-        item.result.complete(new Reply(packet.values(), packet.revision(), packet.message()));
+        Reply reply = new Reply(packet.values(), packet.revision(), packet.message());
+        // Live receivers run on the Minecraft owner queue. Publish before UI future continuations;
+        // even a closed window's successful write still changed the authoritative entity.
+        if (reply.success()) {
+            try { success.accept(item.packet, reply); }
+            catch (RuntimeException failure) {
+                System.getLogger(ClientEntityEditor.class.getName()).log(System.Logger.Level.WARNING,
+                        "Cannot refresh entity preview from editor snapshot", failure);
+            }
+        }
+        item.result.complete(reply);
     }
     private void cancel(long id) {
         Pending item;

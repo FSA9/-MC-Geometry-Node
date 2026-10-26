@@ -13,7 +13,7 @@ import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateScope;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateAccessException;
 import com.mine.geometry_node.core.node.nodes.behavior.BehaviorExecutableNode;

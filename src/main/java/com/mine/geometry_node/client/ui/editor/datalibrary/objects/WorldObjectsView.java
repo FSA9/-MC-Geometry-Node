@@ -26,7 +26,7 @@ import com.mine.geometry_node.client.ui.components.integration.metadata.Reposito
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityPreviewCell;
 import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
@@ -86,6 +86,9 @@ public final class WorldObjectsView extends FrameLayout {
     private boolean awaitingScopeResponse;
     private final Consumer<DatabaseSelection> selectionChanged;
     private final LinearLayout rows;
+    private final UiScrollView scroll;
+    private ScrollAnchor pendingScrollAnchor;
+    private record ScrollAnchor(String key, int offset, int fallbackY) {}
     private final UiTableBatchWork rowBatch;
     private final NativeTypeLabels nativeTypeLabels;
     private final FactionCatalogSubscription factionSubscription;
@@ -304,7 +307,7 @@ public final class WorldObjectsView extends FrameLayout {
         }
         table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
         table.addView(tableHeader,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
-        UiScrollView scroll=new UiScrollView(context); scroll.setFillViewport(true);
+        scroll=new UiScrollView(context); scroll.setFillViewport(true);
         // Reserve the scrollbar outside the rows without changing their column widths.
         scroll.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
         rows=new LinearLayout(context); rows.setOrientation(LinearLayout.VERTICAL);
@@ -671,19 +674,60 @@ public final class WorldObjectsView extends FrameLayout {
         return presentation == null ? typeLabel(entry.provider(), entry.type()) : Component.translatable(presentation.labelKey()).getString();
     }
     private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.provider(), entry.type()) : entry.name(); }
+    private ScrollAnchor captureScrollAnchor(String preferredKey, boolean reveal) {
+        int y = scroll.getScrollY();
+        int height = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
+        UiActionButton preferred = rowViews.get(preferredKey);
+        if (preferred != null) {
+            View host = (View) preferred.getParent();
+            int offset = rows.getTop() + host.getTop() - y;
+            if (reveal || offset < height && offset + host.getHeight() > 0)
+                return new ScrollAnchor(preferredKey, reveal
+                        ? Math.max(0, Math.min(offset, Math.max(0, height - host.getHeight()))) : offset, y);
+        }
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View host = rows.getChildAt(i);
+            if (rows.getTop() + host.getBottom() <= y) continue;
+            for (var row : rowViews.entrySet())
+                if (row.getValue().getParent() == host)
+                    return new ScrollAnchor(row.getKey(), rows.getTop() + host.getTop() - y, y);
+        }
+        return new ScrollAnchor(null, 0, y);
+    }
+    @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (pendingScrollAnchor == null || rowBatch.isRunning() || snapshot.loading() || !shown || disposed) return;
+        ScrollAnchor anchor = pendingScrollAnchor;
+        pendingScrollAnchor = null;
+        UiActionButton row = rowViews.get(anchor.key());
+        int y = row == null ? anchor.fallbackY()
+                : rows.getTop() + ((View) row.getParent()).getTop() - anchor.offset();
+        scroll.scrollTo(scroll.getScrollX(), Math.max(0, y));
+    }
     private void rebuildRows() {
         List<WorldObjectEntry> entries = sortedEntries();
         if (entries.equals(mountedEntries) && typeCatalog.equals(mountedTypes)) {
             updateSelection();
+            if (pendingScrollAnchor != null) requestLayout();
             return;
         }
+        if (pendingScrollAnchor == null)
+            pendingScrollAnchor = captureScrollAnchor(selected.contains(anchorKey) ? anchorKey : null, false);
         cancelMount();
         mountedEntries = null; mountedTypes = null;
         List<WorldObjectType> mountingTypes = List.copyOf(typeCatalog);
         Runnable complete = () -> {
+            // Commit the order together: moving each row to the end in separate frame batches
+            // exposes intermediate permutations to layout, focus scrolling and user input.
+            boolean reorder = false;
+            for (int i = 0; !reorder && i < entries.size(); i++)
+                reorder = rowBindings.get(entries.get(i).key()).button().getParent() != rows.getChildAt(i);
+            if (reorder) for (var entry : entries)
+                rows.bringChildToFront((View) rowBindings.get(entry.key()).button().getParent());
             mountedEntries = entries;
             mountedTypes = mountingTypes;
             updateSelection();
+            requestLayout(); // Restore only after the final row geometry has been laid out.
         };
         // A changed DTO is not a changed view identity. Retire only keys absent from the new
         // result, including when a previous frame batch was interrupted by a newer query.
@@ -703,12 +747,6 @@ public final class WorldObjectsView extends FrameLayout {
                 empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(96)));
             }
         }
-        boolean needsReorder = rows.getChildCount() != entries.size();
-        for (int i = 0; !needsReorder && i < entries.size(); i++) {
-            RowBinding binding = rowBindings.get(entries.get(i).key());
-            needsReorder = binding == null || binding.button().getParent() != rows.getChildAt(i);
-        }
-        boolean reorder = needsReorder;
         Iterator<WorldObjectEntry> iterator = entries.iterator();
         rowBatch.start(new Iterator<Runnable>() {
             private int index;
@@ -717,14 +755,14 @@ public final class WorldObjectsView extends FrameLayout {
                 WorldObjectEntry entry = iterator.next();
                 int rowIndex = index++;
                 return () -> {
-                    if (rowBindings.containsKey(entry.key())) updateRow(entry, rowIndex, reorder);
+                    if (rowBindings.containsKey(entry.key())) updateRow(entry, rowIndex);
                     else mountRow(entry, rowIndex);
                 };
             }
         }, complete);
         updateSelection();
     }
-    private void updateRow(WorldObjectEntry entry, int index, boolean reorder) {
+    private void updateRow(WorldObjectEntry entry, int index) {
         String key = entry.key();
         RowBinding binding = rowBindings.remove(key);
         UiTableRow cells = binding.cells();
@@ -763,8 +801,6 @@ public final class WorldObjectsView extends FrameLayout {
         rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), cells, baseColor, entry));
         rowViews.remove(key);
         rowViews.put(key, binding.button());
-        // Moving within the same parent preserves native preview registration and focus/attach state.
-        if (reorder) rows.bringChildToFront((View)binding.button().getParent());
     }
     private static void updateText(UiTableRow row, int column, String value) {
         TextView cell = (TextView) row.getChildAt(column);
@@ -1084,8 +1120,16 @@ public final class WorldObjectsView extends FrameLayout {
     private void editSelected() {
         if (!canSelect()) return;
         List<WorldObjectEntry> entries = selectedEntries();
-        if (entries.size() == 1 && isNativeEntity(entries.getFirst()) && isLoaded(entries.getFirst()) && isAlive(entries.getFirst()))
-            WorkspaceEntityEditor.show(this, entries.getFirst(), this::queryNow);
+        if (entries.size() == 1 && isNativeEntity(entries.getFirst()) && isLoaded(entries.getFirst()) && isAlive(entries.getFirst())) {
+            String key = entries.getFirst().key(), scope = stateScope;
+            WorkspaceEntityEditor.show(this, entries.getFirst(), () -> refreshEditedEntity(key, scope));
+        }
+    }
+    private void refreshEditedEntity(String key, String scope) {
+        if (!shown || disposed || !Objects.equals(scope, stateScope) || !Objects.equals(scope, UiStateScopes.current())) return;
+        pendingScrollAnchor = captureScrollAnchor(key, true);
+        // Query the current controls. An editor completion must never restore older filters or selection.
+        queryNow();
     }
     private void focusSelected() {
         if (canSelect() && !selectedEntries().isEmpty()) setStatus(WorkspaceWorldObjectNavigation.focus(selectedEntries()));
@@ -1106,6 +1150,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void switchScope() {
         cancelMount();
+        pendingScrollAnchor = null;
         removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask);
         dismissMenu();
         saveState(); selected.clear(); restoreState(); anchorKey = null;
@@ -1171,6 +1216,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     public void onHide() {
         cancelMount();
+        pendingScrollAnchor = null;
         saveState();
         shown = false; resetDoubleClick(); removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); dismissMenu();
         if (factionSubscription != null) factionSubscription.close();

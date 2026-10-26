@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.dialogue.storage;
 
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeContext;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateTarget;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import net.minecraft.server.level.ServerLevel;

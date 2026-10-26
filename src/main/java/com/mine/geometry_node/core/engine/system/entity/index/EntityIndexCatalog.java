@@ -66,6 +66,7 @@ final class EntityIndexCatalog {
         if ((!observation || previous.observedAtMillis() == candidate.observedAtMillis())
                 && previous.alive() == candidate.alive() && previous.entry().equals(candidate.entry())
                 && previous.appearance().equals(candidate.appearance()) && previous.metadata().equals(candidate.metadata())
+                && previous.appearanceSpec().equals(candidate.appearanceSpec())
                 && previous.factions().equals(candidate.factions())) return false;
         long bytes = Math.addExact(estimatedBytes - size(previous), size(candidate));
         if (bytes > MAX_DOCUMENT_BYTES) throw new IllegalStateException("entity_index_full");
@@ -83,6 +84,6 @@ final class EntityIndexCatalog {
     }
     private static long size(EntityIndexRecord record) {
         return 256L + record.entry().estimatedBytes() + record.metadata().encodedSize()
-                + record.appearance().data().sizeInBytes() + 40L * record.factions().size();
+                + record.appearance().data().sizeInBytes() + record.appearanceSpec().estimatedBytes() + 40L * record.factions().size();
     }
 }

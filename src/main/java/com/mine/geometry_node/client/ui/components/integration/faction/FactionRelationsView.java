@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.widget.FrameLayout;

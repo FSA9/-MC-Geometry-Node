@@ -18,14 +18,14 @@ import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceLifecycleManager;
 import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceIndex;
 import com.mine.geometry_node.core.engine.graph.runtime.GraphRuntimeRegistry;
-import com.mine.geometry_node.core.engine.runtime.ServerEngineDriver;
-import com.mine.geometry_node.core.engine.runtime.ServerEngineRegistry;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngineDriver;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngineRegistry;
 import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionService;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRegistry;
 import com.mine.geometry_node.core.engine.graph.debug.GraphDebugEngine;
 import com.mine.geometry_node.core.engine.graph.scoped.ServerScopedStateStore;
 import com.mine.geometry_node.core.engine.graph.scoped.storage.ServerScopedStateSavedData;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.screen.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
@@ -94,6 +94,14 @@ public class GeometryNode {
                             return !tag.isEmpty();
                         }
                     }).build());
+
+    public static final Supplier<AttachmentType<com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec>> ENTITY_APPEARANCE =
+            ATTACHMENT_TYPES.register("entity_appearance", () -> AttachmentType.builder(
+                            () -> com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec.NONE)
+                    .serialize(com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec.CODEC,
+                            value -> !value.isNone())
+                    .sync(com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec.STREAM_CODEC)
+                    .build());
 
     public static final Supplier<AttachmentType<EntityTypeTraitOverrides>> ENTITY_TYPE_TRAITS =
             ATTACHMENT_TYPES.register("entity_type_traits", () -> AttachmentType.builder(

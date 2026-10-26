@@ -53,6 +53,7 @@ public class GeometryNodeClient {
         com.mine.geometry_node.client.feature.graph.metadata.GraphTagMetadata.register(
                 com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL);
         com.mine.geometry_node.client.runtime.model.ModelClientLifecycle.register(modBus);
+        com.mine.geometry_node.client.runtime.entity.appearance.ClientEntityAppearances.installLifecycle(modBus);
         RuntimeScreenIntegration.install();
         ModelHudIntegration.register(modBus);
         ClientNetworkReceiverRegistry.init();

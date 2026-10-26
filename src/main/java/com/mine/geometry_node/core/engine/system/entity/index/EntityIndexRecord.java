@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.engine.system.entity.index;
 
 import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import java.util.Objects;
@@ -12,10 +13,11 @@ import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
 /** Last observation of an explicitly registered instance, never a respawn or entity-save payload. */
 public record EntityIndexRecord(UUID uuid, long revision, long observedAtMillis, boolean alive,
                                 WorldObjectEntry entry, EntityTemplateValue appearance, OwnerMetadata metadata,
-                                Set<UUID> factions) {
+                                Set<UUID> factions, EntityAppearanceSpec appearanceSpec) {
     public EntityIndexRecord {
         Objects.requireNonNull(uuid); Objects.requireNonNull(entry);
         Objects.requireNonNull(appearance); Objects.requireNonNull(metadata);
+        Objects.requireNonNull(appearanceSpec);
         if (factions.size() > FactionRules.MAX_ENTITY_REFERENCES)
             throw new IllegalArgumentException("Too many entity faction memberships");
         factions = Set.copyOf(factions);
@@ -33,6 +35,10 @@ public record EntityIndexRecord(UUID uuid, long revision, long observedAtMillis,
             if (!appearance.entityTypeId().equals(entry.type())) throw new IllegalArgumentException("Mismatched entity appearance");
             appearance = new EntityTemplateValue(entry.type(), EntityAppearanceSanitizer.sanitize(appearance.data()));
         }
+    }
+    public EntityIndexRecord(UUID uuid, long revision, long observedAtMillis, boolean alive,
+                             WorldObjectEntry entry, EntityTemplateValue appearance, OwnerMetadata metadata, Set<UUID> factions) {
+        this(uuid, revision, observedAtMillis, alive, entry, appearance, metadata, factions, EntityAppearanceSpec.NONE);
     }
     public EntityIndexRecord(UUID uuid, long revision, long observedAtMillis, boolean alive,
                              WorldObjectEntry entry, EntityTemplateValue appearance, OwnerMetadata metadata) {

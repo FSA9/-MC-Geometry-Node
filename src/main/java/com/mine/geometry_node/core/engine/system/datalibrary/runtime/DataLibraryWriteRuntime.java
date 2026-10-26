@@ -7,7 +7,7 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;

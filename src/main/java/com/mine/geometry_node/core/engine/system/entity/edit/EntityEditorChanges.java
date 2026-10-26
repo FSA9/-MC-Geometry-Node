@@ -5,9 +5,9 @@ import java.util.*;
 
 /** Computes edits against the read baseline, then compares only the state the user actually edited. */
 public final class EntityEditorChanges {
-    public static final Set<String> EDITABLE = Set.of("attributes", "biologicalTypes", "factions", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs");
+    public static final Set<String> EDITABLE = Set.of("attributes", "biologicalTypes", "factions", "tags", "data", "equipment", "inventory", "equipmentDrops", "graphs", "appearance");
     private static final Set<String> READ_ONLY = Set.of("living", "equipmentSupported", "equipmentCreative", "availableGraphs", "preview",
-            "registryType", "dimension", "position", "attributeFields", "biologicalTypeDefaults");
+            "registryType", "dimension", "position", "attributeFields", "biologicalTypeDefaults", "appearanceSupported", "appearanceVariant");
     private EntityEditorChanges() {}
 
     public static Map<String, Object> between(Map<String, Object> baseline, Map<String, Object> replacement) {
@@ -26,6 +26,8 @@ public final class EntityEditorChanges {
                 continue;
             }
             if (!EDITABLE.contains(key) || !baseline.containsKey(key)) throw new IllegalArgumentException("Unsupported section: " + key);
+            // Validate even an apparently unchanged carrier: numeric equivalence must not admit a coerced version.
+            if (key.equals("appearance")) EntityEditorAppearance.read(value);
             if (key.equals("attributes")) {
                 Map<String, Object> before = dictionary(baseline.get(key)), next = dictionary(value), fields = new LinkedHashMap<>();
                 for (var field : next.entrySet()) {

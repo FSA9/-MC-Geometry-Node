@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.repository;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import com.mine.geometry_node.core.network.packet.asset.AssetPacketLimits;
 import net.minecraft.server.MinecraftServer;
 

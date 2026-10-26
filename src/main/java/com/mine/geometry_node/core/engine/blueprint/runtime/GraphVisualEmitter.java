@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.blueprint.runtime;
 
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;

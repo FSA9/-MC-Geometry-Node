@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.runtime;
+package com.mine.geometry_node.core.engine.lifecycle;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;

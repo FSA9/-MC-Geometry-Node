@@ -1,6 +1,9 @@
 package com.mine.geometry_node.core.engine.system.entity.preview;
 
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearances;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewPayload;
 import com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService;
 import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
 
@@ -52,14 +55,23 @@ public final class ServerEntityPreviewService {
             if (entity == null) {
                 var record = ServerEntityIndexService.INSTANCE.record(server, target.entityId()).orElse(null);
                 if (record == null) return unavailable(target, "entity_unavailable");
-                var template = record.appearance();
-                return template.isEmpty() ? unavailable(target, "appearance_unavailable")
-                        : new PacketEntityPreviewResponse.Entry(target, template, "");
+                if (Set.of("minecraft:player", "minecraft:interaction", "minecraft:mannequin").contains(record.entry().type()))
+                    return unavailable(target, "unsupported_type");
+                var payload = new EntityPreviewPayload(record.appearance(), record.appearanceSpec());
+                return payload.isEmpty() ? unavailable(target, "appearance_unavailable")
+                        : new PacketEntityPreviewResponse.Entry(target, payload, "");
             }
+            if (entity instanceof net.minecraft.world.entity.player.Player || entity instanceof net.minecraft.world.entity.Interaction
+                    || entity.getType() == net.minecraft.world.entity.EntityType.MANNEQUIN)
+                return unavailable(target, "unsupported_type");
+            EntityAppearanceSpec spec = EntityAppearances.get(entity);
             String unsupported = EntityAppearanceCapture.unsupportedReason(entity);
-            if (!unsupported.isEmpty()) return unavailable(target, unsupported);
-            var template = EntityAppearanceCapture.template(entity);
-            return new PacketEntityPreviewResponse.Entry(target, template, "");
+            if (!unsupported.isEmpty() && spec.isNone()) return unavailable(target, unsupported);
+            EntityTemplateValue template = EntityTemplateValue.EMPTY;
+            // A capture failure must not suppress an independent replacement description.
+            try { template = EntityAppearanceCapture.template(entity); }
+            catch (RuntimeException failure) { if (spec.isNone()) return unavailable(target, "appearance_unavailable"); }
+            return new PacketEntityPreviewResponse.Entry(target, new EntityPreviewPayload(template, spec), "");
         } catch (RuntimeException failure) {
             return unavailable(target, "appearance_unavailable");
         }

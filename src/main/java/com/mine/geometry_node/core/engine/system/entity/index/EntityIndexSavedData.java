@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.entity.index;
 import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
@@ -17,7 +18,7 @@ import java.util.*;
 
 /** One server-wide file. Only explicitly registered records are serialized. */
 public final class EntityIndexSavedData extends SavedData {
-    public static final int FORMAT_VERSION = 1;
+    public static final int FORMAT_VERSION = 2;
     public static final SavedDataType<EntityIndexSavedData> TYPE = new SavedDataType<>(
             Identifier.fromNamespaceAndPath("geometry_node", "entity_index"), EntityIndexSavedData::new,
             CompoundTag.CODEC.xmap(EntityIndexSavedData::load, EntityIndexSavedData::save));
@@ -73,7 +74,8 @@ public final class EntityIndexSavedData extends SavedData {
         return root;
     }
     public static EntityIndexSavedData load(CompoundTag root) {
-        if (root.getIntOr("Version", -1) != FORMAT_VERSION) throw new IllegalArgumentException("Unsupported entity index version");
+        int version = root.getIntOr("Version", -1);
+        if (version != 1 && version != FORMAT_VERSION) throw new IllegalArgumentException("Unsupported entity index version");
         long sequence = root.getLong("Sequence").orElseThrow();
         ListTag records = root.getList("Records").orElseThrow();
         if (records.size() > EntityIndexCatalog.MAX_RECORDS) throw new IllegalArgumentException("Too many registered entities");
@@ -108,6 +110,7 @@ public final class EntityIndexSavedData extends SavedData {
         record.factions().stream().sorted().forEach(id -> factions.add(StringTag.valueOf(id.toString())));
         out.put("Factions", factions);
         if (!record.appearance().isEmpty()) out.put("Appearance", record.appearance().data());
+        out.put("AppearanceSpec", EntityAppearanceSpec.CODEC.codec().encodeStart(NbtOps.INSTANCE, record.appearanceSpec()).getOrThrow());
         return out;
     }
     private static EntityIndexRecord read(CompoundTag in) {
@@ -151,7 +154,9 @@ public final class EntityIndexSavedData extends SavedData {
             }
         }
         return new EntityIndexRecord(id, in.getLong("Revision").orElseThrow(), in.getLong("ObservedAt").orElseThrow(),
-                in.getBoolean("Alive").orElseThrow(), entry, appearance, metadata, factions);
+                in.getBoolean("Alive").orElseThrow(), entry, appearance, metadata, factions,
+                in.contains("AppearanceSpec") ? EntityAppearanceSpec.CODEC.codec().parse(NbtOps.INSTANCE, in.get("AppearanceSpec")).getOrThrow()
+                        : EntityAppearanceSpec.NONE);
     }
     private static String text(CompoundTag tag, String key) { return tag.getString(key).orElseThrow(); }
     private static double number(CompoundTag tag, String key) {

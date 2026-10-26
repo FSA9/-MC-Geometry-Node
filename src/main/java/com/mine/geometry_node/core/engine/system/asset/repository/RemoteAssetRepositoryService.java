@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
-import com.mine.geometry_node.core.engine.runtime.ServerEngine;
+import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
 import net.minecraft.server.MinecraftServer;
 
 import java.nio.file.Files;

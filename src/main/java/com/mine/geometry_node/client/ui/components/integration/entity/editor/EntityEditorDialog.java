@@ -227,6 +227,8 @@ public final class EntityEditorDialog extends ModalWindowView {
                         (List<ItemStack>) draft.snapshot().get("inventory"), this::changed);
                 equipment.setCreative(draft.flag("equipmentCreative"));
                 equipment.setOnOperationFinished(this::changed);
+                if (draft.snapshot().containsKey("appearance")) equipment.setAppearanceSpec(
+                        com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorAppearance.read(draft.dictionary("appearance")));
                 if (draft.snapshot().get("preview") instanceof EntityTemplateValue preview) equipment.setPreview(preview);
                 else equipment.setPreviewReference(entity, dimension);
                 addPage("tab.equipment", equipment);
@@ -373,6 +375,8 @@ public final class EntityEditorDialog extends ModalWindowView {
             if (factions != null) factions.refreshConfirmed();
             if (tags != null) tags.refreshConfirmed();
             if (graphs != null) graphs.refreshConfirmed(draft.graphs("graphs"), draft.graphs("availableGraphs"));
+            if (equipment != null && draft.snapshot().containsKey("appearance")) equipment.setAppearanceSpec(
+                    com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorAppearance.read(draft.dictionary("appearance")));
             if (equipment != null && equipment.isCommitReady() && !equipmentPending()) equipment.acceptCommitted(
                     (Map<String, ItemStack>)(Map<?, ?>)draft.dictionary("equipment"),
                     (List<ItemStack>)draft.snapshot().get("inventory"), draft.flag("equipmentCreative"));

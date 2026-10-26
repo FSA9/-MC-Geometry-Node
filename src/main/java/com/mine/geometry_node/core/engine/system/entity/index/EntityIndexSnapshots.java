@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearances;
 import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
 import com.mine.geometry_node.core.engine.system.faction.service.EntityFactions;
 import com.mine.geometry_node.core.engine.system.worldquery.model.*;
@@ -37,7 +38,7 @@ final class EntityIndexSnapshots {
         entry = new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
                 entry.position(), entry.bounds(), metadata.tags(), entry.source(), "unloaded", null, null, references, entry.graphs());
         return new EntityIndexRecord(entity.getUUID(), revision, System.currentTimeMillis(), entity.isAlive(), entry, appearance, metadata,
-                EntityFactions.read(entity).memberships().keySet());
+                EntityFactions.read(entity).memberships().keySet(), EntityAppearances.get(entity));
     }
     static WorldObjectEntry row(Entity entity, boolean loaded) {
         var attachment = attachment(entity);

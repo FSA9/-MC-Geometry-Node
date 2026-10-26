@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.worldquery.model;
 
 import java.util.*;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import net.minecraft.world.phys.Vec3;
 
 /** Empty selections mean unrestricted. Nearby origin is deliberately absent from the wire request. */

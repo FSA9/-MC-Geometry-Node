@@ -3,6 +3,9 @@ package com.mine.geometry_node.client.feature.entity.preview;
 import com.mine.geometry_node.client.platform.ClientServerIdentity;
 import com.mine.geometry_node.core.cache.CacheRegistry;
 import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewPayload;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
+import com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorAppearance;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewRequest;
 import com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse;
@@ -18,6 +21,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -25,14 +29,17 @@ import java.util.concurrent.TimeUnit;
 public final class EntityPreviewClient {
     public static final EntityPreviewClient INSTANCE = new EntityPreviewClient();
     public enum State { LOADING, READY, UNAVAILABLE, ERROR }
-    public record Result(State state, EntityTemplateValue template) {}
+    public record Result(State state, EntityPreviewPayload payload) {
+        public EntityTemplateValue template() { return payload.template(); }
+        public EntityAppearanceSpec appearanceSpec() { return payload.appearanceSpec(); }
+    }
 
-    private final EntityPreviewService<EntityTemplateValue> service;
+    private final EntityPreviewService<EntityPreviewPayload> service;
     private final EntityPreviewPump pump;
     private boolean initialized;
 
     private EntityPreviewClient() {
-        service = new EntityPreviewService<>(EntityTemplateValue.EMPTY, EntityTemplateValue::isEmpty,
+        service = new EntityPreviewService<>(EntityPreviewPayload.EMPTY, EntityPreviewPayload::isEmpty,
                 EntityPreviewClient::measure, System::nanoTime,
                 (id, targets) -> NetworkHandler.sendToServer(new PacketEntityPreviewRequest(id, targets)),
                 task -> Minecraft.getInstance().execute(() -> {
@@ -60,10 +67,10 @@ public final class EntityPreviewClient {
         synchronizeConnection();
         Minecraft minecraft = Minecraft.getInstance();
         if (entityId == null || minecraft.getConnection() == null || minecraft.level == null)
-            return new Result(State.ERROR, EntityTemplateValue.EMPTY);
+            return new Result(State.ERROR, EntityPreviewPayload.EMPTY);
         String normalized = dimension == null || dimension.isBlank()
                 ? minecraft.level.dimension().identifier().toString() : dimension;
-        if (normalized.length() > 256) return new Result(State.ERROR, EntityTemplateValue.EMPTY);
+        if (normalized.length() > 256) return new Result(State.ERROR, EntityPreviewPayload.EMPTY);
         var result = service.resolve(new EntityPreviewTarget(entityId, normalized));
         pump.request();
         State state = switch (result.state()) {
@@ -78,11 +85,24 @@ public final class EntityPreviewClient {
     /** Safe to capture on the network thread before queueing a response. */
     public long generation() { return service.generation(); }
 
+    /** Successful live editor READ/APPLY snapshot, delivered on the Minecraft owner thread. */
+    public void rememberEditorSnapshot(String dimension, UUID entityId, Map<String, Object> values) {
+        requireClientThread();
+        synchronizeConnection();
+        // Partial/non-editor carriers must not erase a complete cached appearance.
+        if (!values.containsKey("appearance")) return;
+        Object preview = values.get("preview");
+        var payload = new EntityPreviewPayload(preview instanceof EntityTemplateValue template
+                ? template : EntityTemplateValue.EMPTY, EntityEditorAppearance.read(values.get("appearance")));
+        service.remember(new EntityPreviewTarget(entityId, dimension), payload);
+        pump.request();
+    }
+
     public void accept(PacketEntityPreviewResponse packet, long expectedGeneration) {
         requireClientThread();
         synchronizeConnection();
         service.accept(packet.requestId(), packet.entries().stream()
-                .map(entry -> new EntityPreviewService.Entry<>(entry.target(), entry.template(), entry.message())).toList(),
+                .map(entry -> new EntityPreviewService.Entry<>(entry.target(), entry.payload(), entry.message())).toList(),
                 expectedGeneration);
         pump.request();
     }
@@ -117,7 +137,8 @@ public final class EntityPreviewClient {
     }
 
     /** Bounded counting output measures the appearance without retaining a second serialized copy. */
-    private static EntityPreviewService.Size measure(EntityTemplateValue template) {
+    private static EntityPreviewService.Size measure(EntityPreviewPayload payload) {
+        EntityTemplateValue template = payload.template();
         var output = new OutputStream() {
             long count;
             @Override public void write(int value) throws IOException { add(1); }
@@ -131,10 +152,18 @@ public final class EntityPreviewClient {
             var data = template.data();
             NbtIo.write(data, new DataOutputStream(output));
             return new EntityPreviewService.Size(
-                    output.count + template.entityTypeId().getBytes(StandardCharsets.UTF_8).length,
-                    data.sizeInBytes() + 2L * template.entityTypeId().length());
+                    output.count + template.entityTypeId().getBytes(StandardCharsets.UTF_8).length + specBytes(payload.appearanceSpec()),
+                    data.sizeInBytes() + 2L * template.entityTypeId().length() + 2L * specBytes(payload.appearanceSpec()));
         } catch (IOException failure) {
             throw new IllegalArgumentException("Cannot measure preview appearance", failure);
         }
+    }
+
+    private static long specBytes(EntityAppearanceSpec spec) {
+        long bytes = 16L + spec.targetTypeId().getBytes(StandardCharsets.UTF_8).length;
+        for (var entry : spec.parameters().entrySet())
+            bytes += 8L + entry.getKey().getBytes(StandardCharsets.UTF_8).length
+                    + entry.getValue().getBytes(StandardCharsets.UTF_8).length;
+        return bytes;
     }
 }

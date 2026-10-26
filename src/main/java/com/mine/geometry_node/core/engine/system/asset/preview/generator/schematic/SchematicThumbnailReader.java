@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic;
 
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits;
-import com.mine.geometry_node.core.schematic.SchematicBlockColor;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicBlockColor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;

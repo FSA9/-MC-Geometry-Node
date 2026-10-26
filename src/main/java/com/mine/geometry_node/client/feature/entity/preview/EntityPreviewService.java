@@ -36,7 +36,11 @@ final class EntityPreviewService<T> implements AutoCloseable {
         void send(long requestId, List<EntityPreviewTarget> targets);
     }
     private record Cached<T>(T template, State state, long retryAt, int failures, long bytes, long successAt) {}
-    private record Request(List<EntityPreviewTarget> targets, long sentAt) {}
+    private record Request(List<EntityPreviewTarget> targets, long sentAt, Set<EntityPreviewTarget> superseded) {
+        List<EntityPreviewTarget> activeTargets() {
+            return targets.stream().filter(target -> !superseded.contains(target)).toList();
+        }
+    }
 
     private final T empty;
     private final Predicate<T> isEmpty;
@@ -116,6 +120,31 @@ final class EntityPreviewService<T> implements AutoCloseable {
 
     long generation() { return generation; }
 
+    /** Owner-thread authoritative snapshot. Fences only this target in already-sent batches. */
+    void remember(EntityPreviewTarget target, T template) {
+        if (closed || connection == null) return;
+        long now = clock.getAsLong();
+        // Supersession lives only inside bounded, expiring batches, including after cache eviction.
+        for (Request request : inflight.values())
+            if (request.targets().contains(target)) request.superseded().add(target);
+        pending.remove(target);
+        busy.remove(target);
+        try {
+            Size size = isEmpty.test(template) ? new Size(0, 0) : measure.apply(template);
+            if (size.encodedBytes() < 0 || size.encodedBytes() > MAX_APPEARANCE_BYTES
+                    || size.retainedBytes() < 0 || size.retainedBytes() > Long.MAX_VALUE - 640)
+                throw new IllegalArgumentException("Oversized preview appearance");
+            if (cache.put(target, new Cached<>(template, isEmpty.test(template) ? State.UNAVAILABLE : State.READY,
+                    now + REFRESH_NANOS, 0, size.retainedBytes(), now))) return;
+        } catch (RuntimeException invalid) {
+            // A full editor reply may exceed the preview budget. Refresh through the bounded transport.
+        }
+        Cached<T> old = cache.get(target);
+        if (old != null) cache.put(target, new Cached<>(old.template(), old.state(), now,
+                old.failures(), old.bytes(), old.successAt()));
+        resolve(target); // Retains a usable old image while normal queue/backoff/size limits apply.
+    }
+
     Result<T> resolve(EntityPreviewTarget target) {
         if (closed || connection == null) return new Result<>(State.ERROR, empty);
         long now = clock.getAsLong();
@@ -147,7 +176,7 @@ final class EntityPreviewService<T> implements AutoCloseable {
             Request request = requests.next().getValue();
             if (now - request.sentAt() >= TIMEOUT_NANOS) {
                 requests.remove();
-                fail(request.targets(), State.ERROR, now);
+                fail(request.activeTargets(), State.ERROR, now);
             }
         }
         var queued = pending.entrySet().iterator();
@@ -169,12 +198,13 @@ final class EntityPreviewService<T> implements AutoCloseable {
         }
         List<EntityPreviewTarget> batch = List.copyOf(targets);
         long requestId = ++nextRequest;
-        inflight.put(requestId, new Request(batch, now));
+        inflight.put(requestId, new Request(batch, now, new HashSet<>()));
         flushed = true;
         lastFlush = now;
         try { transport.send(requestId, batch); }
         catch (RuntimeException failure) {
-            if (inflight.remove(requestId) != null) fail(batch, State.ERROR, now);
+            Request failed = inflight.remove(requestId);
+            if (failed != null) fail(failed.activeTargets(), State.ERROR, now);
         }
     }
 
@@ -185,7 +215,7 @@ final class EntityPreviewService<T> implements AutoCloseable {
         if (request == null) return;
         long now = clock.getAsLong();
         if (now - request.sentAt() >= TIMEOUT_NANOS) {
-            fail(request.targets(), State.ERROR, now);
+            fail(request.activeTargets(), State.ERROR, now);
             return;
         }
         Map<EntityPreviewTarget, Entry<T>> received = new HashMap<>();
@@ -206,10 +236,10 @@ final class EntityPreviewService<T> implements AutoCloseable {
                 sizes.put(entry.target(), size.retainedBytes());
             }
         } catch (RuntimeException invalid) {
-            fail(request.targets(), State.ERROR, now);
+            fail(request.activeTargets(), State.ERROR, now);
             return;
         }
-        for (EntityPreviewTarget target : request.targets()) {
+        for (EntityPreviewTarget target : request.activeTargets()) {
             Entry<T> entry = received.get(target);
             if (entry == null) fail(List.of(target), State.ERROR, now);
             else if (isEmpty.test(entry.template())) fail(List.of(target), failureState(entry.message()), now);

@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.network;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateTargetResolvers;
 import com.mine.geometry_node.core.engine.behavior.debug.BehaviorTreeDebugService;
 import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
-import com.mine.geometry_node.core.engine.service.GraphEngineServices;
+import com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
 import com.mine.geometry_node.core.engine.security.WorldEditPermissions;

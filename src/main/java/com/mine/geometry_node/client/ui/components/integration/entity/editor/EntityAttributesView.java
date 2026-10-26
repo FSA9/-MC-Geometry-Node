@@ -35,6 +35,7 @@ final class EntityAttributesView extends LinearLayout {
     private final EntityEditDraft draft;
     private final EntityTypesView biologicalTypes;
     private final EntityRegistrationView registration;
+    private final EntityAppearanceFieldView appearance;
     private final Map<String, UiTextInput> numbers = new LinkedHashMap<>();
     private final Map<String, UiTextInput> inputs = new LinkedHashMap<>();
     private final Map<String, UiCheckBox> flags = new LinkedHashMap<>();
@@ -115,6 +116,8 @@ final class EntityAttributesView extends LinearLayout {
             page.addView(divider(context, theme), line);
             categoryPages.put(category, page); pages.addView(page, size(-1, -2));
         }
+        appearance = new EntityAppearanceFieldView(context, theme, draft, () -> !disposed && editable.getAsBoolean());
+        categoryPages.get("appearance").addView(appearance, size(-1, -2));
         if (biologicalTypes != null) categoryPages.get("types").addView(biologicalTypes, size(-1, -2));
         if (registration != null) {
             LinearLayout line = row(context);
@@ -147,6 +150,8 @@ final class EntityAttributesView extends LinearLayout {
         Map<String, Integer> counts = new HashMap<>();
         if (registration != null) counts.put("general", 1);
         if (biologicalTypes != null) counts.put("types", EntityTypeTraits.IDS.size());
+        appearance.refreshConfirmed();
+        if (appearance.supported()) counts.put("appearance", 1);
         for (EntityAttributeFields.Field field : advertised) {
             fields.put(field.key(), field);
             LinearLayout fieldRow = fieldRows.get(field.key());
@@ -285,6 +290,7 @@ final class EntityAttributesView extends LinearLayout {
     void dispose() {
         disposed = true; updating = true;
         if (registration != null) registration.dispose();
+        appearance.dispose();
     }
     private boolean commitFields(Collection<String> keys) {
         if (disposed) return false;
@@ -330,6 +336,7 @@ final class EntityAttributesView extends LinearLayout {
     void refreshInputState() {
         if (!disposed && biologicalTypes != null) biologicalTypes.refreshConfirmed();
         if (registration != null) registration.refreshInputState();
+        appearance.refreshInputState();
     }
     /** Reconcile existing controls without replacing focused views or uncommitted text. */
     void refreshConfirmedValues() {

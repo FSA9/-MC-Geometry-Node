@@ -28,7 +28,7 @@ import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivi
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
-import com.mine.geometry_node.core.query.ColumnFilters;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableFilterHeader;
 import com.mine.geometry_node.client.ui.components.composite.table.UiColumnFilterPopover;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;

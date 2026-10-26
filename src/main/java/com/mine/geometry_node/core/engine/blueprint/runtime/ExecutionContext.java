@@ -251,5 +251,5 @@ public interface ExecutionContext extends GraphDataContext {
                                 net.minecraft.nbt.CompoundTag extraData,
                                 net.minecraft.world.phys.Vec3 center,
                                 double radius,
-                                java.util.List<com.mine.geometry_node.core.engine.service.GraphEngineServices.VisualAsset> assets);
+                                java.util.List<com.mine.geometry_node.core.engine.graph.runtime.GraphEngineServices.VisualAsset> assets);
 }

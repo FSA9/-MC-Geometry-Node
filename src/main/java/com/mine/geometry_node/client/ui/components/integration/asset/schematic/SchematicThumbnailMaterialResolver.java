@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.cache.CacheStats;
 import com.mine.geometry_node.core.cache.ManagedCache;
 import java.util.concurrent.CompletionStage;
 
-import com.mine.geometry_node.core.schematic.LegacySchematicBlockStateMapper;
+import com.mine.geometry_node.core.engine.system.schematic.LegacySchematicBlockStateMapper;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockStateModelSet;

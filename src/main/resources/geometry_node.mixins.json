@@ -30,7 +30,11 @@
     "scoreboard.ServerScoreboardMixin"
   ],
   "client": [
+    "entityappearance.EntityAppearanceDispatcherMixin",
+    "entityappearance.EntityAppearanceRendererBoundsMixin",
     "preview.GuiEntityPreviewSubmissionMixin",
+    "preview.LivingEntityPreviewGeometryMixin",
+    "preview.AgeablePreviewModels",
     "game.chunk.EditClientChunkCacheMixin",
     "game.chunk.EditClientChunkStorageMixin",
     "game.render.GameViewRendererMixin",

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.schematic;
+package com.mine.geometry_node.core.engine.system.schematic;
 
 import java.util.Locale;
 

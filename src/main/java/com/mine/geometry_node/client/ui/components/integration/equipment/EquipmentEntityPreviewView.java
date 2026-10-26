@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
 import net.minecraft.client.Minecraft;
@@ -21,8 +22,8 @@ import java.util.UUID;
  * Even a live reference is captured and rendered as a detached template, never dressed in place. */
 final class EquipmentEntityPreviewView extends EntityTemplatePreviewView {
     private record Source(EntityTemplateValue template, UUID entityId, String dimension,
-                          Map<String, ItemStack> equipment) {}
-    private volatile Source source = new Source(EntityTemplateValue.EMPTY, null, "", Map.of());
+                          Map<String, ItemStack> equipment, EntityAppearanceSpec appearance) {}
+    private volatile Source source = new Source(EntityTemplateValue.EMPTY, null, "", Map.of(), EntityAppearanceSpec.NONE);
     // Render-thread cache; Source identity fences concurrent UI edits and source switches.
     private Source appliedSource;
     private EntityTemplateValue appliedBase;
@@ -46,19 +47,27 @@ final class EquipmentEntityPreviewView extends EntityTemplatePreviewView {
     }
 
     synchronized void setTemplateSource(EntityTemplateValue template) {
-        source = new Source(template == null ? EntityTemplateValue.EMPTY : template, null, "", source.equipment());
-        super.setDisplayTemplate(source.template());
+        source = new Source(template == null ? EntityTemplateValue.EMPTY : template, null, "", source.equipment(), source.appearance());
+        super.setDisplayTemplate(source.template(), source.appearance());
     }
 
     synchronized void setReferenceSource(UUID entityId, String dimension) {
-        source = new Source(EntityTemplateValue.EMPTY, entityId, dimension == null ? "" : dimension, source.equipment());
+        source = new Source(EntityTemplateValue.EMPTY, entityId, dimension == null ? "" : dimension, source.equipment(), source.appearance());
         super.setDisplayReference(entityId, dimension);
     }
 
     synchronized void setEquipment(Map<String, ItemStack> equipment) {
         Map<String, ItemStack> detached = new LinkedHashMap<>();
         equipment.forEach((key, stack) -> detached.put(key, stack.copy()));
-        source = new Source(source.template(), source.entityId(), source.dimension(), Map.copyOf(detached));
+        source = new Source(source.template(), source.entityId(), source.dimension(), Map.copyOf(detached), source.appearance());
+        requestNativePreviewRender();
+        invalidate();
+    }
+
+    synchronized void setAppearanceSpec(EntityAppearanceSpec appearance) {
+        EntityAppearanceSpec next = appearance == null ? EntityAppearanceSpec.NONE : appearance;
+        if (next.equals(source.appearance())) return;
+        source = new Source(source.template(), source.entityId(), source.dimension(), source.equipment(), next);
         requestNativePreviewRender();
         invalidate();
     }
@@ -167,9 +176,9 @@ final class EquipmentEntityPreviewView extends EntityTemplatePreviewView {
         publicationPosted = false;
         if (publication == null || !previewAttached || source != publication.source()
                 || attachmentRevision != publication.attachment()) return;
-        if (publication.template() != null) super.setDisplayTemplate(publication.template());
+        if (publication.template() != null) super.setDisplayTemplate(publication.template(), publication.source().appearance());
         else if (publication.source().entityId() != null)
             super.setDisplayReference(publication.source().entityId(), publication.source().dimension());
-        else super.setDisplayTemplate(publication.source().template());
+        else super.setDisplayTemplate(publication.source().template(), publication.source().appearance());
     }
 }

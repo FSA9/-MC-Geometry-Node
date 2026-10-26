@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.schematic;
+package com.mine.geometry_node.core.engine.system.schematic.execution;
 
 import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
 import net.minecraft.server.MinecraftServer;

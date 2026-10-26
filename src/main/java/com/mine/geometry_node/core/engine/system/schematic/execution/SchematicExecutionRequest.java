@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.schematic.execution;
 
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
-import com.mine.geometry_node.core.schematic.SchematicData;
+import com.mine.geometry_node.core.engine.system.schematic.SchematicData;
 
 import java.util.Objects;
 
