@@ -33,7 +33,10 @@ public record EntityIndexRecord(UUID uuid, long revision, long observedAtMillis,
             throw new IllegalArgumentException("Entity snapshot metadata byte budget exceeded");
         if (!appearance.isEmpty()) {
             if (!appearance.entityTypeId().equals(entry.type())) throw new IllegalArgumentException("Mismatched entity appearance");
-            appearance = new EntityTemplateValue(entry.type(), EntityAppearanceSanitizer.sanitize(appearance.data()));
+            var data = appearance.data();
+            var safe = EntityAppearanceSanitizer.sanitize(data);
+            // EntityTemplateValue owns its NBT and exposes only copies. Keep an already safe value.
+            if (!safe.equals(data)) appearance = new EntityTemplateValue(entry.type(), safe);
         }
     }
     public EntityIndexRecord(UUID uuid, long revision, long observedAtMillis, boolean alive,

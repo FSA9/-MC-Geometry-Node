@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.entity.index;
 
 import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionRules;
-import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceNbt;
 import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSpec;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
@@ -141,7 +141,11 @@ public final class EntityIndexSavedData extends SavedData {
                 "native", type, text(in, "Name"), dimension, position, new AABB(minX, minY, minZ, maxX, maxY, maxZ),
                 metadata.tags(), text(in, "Source"), "unloaded", null, null, references, graphs);
         EntityTemplateValue appearance = in.getCompound("Appearance")
-                .map(tag -> new EntityTemplateValue(type, EntityAppearanceSanitizer.sanitize(tag))).orElse(EntityTemplateValue.EMPTY);
+                .map(tag -> {
+                    // Bound untrusted NBT before the template copies it; the record sanitizes once.
+                    EntityAppearanceNbt.validate(tag);
+                    return new EntityTemplateValue(type, tag);
+                }).orElse(EntityTemplateValue.EMPTY);
         // Version 1 predates membership snapshots. Missing means unknown/empty until next observation.
         Set<UUID> factions = new LinkedHashSet<>();
         if (in.contains("Factions")) {

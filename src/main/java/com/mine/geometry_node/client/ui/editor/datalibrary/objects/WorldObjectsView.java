@@ -161,6 +161,13 @@ public final class WorldObjectsView extends FrameLayout {
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
     private WorldObjectQuery completedQuery;
     private List<WorldObjectEntry> mountedEntries;
+    private RowOrder rowOrder;
+    /** Only the current presentation is retained; selection/status changes reuse its order. */
+    private record RowOrder(List<WorldObjectEntry> source, List<WorldObjectType> types,
+                            WorldObjectEntityFilter entities, WorldObjectCategories.Category category,
+                            String provider, String registryType, WorldObjectGraphFilter graphs,
+                            ColumnFilters columns, String sort, boolean ascending,
+                            List<WorldObjectEntry> entries) {}
     private List<WorldObjectType> mountedTypes;
     private DatabaseSelection publishedSelection;
     private boolean inspectorWaitingForQuery;
@@ -515,15 +522,19 @@ public final class WorldObjectsView extends FrameLayout {
         if (keyword.isEmpty()) return Set.of();
         String needle = keyword.toLowerCase(Locale.ROOT);
         Set<String> matches = new LinkedHashSet<>();
+        Set<String> seen = new HashSet<>();
         for (var type : typeCatalog)
-            if (typeLabel(type.provider(), type.id()).toLowerCase(Locale.ROOT).contains(needle))
+            if (seen.add(WorldObjectEntry.key(type.provider(), "", type.id()))
+                    && typeLabel(type.provider(), type.id()).toLowerCase(Locale.ROOT).contains(needle))
                 matches.add(WorldObjectEntry.key(type.provider(), "", type.id()));
         for (var entry : snapshot.entries())
-            if (typeLabel(entry.provider(), entry.type()).toLowerCase(Locale.ROOT).contains(needle))
+            if (seen.add(WorldObjectQuery.rawType(entry))
+                    && typeLabel(entry.provider(), entry.type()).toLowerCase(Locale.ROOT).contains(needle))
                 matches.add(WorldObjectQuery.rawType(entry));
         // Native registry coverage is complete even before the first server catalog arrives.
         for (String id : nativeTypeLabels.ids()) {
-            if (typeLabel("native", id).toLowerCase(Locale.ROOT).contains(needle))
+            if (seen.add(WorldObjectEntry.key("native", "", id))
+                    && typeLabel("native", id).toLowerCase(Locale.ROOT).contains(needle))
                 matches.add(WorldObjectEntry.key("native", "", id));
         }
         return Set.copyOf(matches);
@@ -645,6 +656,13 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void dismissMenu() { if (filterPopover != null) filterPopover.dismiss(); }
     private List<WorldObjectEntry> sortedEntries() {
+        if (rowOrder != null && rowOrder.source() == snapshot.entries() && rowOrder.types() == typeCatalog
+                && rowOrder.entities().equals(entityFilter) && rowOrder.category() == category
+                && rowOrder.provider().equals(provider) && rowOrder.registryType().equals(registryTypeFilter)
+                && rowOrder.graphs().equals(graphFilter) && rowOrder.columns().equals(columnFilters)
+                && rowOrder.sort().equals(sort) && rowOrder.ascending() == sortAscending)
+            return rowOrder.entries();
+        WorldObjectEntityFilter entities = effectiveEntityFilter();
         Comparator<WorldObjectEntry> comparator = switch (sort) {
             case "registered" -> Comparator.comparing(e -> e.entityState() != null && e.entityState().registered());
             case "loaded" -> Comparator.comparing(WorldObjectPresentation::isLoaded);
@@ -661,13 +679,16 @@ public final class WorldObjectsView extends FrameLayout {
             default -> Comparator.comparing(this::displayName, String.CASE_INSENSITIVE_ORDER);
         };
         if (!sortAscending) comparator = comparator.reversed();
-        return snapshot.entries().stream().filter(e -> mode != Mode.ENTITIES || effectiveEntityFilter().matches(e))
+        List<WorldObjectEntry> entries = snapshot.entries().stream().filter(e -> mode != Mode.ENTITIES || entities.matches(e))
                 .filter(e -> category == null || category.matches(e))
                 .filter(e -> provider.isEmpty() || provider.equals(e.provider()))
                 .filter(e -> mode != Mode.ENTITIES || WorldObjectQuery.matchesRegistryType(e, registryTypeFilter))
                 .filter(e -> graphFilter.matches(e.graphs()))
                 .filter(e -> columnFilters.matches(displayName(e), WorldObjectQuery.filterType(e), WorldObjectQuery.numericValue(e),
                         e.dimension(), e.position().x, e.position().y, e.position().z, e.lifetime(), e.tags())).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
+        rowOrder = new RowOrder(snapshot.entries(), typeCatalog, entityFilter, category, provider, registryTypeFilter,
+                graphFilter, columnFilters, sort, sortAscending, entries);
+        return entries;
     }
     private String displayType(WorldObjectEntry entry) {
         var presentation = WorldObjectCategories.forEntry(entry);
@@ -1150,6 +1171,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private void switchScope() {
         cancelMount();
+        rowOrder = null;
         pendingScrollAnchor = null;
         removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask);
         dismissMenu();
@@ -1216,6 +1238,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     public void onHide() {
         cancelMount();
+        rowOrder = null;
         pendingScrollAnchor = null;
         saveState();
         shown = false; resetDoubleClick(); removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); dismissMenu();

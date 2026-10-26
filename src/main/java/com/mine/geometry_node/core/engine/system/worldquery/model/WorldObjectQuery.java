@@ -123,22 +123,12 @@ public record WorldObjectQuery(Range range, String dimension, Set<String> provid
         return keyword.isEmpty() || entry.registryType().toLowerCase(Locale.ROOT)
                 .contains(keyword.toLowerCase(Locale.ROOT));
     }
+    /** Compile once per query; the returned predicate retains only this immutable request. */
+    public java.util.function.Predicate<WorldObjectEntry> compileMetadata() {
+        return new WorldObjectQueryMatcher(this);
+    }
     public boolean matchesMetadata(WorldObjectEntry entry) {
-        String rawType = rawType(entry);
-        String effectiveName = entry.name().isEmpty() && columnNameFallbackTypes.contains(rawType)
-                ? columns.name() : entry.name();
-        return entityFilter.matches(entry)
-                && (providers.isEmpty() || providers.contains(entry.provider()))
-                && (types.isEmpty() || types.contains(entry.type()))
-                && (name.isEmpty() || (entry.name().isEmpty() ? searchFallbackTypes.contains(rawType)
-                    : entry.name().toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT))))
-                && entry.tags().containsAll(tags)
-                && (sources.isEmpty() || sources.contains(entry.source()))
-                && (lifetimes.isEmpty() || lifetimes.contains(entry.lifetime()))
-                && matchesRegistryType(entry)
-                && graphFilter.matches(entry.graphs())
-                && columns.matches(effectiveName, filterType(entry), numericValue(entry), entry.dimension(),
-                        entry.position().x, entry.position().y, entry.position().z, entry.lifetime(), entry.tags());
+        return compileMetadata().test(entry);
     }
     /** Bounds distance includes large objects intersecting the search sphere even if their pivot is outside. */
     public boolean withinRadius(WorldObjectEntry entry, Vec3 origin) {

@@ -195,8 +195,11 @@ final class BuiltinWorldObjectProviders {
                     UUID uuid = UUID.fromString(entry.references().get("entityUuid"));
                     var state = new WorldObjectEntityState(uuid, indexed.loaded(), indexed.registered(), indexed.alive(),
                             indexed.capturedAtMillis(), indexed.revision(), indexed.factions());
-                    Map<String, String> refs = new LinkedHashMap<>(entry.references());
-                    if (!indexed.loaded() || !indexed.alive()) {
+                    Map<String, String> refs = entry.references();
+                    if ((!indexed.loaded() || !indexed.alive())
+                            && (refs.containsKey(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits.TARGET_REFERENCE)
+                                || refs.containsKey(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits.TARGET_REFERENCE))) {
+                        refs = new LinkedHashMap<>(refs);
                         refs.remove(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits.TARGET_REFERENCE);
                         refs.remove(com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits.TARGET_REFERENCE);
                     }

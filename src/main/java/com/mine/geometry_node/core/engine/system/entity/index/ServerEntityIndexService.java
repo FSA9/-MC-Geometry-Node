@@ -23,7 +23,7 @@ import java.util.function.Predicate;
 public final class ServerEntityIndexService implements ServerEngine {
     public static final ServerEntityIndexService INSTANCE = new ServerEntityIndexService();
     private static final System.Logger LOGGER = System.getLogger(ServerEntityIndexService.class.getName());
-    private static final int RECONCILE_BUDGET = 32, REFRESH_BUDGET = 32;
+    private static final int RECONCILE_BUDGET = 32, REFRESH_PER_SECOND = 32;
     private final Map<MinecraftServer, State> servers = new IdentityHashMap<>();
     private boolean initialized;
     private ServerEntityIndexService() {}
@@ -84,8 +84,8 @@ public final class ServerEntityIndexService implements ServerEngine {
     public void visit(MinecraftServer server, Predicate<EntityIndexEntry> visitor) {
         State state = state(server); seed(server, state); Objects.requireNonNull(visitor);
         EntityIndexCatalog catalog = storage(server, state).catalog();
-        Set<UUID> ids = new LinkedHashSet<>(state.index.ids());
-        catalog.visit(record -> { ids.add(record.uuid()); return true; });
+        List<UUID> ids = state.index.ids();
+        Set<UUID> seen = new HashSet<>(ids);
         for (UUID id : ids) {
             Entity entity = loaded(state, id);
             EntityIndexRecord record = catalog.get(id);
@@ -93,6 +93,8 @@ public final class ServerEntityIndexService implements ServerEngine {
                 if (!visitor.test(liveRow(entity, record))) return;
             } else if (record != null && !visitor.test(record.asEntry())) return;
         }
+        // Stream unloaded records: a bounded query can stop without copying the entire directory.
+        catalog.visit(record -> seen.contains(record.uuid()) || visitor.test(record.asEntry()));
     }
     public EntityIndexRegistrationResult setRegistered(MinecraftServer server, UUID uuid, boolean registered, long expectedRevision) {
         State state = state(server);
@@ -109,10 +111,16 @@ public final class ServerEntityIndexService implements ServerEngine {
             if (!EntityIndexSnapshots.ordinary(entity)) throw new IllegalArgumentException("unsupported_entity");
             try { changed = catalog.register(uuid, expectedRevision, revision -> EntityIndexSnapshots.capture(entity, revision, null)); }
             catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("invalid", invalid); }
-            if (changed) state.owners.put(uuid, new WeakReference<>(entity));
+            if (changed) {
+                state.owners.put(uuid, new WeakReference<>(entity));
+                state.refreshQueue.schedule(uuid, state.ticks);
+            }
         } else {
             changed = catalog.unregister(uuid, expectedRevision);
-            if (changed) { state.owners.remove(uuid); state.failedCaptures.remove(uuid); }
+            if (changed) {
+                state.owners.remove(uuid); state.failedCaptures.remove(uuid);
+                state.refreshQueue.remove(uuid);
+            }
         }
         if (changed) data.changed();
         return new EntityIndexRegistrationResult(catalog.revision(uuid), changed, find(server, uuid));
@@ -141,6 +149,7 @@ public final class ServerEntityIndexService implements ServerEngine {
         if (!entity.isRemoved() && loaded(state, entity.getUUID()) == entity)
             refreshEntity(level.getServer(), state, entity, true);
         state.index.leave(level, entity.getUUID(), entity);
+        if (loaded(state, entity.getUUID()) == null) state.refreshQueue.remove(entity.getUUID());
     }
     /** setRemoved HEAD: metadata adapters and attachments may be unavailable after removal. */
     public void entityRemoving(ServerLevel level, Entity entity, Entity.RemovalReason reason) {
@@ -154,6 +163,7 @@ public final class ServerEntityIndexService implements ServerEngine {
         UUID id = entity.getUUID();
         Entity successor = loaded(state, id);
         state.index.remove(level, entity.getUUID(), entity);
+        if (loaded(state, id) == null) state.refreshQueue.remove(id);
         if (reason == null || !reason.shouldDestroy()) return;
         WeakReference<Entity> owner = state.owners.get(id);
         boolean successorOwnsIdentity = successor != null && successor != entity
@@ -168,7 +178,10 @@ public final class ServerEntityIndexService implements ServerEngine {
         State state = state(level.getServer());
         for (UUID id : state.index.ids()) {
             Entity entity = loaded(state, id);
-            if (entity != null && entity.level() == level) refreshEntity(level.getServer(), state, entity, true);
+            if (entity != null && entity.level() == level) {
+                refreshEntity(level.getServer(), state, entity, true);
+                state.refreshQueue.remove(id);
+            }
         }
         state.index.removeLevel(level);
         state.seeded.remove(level);
@@ -182,14 +195,18 @@ public final class ServerEntityIndexService implements ServerEngine {
         MinecraftServer server = level.getServer();
         if (level != server.overworld()) return;
         State state = state(server);
+        ++state.ticks;
         state.index.reconcile(RECONCILE_BUDGET, entity -> refreshEntity(server, state, entity, false));
-        if (++state.ticks % 20 == 0) {
-            EntityIndexSavedData data = storage(server, state);
-            if (state.refreshQueue.isEmpty()) for (EntityIndexRecord record : data.catalog().records()) state.refreshQueue.addLast(record.uuid());
-            for (int i = 0; i < REFRESH_BUDGET && !state.refreshQueue.isEmpty(); i++) {
-                Entity entity = loaded(state, state.refreshQueue.removeFirst());
-                if (entity != null) refreshEntity(server, state, entity, false);
-            }
+        // Load/seed the registration schedule once, then spread the same 32/s budget over ticks.
+        storage(server, state);
+        state.refreshRemainder += REFRESH_PER_SECOND;
+        int budget = state.refreshRemainder / 20;
+        state.refreshRemainder %= 20;
+        for (int i = 0; i < budget; i++) {
+            UUID id = state.refreshQueue.poll(state.ticks);
+            if (id == null) break;
+            Entity entity = loaded(state, id);
+            if (entity != null) refreshEntity(server, state, entity, false);
         }
         if (state.failedSave) {
             state.failedSave = false;
@@ -228,7 +245,9 @@ public final class ServerEntityIndexService implements ServerEngine {
         catch (RuntimeException failure) { reportStorageFailure(state, failure); return false; }
         EntityIndexRecord previous = data.catalog().get(entity.getUUID());
         if (previous == null || !EntityIndexSnapshots.ordinary(entity)) return false;
-        state.owners.put(entity.getUUID(), new WeakReference<>(entity));
+        state.refreshQueue.schedule(entity.getUUID(), state.ticks);
+        WeakReference<Entity> owner = state.owners.get(entity.getUUID());
+        if (owner == null || owner.get() != entity) state.owners.put(entity.getUUID(), new WeakReference<>(entity));
         try {
             boolean changed = data.catalog().refresh(EntityIndexSnapshots.capture(entity, previous.revision(), previous), observation);
             if (changed) data.changed();
@@ -269,7 +288,13 @@ public final class ServerEntityIndexService implements ServerEngine {
         return state;
     }
     private static EntityIndexSavedData storage(MinecraftServer server, State state) {
-        if (state.data == null) state.data = EntityIndexSavedData.get(server);
+        if (state.data == null) {
+            state.data = EntityIndexSavedData.get(server);
+            state.data.catalog().visit(record -> {
+                if (loaded(state, record.uuid()) != null) state.refreshQueue.schedule(record.uuid(), state.ticks);
+                return true;
+            });
+        }
         return state.data;
     }
     private static void reportStorageFailure(State state, RuntimeException failure) {
@@ -281,6 +306,9 @@ public final class ServerEntityIndexService implements ServerEngine {
     private static void observe(State state, ServerLevel level, Entity entity, boolean pending) {
         if (entity == null || entity.isRemoved() || state.closedLevels.contains(level)) return;
         state.index.join(level, entity.getUUID(), entity, pending);
+        if (!pending && state.data != null && state.data.catalog().get(entity.getUUID()) != null
+                && loaded(state, entity.getUUID()) == entity)
+            state.refreshQueue.schedule(entity.getUUID(), state.ticks);
     }
     private static Entity loaded(State state, UUID id) {
         return state.index.current(id);
@@ -293,10 +321,11 @@ public final class ServerEntityIndexService implements ServerEngine {
         final Set<ServerLevel> seeded = Collections.newSetFromMap(new IdentityHashMap<>());
         final Set<ServerLevel> closedLevels = Collections.newSetFromMap(new IdentityHashMap<>());
         final Set<UUID> failedCaptures = new HashSet<>();
-        final ArrayDeque<UUID> refreshQueue = new ArrayDeque<>();
+        final EntityIndexRefreshQueue refreshQueue = new EntityIndexRefreshQueue();
         CompletableFuture<?> verification = CompletableFuture.completedFuture(null);
         volatile boolean failedSave;
         boolean stopping, storageFailureReported;
-        int ticks;
+        long ticks;
+        int refreshRemainder;
     }
 }

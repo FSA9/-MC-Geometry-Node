@@ -12,6 +12,7 @@ import java.util.function.Predicate;
 /** Actual server result sink; injectable scope checks keep result-budget tests independent of a live level. */
 class WorldObjectResultCollector implements WorldObjectProvider.Sink {
     private final WorldObjectQuery query;
+    private final Predicate<WorldObjectEntry> matchesMetadata;
     private final Predicate<WorldObjectEntry> inScope;
     final List<WorldObjectEntry> entries = new ArrayList<>();
     private final Set<String> keys = new HashSet<>();
@@ -25,6 +26,7 @@ class WorldObjectResultCollector implements WorldObjectProvider.Sink {
 
     WorldObjectResultCollector(WorldObjectQuery query, Predicate<WorldObjectEntry> inScope) {
         this.query = Objects.requireNonNull(query);
+        this.matchesMetadata = query.compileMetadata();
         this.inScope = Objects.requireNonNull(inScope);
     }
     @Override public boolean scan() {
@@ -47,20 +49,25 @@ class WorldObjectResultCollector implements WorldObjectProvider.Sink {
                 counts.merge(id, 1L, Long::sum);
             else countsPartial = true;
         }
-        if (resultsFull || !query.matchesMetadata(entry)) return true;
+        if (resultsFull || !matchesMetadata.test(entry)) return true;
         if (!keys.add(entry.key())) return true;
         int remaining = WorldObjectPage.MAX_ENTRY_BYTES - bytes;
-        if (entries.size() >= query.limit() || entry.estimatedBytes() > remaining) {
+        if (entries.size() >= query.limit()) {
             // Keep scanning for independent navigation totals; never retain further result rows.
+            truncated = resultsFull = true; return true;
+        }
+        int entryBytes = entry.estimatedBytes();
+        if (entryBytes > remaining) {
             truncated = resultsFull = true; return true;
         }
         try {
             WorldObjectEntry advertised = advertise(entry, remaining);
-            if (advertised.estimatedBytes() <= remaining) entry = advertised;
+            int advertisedBytes = advertised == entry ? entryBytes : advertised.estimatedBytes();
+            if (advertisedBytes <= remaining) { entry = advertised; entryBytes = advertisedBytes; }
         } catch (RuntimeException unavailable) {
             // Metadata capability failure must not hide the object or fail a read-only query.
         }
-        entries.add(entry); bytes += entry.estimatedBytes();
+        entries.add(entry); bytes += entryBytes;
         return true;
     }
     protected WorldObjectEntry advertise(WorldObjectEntry entry, int remainingBytes) { return entry; }

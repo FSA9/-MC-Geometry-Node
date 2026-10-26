@@ -119,17 +119,23 @@ public final class ClientEntityIndex {
         if (mayHaveSent) { coolingDown = true; nextDispatch = clock.getAsLong() + REQUEST_GAP_NANOS; }
     }
     void expire() {
-        var expired = new ArrayList<Pending>();
+        List<Pending> expired = null;
         long expected;
         synchronized (this) {
+            if (pending.isEmpty()) return;
             long now = clock.getAsLong();
-            pending.values().removeIf(item -> {
-                if (now - item.deadline() < 0) return false;
-                expired.add(item); release(item.packet().requestId(), true); return true;
-            });
+            var iterator = pending.values().iterator();
+            while (iterator.hasNext()) {
+                Pending item = iterator.next();
+                if (now - item.deadline() < 0) continue;
+                if (expired == null) expired = new ArrayList<>();
+                expired.add(item);
+                release(item.packet().requestId(), true);
+                iterator.remove();
+            }
             expected = generation;
         }
-        expired.forEach(item -> item.result().complete(error("timeout")));
+        if (expired != null) expired.forEach(item -> item.result().complete(error("timeout")));
         dispatch(expected);
     }
     public void disconnect() {

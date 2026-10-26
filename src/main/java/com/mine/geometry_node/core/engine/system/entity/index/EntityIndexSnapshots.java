@@ -31,18 +31,19 @@ final class EntityIndexSnapshots {
             appearance = previous == null ? EntityTemplateValue.EMPTY : previous.appearance();
             previewFailed = true;
         }
-        WorldObjectEntry entry = row(entity, false);
-        Map<String, String> references = new LinkedHashMap<>(entry.references());
-        if (previewFailed) references.put("previewStatus", "appearance_unavailable");
-        else if (appearance.isEmpty()) references.put("previewStatus", "unsupported_entity");
-        entry = new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
-                entry.position(), entry.bounds(), metadata.tags(), entry.source(), "unloaded", null, null, references, entry.graphs());
+        String previewStatus = previewFailed ? "appearance_unavailable" : appearance.isEmpty() ? "unsupported_entity" : "";
+        WorldObjectEntry entry = row(entity, false, attachment, metadata.tags(), previewStatus);
         return new EntityIndexRecord(entity.getUUID(), revision, System.currentTimeMillis(), entity.isAlive(), entry, appearance, metadata,
                 EntityFactions.read(entity).memberships().keySet(), EntityAppearances.get(entity));
     }
     static WorldObjectEntry row(Entity entity, boolean loaded) {
         var attachment = attachment(entity);
+        return row(entity, loaded, attachment, attachment == null ? List.of() : attachment.customTags(), "");
+    }
+    private static WorldObjectEntry row(Entity entity, boolean loaded, EntityGraphAttachment attachment,
+                                       List<String> tags, String previewStatus) {
         Map<String, String> references = new LinkedHashMap<>(); references.put("entityUuid", entity.getUUID().toString());
+        if (!previewStatus.isEmpty()) references.put("previewStatus", previewStatus);
         if (entity instanceof ItemEntity item && !item.getItem().isEmpty())
             references.put("itemId", BuiltInRegistries.ITEM.getKey(item.getItem().getItem()).toString());
         List<WorldObjectGraph> graphs = new ArrayList<>();
@@ -59,7 +60,7 @@ final class EntityIndexSnapshots {
         return new WorldObjectEntry(WorldObjectEntry.key("native", "", entity.getUUID().toString()), "native",
                 BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(),
                 entity.hasCustomName() ? entity.getCustomName().getString() : "", entity.level().dimension().identifier().toString(),
-                entity.position(), entity.getBoundingBox(), attachment == null ? List.of() : attachment.customTags(), "",
+                entity.position(), entity.getBoundingBox(), tags, "",
                 loaded ? "loaded" : "unloaded", loaded && (entity instanceof Interaction || SceneNativeEntities.eligible(entity))
                     ? entity.getUUID() : null, loaded ? entity.getId() : null, references, graphs);
     }
