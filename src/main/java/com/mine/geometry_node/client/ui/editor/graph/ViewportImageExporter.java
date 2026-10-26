@@ -1,7 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.document.GraphSessionViewState;
+
 import com.mine.geometry_node.client.platform.ClientPaths;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.arc3d.core.ColorInfo;
 import icyllis.arc3d.core.ColorSpaces;
@@ -228,7 +230,7 @@ final class ViewportImageExporter {
     }
 
     private static Path createOutputPath(GraphSession session) {
-        String baseName = sanitizeFileName(session.tabName);
+        String baseName = sanitizeFileName(GraphSessionViewState.of(session).tabName);
         if (baseName.isBlank()) baseName = "graph";
         if (baseName.toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
             baseName = baseName.substring(0, baseName.length() - 5);

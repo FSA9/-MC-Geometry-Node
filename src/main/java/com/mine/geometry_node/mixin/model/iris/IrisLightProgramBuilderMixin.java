@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.iris;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelPackLightAdapters;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelPackLightAdapters;
 import com.mine.geometry_node.client.runtime.light.shader.NodeLightIrisPrograms;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;

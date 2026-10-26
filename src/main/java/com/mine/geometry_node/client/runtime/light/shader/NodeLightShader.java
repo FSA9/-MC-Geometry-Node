@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.light.shader;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelSundialHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelSundialHeldLight;
 import com.mine.geometry_node.client.runtime.light.shader.adapter.LightShaderAdapter;
 import com.mine.geometry_node.client.runtime.light.shader.adapter.LightShaderAdapters;
 import com.mine.geometry_node.client.runtime.light.shader.adapter.LightShaderPatch;

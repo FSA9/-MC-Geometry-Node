@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;

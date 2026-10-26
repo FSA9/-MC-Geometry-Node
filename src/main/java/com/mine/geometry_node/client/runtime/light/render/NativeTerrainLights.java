@@ -2,8 +2,8 @@ package com.mine.geometry_node.client.runtime.light.render;
 
 import com.mine.geometry_node.client.runtime.light.diagnostic.LightReports;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.bvh.ModelPlacedLightField;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelPlacedLightField;
 import org.lwjgl.opengl.*;
 
 /** Native terrain passes share node lights and the same world/model blockers as model receivers. */
@@ -39,7 +39,7 @@ public final class NativeTerrainLights {
             binding.bind();
             active = binding;
             if (terrain && LightReports.capturing())
-                terrainTimer = com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_terrain");
+                terrainTimer = com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_terrain");
             passes++;
             if(binding.nodes!=null && loggedPrograms.size()<8 && loggedPrograms.add(program))
                 com.mine.geometry_node.GeometryNode.LOGGER.info("Node light native terrain receiver bound: program={}, lights={}",program,NodeLightRenderer.lights().size());
@@ -51,7 +51,7 @@ public final class NativeTerrainLights {
     }
 
     public static void end() {
-        com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.end(terrainTimer);
+        com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.end(terrainTimer);
         terrainTimer = -1;
         Binding binding = active;
         active = null;

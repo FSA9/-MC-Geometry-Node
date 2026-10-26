@@ -18,7 +18,7 @@ import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.overlay.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;

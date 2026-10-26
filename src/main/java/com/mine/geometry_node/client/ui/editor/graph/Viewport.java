@@ -25,7 +25,7 @@ import com.mine.geometry_node.client.ui.editor.graph.toolbar.ViewportToolbar;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigChangeListener;
 import com.mine.geometry_node.client.config.ConfigManager;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Context;

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.game.scene;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSettings;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;

@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.config;
 import com.mine.geometry_node.client.input.binding.InputBinding;
 import com.mine.geometry_node.client.input.binding.ControlKeyBinding;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
-import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.input.binding.KeyScope;
 
 import java.util.ArrayList;

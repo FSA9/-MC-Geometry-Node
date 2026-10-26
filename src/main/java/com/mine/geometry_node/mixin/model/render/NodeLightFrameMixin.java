@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.render;
 
-import com.mine.geometry_node.client.model.ModelClientLifecycle;
+import com.mine.geometry_node.client.runtime.model.ModelClientLifecycle;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import net.minecraft.client.DeltaTracker;

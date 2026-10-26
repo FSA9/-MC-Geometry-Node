@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import java.util.List;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportProjection;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import org.joml.Matrix4d;
 import org.joml.Matrix4dc;
 import org.joml.Matrix4f;

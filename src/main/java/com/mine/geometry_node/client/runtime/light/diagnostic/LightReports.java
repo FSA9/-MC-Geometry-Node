@@ -4,10 +4,10 @@ import com.mine.geometry_node.client.runtime.light.render.NodeLightFroxels;
 import com.mine.geometry_node.client.runtime.light.render.NodeLightRenderer;
 
 import com.google.gson.GsonBuilder;
-import com.mine.geometry_node.client.model.diagnostic.ModelReportContext;
-import com.mine.geometry_node.client.model.diagnostic.ModelReportFiles;
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings;
+import com.mine.geometry_node.client.runtime.model.diagnostic.ModelReportContext;
+import com.mine.geometry_node.client.runtime.model.diagnostic.ModelReportFiles;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -382,7 +382,7 @@ public final class LightReports {
                         "/com/mine/geometry_node/client/runtime/light/shader/NodeLightPrograms.class",
                         "/com/mine/geometry_node/client/runtime/light/shader/NodeLightProgramCache.class",
                         "/com/mine/geometry_node/client/runtime/light/render/NativeVolumeLights.class",
-                        "/com/mine/geometry_node/client/model/render/bvh/ModelPlacedLightField.class",
+                        "/com/mine/geometry_node/client/runtime/model/render/bvh/ModelPlacedLightField.class",
                         "/com/mine/geometry_node/client/runtime/light/render/NodeLightEntityShadows.class",
                         "/com/mine/geometry_node/client/runtime/light/store/ClientLightStore.class",
                         "/com/mine/geometry_node/client/runtime/light/render/NodeLightTargets.class",

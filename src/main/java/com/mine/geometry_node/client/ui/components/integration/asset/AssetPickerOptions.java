@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.asset;
 
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.repository.AssetLocation;
+import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.feature.asset.repository.AssetLocation;
 
 import java.util.Objects;
 import java.util.Set;

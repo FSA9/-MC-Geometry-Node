@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.core.node.document.NodeData;

@@ -5,7 +5,6 @@ import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.runtime.game.host.ViewportHostPolicy;
-import icyllis.modernui.mc.MuiScreen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.ChatComponent;
@@ -164,10 +163,11 @@ public final class GameViewportInput {
             if (requested == null && mc.level != null && mc.player != null && !mc.player.isDeadOrDying()) {
                 return suspendedEditor;
             }
-            if (requested instanceof MuiScreen && requested != suspendedEditor) discardSuspendedEditor();
+            if (ViewportHostPolicy.snapshot(requested).replacesRetainedWorkspace()
+                    && requested != suspendedEditor) discardSuspendedEditor();
         }
         if (isGameInputActive() && requested != null && requested != mc.screen) {
-            if (!(requested instanceof MuiScreen)) suspendedEditor = mc.screen;
+            if (!ViewportHostPolicy.snapshot(requested).replacesRetainedWorkspace()) suspendedEditor = mc.screen;
             releaseNow(mc);
         }
         return requested;

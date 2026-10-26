@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.runtime.game.selection;
 
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.viewport.*;
 import net.minecraft.client.Minecraft;

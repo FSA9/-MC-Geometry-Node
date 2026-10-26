@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
@@ -19,7 +18,7 @@ import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
 import com.mine.geometry_node.client.ui.workspace.area.SurfaceRegistrationAware;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
@@ -71,7 +70,7 @@ public class GraphEditorWindow extends LinearLayout
                 INITIAL_WORKSPACE_WEIGHT - sidebarWeight));
 
         View sidebarDivider = ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> persistSidebarState());
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         workspace.addView(sidebarDivider);
 
         mRightSidebar = new EditorSidebar(context);
@@ -90,7 +89,6 @@ public class GraphEditorWindow extends LinearLayout
                 sidebarDivider,
                 mRightSidebar,
                 sidebarWeight,
-                EditorLayoutPolicy.MIN_PANEL_WEIGHT,
                 (visible, weight) -> mUiStateContext.write(
                         EditorSidebarState.GRAPH, EditorSidebarState.SCOPE,
                         new EditorSidebarState(visible, weight, mRightSidebar.getSelectedPanelId())));

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.runtime.light.render;
 
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
 
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
+import com.mine.geometry_node.client.runtime.model.render.geometry.ModelRenderAsset;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;

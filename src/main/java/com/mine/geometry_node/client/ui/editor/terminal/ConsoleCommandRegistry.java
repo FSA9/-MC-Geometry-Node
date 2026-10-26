@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.terminal;
 
-import com.mine.geometry_node.client.ai.command.CommandCatalog;
-import com.mine.geometry_node.client.ai.command.CommandRegistry;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.ai.command.CommandCatalog;
+import com.mine.geometry_node.client.feature.ai.command.CommandRegistry;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 
 import java.util.List;
 

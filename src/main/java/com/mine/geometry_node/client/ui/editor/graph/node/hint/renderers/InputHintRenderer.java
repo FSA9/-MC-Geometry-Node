@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.NumericInputSpec;

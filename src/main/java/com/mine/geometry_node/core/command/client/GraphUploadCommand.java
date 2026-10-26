@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.command.client;
 
-import com.mine.geometry_node.client.graph.persistence.LocalDraftManager;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.feature.graph.persistence.LocalDraftManager;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferRequest;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 import com.mojang.brigadier.CommandDispatcher;

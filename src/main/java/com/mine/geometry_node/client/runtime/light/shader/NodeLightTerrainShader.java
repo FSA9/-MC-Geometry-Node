@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.light.shader;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelSundialHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelSundialHeldLight;
 
 /** Native material receivers. Only known terrain signatures are patched; shaderpack programs are separate. */
 public final class NodeLightTerrainShader {

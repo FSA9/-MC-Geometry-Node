@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.components.integration.equipment;
 
-import com.mine.geometry_node.client.entitypreview.EntityPreviewClient;
+import com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;

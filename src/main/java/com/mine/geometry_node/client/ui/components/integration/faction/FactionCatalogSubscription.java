@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.components.integration.faction;
 
-import com.mine.geometry_node.client.faction.ClientFactionRepository;
+import com.mine.geometry_node.client.feature.faction.ClientFactionRepository;
 import icyllis.modernui.view.View;
 import java.util.Objects;
 

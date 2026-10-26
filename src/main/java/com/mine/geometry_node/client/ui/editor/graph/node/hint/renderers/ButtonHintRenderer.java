@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.ui.utils.UIUtils;

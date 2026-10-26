@@ -2,7 +2,7 @@ package com.mine.geometry_node.mixin.model.iris;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
 import java.util.function.Function;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;

@@ -1,31 +1,21 @@
 package com.mine.geometry_node.client.ui.editor.asset;
 
-import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-import com.mine.geometry_node.client.ui.editor.asset.dialog.FolderPickerDialog;
-import com.mine.geometry_node.client.ui.editor.asset.dialog.OverwriteConfirmDialog;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.ui.editor.asset.image.ImageThumbnailView;
-import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.ui.editor.asset.properties.AssetFilePropertiesTarget;
-import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
-import com.mine.geometry_node.client.ui.editor.asset.service.LocalAssetService;
-import com.mine.geometry_node.client.ui.editor.asset.task.AssetTaskController;
+import com.mine.geometry_node.client.ui.components.integration.asset.navigation.AssetNavigationPanel;
+import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.feature.asset.repository.AssetRepositoryOperation;
+import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.ui.components.integration.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
-import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
-import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.ui.workspace.state.EditorSidebarState;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
@@ -33,15 +23,7 @@ import com.mine.geometry_node.client.config.BuiltinConfigEntries;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.workspace.persistence.EditorSessionState;
-import com.mine.geometry_node.client.ui.document.DocumentManager;
-import com.mine.geometry_node.client.ui.document.GraphSession;
-import com.mine.geometry_node.client.graph.persistence.GraphJsonIO;
 import com.mine.geometry_node.client.ui.workspace.area.AreaEditorWindow;
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetConflict;
-import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
-import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
-import com.mine.geometry_node.core.network.packet.asset.transfer.AssetTransferPlanKind;
-import com.mine.geometry_node.core.node.document.NodeGraph;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
@@ -52,61 +34,48 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
 import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.Function;
+
 
 public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow, AssetBrowserCoordinator {
     private final LinearLayout mMainLayout;
     private final AssetNavigationPanel mNavigationPanel;
     private final AssetFileBrowserPanel mBrowserPanel;
-    private final GraphPropertiesPanel mPropertiesPanel;
+    private final AssetBrowserAreaBindings.Properties mPropertiesPanel;
+    private final AssetBrowserAreaBindings mBindings;
+    private final AssetBrowserAreaBindings.Transfers mTransfers;
     private final EditorSidebar mPropertiesSidebar;
     private final SidebarLayoutController mSidebarLayout;
     private final UiStateContext mUiStateContext;
-    private final LocalAssetService mLocalAssetService = new LocalAssetService();
-    private final AssetTaskController mIoTasks;
-    // Both request sets and the owner generation are confined to the UI thread.
+    // Capability requests and the owner generation are confined to the UI thread.
     private long mRemoteGeneration;
     private boolean mRemoteActive = true;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
-    private final Set<Integer> mTransferPlanRequestIds = new HashSet<>();
     private final EditorSessionState.AssetBrowserState mSessionState;
     private final Runnable mSessionChanged;
-    private final Consumer<GraphSession> mSessionSavedListener;
+    private AutoCloseable mSavedSubscription;
     private boolean mRestoringLocation;
     private String mPendingRemoteRestore;
 
-    public AssetBrowserWindow(Context context) {
-        this(context, new EditorSessionState.AssetBrowserState(), null);
-    }
-
-    public AssetBrowserWindow(
-            Context context,
-            EditorSessionState.AssetBrowserState sessionState,
-            Runnable sessionChanged) {
-        this(context, sessionState, sessionChanged, UiStateContext.ephemeral());
+    public AssetBrowserWindow(Context context, AssetBrowserAreaBindings bindings) {
+        this(context, new EditorSessionState.AssetBrowserState(), null, UiStateContext.ephemeral(), bindings);
     }
 
     public AssetBrowserWindow(
             Context context,
             EditorSessionState.AssetBrowserState sessionState,
             Runnable sessionChanged,
-            UiStateContext uiStateContext) {
+            UiStateContext uiStateContext,
+            AssetBrowserAreaBindings bindings) {
         super(context);
         mUiStateContext = java.util.Objects.requireNonNull(uiStateContext);
         mSessionState = sessionState == null
                 ? new EditorSessionState.AssetBrowserState()
                 : sessionState;
         mSessionChanged = sessionChanged;
-        mIoTasks = new AssetTaskController(this);
+        mBindings = java.util.Objects.requireNonNull(bindings);
 
         mMainLayout = new LinearLayout(context);
         mMainLayout.setOrientation(LinearLayout.HORIZONTAL);
@@ -120,7 +89,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 0, ViewGroup.LayoutParams.MATCH_PARENT, navigationWeight));
 
         mMainLayout.addView(ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> captureNavigationWeight()));
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> captureNavigationWeight()));
 
         if (!mUiStateContext.contains(EditorSidebarState.ASSETS, EditorSidebarState.SCOPE)) {
             AppConfig.AssetBrowserConfig browserConfig = ConfigManager.INSTANCE.getConfig().assetBrowser;
@@ -139,25 +108,22 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 1.0f - navigationWeight));
 
-        mBrowserPanel = new AssetFileBrowserPanel(context, this);
-        mSessionSavedListener = session -> postRemote(mRemoteGeneration, () ->
-                mBrowserPanel.refreshIfDisplayingLocalFile(session.filePath()));
+        mBrowserPanel = new AssetFileBrowserPanel(context, this, mBindings::documents);
+        mTransfers = mBindings.transfers(this, mBrowserPanel);
         browserWorkspace.addView(mBrowserPanel, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0.8f - sidebarWeight));
 
         View propertiesDivider = ThinResizableDivider.weighted(
-                context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT, delta -> persistSidebarState());
+                context, ThinResizableDivider.Orientation.HORIZONTAL, delta -> persistSidebarState());
         browserWorkspace.addView(propertiesDivider);
 
         mPropertiesSidebar = new EditorSidebar(context);
         mPropertiesSidebar.installRegisteredPanels(new SidebarPanelContext(
                 context,
                 SidebarPanelScope.ASSET_BROWSER));
-        mPropertiesPanel = mPropertiesSidebar.requirePanel(
-                GraphPropertiesPanel.PANEL_ID,
-                GraphPropertiesPanel.class);
+        mPropertiesPanel = mBindings.properties(mPropertiesSidebar);
         mPropertiesSidebar.restoreSelectedPanel(sidebarState.tab());
         browserWorkspace.addView(mPropertiesSidebar, new LinearLayout.LayoutParams(
                 0,
@@ -170,14 +136,13 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 propertiesDivider,
                 mPropertiesSidebar,
                 sidebarWeight,
-                EditorLayoutPolicy.MIN_PANEL_WEIGHT,
                 (visible, weight) -> mUiStateContext.write(
                         EditorSidebarState.ASSETS, EditorSidebarState.SCOPE,
                         new EditorSidebarState(visible, weight, mPropertiesSidebar.getSelectedPanelId())));
         mPropertiesSidebar.setOnCollapseRequested(() -> mSidebarLayout.setVisible(false, true));
         mPropertiesSidebar.setOnSelectedPanelChanged(id -> persistSidebarState());
-        mBrowserPanel.setSelectionChangedListener(entries -> mPropertiesPanel.bind(
-                AssetFilePropertiesTarget.fromSelection(entries, mBrowserPanel::refreshFileList)));
+        mBrowserPanel.setSelectionChangedListener(entries ->
+                mPropertiesPanel.bind(entries, mBrowserPanel::refreshFileList));
         mBrowserPanel.setLocationChangedListener(this::captureLocationState);
         mSidebarLayout.initialize(sidebarState.visible());
 
@@ -220,85 +185,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                 && mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE);
     }
 
-    @Override
-    public void showUploadDialog(List<File> selectedFiles) {
-        if (selectedFiles == null || selectedFiles.isEmpty() || mBrowserPanel == null
-                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
-        FolderPickerDialog dialog = FolderPickerDialog.remote(
-                getContext(),
-                "上传到服务器",
-                "",
-                targetDirectory -> preflightUpload(selectedFiles, targetDirectory)
-        );
-        dialog.show(this);
-    }
+    @Override public void showUploadDialog(List<File> files) { mTransfers.showUploadDialog(files); }
 
-    @Override
-    public void showDownloadDialog(List<AssetEntry> remoteEntries) {
-        if (remoteEntries == null || remoteEntries.isEmpty() || mBrowserPanel == null
-                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.DOWNLOAD)) return;
-        FolderPickerDialog dialog = FolderPickerDialog.local(
-                getContext(),
-                "下载到本地",
-                AssetBrowserPathPolicy.getLocalDraftsDir(),
-                targetDirectory -> startDownload(remoteEntries, targetDirectory)
-        );
-        dialog.show(this);
-    }
+    @Override public void showDownloadDialog(List<AssetEntry> entries) { mTransfers.showDownloadDialog(entries); }
 
-    @Override
-    public void createRemoteGraph(String targetPath, Runnable onSuccess) {
-        if (targetPath == null || targetPath.isBlank() || mBrowserPanel == null
-                || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
-        if (!mRemoteActive) return;
-        long generation = mRemoteGeneration;
-        mIoTasks.runSilent(context -> {
-            Path temporary = Files.createTempFile("geometry-node-new-graph-", ".json");
-            try {
-                Files.writeString(temporary, GraphJsonIO.toJson(new NodeGraph()), StandardCharsets.UTF_8);
-                return temporary;
-            } catch (Exception exception) {
-                Files.deleteIfExists(temporary);
-                throw exception;
-            }
-        }, temporary -> {
-            if (!isRemoteCurrent(generation)) {
-                try { Files.deleteIfExists(temporary); }
-                catch (java.io.IOException exception) {
-                    System.err.println("[AssetBrowser] Failed to remove abandoned graph temporary file: " + temporary);
-                }
-                return;
-            }
-            java.util.UUID jobId;
-            try {
-                jobId = ClientAssetTransferService.INSTANCE.submit(List.of(ClientAssetTransferRequest.upload(
-                        temporary, targetPath, AssetTransferConflictPolicy.FAIL_IF_EXISTS)));
-            } catch (RuntimeException exception) {
-                try {
-                    Files.deleteIfExists(temporary);
-                } catch (java.io.IOException cleanupException) {
-                    exception.addSuppressed(cleanupException);
-                }
-                System.err.println("[AssetBrowser] Failed to submit generated graph: " + exception.getMessage());
-                return;
-            }
-            ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> {
-                try {
-                    Files.deleteIfExists(temporary);
-                } catch (java.io.IOException exception) {
-                    System.err.println("[AssetBrowser] Failed to remove generated graph temporary file: "
-                            + temporary);
-                }
-                if (error == null && result.completedFileCount() == result.files().size()) {
-                    postRemote(generation, () -> {
-                        if (mBrowserPanel != null) mBrowserPanel.refreshFileList(() -> {
-                            if (isRemoteCurrent(generation) && onSuccess != null) onSuccess.run();
-                        });
-                    });
-                }
-            });
-        }, exception -> System.err.println("[AssetBrowser] Failed to create remote graph: "
-                + exception.getMessage()));
+    @Override public void createRemoteGraph(String targetPath, Runnable onSuccess) {
+        mTransfers.createRemoteGraph(targetPath, onSuccess);
     }
 
     /**
@@ -323,7 +215,11 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mRemoteActive = true;
         if (reactivate) requestRemoteCapabilities();
         mSidebarLayout.onOwnerShown();
-        DocumentManager.INSTANCE.addOnSessionSavedListener(mSessionSavedListener);
+        mTransfers.activate();
+        if (mSavedSubscription == null) {
+            mSavedSubscription = mBindings.onDocumentSaved(path -> postRemote(mRemoteGeneration, () ->
+                    mBrowserPanel.refreshIfDisplayingLocalFile(path)));
+        }
         if (mBrowserPanel != null) {
             mBrowserPanel.activatePanel();
         }
@@ -338,7 +234,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     @Override
     public void onHide() {
         cancelRemoteRequests();
-        DocumentManager.INSTANCE.removeOnSessionSavedListener(mSessionSavedListener);
+        closeSavedSubscription();
         mSidebarLayout.onOwnerHidden();
         mSidebarLayout.persistState();
         if (mBrowserPanel != null) {
@@ -348,9 +244,9 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     protected void onDetachedFromWindow() {
-        DocumentManager.INSTANCE.removeOnSessionSavedListener(mSessionSavedListener);
+        closeSavedSubscription();
         mPropertiesPanel.commitPendingEdits();
-        mIoTasks.cancelAll();
+        mTransfers.dispose();
         cancelRemoteRequests();
         super.onDetachedFromWindow();
     }
@@ -470,241 +366,6 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         return Float.isFinite(weight) ? Math.max(0.05f, Math.min(0.45f, weight)) : 0.2f;
     }
 
-    private void preflightUpload(List<File> selectedFiles, String targetDirectory) {
-        if (!mRemoteActive) return;
-        long generation = mRemoteGeneration;
-        List<File> selectedSnapshot = selectedFiles == null ? List.of() : List.copyOf(selectedFiles);
-        mIoTasks.runSilent(
-                context -> mLocalAssetService.collectUploadSources(selectedSnapshot, targetDirectory, context),
-                result -> {
-                    if (!isRemoteCurrent(generation)) return;
-                    if (result.files().isEmpty()) {
-                        System.err.println("[AssetBrowser] No transferable upload sources: " + result.failedPaths());
-                        return;
-                    }
-                    if (!result.failedPaths().isEmpty()) {
-                        System.err.println("[AssetBrowser] Some upload sources could not be scanned: " + result.failedPaths());
-                    }
-                    requestUploadPreflight(result.files());
-                }, exception -> {
-                    System.err.println("[AssetBrowser] Upload scan failed: " + exception.getMessage());
-                    exception.printStackTrace();
-                });
-    }
-
-    private void requestUploadPreflight(List<LocalAssetService.UploadSource> files) {
-        if (!mRemoteActive) return;
-        long generation = mRemoteGeneration;
-        int[] requestHolder = new int[1];
-        int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.UPLOAD_CONFLICTS,
-                files.stream().map(LocalAssetService.UploadSource::targetPath).toList(), response -> {
-            postTransferPlan(requestHolder, generation, () -> {
-                if (!response.success()) {
-                    System.err.println("[AssetBrowser] Upload planning failed: " + response.message());
-                    return;
-                }
-                if (response.conflicts().isEmpty()) {
-                    startUpload(files, false);
-                    return;
-                }
-                List<String> conflictPaths = new ArrayList<>();
-                for (RemoteAssetConflict conflict : response.conflicts()) {
-                    conflictPaths.add(conflict.targetPath());
-                }
-                ConflictResolutionState<LocalAssetService.UploadSource> resolution =
-                        new ConflictResolutionState<>(files, conflictPaths, LocalAssetService.UploadSource::targetPath);
-                new OverwriteConfirmDialog(getContext(), conflictPaths, decision -> {
-                    if (!isRemoteCurrent(generation)) return;
-                    switch (decision) {
-                        case OVERWRITE_CURRENT -> {
-                            if (resolution.markCurrentOverwrite()) {
-                                startUpload(resolution.remainingFiles(), false, resolution.overwritePaths());
-                            }
-                        }
-                        case OVERWRITE_ALL -> startUpload(files, true, List.of());
-                        case SKIP_CURRENT -> {
-                            if (resolution.markCurrentSkip()) {
-                                startUpload(resolution.remainingFiles(), false, resolution.overwritePaths());
-                            }
-                        }
-                        case SKIP_ALL -> startUpload(resolution.withoutConflicts(), false, List.of());
-                        case CANCEL -> {
-                        }
-                    }
-                }).show(this);
-            });
-        }, () -> postTransferPlan(requestHolder, generation, () -> { }));
-        requestHolder[0] = requestId;
-        mTransferPlanRequestIds.add(requestId);
-    }
-
-    private void startUpload(List<LocalAssetService.UploadSource> files, boolean overwrite) {
-        startUpload(files, overwrite, List.of());
-    }
-
-    private void startUpload(List<LocalAssetService.UploadSource> files, boolean overwrite, List<String> overwritePaths) {
-        if (!mRemoteActive || files.isEmpty()) return;
-        long generation = mRemoteGeneration;
-        Set<String> overwriteSet = new HashSet<>(overwritePaths);
-        List<ClientAssetTransferRequest> requests = files.stream().map(file -> ClientAssetTransferRequest.upload(
-                file.sourcePath(), file.targetPath(), overwrite || overwriteSet.contains(file.targetPath())
-                        ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS)).toList();
-        java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> postRemote(generation, () -> {
-            if (error == null && mBrowserPanel != null) mBrowserPanel.refreshFileList();
-        }));
-    }
-
-    private void startDownload(List<AssetEntry> remoteEntries, File targetDirectory) {
-        if (!mRemoteActive || remoteEntries.isEmpty() || targetDirectory == null) return;
-        long generation = mRemoteGeneration;
-        List<String> paths = remoteEntries.stream().map(AssetEntry::path).toList();
-        int[] requestHolder = new int[1];
-        int requestId = ClientAssetTransferPlanState.request(AssetTransferPlanKind.DOWNLOAD_MANIFEST, paths, response -> {
-            postTransferPlan(requestHolder, generation, () -> {
-                if (!response.success()) {
-                    System.err.println("[AssetBrowser] Download planning failed: " + response.message());
-                    return;
-                }
-                finishDownload(response.files(), targetDirectory);
-            });
-        }, () -> postTransferPlan(requestHolder, generation, () -> { }));
-        requestHolder[0] = requestId;
-        mTransferPlanRequestIds.add(requestId);
-    }
-
-    private void finishDownload(List<AssetDescriptor> files, File targetDirectory) {
-        long generation = mRemoteGeneration;
-        List<String> conflicts = findLocalDownloadConflicts(files, targetDirectory);
-        if (conflicts.isEmpty()) {
-            submitDownload(files, targetDirectory, false, List.of());
-            return;
-        }
-
-        ConflictResolutionState<AssetDescriptor> resolution =
-                new ConflictResolutionState<>(files, conflicts, file -> AssetPathUtils.normalizeRemoteFilePath(file.path()));
-        new OverwriteConfirmDialog(getContext(), conflicts, decision -> {
-            if (!isRemoteCurrent(generation)) return;
-            switch (decision) {
-                case OVERWRITE_CURRENT -> {
-                    if (resolution.markCurrentOverwrite()) {
-                        submitDownload(resolution.remainingFiles(), targetDirectory, false, resolution.overwritePaths());
-                    }
-                }
-                case OVERWRITE_ALL -> submitDownload(files, targetDirectory, true, List.of());
-                case SKIP_CURRENT -> {
-                    if (resolution.markCurrentSkip()) {
-                        submitDownload(resolution.remainingFiles(), targetDirectory, false, resolution.overwritePaths());
-                    }
-                }
-                case SKIP_ALL -> submitDownload(resolution.withoutConflicts(), targetDirectory, false, List.of());
-                case CANCEL -> {
-                }
-            }
-        }).show(this);
-    }
-
-    private void submitDownload(List<AssetDescriptor> files, File targetDirectory,
-                                boolean overwrite, List<String> overwritePaths) {
-        if (!mRemoteActive || files.isEmpty()) return;
-        long generation = mRemoteGeneration;
-        Path root = targetDirectory.toPath().toAbsolutePath().normalize();
-        Set<String> overwriteSet = new HashSet<>(overwritePaths);
-        List<ClientAssetTransferRequest> requests = new ArrayList<>();
-        for (AssetDescriptor file : files) {
-            String remotePath = AssetPathUtils.normalizeRemoteFilePath(file.path());
-            Path target = root.resolve(remotePath).normalize();
-            if (!target.startsWith(root)) continue;
-            requests.add(ClientAssetTransferRequest.download(remotePath, target,
-                    overwrite || overwriteSet.contains(remotePath)
-                            ? AssetTransferConflictPolicy.OVERWRITE : AssetTransferConflictPolicy.FAIL_IF_EXISTS));
-        }
-        if (requests.isEmpty()) return;
-        java.util.UUID jobId = ClientAssetTransferService.INSTANCE.submit(requests);
-        ClientAssetTransferService.INSTANCE.onCompletion(jobId, (result, error) -> post(() -> {
-            if (error == null) {
-                DocumentManager.INSTANCE.refreshFileReferences();
-                ImageThumbnailView.clearCache();
-                // File/cache updates describe the completed download; only the owner UI is fenced.
-                if (isRemoteCurrent(generation) && mBrowserPanel != null) mBrowserPanel.refreshFileList();
-            }
-        }));
-    }
-
-    private List<String> findLocalDownloadConflicts(List<AssetDescriptor> files, File targetDirectory) {
-        List<String> conflicts = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (AssetDescriptor file : files) {
-            String path = AssetPathUtils.normalizeRemoteFilePath(file.path());
-            if (!seen.add(path)) continue;
-            File target = new File(targetDirectory, path);
-            if (target.exists()) {
-                conflicts.add(path);
-            }
-        }
-        return conflicts;
-    }
-
-    private static final class ConflictResolutionState<T> {
-        private final List<T> mFiles;
-        private final List<String> mConflicts;
-        private final Function<T, String> mPathProvider;
-        private final Set<String> mOverwritePaths = new LinkedHashSet<>();
-        private final Set<String> mSkipPaths = new LinkedHashSet<>();
-        private final Set<String> mConflictSet;
-        private int mIndex = 0;
-
-        private ConflictResolutionState(List<T> files, List<String> conflicts, Function<T, String> pathProvider) {
-            mFiles = files;
-            mConflicts = conflicts;
-            mPathProvider = pathProvider;
-            mConflictSet = new HashSet<>(conflicts);
-        }
-
-        boolean markCurrentOverwrite() {
-            if (mIndex < mConflicts.size()) {
-                mOverwritePaths.add(mConflicts.get(mIndex));
-            }
-            return advance();
-        }
-
-        boolean markCurrentSkip() {
-            if (mIndex < mConflicts.size()) {
-                mSkipPaths.add(mConflicts.get(mIndex));
-            }
-            return advance();
-        }
-
-        private boolean advance() {
-            mIndex++;
-            return mIndex >= mConflicts.size();
-        }
-
-        List<String> overwritePaths() {
-            return new ArrayList<>(mOverwritePaths);
-        }
-
-        List<T> remainingFiles() {
-            List<T> result = new ArrayList<>();
-            for (T file : mFiles) {
-                if (!mSkipPaths.contains(mPathProvider.apply(file))) {
-                    result.add(file);
-                }
-            }
-            return result;
-        }
-
-        List<T> withoutConflicts() {
-            List<T> result = new ArrayList<>();
-            for (T file : mFiles) {
-                if (!mConflictSet.contains(mPathProvider.apply(file))) {
-                    result.add(file);
-                }
-            }
-            return result;
-        }
-    }
-
     private int beginRemoteRequest() {
         int requestId = RemoteAssetClient.nextRequestId();
         mRemoteRequestIds.add(requestId);
@@ -727,21 +388,23 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         });
     }
 
-    private void postTransferPlan(int[] requestHolder, long generation, Runnable action) {
-        // Read the returned ID on the UI thread, after request() assigned it, even for inline responses.
-        postRemote(generation, () -> {
-            if (mTransferPlanRequestIds.remove(requestHolder[0])) action.run();
-        });
+    private void closeSavedSubscription() {
+        if (mSavedSubscription == null) return;
+        AutoCloseable subscription = mSavedSubscription;
+        mSavedSubscription = null;
+        try { subscription.close(); }
+        catch (Exception failure) {
+            System.getLogger(AssetBrowserWindow.class.getName()).log(
+                    System.Logger.Level.WARNING, "Could not remove document save listener", failure);
+        }
     }
 
     private void cancelRemoteRequests() {
         mRemoteActive = false;
         mRemoteGeneration++;
         List<Integer> requests = List.copyOf(mRemoteRequestIds);
-        List<Integer> plans = List.copyOf(mTransferPlanRequestIds);
         mRemoteRequestIds.clear();
-        mTransferPlanRequestIds.clear();
         for (int requestId : requests) RemoteAssetClient.cancel(requestId);
-        for (int requestId : plans) ClientAssetTransferPlanState.cancel(requestId);
+        mTransfers.deactivate();
     }
 }

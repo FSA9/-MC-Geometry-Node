@@ -9,11 +9,11 @@ import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
 import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
-import com.mine.geometry_node.client.asset.preview.protocol.ClientAssetPreviewProtocol;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.client.feature.asset.preview.protocol.ClientAssetPreviewProtocol;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetFileResponse;
 import com.mine.geometry_node.core.network.packet.asset.transfer.PacketAssetTransferPlanResponse;
 import com.mine.geometry_node.core.network.packet.s2c.PacketCaptureEntityTemplateResponse;
@@ -36,7 +36,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketSpawnDynamicVisual;
 import com.mine.geometry_node.core.network.packet.s2c.PacketVisualAssetData;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewResponse;
 import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataLibraryResponse;
-import com.mine.geometry_node.client.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.client.feature.datalibrary.NetworkRemoteDataLibraryGateway;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 
 /** Registers S2C receivers and routes their payloads into client-owned state. */
@@ -49,26 +49,26 @@ public final class ClientNetworkReceiverRegistry {
     public static synchronized void init() {
         if (initialized) return;
         initialized = true;
-        com.mine.geometry_node.client.entityindex.ClientEntityIndex.INSTANCE.init();
-        com.mine.geometry_node.client.entityeditor.ClientEntityEditor.INSTANCE.init();
-        com.mine.geometry_node.client.faction.ClientFactionRepository.INSTANCE.init();
-        com.mine.geometry_node.client.entitypreview.EntityPreviewClient.INSTANCE.init();
+        com.mine.geometry_node.client.feature.entity.index.ClientEntityIndex.INSTANCE.init();
+        com.mine.geometry_node.client.feature.entity.edit.ClientEntityEditor.INSTANCE.init();
+        com.mine.geometry_node.client.feature.faction.ClientFactionRepository.INSTANCE.init();
+        com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.TYPE,
                 (payload, context) -> {
-                    var previews = com.mine.geometry_node.client.entitypreview.EntityPreviewClient.INSTANCE;
+                    var previews = com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient.INSTANCE;
                     long generation = previews.generation();
                     context.queue(() -> previews.accept(payload, generation));
                 });
-        com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository.INSTANCE.init();
+        com.mine.geometry_node.client.feature.worldquery.ClientWorldObjectRepository.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectPage.TYPE,
                 (payload, context) -> {
-                    var repository = com.mine.geometry_node.client.worldquery.ClientWorldObjectRepository.INSTANCE;
+                    var repository = com.mine.geometry_node.client.feature.worldquery.ClientWorldObjectRepository.INSTANCE;
                     long generation = repository.generation();
                     context.queue(() -> repository.accept(payload, generation));
                 });
-        com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.init();
+        com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.viewport.PacketViewportEntityMoveResult.TYPE,
                 (payload, context) -> context.queue(() ->
@@ -76,15 +76,15 @@ public final class ClientNetworkReceiverRegistry {
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.scene.PacketSceneSnapshot.TYPE,
                 (payload, context) -> {
-                    long generation = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();
-                    context.queue(() -> com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.accept(payload, generation));
+                    long generation = com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();
+                    context.queue(() -> com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.accept(payload, generation));
                 });
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.viewport.PacketViewportNativeEntitySnapshot.TYPE,
                 (payload, context) -> {
-                    long generation = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();
-                    context.queue(() -> com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.acceptBackendSnapshot(
-                            com.mine.geometry_node.client.scene.SceneEditBackends.NATIVE_ENTITIES, payload.snapshot(), generation));
+                    long generation = com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.snapshot().worldGeneration();
+                    context.queue(() -> com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.acceptBackendSnapshot(
+                            com.mine.geometry_node.client.feature.scene.SceneEditBackends.NATIVE_ENTITIES, payload.snapshot(), generation));
                 });
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.s2c.PacketViewportDebugSnapshot.TYPE,

@@ -1,19 +1,21 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import com.mine.geometry_node.client.ui.document.GraphSessionViewState;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
-import com.mine.geometry_node.client.ui.editor.asset.drag.AssetDragPayload;
-import com.mine.geometry_node.client.ui.editor.datalibrary.DataLibraryDragPayload;
+import com.mine.geometry_node.client.ui.components.integration.asset.drag.AssetDragPayload;
+import com.mine.geometry_node.client.ui.workspace.drag.payload.DataLibraryDragPayload;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragDropRegistry;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.asset.ClientAssetCallbacks;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferRequest;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.platform.ClientThread;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferRequest;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -215,7 +217,7 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     private boolean acceptDataLibraryDrop(DataLibraryDragPayload payload, float rawX, float rawY) {
-        if (!payload.isEntry()) return false;
+        if (!payload.isEntry() || payload.entryIds().size() != 1) return false;
         GraphSession targetSession = mViewport.getController().getCurrentSession();
         if (!isReadyForImport(targetSession) || !isRawPointInside(mViewport, rawX, rawY)) return false;
         int[] viewportLoc = new int[2];
@@ -265,7 +267,7 @@ public class GraphViewportPanel extends LinearLayout {
                     if (isReadyForImport(targetSession)) {
                         mViewport.getController().executeImportGraphJson(json, viewportX, viewportY);
                     }
-                }, ClientAssetCallbacks.executor());
+                }, ClientThread.executor());
             });
             return true;
         }
@@ -332,7 +334,7 @@ public class GraphViewportPanel extends LinearLayout {
         contentArea.setGravity(Gravity.CENTER_VERTICAL);
         contentArea.setPadding(dp2pxInt(PADDING_TITLE_L), 0, dp2pxInt(PADDING_TITLE_R), 0);
 
-        String titleText = (session.isDirty ? "* " : "") + session.tabName;
+        String titleText = (session.isDirty ? "* " : "") + GraphSessionViewState.of(session).tabName;
         TextView titleView = UIUtils.createLockedTextView(getContext(), titleText, TEXT_SIZE_TAB, isActive ? UiThemes.EDITOR.text().strong() : UiThemes.EDITOR.text().muted());
         contentArea.addView(titleView);
 

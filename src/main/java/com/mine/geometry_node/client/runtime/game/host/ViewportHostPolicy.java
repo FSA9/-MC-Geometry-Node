@@ -7,8 +7,12 @@ import java.util.function.Function;
 
 /** Host identity and composition color supplied by the application, without concrete UI dependencies. */
 public final class ViewportHostPolicy {
-    public record Snapshot(boolean workspace, int background) {
+    /** A managed screen can replace a retained workspace without being a workspace itself.
+     * Ordinary native screens leave this false so the editor can resume after they close.
+     */
+    public record Snapshot(boolean workspace, int background, boolean replacesRetainedWorkspace) {
         public static final Snapshot NONE = new Snapshot(false, 0);
+        public Snapshot(boolean workspace, int background) { this(workspace, background, workspace); }
         public boolean opaque() { return workspace && (background >>> 24) == 255; }
     }
 

@@ -6,7 +6,7 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
-import com.mine.geometry_node.client.graph.query.NodeSearchService;
+import com.mine.geometry_node.client.feature.graph.query.NodeSearchService;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.config.AppConfig;

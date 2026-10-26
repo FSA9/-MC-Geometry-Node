@@ -1,11 +1,11 @@
 package com.mine.geometry_node.mixin.model.iris;
 
-import com.mine.geometry_node.client.model.render.pipeline.ModelIrisAlphaTest;
-import com.mine.geometry_node.client.model.render.bvh.ModelNativeLight;
-import com.mine.geometry_node.client.model.render.shadow.ModelIrisShadowUv;
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.bvh.ModelLightingReceiverTag;
-import com.mine.geometry_node.client.model.render.pipeline.ModelIrisBlendOverride;
+import com.mine.geometry_node.client.runtime.model.render.pipeline.ModelIrisAlphaTest;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelNativeLight;
+import com.mine.geometry_node.client.runtime.model.render.shadow.ModelIrisShadowUv;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelLightingReceiverTag;
+import com.mine.geometry_node.client.runtime.model.render.pipeline.ModelIrisBlendOverride;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -37,7 +37,7 @@ public abstract class ModelIrisAlphaDrawMixin {
     private static void geometryNode$forgetAlpha(int program, CallbackInfo callback) {
         ModelNativeLight.deleted(program);
         ModelIrisAlphaTest.deleted(program);
-        com.mine.geometry_node.client.model.compat.ModelIrisPbrBindings.deleted(program);
+        com.mine.geometry_node.client.runtime.model.compat.ModelIrisPbrBindings.deleted(program);
         ModelIrisShadowUv.deleted(program);
         ModelIrisHeldLight.deleted(program);
         ModelLightingReceiverTag.deleted(program);

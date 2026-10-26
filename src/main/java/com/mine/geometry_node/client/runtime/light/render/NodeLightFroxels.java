@@ -5,11 +5,11 @@ import com.mine.geometry_node.client.runtime.light.shader.NodeLightPrograms;
 import com.mine.geometry_node.client.runtime.light.shader.NodeLightShader;
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
-import com.mine.geometry_node.client.model.render.bvh.ModelPlacedLightField;
-import com.mine.geometry_node.client.model.render.bvh.ModelSundialHeldLight;
-import com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings;
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelPlacedLightField;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelSundialHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings;
+import com.mine.geometry_node.client.runtime.model.render.geometry.ModelRenderAsset;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;

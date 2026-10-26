@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.runtime.light.shader.adapter;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelPackLightAdapters;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelPackLightAdapters;
 import java.util.regex.Pattern;
 
 /** Token-aware patch operations shared by pack adapters. */

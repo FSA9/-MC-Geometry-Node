@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.runtime.game.render;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSources;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.chunk.EditCameraChunkClient;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
@@ -14,7 +14,6 @@ import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraObservers;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import icyllis.modernui.graphics.Canvas;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
@@ -28,6 +27,7 @@ import java.util.Set;
 import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import java.util.WeakHashMap;
 import java.lang.ref.WeakReference;
+import java.util.function.Function;
 
 /** Budgeted multi-view rendering: independent terrain contexts, one complete world pass per frame. */
 public final class EditViewportRuntime {
@@ -38,7 +38,7 @@ public final class EditViewportRuntime {
     private static volatile Session frame;
     private static volatile boolean navigationAllowed;
     private static volatile boolean basicShading;
-    private static volatile GameFrameImage.Size framebuffer = new GameFrameImage.Size(0, 0);
+    private static volatile ViewportFrameSize framebuffer = new ViewportFrameSize(0, 0);
     private static final Map<EditViewportCamera, WeakReference<Object>> CAMERA_LEVELS = new WeakHashMap<>();
     private static Object currentLevel;
     private static Object preferred;
@@ -59,14 +59,14 @@ public final class EditViewportRuntime {
     private static final class Session implements AutoCloseable {
         final EditViewportCamera camera;
         final EditorRenderCamera renderCamera = new EditorRenderCamera();
-        final ViewportFrameSurface surface = new ViewportFrameSurface(new GameFrameImage.Channel());
+        final ViewportFrameSurface surface = new ViewportFrameSurface();
         final ViewportResolution resolution = new ViewportResolution();
         EditViewportRenderContext context;
         TextureTarget target;
         ClientSceneService.Snapshot sceneSnapshot;
         ViewportSnapGeometry.Query snapQuery;
         Set<ViewportTarget.Key> selection = Set.of();
-        GameFrameImage.Size requestedSize = new GameFrameImage.Size(0, 0);
+        ViewportFrameSize requestedSize = new ViewportFrameSize(0, 0);
         Session(EditViewportCamera camera) { this.camera = camera; }
         @Override public void close() {
             surface.clear();
@@ -111,7 +111,7 @@ public final class EditViewportRuntime {
         else if (preferred == owner) preferred = null;
     }
     public static synchronized void touch(Object owner) { preferred = owner; }
-    public static GameFrameImage.Size framebufferSize() { return framebuffer; }
+    public static ViewportFrameSize framebufferSize() { return framebuffer; }
     public static synchronized boolean hasVisibleViews() {
         for (Request request : VISIBLE.values()) if (request.demand > 0) return true;
         return false;
@@ -143,24 +143,25 @@ public final class EditViewportRuntime {
     }
     public static boolean useBasicShading() { return basicShading; }
     public static synchronized boolean isAvailable(Object owner) {
-        Session session = SESSIONS.get(owner);
-        return isOwner(owner) && session != null && session.surface.image.isAvailable();
+        var publication = admittedPublication(owner);
+        return publication != null && publication.isAvailable();
     }
-    public static synchronized GameFrameImage.Size size(Object owner) {
-        Session session = SESSIONS.get(owner);
-        return isOwner(owner) && session != null ? session.surface.image.size() : new GameFrameImage.Size(0, 0);
+    public static synchronized ViewportFrameSize size(Object owner) {
+        var publication = admittedPublication(owner);
+        return publication == null ? ViewportFrameSize.EMPTY : publication.size();
     }
-    public static synchronized boolean draw(Object owner, Canvas canvas, GameFrameImage.Size size,
-                                             float left, float top, float right, float bottom) {
+    /** Caller holds the session monitor. */
+    private static ViewportFramePublication admittedPublication(Object owner) {
         Session session = SESSIONS.get(owner);
-        return isOwner(owner) && session != null && session.surface.image.draw(canvas, size, left, top, right, bottom);
+        return isOwner(owner) && session != null ? session.surface.publication() : null;
     }
-    /** Returns precisely the metadata of the texture retained by this UI draw, or null when skipped. */
-    public static synchronized PresentedViewportFrame drawPresented(Object owner, Canvas canvas, GameFrameImage.Size size,
-                                                                    float left, float top, float right, float bottom) {
-        Session session = SESSIONS.get(owner);
-        return isOwner(owner) && session != null
-                ? session.surface.image.drawPresented(canvas, size, left, top, right, bottom) : null;
+    /** Read/retain a publication on the caller's thread, under the same lock as session admission
+     * and retirement. Readers must finish retaining their image here, without storing the channel
+     * or changing its producer-owned lifecycle. Returns null for an absent/inadmissible source.
+     */
+    public static synchronized <T> T withFramePublication(Object owner, Function<ViewportFramePublication, T> reader) {
+        var publication = admittedPublication(owner);
+        return publication == null ? null : reader.apply(publication);
     }
 
     public static Object renderingOwner() { return frame == null ? null : frameSource; }
@@ -179,7 +180,7 @@ public final class EditViewportRuntime {
         frame = null;
         frameSource = null;
         budgetSources = false;
-        var nextFramebuffer = new GameFrameImage.Size(mc.getWindow().getWidth(), mc.getWindow().getHeight());
+        var nextFramebuffer = new ViewportFrameSize(mc.getWindow().getWidth(), mc.getWindow().getHeight());
         if (!nextFramebuffer.equals(framebuffer)) {
             for (Session session : SESSIONS.values()) session.surface.clear();
             SharedGameFrame.clearImage();

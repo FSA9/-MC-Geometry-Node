@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.runtime.light.diagnostic.NodeLightPixelDiag
 import com.mine.geometry_node.client.runtime.light.shader.NodeLightShader;
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.opengl.*;
@@ -58,7 +58,7 @@ public final class NodeLightRenderer {
 
     private NodeLightRenderer() {}
     public static void prepare(Vec3 eye) {
-        com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.poll();
+        com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.poll();
         long started=System.nanoTime();
         frameNativeDraws=0;
         framePackDraws=0;

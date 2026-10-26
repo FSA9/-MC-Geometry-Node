@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
-import com.mine.geometry_node.client.scene.ClientSceneService;
-import com.mine.geometry_node.client.scene.SceneEditCapabilities;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.SceneEditCapabilities;
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;

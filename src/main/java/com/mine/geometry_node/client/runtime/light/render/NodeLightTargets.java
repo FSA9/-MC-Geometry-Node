@@ -3,8 +3,8 @@ package com.mine.geometry_node.client.runtime.light.render;
 import com.mine.geometry_node.client.runtime.light.diagnostic.LightReports;
 import com.mine.geometry_node.client.runtime.light.diagnostic.NodeLightPixelDiagnostics;
 
-import com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings;
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
+import com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings;
+import com.mine.geometry_node.client.runtime.model.render.geometry.ModelRenderAsset;
 import com.mojang.blaze3d.systems.RenderSystem;
 import java.util.Map;
 import org.lwjgl.opengl.*;

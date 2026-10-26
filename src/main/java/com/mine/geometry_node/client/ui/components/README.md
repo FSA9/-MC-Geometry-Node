@@ -22,6 +22,12 @@
 
 常规图标动作使用 `UiIconButton.createThemed(context, theme, icon, description)`，统一采用 `TOOLBAR` 预设；表格行、标签删除、复制等透明背景动作传入 `Preset.INLINE`。预设统一背景、边框、焦点、禁用状态及图标大小，`INLINE` 保留调用方图标颜色。紧凑控件可通过 `Style.forPreset(theme, preset).withSize(width, height, iconSize)` 调整最小命中尺寸及图标尺寸；不再复制整套状态颜色。组件只负责展示和交互状态，清除、删除、重置等回调及启用条件由所属业务页面维护。
 
+## 目录导航
+
+本目录的全部直接子目录为 [base](base/README.md)、[composite](composite/README.md) 和 [integration](integration/README.md)，各层 README 列出其子目录与关键入口。公共资产 UI 见 [integration/asset](integration/asset/README.md)，工作区资产 Area 只保留窗口装配。
+
+展示状态由 UI 线程维护；`View.post()` 适合可丢弃的展示刷新。已提交操作的完成、确认和资源释放应使用独立 UI executor 或业务会话调度器，不依赖 View 是否仍挂载。组件只关闭自己拥有的订阅、会话与资源句柄，借用资源由原 owner 管理。
+
 ## 层级与选择规则
 
 | 层级 | 职责 | 选用边界 |
@@ -36,7 +42,7 @@
 - helper 跟随所属职责和使用者归层；纯算法、无状态或不引用 Minecraft 并不自动构成下沉 base 的理由。只有具备独立的基础职责和实际复用需求时才考虑提取，不把每个纯算法强拆到 base。原生预览的 `PreviewZoomController`、`ValuePreviewStyle` 留在 `integration/valuepreview`。
 - `base` 可以使用项目的主题、缩放、Area 生命周期及 `core.cache` 通用缓存契约；缓存包只依赖 JDK，不包含游戏状态或业务数据。这里的基础层不等同于脱离项目的独立 UI 库，但禁止直接依赖 Minecraft、core 数据模型及具体编辑器。完整模态弹层通过 `OverlayMount` 接入 shell，并保留独立宿主路径。
 - 组件内允许的依赖方向为 `integration → composite → base`，也允许 `integration → base`；禁止反向依赖。`composite` 可以接收纯数据类型，但不直接调用 Minecraft 渲染、世界状态或具体编辑器／运行时实现；本地化 `Component` 是允许的适配。编辑器专用拼装留在对应编辑器。
-- `base` / `composite` 不导入 `EditorLayoutPolicy`、`NodeUiMetrics`、`GraphUiStyle` 或 `GraphInteractionConfig`。编辑器在调用方读取 `EditorLayoutPolicy.MIN_PANEL_WEIGHT` 并注入分割器、侧栏等组件；图网格、节点布局和图交互参数留在 `ui/editor/graph`，不下沉到共享视觉指标。`UiThemeBoundaryTest` 守护这一边界。
+- `base` / `composite` 不导入具体编辑器、`NodeUiMetrics`、`GraphUiStyle` 或 `GraphInteractionConfig`。分割器和侧栏使用默认最小权重；有特殊布局约束时由调用方显式传入；图网格、节点布局和图交互参数留在 `ui/editor/graph`，不下沉到共享视觉指标。`UiThemeBoundaryTest` 守护这一边界。
 - 迁移必须更新 package、调用方与测试引用；不保留旧包名转发类或平行实现。本页组件链接统一使用分层后的路径。
 - `ComponentLayeringTest` 检查生产源码的层级边界、目录归属和包声明，阻止后续改动重新混入旧目录或产生反向依赖。
 
@@ -73,6 +79,8 @@
 | `table` | [UiColumnFilterPopover](composite/table/UiColumnFilterPopover.java)、[UiTableBatchWork](composite/table/UiTableBatchWork.java)、[UiTableColumns](composite/table/UiTableColumns.java)、[UiTableFilterHeader](composite/table/UiTableFilterHeader.java)、[UiTableRow](composite/table/UiTableRow.java)、[UiTableRowFrame](composite/table/UiTableRowFrame.java)、[UiTableStyle](composite/table/UiTableStyle.java)、[UiTableViewport](composite/table/UiTableViewport.java) | 列模型、行与单元格、横向视口、表头筛选、样式和分帧建行。 |
 
 ### integration：Minecraft 与运行时适配
+
+实体编辑使用 [EntityEditorDialog](integration/entity/editor/EntityEditorDialog.java)，这是可复用的模态弹窗，不是 Area。页面和编辑会话归 `integration/entity/editor`，实体请求及预览服务归 `client/feature/entity`；选图与打开图通过 `EntityGraphActions` 注入。工作区入口 `client/integration/entity/WorkspaceEntityEditor` 负责连接资产选择器和同宿主的现有图编辑器，组件不查找具体编辑器或 shell。
 
 资产选择使用 [AssetPickerDialog](integration/asset/AssetPickerDialog.java)：
 `show(anchor, title, new AssetPickerOptions(sources, target, fileFilter, initialDirectory), onPick)`
@@ -270,7 +278,7 @@ preview.zoom().reset();        // 回到 1，受当前范围约束
 
 编辑器组合公共 `ModalWindowView`、`UiContextMenu`、`UiTextInput`、`UiSelectButton`、按钮与滚动容器，不再创建独立弹层体系。下拉选择复用 `UiContextMenu.showBelow(anchor, contentHost())`，挂在模态窗口内部，不能加到低于 modal layer 的全局根节点；Esc 先关闭菜单。顶部统一放置搜索、类型筛选和新增；左侧按20条分页并显示条目类型；右侧键与类型并排，布尔值复用复选框，字典与列表切换 JSON 编辑和有上限的结构预览。标题与对象说明在同一文本基线，底栏显示草稿状态和等距操作；还原条目只撤销当前表单，保存条目只更新草稿，应用才写入业务仓库。整数及其他数值使用普通文本输入，无上下微调按钮。编辑保留 Integer／Long／Float／Double 精度；重复键、溢出、非有限数和超限结构不能提交。未知注册类型与包含它们的复杂值保持只读，编辑其他条目不会把原值字符串化。
 
-草稿只在应用时提交；取消与关闭确认不修改仓库。重新加载在存在草稿时先用弹窗内的丢弃确认，确认后重新取得数据并建立新的比较基线，可恢复版本冲突；取消确认会保留当前输入。组件自己的监听在 detach／modal close 时解除；异步通知和完成回调 post 回 UI 线程，并拒绝旧绑定／关闭后的回调。组件**不关闭共享 binding/session**，由业务 owner 负责。侧栏只在挂载且可见时主动请求读取；表格优先使用 summary-only API。管理弹窗的 anchor 应为稳定 editor／面板，避免刷新表格重建行时把弹窗误关掉。
+独立管理窗口的草稿在应用时提交；取消与关闭确认不修改仓库。重新加载在存在草稿时先用弹窗内的丢弃确认，确认后重新取得数据并建立新的比较基线，可恢复版本冲突；取消确认会保留当前输入。独立窗口通过 `binding.openSession()` 取得并拥有会话 binding；嵌入编辑器借用父 binding，由父 owner 负责关闭。嵌入式 `saveEntry()` 提交已完成的条目操作，未完成表单只保留在本地；`suspend()` 只暂停展示，`dispose()` 才丢弃未完成表单。逻辑关闭后，已发出的写入仍经独立 UI 调度通道收尾，完成后解除监听并释放自有 binding；展示回调必须拒绝旧绑定或失效 View，不能以此丢弃提交确认。侧栏只在挂载且可见时主动请求读取；表格优先使用 summary-only API。管理弹窗的 anchor 应为稳定 editor／面板，避免刷新表格重建行时把弹窗误关掉。
 
 实体装备组件由宿主传入装备、背包快照、能力、预览来源和变更回调，不依赖实体编辑窗口或网络。`equipment()`、`inventory()`、`dropped()` 返回分离快照；`isCommitReady()` 表示一次装备操作是否完成。宿主负责在操作完成时成批提交并以 `acceptCommitted()` 接收确认。切页保留手持与输入状态，真正关闭由宿主决定丢弃；组件不自行修改实体。
 

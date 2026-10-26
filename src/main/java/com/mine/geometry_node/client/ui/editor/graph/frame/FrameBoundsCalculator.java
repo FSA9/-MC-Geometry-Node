@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.frame;
 
-import com.mine.geometry_node.client.ui.document.edit.FrameBoundsPolicy;
+import com.mine.geometry_node.client.feature.graph.edit.FrameBoundsPolicy;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.document.FrameData;

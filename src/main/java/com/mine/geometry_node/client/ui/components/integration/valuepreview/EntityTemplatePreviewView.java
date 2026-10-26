@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
-import com.mine.geometry_node.client.entitypreview.EntityPreviewClient;
+import com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.nativepreview.DeferredEntityPreviewGuard;
 import com.mine.geometry_node.client.config.BuiltinConfigEntries;

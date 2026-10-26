@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;

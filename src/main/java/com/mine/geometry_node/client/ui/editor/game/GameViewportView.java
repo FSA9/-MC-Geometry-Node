@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportPixelDema
 import com.mine.geometry_node.client.runtime.game.camera.EditViewportCamera;
 import com.mine.geometry_node.client.runtime.game.input.EditViewportFlightInput;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
-import com.mine.geometry_node.client.runtime.game.render.GameFrameImage;
+import com.mine.geometry_node.client.integration.game.GameFrameImage;
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.diagnostic.GameViewTiming;
 import com.mine.geometry_node.client.input.binding.KeyScope;
@@ -178,7 +178,7 @@ final class GameViewportView extends View {
             return;
         }
         var bounds = GameViewportLayout.fit(getWidth(), getHeight(), framebuffer.width(), framebuffer.height());
-        var presented = editing() ? EditViewportRuntime.drawPresented(inputOwner, canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom()) : null;
+        var presented = editing() ? GameFrameImage.drawPresented(inputOwner, canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom()) : null;
         boolean drawn = editing() ? presented != null
                 : GameFrameImage.draw(canvas, size, bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
         if (drawn) {

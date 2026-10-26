@@ -2,27 +2,28 @@ package com.mine.geometry_node;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.behavior.ClientBehaviorDebugStore;
-import com.mine.geometry_node.client.runtime.dialogue.DialogueStyleRenderer;
+import com.mine.geometry_node.client.integration.runtime.RuntimeUiIntegration;
+import com.mine.geometry_node.client.integration.model.ModelHudIntegration;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.input.KeyBindings;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
 import com.mine.geometry_node.client.runtime.marker.ClientMarkerStore;
 import com.mine.geometry_node.client.network.ClientNetworkReceiverRegistry;
-import com.mine.geometry_node.client.runtime.marker.MarkerHudRenderer;
+import com.mine.geometry_node.client.ui.hud.marker.MarkerHudRenderer;
 import com.mine.geometry_node.client.runtime.render.ClientVisualManager;
 import com.mine.geometry_node.client.runtime.render.image.ClientImageAssetManager;
 import com.mine.geometry_node.client.runtime.render.debug.GeometryDebugRenderer;
 import com.mine.geometry_node.client.runtime.render.debug.SchematicProjectionRenderer;
 import com.mine.geometry_node.client.ui.MainUI;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.shell.registration.BuiltinSidebarPanels;
 import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
 import com.mine.geometry_node.client.integration.picker.DataLibraryEntityPickerController;
-import com.mine.geometry_node.client.datalibrary.NetworkRemoteDataLibraryGateway;
-import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferService;
-import com.mine.geometry_node.client.asset.transfer.ClientAssetTransferPlanState;
-import com.mine.geometry_node.client.asset.preview.ClientAssetPreviewService;
+import com.mine.geometry_node.client.feature.datalibrary.NetworkRemoteDataLibraryGateway;
+import com.mine.geometry_node.client.feature.datalibrary.ClientDataLibraryRepository;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferPlanState;
+import com.mine.geometry_node.client.feature.asset.preview.ClientAssetPreviewService;
 import com.mine.geometry_node.core.command.registry.ModClientCommands;
 import icyllis.modernui.mc.ModernUIMod;
 import net.minecraft.client.Minecraft;
@@ -48,9 +49,12 @@ public class GeometryNodeClient {
     public GeometryNodeClient(IEventBus modBus) {
         disableModernUiDevRegistries();
         com.mine.geometry_node.client.integration.game.WorkspaceViewportIntegration.install();
-        com.mine.geometry_node.client.graph.metadata.GraphTagMetadata.register(
+        com.mine.geometry_node.client.integration.asset.AssetBrowserRepositories.init();
+        com.mine.geometry_node.client.feature.graph.metadata.GraphTagMetadata.register(
                 com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL);
-        com.mine.geometry_node.client.model.ModelClientLifecycle.register(modBus);
+        com.mine.geometry_node.client.runtime.model.ModelClientLifecycle.register(modBus);
+        RuntimeUiIntegration.install();
+        ModelHudIntegration.register(modBus);
         ClientNetworkReceiverRegistry.init();
         // 注册按键
         modBus.addListener(KeyBindings::register);
@@ -100,7 +104,7 @@ public class GeometryNodeClient {
         }
 
         ClientVisualManager.tick();
-        DialogueStyleRenderer.tick();
+        RuntimeUiIntegration.tick();
 
         ClientBlueprintInputManager.tick();
     }
@@ -166,7 +170,7 @@ public class GeometryNodeClient {
         GeometryNode.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
 
         com.mine.geometry_node.client.config.ConfigManager.INSTANCE.initOrLoad();
-        com.mine.geometry_node.client.ui.editor.asset.AssetCacheRegistration.init();
+        com.mine.geometry_node.client.integration.asset.AssetCacheRegistration.init();
         com.mine.geometry_node.client.runtime.light.shader.NodeLightProgramCache.registerCache(
                 Minecraft.getInstance().gameDirectory.toPath());
         com.mine.geometry_node.core.node.NodeRegistry.INSTANCE.init();

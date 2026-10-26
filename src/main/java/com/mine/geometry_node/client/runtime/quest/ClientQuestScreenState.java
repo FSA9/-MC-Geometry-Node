@@ -10,23 +10,45 @@ public final class ClientQuestScreenState {
     private static volatile PacketQuestScreenSnapshot current;
     private static volatile boolean previewActive;
 
+    @Nullable
+    private static volatile QuestScreenPresentation presentation;
+
+    /** Install once for the client lifetime. Reinstalling the same instance is harmless, including during a session. */
+    public static synchronized void installPresentation(QuestScreenPresentation value) {
+        java.util.Objects.requireNonNull(value, "presentation");
+        if (presentation != null && presentation != value) {
+            throw new IllegalStateException("QuestScreenPresentation is already installed; replacing it would detach its screen lifecycle");
+        }
+        presentation = value;
+    }
+
+    private static QuestScreenPresentation presentation() {
+        QuestScreenPresentation installed = presentation;
+        if (installed == null) {
+            throw new IllegalStateException("QuestScreenPresentation must be installed before receiving packets or opening previews");
+        }
+        return installed;
+    }
+
     private ClientQuestScreenState() {
     }
 
     public static void handleSnapshot(PacketQuestScreenSnapshot snapshot) {
-        if (!snapshot.openScreen() && !QuestScreenRenderer.isActive()) {
+        QuestScreenPresentation installed = presentation();
+        if (!snapshot.openScreen() && !installed.isActive()) {
             return;
         }
         previewActive = false;
         current = snapshot;
-        QuestScreenRenderer.openOrRefresh(snapshot);
+        installed.openOrRefresh(snapshot);
     }
 
     public static boolean openPreview(PacketQuestScreenSnapshot snapshot) {
         if (snapshot == null) return false;
+        QuestScreenPresentation installed = presentation();
         previewActive = true;
         current = snapshot;
-        QuestScreenRenderer.openOrRefresh(snapshot);
+        installed.openOrRefresh(snapshot);
         return true;
     }
 
@@ -52,28 +74,31 @@ public final class ClientQuestScreenState {
     }
 
     public static void requestOpen() {
+        presentation();
         previewActive = false;
         NetworkHandler.sendToServer(new PacketQuestScreenAction(PacketQuestScreenAction.OPEN, "", ""));
     }
 
     public static void close() {
+        presentation();
         boolean closingPreview = previewActive;
-        if (!closingPreview && QuestScreenRenderer.isActive()) {
+        if (!closingPreview && presentation().isActive()) {
             NetworkHandler.sendToServer(new PacketQuestScreenAction(PacketQuestScreenAction.CLOSE, "", ""));
         }
         previewActive = false;
         if (closingPreview) current = null;
-        QuestScreenRenderer.close();
+        presentation().close();
     }
 
     public static void reset() {
+        presentation();
         previewActive = false;
         current = null;
-        QuestScreenRenderer.clear();
+        presentation().clear();
     }
 
     private static boolean send(String action, String taskKey, String instanceId) {
-        if (previewActive || !QuestScreenRenderer.isActive()) return false;
+        if (previewActive || !presentation().isActive()) return false;
         NetworkHandler.sendToServer(new PacketQuestScreenAction(action, taskKey, instanceId));
         return true;
     }

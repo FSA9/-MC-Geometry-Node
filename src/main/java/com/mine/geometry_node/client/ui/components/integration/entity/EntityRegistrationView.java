@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.components.integration.entity;
 
-import com.mine.geometry_node.client.entityindex.ClientEntityIndex;
+import com.mine.geometry_node.client.feature.entity.index.ClientEntityIndex;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;

@@ -1,6 +1,6 @@
 package com.mine.geometry_node.mixin.model.iris;
 
-import com.mine.geometry_node.client.model.compat.ModelIrisPbrBindings;
+import com.mine.geometry_node.client.runtime.model.compat.ModelIrisPbrBindings;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;

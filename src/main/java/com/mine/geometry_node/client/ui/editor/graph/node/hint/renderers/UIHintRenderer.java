@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import icyllis.modernui.core.Context;

@@ -3,7 +3,8 @@ package com.mine.geometry_node.client.ui.shell.registration;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.integration.terminal.McpTerminalRuntimeFactory;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserWindow;
-import com.mine.geometry_node.client.ui.editor.database.DatabaseWindow;
+import com.mine.geometry_node.client.integration.asset.WorkspaceAssetBrowserBindings;
+import com.mine.geometry_node.client.ui.editor.datalibrary.DatabaseWindow;
 import com.mine.geometry_node.client.ui.editor.game.GameViewportWindow;
 import com.mine.geometry_node.client.ui.editor.graph.GraphEditorWindow;
 import com.mine.geometry_node.client.ui.editor.terminal.TerminalWindow;
@@ -35,7 +36,8 @@ public final class BuiltinAreaEditors {
                     var uiState = UiStateContext.forArea(state, changed);
                     var snapshot = uiState.read(BuiltinUiStateKeys.ASSET_BROWSER, BuiltinUiStateKeys.SCOPE);
                     return new AssetBrowserWindow(context, snapshot,
-                            () -> uiState.write(BuiltinUiStateKeys.ASSET_BROWSER, BuiltinUiStateKeys.SCOPE, snapshot), uiState);
+                            () -> uiState.write(BuiltinUiStateKeys.ASSET_BROWSER, BuiltinUiStateKeys.SCOPE, snapshot), uiState,
+                            new WorkspaceAssetBrowserBindings());
                 });
         registry.register(AreaEditorType.DATA_LIBRARY, UiSurfaceType.DATA_LIBRARY,
                 (context, state, changed) -> new DatabaseWindow(context, UiStateContext.forArea(state, changed)));

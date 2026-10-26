@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.node.document;
 
-import com.mine.geometry_node.client.ui.document.edit.GraphController;
+import com.mine.geometry_node.client.feature.graph.edit.GraphController;
 
 import com.google.gson.annotations.SerializedName;
 import com.mine.geometry_node.core.node.group.GroupNodeTypes;

@@ -20,7 +20,7 @@ public final class BuiltinSidebarPanels {
         SidebarPanelRegistry.INSTANCE.register(AssetTransferPanel.DEFINITION);
         SidebarPanelRegistry.INSTANCE.register(GameViewportSidebarPanel.DEFINITION);
         SidebarPanelRegistry.INSTANCE.register(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.DEFINITION);
-        SidebarPanelRegistry.INSTANCE.register(com.mine.geometry_node.client.ui.editor.database.sidebar.DatabaseDetailsPanel.DEFINITION);
+        SidebarPanelRegistry.INSTANCE.register(com.mine.geometry_node.client.ui.editor.datalibrary.inspector.DatabaseDetailsPanel.DEFINITION);
         registered = true;
     }
 }

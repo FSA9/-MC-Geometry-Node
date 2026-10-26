@@ -31,7 +31,7 @@ public final class SharedGameFrame {
     // forcing earlier GPU fence waits. Each submission keeps its own buffer rings;
     // item atlases and picture-in-picture caches still belong to the same renderer.
     private static final Map<VertexFormat, MappableRingBuffer> HUD_VERTEX_BUFFERS = new Object2ObjectOpenHashMap<>();
-    private static final ViewportFrameSurface GAME = new ViewportFrameSurface(GameFrameImage.gameChannel());
+    private static final ViewportFrameSurface GAME = new ViewportFrameSurface();
     private static boolean editorFrame;
     private static boolean opaqueEditorFrame;
     private static int editorBackground;
@@ -39,6 +39,9 @@ public final class SharedGameFrame {
     private static boolean captureThisFrame;
     private static GuiRenderer hudPassRenderer;
     private SharedGameFrame() {}
+
+    /** Borrow the runtime-owned game publication; null until the first capture. Consumers only read/retain it. */
+    public static ViewportFramePublication framePublication() { return GAME.publication(); }
 
     public static synchronized void setVisible(Object owner, boolean visible) {
         if (visible) CONSUMERS.add(owner);

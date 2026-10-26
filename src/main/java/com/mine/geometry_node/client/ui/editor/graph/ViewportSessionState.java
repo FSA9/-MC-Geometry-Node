@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
+import com.mine.geometry_node.client.ui.document.GraphSessionViewState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,26 +20,27 @@ final class ViewportSessionState {
             state.currentScale = 1.0f;
             return state;
         }
-        state.viewportX = session.viewportX;
-        state.viewportY = session.viewportY;
-        state.currentScale = session.currentScale;
-        state.hasViewportState = session.hasViewportState;
-        state.selectedNodeIds.addAll(session.selectedNodeIds);
-        state.selectedFrameIds.addAll(session.selectedFrameIds);
+        GraphSessionViewState defaults = GraphSessionViewState.of(session);
+        state.viewportX = defaults.viewportX;
+        state.viewportY = defaults.viewportY;
+        state.currentScale = defaults.currentScale;
+        state.hasViewportState = defaults.hasViewportState;
+        state.selectedNodeIds.addAll(defaults.selectedNodeIds);
+        state.selectedFrameIds.addAll(defaults.selectedFrameIds);
         return state;
     }
 
     void seedSessionDefaults(GraphSession session) {
-        if (session == null || session.hasViewportState) {
-            return;
-        }
-        session.viewportX = viewportX;
-        session.viewportY = viewportY;
-        session.currentScale = currentScale;
-        session.hasViewportState = hasViewportState;
-        session.selectedNodeIds.clear();
-        session.selectedNodeIds.addAll(selectedNodeIds);
-        session.selectedFrameIds.clear();
-        session.selectedFrameIds.addAll(selectedFrameIds);
+        if (session == null) return;
+        GraphSessionViewState defaults = GraphSessionViewState.of(session);
+        if (defaults.hasViewportState) return;
+        defaults.viewportX = viewportX;
+        defaults.viewportY = viewportY;
+        defaults.currentScale = currentScale;
+        defaults.hasViewportState = hasViewportState;
+        defaults.selectedNodeIds.clear();
+        defaults.selectedNodeIds.addAll(selectedNodeIds);
+        defaults.selectedFrameIds.clear();
+        defaults.selectedFrameIds.addAll(selectedFrameIds);
     }
 }

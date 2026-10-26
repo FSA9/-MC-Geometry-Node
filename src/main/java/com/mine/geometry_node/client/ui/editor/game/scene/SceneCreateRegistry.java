@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.game.scene;
 
-import com.mine.geometry_node.client.scene.ClientSceneService;
-import com.mine.geometry_node.client.scene.SceneEditBackends;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.SceneEditBackends;
 import com.mine.geometry_node.core.engine.system.scene.SceneObjectTypes;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;

@@ -62,7 +62,7 @@ final class EditorRenderCamera extends Camera {
         frustum.prepare(pose.x(), pose.y(), pose.z());
     }
 
-    PresentedViewportFrame presented(long id, com.mine.geometry_node.client.scene.ClientSceneService.Snapshot scene) {
+    PresentedViewportFrame presented(long id, com.mine.geometry_node.client.feature.scene.ClientSceneService.Snapshot scene) {
         return snapshot == null ? null : new PresentedViewportFrame(id, snapshot, projectionAspect,
                 PROJECTION_Z_NEAR, projectionDistance, projectionZeroToOne, scene,
                 getViewRotationProjectionMatrix(new Matrix4f()));

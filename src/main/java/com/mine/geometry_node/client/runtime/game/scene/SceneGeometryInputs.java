@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.runtime.game.scene;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapGeometry;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapMeshCounts;
 import com.mine.geometry_node.client.runtime.game.snap.ViewportSnapSources;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;

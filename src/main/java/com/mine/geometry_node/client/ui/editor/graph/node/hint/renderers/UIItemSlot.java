@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemSlotView;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStackTooltipOverlay;

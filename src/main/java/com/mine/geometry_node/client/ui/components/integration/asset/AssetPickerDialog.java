@@ -1,25 +1,25 @@
 package com.mine.geometry_node.client.ui.components.integration.asset;
 
-import com.mine.geometry_node.client.asset.path.AssetBrowserPathPolicy;
-import com.mine.geometry_node.client.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
-import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserCoordinator;
-import com.mine.geometry_node.client.ui.editor.asset.AssetPathUtils;
-import com.mine.geometry_node.client.ui.editor.asset.browser.AssetFileBrowserPanel;
+import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
+import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
+import com.mine.geometry_node.client.ui.components.integration.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetEntry;
-import com.mine.geometry_node.client.ui.editor.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.ui.editor.asset.navigation.AssetNavigationPanel;
-import com.mine.geometry_node.client.ui.editor.asset.repository.AssetLocation;
-import com.mine.geometry_node.client.ui.editor.asset.repository.AssetRepositoryOperation;
+import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.ui.components.integration.asset.navigation.AssetNavigationPanel;
+import com.mine.geometry_node.client.feature.asset.repository.AssetLocation;
+import com.mine.geometry_node.client.feature.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
-import com.mine.geometry_node.client.ui.shell.MainUiServices;
+import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import icyllis.modernui.core.Context;
@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-/** Single-selection modal backed by the asset library's browser and MainUiServices modal owner. */
+/** Single-selection modal backed by the shared asset browser and the anchor's overlay host. */
 public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCoordinator {
     private final LinearLayout mPanel;
     private final UiTheme mTheme;
@@ -296,7 +296,7 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
 
     public final OverlayHandle show(View anchor) {
         bindSessionOwner(anchor);
-        return MainUiServices.require(anchor).layerManager().showModal(this,
+        return java.util.Objects.requireNonNull(OverlayHost.find(anchor), "No overlay host for asset dialog").showModal(this,
                 new ModalOptions(false, true, anchor, mTheme.surface().modalScrimLight()));
     }
 

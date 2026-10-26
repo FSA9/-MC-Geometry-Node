@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.integration.terminal;
 
-import com.mine.geometry_node.client.terminal.TerminalMode;
+import com.mine.geometry_node.client.feature.terminal.TerminalMode;
 
 import java.util.UUID;
 

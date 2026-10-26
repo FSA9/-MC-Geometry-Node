@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.game;
 
-import com.mine.geometry_node.client.ui.editor.EditorLayoutPolicy;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
@@ -147,14 +146,14 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         LinearLayout workspace = new LinearLayout(context);
         workspace.setOrientation(HORIZONTAL);
         workspace.addView(content, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.75f));
-        View divider = ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL, EditorLayoutPolicy.MIN_PANEL_WEIGHT);
+        View divider = ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL);
         workspace.addView(divider);
         sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.GAME_VIEWPORT, this));
         sidebarPanel = sidebar.requirePanel(GameViewportSidebarPanel.PANEL_ID, GameViewportSidebarPanel.class);
         propertiesPanel = sidebar.requirePanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID, com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.class);
         workspace.addView(sidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.25f));
-        sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, EditorLayoutPolicy.MIN_PANEL_WEIGHT, null);
+        sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, null);
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
         sidebarLayout.initialize(false);
         addView(workspace, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -232,7 +231,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         float menuX = rootX, menuY = rootY;
         com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.resolve(placement, position -> post(() -> {
             if (request != creationRequest || disposed || !registered || mode() != ViewportMode.EDIT
-                    || !viewport.canNavigate() || !placement.current(com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE.snapshot())) return;
+                    || !viewport.canNavigate() || !placement.current(com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.snapshot())) return;
             sceneMenus.createAt(menuX,menuY,position,()->{
                 sidebarLayout.setVisible(true,true);
                 sidebar.selectPanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID);
@@ -302,7 +301,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     public boolean focusWorldObjects(String dimension, net.minecraft.world.phys.AABB bounds,
                                      java.util.Set<java.util.UUID> objectIds) {
         if (disposed || !shown || bounds == null) return false;
-        var service = com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE;
+        var service = com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE;
         var snapshot = service.snapshot();
         if (!snapshot.dimension().equals(dimension)) return false;
         closeViewMenu(); closeSceneMenus();
@@ -442,7 +441,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     @Override
     public com.mine.geometry_node.client.history.HistoryTarget historyTarget() {
-        return mode() == ViewportMode.EDIT ? com.mine.geometry_node.client.scene.ClientSceneService.INSTANCE : null;
+        return mode() == ViewportMode.EDIT ? com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE : null;
     }
 
     private void refresh() {

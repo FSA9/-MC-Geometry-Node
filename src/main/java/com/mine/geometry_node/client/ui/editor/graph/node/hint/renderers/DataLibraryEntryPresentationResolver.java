@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.datalibrary.ClientDataLibraryRepository;
-import com.mine.geometry_node.client.datalibrary.DataLibraryRepository;
+import com.mine.geometry_node.client.feature.datalibrary.ClientDataLibraryRepository;
+import com.mine.geometry_node.client.feature.datalibrary.DataLibraryRepository;
 
 import org.jetbrains.annotations.Nullable;
 import com.mine.geometry_node.core.node.definition.port.PortType;

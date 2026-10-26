@@ -1,12 +1,12 @@
 package com.mine.geometry_node.client.integration.terminal;
 
-import com.mine.geometry_node.client.ai.mcp.McpToolEventListener;
-import com.mine.geometry_node.client.terminal.ProcessLaunchSpec;
-import com.mine.geometry_node.client.terminal.TerminalMode;
-import com.mine.geometry_node.client.terminal.TerminalSession;
-import com.mine.geometry_node.client.terminal.TerminalSize;
-import com.mine.geometry_node.client.terminal.pty.PtyProcessFactory;
-import com.mine.geometry_node.client.terminal.shell.ShellTerminalCoordinator;
+import com.mine.geometry_node.client.feature.ai.mcp.McpToolEventListener;
+import com.mine.geometry_node.client.feature.terminal.ProcessLaunchSpec;
+import com.mine.geometry_node.client.feature.terminal.TerminalMode;
+import com.mine.geometry_node.client.feature.terminal.TerminalSession;
+import com.mine.geometry_node.client.feature.terminal.TerminalSize;
+import com.mine.geometry_node.client.feature.terminal.pty.PtyProcessFactory;
+import com.mine.geometry_node.client.feature.terminal.shell.ShellTerminalCoordinator;
 
 import java.util.Objects;
 import java.util.UUID;

@@ -46,9 +46,19 @@ public final class ClientMarkerStore {
         MARKERS.remove(packet.address());
     }
 
-    static synchronized List<ClientMarker> snapshot() {
-        return List.copyOf(new ArrayList<>(MARKERS.values()));
+    /** Read-only frame data; entity tracking and remote interpolation stay inside the runtime. */
+    public static synchronized List<RenderSnapshot> renderSnapshot(Minecraft minecraft, float partialTick) {
+        var result = new ArrayList<RenderSnapshot>(MARKERS.size());
+        for (ClientMarker marker : MARKERS.values()) {
+            if (marker.payload.active() && minecraft.level != null
+                    && marker.payload.dimension().equals(minecraft.level.dimension().identifier().toString())) {
+                result.add(new RenderSnapshot(marker.payload, marker.renderPosition(minecraft, partialTick)));
+            }
+        }
+        return List.copyOf(result);
     }
+
+    public record RenderSnapshot(MarkerPayload payload, Vec3 position) {}
 
     public static synchronized void clear() {
         MARKERS.clear();

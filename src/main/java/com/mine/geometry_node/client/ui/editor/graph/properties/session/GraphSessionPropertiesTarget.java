@@ -1,10 +1,12 @@
 package com.mine.geometry_node.client.ui.editor.graph.properties.session;
 
-import com.mine.geometry_node.client.ui.document.edit.EditorContext;
-import com.mine.geometry_node.client.ui.document.edit.commands.document.CmdSetGraphMetadata;
+import com.mine.geometry_node.client.ui.document.GraphSessionViewState;
+
+import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
+import com.mine.geometry_node.client.feature.graph.edit.commands.document.CmdSetGraphMetadata;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.editor.graph.properties.GraphPropertiesTarget;
-import com.mine.geometry_node.client.ui.document.GraphSession;
+import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
@@ -35,7 +37,7 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
         NodeGraph graph = mSession.editorContext.getGraph();
         if (graph == null) return CompletableFuture.completedFuture(null);
         return CompletableFuture.completedFuture(new GraphPropertiesSnapshot(
-                mSession.tabName,
+                GraphSessionViewState.of(mSession).tabName,
                 graph.getGraphTypeId(),
                 graph.comment,
                 graph.tags,

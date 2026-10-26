@@ -5,8 +5,8 @@ import com.mine.geometry_node.client.runtime.light.shader.NodeLightProgramCache;
 import com.mine.geometry_node.client.runtime.light.shader.NodeLightPrograms;
 import com.mine.geometry_node.client.runtime.light.shader.NodeLightShader;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelSundialHeldLight;
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelSundialHeldLight;
+import com.mine.geometry_node.client.runtime.model.render.geometry.ModelRenderAsset;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -76,9 +76,9 @@ public final class NativeVolumeLights {
             GL11C.glReadBuffer(GL30C.GL_COLOR_ATTACHMENT0);
             GL30C.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER,copyFbo);
             GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
-            int copyTimer=com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_snapshot");
+            int copyTimer=com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_snapshot");
             try {GL30C.glBlitFramebuffer(0,0,width,height,0,0,width,height,GL11C.GL_COLOR_BUFFER_BIT|GL11C.GL_DEPTH_BUFFER_BIT,GL11C.GL_NEAREST);}
-            finally {com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.end(copyTimer);}
+            finally {com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.end(copyTimer);}
             GL30C.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER,outputFbo);
             GL30C.glFramebufferTexture2D(GL30C.GL_DRAW_FRAMEBUFFER,GL30C.GL_COLOR_ATTACHMENT0,GL11C.GL_TEXTURE_2D,targetColor.glId(),0);
             GL20C.glDrawBuffers(GL30C.GL_COLOR_ATTACHMENT0);
@@ -95,9 +95,9 @@ public final class NativeVolumeLights {
             try {
                 NodeLightTargets.draw(program,uniforms,()->{
                     if(uniforms.pass>=0 && GL20C.glGetUniformi(program,uniforms.pass)!=0 || NodeLightPixelDiagnostics.isDrawing()) {GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,3);return;}
-                    int timer=com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_composite");
+                    int timer=com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.begin("node_light_native_composite");
                     try {GL11C.glDrawArrays(GL11C.GL_TRIANGLES,0,3);}
-                    finally {com.mine.geometry_node.client.model.render.diagnostic.ModelShaderGpuTimings.end(timer);}
+                    finally {com.mine.geometry_node.client.runtime.model.render.diagnostic.ModelShaderGpuTimings.end(timer);}
                 });
                 draws++;frameDraws++;status="ACTIVE";failure="";
             } finally {NativeTerrainLights.end();}
@@ -177,7 +177,7 @@ public final class NativeVolumeLights {
         NodeLightFroxels.close();
         clear();
         int p=program,v=vao;program=vao=0;uniforms=null;
-        if(p!=0)com.mine.geometry_node.client.model.render.bvh.ModelIrisHeldLight.deleted(p);
+        if(p!=0)com.mine.geometry_node.client.runtime.model.render.bvh.ModelIrisHeldLight.deleted(p);
         if(p!=0||v!=0)RenderSystem.queueFencedTask(()->{GL20C.glDeleteProgram(p);GL30C.glDeleteVertexArrays(v);});
     }
 

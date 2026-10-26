@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.integration.terminal;
 
-import com.mine.geometry_node.client.ai.command.CommandCatalog;
-import com.mine.geometry_node.client.ai.mcp.McpPowerShellRun;
-import com.mine.geometry_node.client.ai.mcp.client.MinecraftClientMcpGateway;
-import com.mine.geometry_node.client.terminal.TerminalMode;
-import com.mine.geometry_node.client.terminal.pty.pty4j.Pty4jProcessFactory;
+import com.mine.geometry_node.client.feature.ai.command.CommandCatalog;
+import com.mine.geometry_node.client.feature.ai.mcp.McpPowerShellRun;
+import com.mine.geometry_node.client.integration.ai.mcp.MinecraftClientMcpGateway;
+import com.mine.geometry_node.client.feature.terminal.TerminalMode;
+import com.mine.geometry_node.client.feature.terminal.pty.pty4j.Pty4jProcessFactory;
 
 import java.util.UUID;
 

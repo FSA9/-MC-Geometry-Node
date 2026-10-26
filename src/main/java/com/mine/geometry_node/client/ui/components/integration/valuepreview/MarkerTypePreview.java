@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.valuepreview;
 
-import com.mine.geometry_node.client.runtime.marker.ClientMarkerRenderer;
+import com.mine.geometry_node.client.ui.hud.marker.ClientMarkerRenderer;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.runtime.marker.ClientMarkerRendererRegistry;
+import com.mine.geometry_node.client.ui.hud.marker.ClientMarkerRendererRegistry;
 import com.mine.geometry_node.core.engine.system.marker.type.MarkerType;
 import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 import icyllis.modernui.core.Context;

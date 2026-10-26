@@ -2,9 +2,9 @@ package com.mine.geometry_node.client.runtime.light.render;
 
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
 
-import com.mine.geometry_node.client.model.render.bvh.ModelLightOcclusionBvh;
+import com.mine.geometry_node.client.runtime.model.render.bvh.ModelLightOcclusionBvh;
 import com.mine.geometry_node.core.engine.system.model.io.ModelCancellation;
-import com.mine.geometry_node.client.model.render.geometry.ModelRenderAsset;
+import com.mine.geometry_node.client.runtime.model.render.geometry.ModelRenderAsset;
 import com.mine.geometry_node.mixin.model.render.LivingEntityShadowAccessor;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;

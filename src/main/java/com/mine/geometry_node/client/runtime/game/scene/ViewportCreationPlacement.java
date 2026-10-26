@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.runtime.game.scene;
 
 import com.mine.geometry_node.client.runtime.game.input.GameViewportInput;
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
-import com.mine.geometry_node.client.scene.ClientSceneService;
+import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.core.engine.system.viewport.entity.ViewportBlockRaycast;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.BlockHitResult;
