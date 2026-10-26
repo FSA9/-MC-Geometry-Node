@@ -6,6 +6,9 @@ import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.graph.debug.*;
 import com.mine.geometry_node.core.engine.graph.debug.geometry.*;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.phys.*;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -45,7 +48,9 @@ public final class WorldObjectEntries {
                 "collision", "model_collision", "", dimension,
                 new Vec3(definition.x(), definition.y(), definition.z()), definition.bounds(),
                 definition.metadata().tagSnapshot(), "", "runtime", null, null,
-                Map.of("collisionInstanceId", id, "collisionInstanceKind", kind));
+                Map.of("collisionInstanceId", id, "collisionInstanceKind", kind,
+                        "resourceId", GraphResourceReferences.encode(new GraphResourceReferences.ModelCollisionAddress(
+                                ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)), identity))));
     }
 
     public static Object modelCollisionId(Map<String, String> references) {

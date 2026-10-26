@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraits;
+import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraits;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.LinearLayout;

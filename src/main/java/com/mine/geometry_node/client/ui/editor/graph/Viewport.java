@@ -65,6 +65,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     private final float[] mTempPos = new float[2];
     private boolean mSnapToGridEnabled = false;
     private boolean mLifecycleRegistered = true;
+    private boolean mDisposed;
     private final ConfigChangeListener mConfigChangeListener = this::applyViewportConfig;
 
     private TextView mEmptyHint;
@@ -137,6 +138,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
     }
 
     public void activateLifecycle() {
+        if (mDisposed) return;
         if (!mLifecycleRegistered) {
             ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
             mKeyManager.attach();
@@ -159,6 +161,14 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
             mLifecycleRegistered = false;
         }
         mController.saveCurrentSessionState();
+    }
+
+    public void dispose() {
+        if (mDisposed) return;
+        mDisposed = true;
+        deactivateLifecycle();
+        mToolbar.dispose();
+        mController.dispose();
     }
 
     @Override
@@ -402,12 +412,17 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
 
     @Override
     public void previewSelectedElementsMove(float totalUiDx, float totalUiDy) {
+        previewSelectedElementsMove(totalUiDx, totalUiDy, false);
+    }
+
+    private void previewSelectedElementsMove(float totalUiDx, float totalUiDy, boolean restoreCommitted) {
         Set<String> selectedFrameIds = new HashSet<>(mSelection.frameIds());
         List<String> rootFrameIds = getRootSelectedFrameIds(selectedFrameIds);
 
         for (String frameId : rootFrameIds) {
             if (mFrameLayer != null) {
-                mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy);
+                if (restoreCommitted) mFrameLayer.resetFrameMovePreview(frameId);
+                else mFrameLayer.previewFrameMove(frameId, totalUiDx, totalUiDy);
             }
         }
 
@@ -435,7 +450,7 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
 
     @Override
     public void resetSelectedElementsPreview() {
-        previewSelectedElementsMove(0.0f, 0.0f);
+        previewSelectedElementsMove(0.0f, 0.0f, true);
     }
 
     @Override

@@ -22,6 +22,12 @@ public sealed interface ScopedStateTarget permits ScopedStateTarget.OwnerTarget,
         return new AreaTarget(area);
     }
 
+    static ScopedStateTarget global() {
+        return SharedTarget.INSTANCE;
+    }
+
+    /** Legacy alias; both names resolve to the same server-wide owner. */
+    @Deprecated
     static ScopedStateTarget shared() {
         return SharedTarget.INSTANCE;
     }

@@ -226,6 +226,11 @@ public class FrameLayer extends FrameLayout {
         previewFrameMoveInternal(frameId, totalUiDx, totalUiDy, mViewport.isSnapToGridEnabled(), mViewport.getSnapGridSize());
     }
 
+    /** Cancellation restores authored positions, irrespective of the current snapping preference. */
+    public void resetFrameMovePreview(String frameId) {
+        previewFrameMoveInternal(frameId, 0, 0, false, 1);
+    }
+
     private boolean previewFrameMoveInternal(String frameId, float totalUiDx, float totalUiDy, boolean snapToGrid, float gridSize) {
         FrameVisualAdapter frame = mFrameVisuals.get(frameId);
         boolean hasChildren = false;

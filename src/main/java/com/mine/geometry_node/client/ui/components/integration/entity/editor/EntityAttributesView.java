@@ -11,8 +11,8 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.integration.entity.EntityRegistrationView;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges;
-import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorNames;
+import com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorChanges;
+import com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorNames;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -25,7 +25,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.*;
 import java.util.function.BooleanSupplier;
-import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraits;
+import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraits;
 import static com.mine.geometry_node.client.ui.components.integration.entity.editor.EntityEditorViews.*;
 
 /** Only advertised fields are editable. Enter completes text edits; navigation preserves raw input. */

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network;
 
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService;
+import com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService;
 import com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexRequest;
 import com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexResult;
 import net.minecraft.server.level.ServerPlayer;

@@ -25,6 +25,7 @@ public final class ResourceTagNode extends BaseNode {
     public NodeDef getDefaultDefinition() {
         String id = add ? "add_resource_tag" : "remove_resource_tag";
         return NodeDef.builder(id, NodeType.ACTION, Component.translatable("geometry_node.node." + id))
+                .addMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, true)
                 .comment(NodeComment.builder(id).text("summary")
                         .input(StandardPorts.RESOURCE_ID, "geometry_node.resource.help.existing")
                         .input(StandardPorts.TAG, "geometry_node.resource.help.tag")

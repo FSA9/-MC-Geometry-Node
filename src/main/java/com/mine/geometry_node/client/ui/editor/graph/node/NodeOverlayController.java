@@ -150,7 +150,7 @@ final class NodeOverlayController {
         }
         for (int i = 0; i < mNodeDef.rows().size(); i++) {
             PortRow row = mNodeDef.rows().get(i);
-            if (hasHintOverlay(row) || hasDynamicRemoveButton(row)) {
+            if (hasHintOverlay(row) || UIHintUtils.hasDynamicRemoveButton(row)) {
                 return true;
             }
         }
@@ -295,7 +295,7 @@ final class NodeOverlayController {
     }
 
     private void addDynamicRemoveButton(Context context, PortRow row, float currentY) {
-        if (!hasDynamicRemoveButton(row)) return;
+        if (!UIHintUtils.hasDynamicRemoveButton(row)) return;
 
         String portId = row.leftPort() != null ? row.leftPort().id() : (row.rightPort() != null ? row.rightPort().id() : "");
         Integer removeIndex = row.hintParams() != null ? (Integer) row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) : null;
@@ -511,21 +511,10 @@ final class NodeOverlayController {
         return view;
     }
 
-    private boolean isDynamicRow(PortRow row) {
-        return row.hintParams() != null && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC));
-    }
-
     private boolean hasHintOverlay(PortRow row) {
         return row.uiHint() != null
                 && !isInputConnected(row)
                 && HintRendererFactory.getRenderer(row) != null;
-    }
-
-    private boolean hasDynamicRemoveButton(PortRow row) {
-        return isDynamicRow(row)
-                && row.hintParams() != null
-                && !Boolean.FALSE.equals(row.hintParams().get(PortMetaKeys.DYNAMIC_REMOVE_BUTTON))
-                && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
     }
 
     private boolean hasDynamicAddButton() {

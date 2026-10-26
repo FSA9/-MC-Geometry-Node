@@ -47,11 +47,11 @@ public final class ServerScopedStateSavedData extends SavedData {
     public ScopedStateProvider provider(ScopedStateNamespace namespace,
                                         ScopedStateScope scope, String stableIdentity,
                                         ServerLevel level, int maxEntries) {
-        if (scope != ScopedStateScope.SHARED && scope != ScopedStateScope.GROUP
+        if (scope != ScopedStateScope.GLOBAL && scope != ScopedStateScope.GROUP
                 && scope != ScopedStateScope.WORLD) {
             throw new IllegalArgumentException("Scope is not stored in server SavedData: " + scope);
         }
-        String identity = scope == ScopedStateScope.SHARED
+        String identity = scope == ScopedStateScope.GLOBAL
                 ? "server" : normalizeIdentity(stableIdentity);
         if (identity.isEmpty()) throw new IllegalArgumentException("Blackboard identity cannot be empty");
         return new StoredProvider(namespace, scope,
@@ -65,7 +65,7 @@ public final class ServerScopedStateSavedData extends SavedData {
     public boolean removeScope(ScopedStateNamespace namespace,
                                ScopedStateScope scope, String stableIdentity) {
         requireNotUpdating();
-        String identity = scope == ScopedStateScope.SHARED
+        String identity = scope == ScopedStateScope.GLOBAL
                 ? "server" : normalizeIdentity(stableIdentity);
         boolean removed = buckets.remove(new ScopeKey(namespace, scope, identity)) != null;
         if (removed) setDirty();
@@ -104,11 +104,11 @@ public final class ServerScopedStateSavedData extends SavedData {
             if (!(rawBucket instanceof CompoundTag tag)) continue;
             ScopedStateScope scope;
             try {
-                scope = ScopedStateScope.valueOf(tag.getStringOr("Scope", ""));
+                scope = ScopedStateScope.parse(tag.getStringOr("Scope", ""));
             } catch (IllegalArgumentException ignored) {
                 continue;
             }
-            if (scope != ScopedStateScope.SHARED && scope != ScopedStateScope.GROUP
+            if (scope != ScopedStateScope.GLOBAL && scope != ScopedStateScope.GROUP
                     && scope != ScopedStateScope.WORLD) continue;
             ScopedStateNamespace namespace;
             if (!tag.contains("Namespace")) {
@@ -120,7 +120,7 @@ public final class ServerScopedStateSavedData extends SavedData {
             }
             String identity;
             try {
-                identity = scope == ScopedStateScope.SHARED ? "server"
+                identity = scope == ScopedStateScope.GLOBAL ? "server"
                         : normalizeIdentity(tag.getStringOr("Identity", ""));
             } catch (IllegalArgumentException ignored) {
                 continue;

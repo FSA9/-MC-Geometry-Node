@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.marker;
 
 import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
+import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
@@ -26,12 +27,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * Persistent server-wide marker storage.
  */
 public final class MarkerStorage extends SavedData {
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
     private static final String TAG_VERSION = "Version";
     private static final String TAG_MARKERS = "Markers";
 
@@ -47,6 +50,13 @@ public final class MarkerStorage extends SavedData {
     );
 
     private final Map<MarkerAddress, MarkerInstance> markers = new LinkedHashMap<>();
+    private final Thread ownerThread = Thread.currentThread();
+    private boolean metadataUpdating;
+
+    private void requireMutation() {
+        if (Thread.currentThread() != ownerThread) throw new IllegalStateException("Marker mutations require the owner thread");
+        if (metadataUpdating) throw new IllegalStateException("Reentrant marker mutation during metadata update");
+    }
 
     public static MarkerStorage get(MinecraftServer server) {
         return server.getDataStorage().computeIfAbsent(TYPE);
@@ -61,12 +71,18 @@ public final class MarkerStorage extends SavedData {
     }
 
     public synchronized Optional<MarkerInstance> put(MarkerInstance marker) {
+        requireMutation();
+        MarkerInstance current = markers.get(marker.address());
+        // Updating presentation or anchor does not replace the metadata owner.
+        if (current != null) marker = marker.withMetadata(current.metadata(), current.incarnation(), current.metadataRevision());
+        else marker = marker.withMetadata(marker.metadata(), UUID.randomUUID(), marker.metadataRevision());
         MarkerInstance previous = markers.put(marker.address(), marker);
         setDirty();
         return Optional.ofNullable(previous);
     }
 
     public synchronized Optional<MarkerInstance> remove(MarkerAddress address) {
+        requireMutation();
         MarkerInstance removed = markers.remove(address);
         if (removed != null) {
             setDirty();
@@ -75,6 +91,7 @@ public final class MarkerStorage extends SavedData {
     }
 
     public synchronized List<MarkerInstance> removeExpired(long gameTime) {
+        requireMutation();
         ArrayList<MarkerInstance> removed = new ArrayList<>();
         markers.values().removeIf(marker -> {
             if (!marker.isExpired(gameTime)) {
@@ -89,7 +106,23 @@ public final class MarkerStorage extends SavedData {
         return List.copyOf(removed);
     }
 
-    private CompoundTag saveToTag(CompoundTag root) {
+    public synchronized boolean updateMetadata(MarkerAddress address, UUID incarnation,
+                                                UnaryOperator<OwnerMetadata> change) {
+        requireMutation();
+        MarkerInstance current = get(address).orElseThrow(() -> new IllegalStateException("Marker no longer exists"));
+        if (!current.incarnation().equals(incarnation)) throw new IllegalStateException("Stale marker metadata target");
+        OwnerMetadata next;
+        metadataUpdating = true;
+        try { next = Objects.requireNonNull(change.apply(current.metadata())); }
+        finally { metadataUpdating = false; }
+        if (markers.get(address) != current) throw new IllegalStateException("Marker changed during metadata update");
+        if (current.metadata().equals(next)) return false;
+        markers.put(address, current.withMetadata(next, incarnation, Math.incrementExact(current.metadataRevision())));
+        setDirty();
+        return true;
+    }
+
+    public CompoundTag saveToTag(CompoundTag root) {
         root.putInt(TAG_VERSION, VERSION);
         ListTag list = new ListTag();
         synchronized (this) {
@@ -101,7 +134,7 @@ public final class MarkerStorage extends SavedData {
         return root;
     }
 
-    private static MarkerStorage load(CompoundTag root) {
+    public static MarkerStorage load(CompoundTag root) {
         MarkerStorage storage = new MarkerStorage();
         ListTag list = root.getListOrEmpty(TAG_MARKERS);
         for (int i = 0; i < list.size(); i++) {
@@ -123,6 +156,9 @@ public final class MarkerStorage extends SavedData {
         tag.putBoolean("ShowDistance", marker.showDistance());
         tag.putLong("CreatedGameTime", marker.createdGameTime());
         tag.putLong("ExpiresAtGameTime", marker.expiresAtGameTime());
+        tag.put("Metadata", marker.metadata().save());
+        tag.putString("Incarnation", marker.incarnation().toString());
+        tag.putLong("MetadataRevision", marker.metadataRevision());
 
         MarkerAnchor anchor = marker.anchor();
         tag.putString("Dimension", anchor.dimension().identifier().toString());
@@ -174,7 +210,10 @@ public final class MarkerStorage extends SavedData {
                     tag.getStringOr("Text", ""),
                     tag.getBooleanOr("ShowDistance", true),
                     tag.getLongOr("CreatedGameTime", 0L),
-                    tag.getLongOr("ExpiresAtGameTime", MarkerInstance.NEVER_EXPIRES)
+                    tag.getLongOr("ExpiresAtGameTime", MarkerInstance.NEVER_EXPIRES),
+                    OwnerMetadata.load(tag.getCompoundOrEmpty("Metadata")),
+                    tag.contains("Incarnation") ? UUID.fromString(tag.getStringOr("Incarnation", "")) : UUID.randomUUID(),
+                    tag.getLongOr("MetadataRevision", 0)
             ));
         } catch (IllegalArgumentException exception) {
             GeometryNode.LOGGER.warn("Skipping invalid persisted marker: {}", exception.getMessage());

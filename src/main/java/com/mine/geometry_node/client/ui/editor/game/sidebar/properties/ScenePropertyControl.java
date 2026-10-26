@@ -57,18 +57,19 @@ public final class ScenePropertyControl {
     public View view() { return view; }
     public UiTextInput textInput() { return view instanceof UiTextInput input ? input : null; }
 
+    /** Choice values remain stored keys even when a readonly TextView displays a label. */
     public String value() {
         if (view instanceof UiCheckBox checkbox) return Boolean.toString(checkbox.isChecked());
-        if (view instanceof UiSelectButton) return choiceValue;
+        if (field.kind() == Kind.CHOICE) return choiceValue;
         return ((TextView) view).getText().toString();
     }
 
     public void setValue(String value) {
+        if (field.kind() == Kind.CHOICE) choiceValue = value;
         if (view instanceof UiCheckBox checkbox) {
             boolean checked = Boolean.parseBoolean(value);
             if (checkbox.isChecked() != checked) checkbox.setChecked(checked);
         } else if (view instanceof UiSelectButton button) {
-            choiceValue = value;
             String label = choiceLabel(value);
             if (!label.equals(choiceLabel)) {
                 choiceLabel = label;

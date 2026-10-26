@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.editor.graph.ViewportCamera;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.connection.ConnectionLayer;
 import com.mine.geometry_node.client.ui.editor.graph.frame.FrameVisualAdapter;
+import com.mine.geometry_node.client.ui.editor.graph.menu.GraphMenuOverlay;
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeVisualAdapter;
 import com.mine.geometry_node.core.node.reroute.RerouteNodeSupport;
 import icyllis.modernui.graphics.Canvas;
@@ -357,6 +358,7 @@ public class InteractionManager {
     }
 
     public void cancelTransientInteraction() {
+        GraphMenuOverlay.dismissAll(mContext);
         int cancelledMode = mCurrentMode;
         if (cancelledMode == MODE_DRAGGING_NODES
                 || cancelledMode == MODE_DRAGGING_FRAME
@@ -599,7 +601,7 @@ public class InteractionManager {
             commitMoveElements(new ArrayList<>(), List.of(draggedFrameId), rawTotalUiDx, rawTotalUiDy);
             updateSingleMovedFrameParent(List.of(draggedFrameId), endUiX, endUiY);
         } else {
-            mContext.updateFrameBounds(draggedFrameId);
+            mContext.resetSelectedElementsPreview();
         }
         mDraggedFrame = null;
     }

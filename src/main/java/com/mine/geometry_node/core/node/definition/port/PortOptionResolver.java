@@ -55,6 +55,12 @@ public final class PortOptionResolver {
         if (registryId == null || registryId.isBlank()) {
             return new Resolution(Source.NONE, "", true, List.of());
         }
+        RegistryDataManager.DynamicOptions live = RegistryDataManager.getLiveDynamicOptions(registryId);
+        if (live != null) {
+            List<Option> options = live.ids().stream()
+                    .map(id -> new Option(id, live.labels().getOrDefault(id, id))).toList();
+            return new Resolution(Source.DYNAMIC, registryId, live.available(), options);
+        }
         List<String> ids = RegistryDataManager.getDynamicOptions(registryId, registryAccess);
         Map<String, String> labelKeys = RegistryDataManager.getDynamicOptionLabelKeys(registryId);
         List<Option> options = ids.stream().map(id -> {

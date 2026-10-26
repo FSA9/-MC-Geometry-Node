@@ -21,6 +21,8 @@ public final class BuiltinMetadataCapabilities {
         SceneMetadataTargets.register(registry);
         PlacementMetadataTargets.register(registry);
         RuntimeMetadataTargets.register(registry);
+        FactionMetadataTargets.register(registry);
+        MarkerMetadataTargets.register(registry);
         DataLibraryMetadata.register(registry);
     }
 }

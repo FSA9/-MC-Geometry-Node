@@ -12,14 +12,17 @@ public enum ScopedStateScope {
     INSTANCE(false),
     AREA(false),
     OWNER(true),
-    SHARED(true),
+    GLOBAL(true),
     GROUP(true),
     WORLD(true);
 
+    /** Source compatibility for integrations; new menus and saves use GLOBAL. */
+    @Deprecated public static final ScopedStateScope SHARED = GLOBAL;
+
     public static final Set<ScopedStateScope> ALL = Set.of(values());
-    public static final Set<ScopedStateScope> PERSISTENT = Set.of(OWNER, SHARED, GROUP, WORLD);
-    public static final Set<ScopedStateScope> GRAPH = Set.of(AREA, OWNER, SHARED, GROUP, WORLD);
-    public static final Set<ScopedStateScope> BEHAVIOR = Set.of(INSTANCE, OWNER, SHARED, GROUP, WORLD);
+    public static final Set<ScopedStateScope> PERSISTENT = Set.of(OWNER, GLOBAL, GROUP, WORLD);
+    public static final Set<ScopedStateScope> GRAPH = Set.of(AREA, OWNER, GLOBAL, GROUP, WORLD);
+    public static final Set<ScopedStateScope> BEHAVIOR = Set.of(INSTANCE, OWNER, GLOBAL, GROUP, WORLD);
 
     private final boolean persistent;
 
@@ -40,7 +43,8 @@ public enum ScopedStateScope {
         if (value instanceof ScopedStateScope scope) return scope;
         if (!(value instanceof String text) || text.isBlank()) return null;
         try {
-            return valueOf(text.trim().toUpperCase(Locale.ROOT));
+            String normalized = text.trim().toUpperCase(Locale.ROOT);
+            return valueOf(normalized.equals("SHARED") ? "GLOBAL" : normalized);
         } catch (IllegalArgumentException ignored) {
             return null;
         }

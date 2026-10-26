@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.worldquery;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityState;
-import com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService;
+import com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
@@ -89,7 +89,10 @@ final class BuiltinWorldObjectProviders {
                 return sink.emit(new WorldObjectEntry(WorldObjectEntry.key("scene", dim, object.id().toString()),
                         "scene", object.typeId(), object.name(), dim, object.position(),
                         WorldObjectEntries.sceneBounds(object), object.tags(), "scene", "persistent",
-                        object.id(), null, Map.of("enabled", Boolean.toString(object.enabled()))));
+                        object.id(), null, Map.of("enabled", Boolean.toString(object.enabled()),
+                                "resourceId", GraphResourceReferences.encode(new GraphResourceReferences.SceneObjectAddress(
+                                        net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
+                                                net.minecraft.resources.Identifier.parse(dim)), object.id())))));
             }));
         register("collision", "server_collision_instances", () -> types("collision", "geometry_collision", "model_collision"), (c, sink) -> {
             for (ServerLevel level : c.levels()) {
@@ -146,7 +149,8 @@ final class BuiltinWorldObjectProviders {
                         record.boundsMax().getX() + 1.0, record.boundsMax().getY() + 1.0, record.boundsMax().getZ() + 1.0);
                 if (!sink.emit(new WorldObjectEntry(WorldObjectEntry.key("schematic", dim, record.key()), "schematic", "schematic_placement",
                         "", dim, bounds.getCenter(), bounds, record.tags(), record.graphId(), "persistent", null, null,
-                        Map.of("placementKey", record.key())))) return;
+                        Map.of("placementKey", record.key(), "resourceId", GraphResourceReferences.encode(
+                                new GraphResourceReferences.PlacementAddress(record.dimension(), record.key())))))) return;
             }
         });
         register("area", "server_graph_areas", () -> types("area", "area/box", "area/sphere", "area/cylinder"), (c, sink) ->

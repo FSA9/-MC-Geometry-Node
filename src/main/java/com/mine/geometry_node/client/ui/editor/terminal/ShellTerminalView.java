@@ -20,6 +20,7 @@ import com.mine.geometry_node.client.feature.terminal.shell.ShellTerminalObserve
 import com.mine.geometry_node.client.feature.ai.mcp.McpToolEvent;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.text.Editable;
@@ -45,6 +46,7 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.Minecraft;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -67,6 +69,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     private final ShellTerminalCoordinator coordinator;
     private final TerminalRuntime runtime;
+    private final Executor uiExecutor;
+    private final Executor renderExecutor;
     private final TerminalScrollView scrollView;
     private final TextView screenView;
     private final EditText inputSink;
@@ -104,9 +108,19 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     private volatile boolean startRequested;
     private volatile boolean active;
     private volatile boolean disposed;
+    private boolean resumeOnAttach;
+    private volatile TrustedStatus trustedStatus;
+    private TrustedStatus displayedTrustedStatus;
+
     public ShellTerminalView(Context context, TerminalRuntime runtime) {
+        this(context, runtime, MuiModApi::postToUiThread, RENDER_EXECUTOR);
+    }
+
+    ShellTerminalView(Context context, TerminalRuntime runtime, Executor uiExecutor, Executor renderExecutor) {
         super(context);
         this.runtime = runtime;
+        this.uiExecutor = uiExecutor;
+        this.renderExecutor = renderExecutor;
         this.coordinator = runtime.coordinator();
         coordinator.setObserver(this);
         setOrientation(VERTICAL);
@@ -201,33 +215,40 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
 
     public void onTrustedToolEvent(McpToolEvent event) {
         if (disposed || event == null) return;
-        post(() -> {
-            if (disposed) return;
-            String code = event.code().isBlank() ? "" : "  " + event.code();
-            String elapsed = event.state() == McpToolEvent.State.STARTED ? "" : "  " + event.elapsedMillis() + " ms";
-            trustedEventView.setText("MCP  " + event.toolName() + "  " + event.state() + code + elapsed);
-            trustedEventView.setTextColor(event.state() == McpToolEvent.State.FAILED ? UiThemes.EDITOR.status().error() : UiThemes.EDITOR.status().success());
-        });
+        String code = event.code().isBlank() ? "" : "  " + event.code();
+        String elapsed = event.state() == McpToolEvent.State.STARTED ? "" : "  " + event.elapsedMillis() + " ms";
+        trustedStatus = new TrustedStatus("MCP  " + event.toolName() + "  " + event.state() + code + elapsed,
+                event.state() == McpToolEvent.State.FAILED ? UiThemes.EDITOR.status().error() : UiThemes.EDITOR.status().success());
+        requestRefresh();
     }
 
     public void requestInputFocus() {
         if (disposed || !active) return;
         inputSink.requestFocus();
-        inputSink.post(() -> {
-            if (!disposed) inputSink.requestFocus();
+        postInputFocus();
+    }
+
+    private void postInputFocus() {
+        if (disposed || !active) return;
+        long generation = activationGeneration.get();
+        uiExecutor.execute(() -> {
+            if (!disposed && active && generation == activationGeneration.get()) inputSink.requestFocus();
         });
     }
 
     /** Enables UI rendering for this tab without changing the PTY lifecycle. */
     public void activate() {
+        resumeOnAttach = false;
         if (disposed || active) return;
         active = true;
         activationGeneration.incrementAndGet();
+        if (displayedState.hasActiveBackend()) scheduleSettledResize();
         requestRefresh();
     }
 
     /** Suspends UI rendering while the PTY continues to consume output. */
     public void deactivate() {
+        resumeOnAttach = false;
         if (disposed || !active) return;
         active = false;
         activationGeneration.incrementAndGet();
@@ -241,6 +262,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         if (disposed) return;
         disposed = true;
         active = false;
+        resumeOnAttach = false;
         activationGeneration.incrementAndGet();
         removeCallbacks(refreshTask);
         removeCallbacks(resizeTask);
@@ -251,6 +273,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     public void releaseUiInteraction() {
+        activationGeneration.incrementAndGet();
         removeCallbacks(selectionReleaseTask);
         selectingText = false;
         selectionDragged = false;
@@ -262,6 +285,20 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         screenView.clearFocus();
         inputSink.clearFocus();
         if (!disposed && active) requestRefresh();
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (resumeOnAttach) activate();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        boolean resume = active;
+        deactivate();
+        resumeOnAttach = resume && !disposed;
+        super.onDetachedFromWindow();
     }
 
     @Override
@@ -289,19 +326,12 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         if (state == TerminalRunState.RUNNING) {
             startRequested = true;
             scheduleSettledResize();
-            post(() -> {
-                if (!disposed) {
-                    trustedEventView.setText("MCP server ready  |  waiting for tool call");
-                    trustedEventView.setTextColor(UiThemes.EDITOR.status().success());
-                }
-            });
-            post(this::requestInputFocus);
+            trustedStatus = new TrustedStatus("MCP server ready  |  waiting for tool call", UiThemes.EDITOR.status().success());
+            postInputFocus();
         }
         if (state == TerminalRunState.EXITED || state == TerminalRunState.FAILED) {
             startRequested = false;
-            post(() -> {
-                if (!disposed) trustedEventView.setText("MCP  stopped");
-            });
+            trustedStatus = new TrustedStatus("MCP  stopped", UiThemes.EDITOR.status().success());
         }
         requestRefresh();
     }
@@ -371,13 +401,13 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         Runnable renderTask = () -> {
             try {
                 RenderedSnapshot rendered = buildRenderedSnapshot(coordinator.snapshot());
-                post(() -> finishBackgroundRender(rendered, null, requestedRevision, requestedActivation));
+                uiExecutor.execute(() -> finishBackgroundRender(rendered, null, requestedRevision, requestedActivation));
             } catch (RuntimeException failure) {
-                post(() -> finishBackgroundRender(null, failure, requestedRevision, requestedActivation));
+                uiExecutor.execute(() -> finishBackgroundRender(null, failure, requestedRevision, requestedActivation));
             }
         };
         try {
-            RENDER_EXECUTOR.execute(renderTask);
+            renderExecutor.execute(renderTask);
         } catch (RejectedExecutionException rejected) {
             renderInFlight.set(false);
             dirty.set(true);
@@ -468,9 +498,7 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
         scrollView.prepareContentChange(followBottom, retainedScrollY, restoreRevision);
         screenView.setText(rendered.text());
         lastRenderedRevision = rendered.revision();
-        if (retainInputFocus) inputSink.post(() -> {
-            if (!disposed) inputSink.requestFocus();
-        });
+        if (retainInputFocus) postInputFocus();
     }
 
     private static void applyStyle(SpannableStringBuilder text, int start, int end, TerminalStyle style) {
@@ -544,8 +572,9 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
                 removeCallbacks(selectionReleaseTask);
                 boolean wasSelecting = selectionDragged;
                 selectingText = false;
-                screenView.post(() -> {
-                    if (disposed) return;
+                long generation = activationGeneration.get();
+                uiExecutor.execute(() -> {
+                    if (disposed || !active || generation != activationGeneration.get()) return;
                     if (wasSelecting || hasTextSelection()) {
                         removeCallbacks(selectionReleaseTask);
                         postDelayed(selectionReleaseTask, SELECTION_HOLD_MILLIS);
@@ -644,6 +673,12 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
     }
 
     private void updateStatus() {
+        TrustedStatus latest = trustedStatus;
+        if (latest != null && latest != displayedTrustedStatus) {
+            trustedEventView.setText(latest.text());
+            trustedEventView.setTextColor(latest.color());
+            displayedTrustedStatus = latest;
+        }
         String detail = pendingError.isBlank() ? displayedState.name() : pendingError;
         String statusText = "HIGH TRUST  PowerShell  " + detail;
         String actionText = TerminalChrome.tr(displayedState.hasActiveBackend()
@@ -662,6 +697,8 @@ public final class ShellTerminalView extends LinearLayout implements ShellTermin
             statusView.setTextColor(statusColor);
         }
     }
+
+    private record TrustedStatus(String text, int color) {}
 
     private static boolean isSpecialKey(int keyCode) { return mapKey(keyCode) != null; }
 

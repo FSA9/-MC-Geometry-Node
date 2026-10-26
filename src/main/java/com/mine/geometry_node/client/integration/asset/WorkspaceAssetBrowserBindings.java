@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.ui.components.integration.asset.browser.Ass
 import com.mine.geometry_node.client.ui.components.integration.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.editor.asset.AssetBrowserAreaBindings;
-import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesPanel;
 import icyllis.modernui.view.ViewGroup;
 
 import java.nio.file.Path;

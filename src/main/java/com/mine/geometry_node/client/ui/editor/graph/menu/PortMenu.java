@@ -6,7 +6,6 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
-import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -70,9 +69,10 @@ public class PortMenu {
         final String finalCategory = category;
 
         Context uiContext = context.getUIContext();
-        FrameLayout popupOverlay = new UiInputBarrier(uiContext);
+        GraphMenuOverlay popupOverlay = new GraphMenuOverlay(context,
+                () -> GraphMenuOverlay.containsIdentity(context.getAllNodeVisuals(), node));
         popupOverlay.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        popupOverlay.setOnClickListener(v -> close(context, popupOverlay));
+        popupOverlay.setOnClickListener(v -> popupOverlay.close(true));
 
         LinearLayout panel = new LinearLayout(uiContext);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -102,6 +102,7 @@ public class PortMenu {
         addDivider(uiContext, panel);
 
         panel.addView(menuItem(uiContext, "应用", COLOR_ACTION_TEXT, v -> {
+            if (!popupOverlay.isCurrent()) return;
             String desiredName = input.getText().toString().trim();
             String newCustomName = desiredName.isEmpty() || desiredName.equals(finalDefaultName)
                     ? null
@@ -116,10 +117,11 @@ public class PortMenu {
                                 .build()
                 );
             }
-            close(context, popupOverlay);
+            popupOverlay.close(true);
         }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
 
         panel.addView(menuItem(uiContext, "重置", hasCustomName ? COLOR_ACTION_TEXT : COLOR_MUTED_TEXT, v -> {
+            if (!popupOverlay.isCurrent()) return;
             if (hasCustomName) {
                 context.getActionSink().performAction(
                         ViewportActionId.RENAME_PORT,
@@ -130,15 +132,16 @@ public class PortMenu {
                                 .build()
                 );
             }
-            close(context, popupOverlay);
+            popupOverlay.close(true);
         }), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
 
-        panel.addView(menuItem(uiContext, "取消", COLOR_MUTED_TEXT, v -> close(context, popupOverlay)),
+        panel.addView(menuItem(uiContext, "取消", COLOR_MUTED_TEXT, v -> popupOverlay.close(true)),
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ITEM_H_DP)));
 
         if (context instanceof ViewGroup parent) {
             popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
             parent.addView(popupOverlay);
+            popupOverlay.bindLifetime();
             input.requestFocus();
             input.setSelection(0, effectiveName.length());
         }
@@ -217,13 +220,6 @@ public class PortMenu {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
         lp.setMargins(0, dp(6), 0, dp(6));
         panel.addView(divider, lp);
-    }
-
-    private static void close(InteractionContext context, FrameLayout overlay) {
-        if (overlay.getParent() instanceof ViewGroup parent) {
-            parent.removeView(overlay);
-        }
-        context.requestViewportFocus();
     }
 
     private static ShapeDrawable rect(int color, float radiusDp) {

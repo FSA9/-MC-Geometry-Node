@@ -1088,10 +1088,8 @@ public final class ShopEditorOverlay extends UiInputBarrier {
             }
             int oldIndex = entries.indexOf(entry);
             entries.remove(entry);
-            int insertIndex = clampIndex(targetIndex, target.entries.size());
-            if (target == this && oldIndex >= 0 && oldIndex < targetIndex) {
-                insertIndex = Math.max(0, insertIndex - 1);
-            }
+            int insertIndex = insertionIndexAfterRemoval(
+                    target == this ? oldIndex : -1, targetIndex, target.entries.size());
             entry.setOwner(target);
             target.entries.add(insertIndex, entry);
             rebuildSlots();
@@ -1167,6 +1165,11 @@ public final class ShopEditorOverlay extends UiInputBarrier {
         private int clampIndex(int index, int size) {
             return Math.max(0, Math.min(index, size));
         }
+    }
+
+    static int insertionIndexAfterRemoval(int oldIndex, int targetIndex, int remainingSize) {
+        int adjusted = oldIndex >= 0 && oldIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        return Math.max(0, Math.min(adjusted, remainingSize));
     }
 
     private final class StackEntryView extends FrameLayout {

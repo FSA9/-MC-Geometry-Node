@@ -11,15 +11,13 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragState;
 import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
 import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
 import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
-import com.mine.geometry_node.client.platform.ClientThread;
-import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferRequest;
-import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferService;
+import com.mine.geometry_node.client.integration.graph.GraphAssetImports;
+import icyllis.modernui.mc.MuiModApi;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
-import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
@@ -32,11 +30,10 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.HorizontalScrollView;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executor;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 /**
@@ -66,20 +63,30 @@ public class GraphViewportPanel extends LinearLayout {
     private final TabBarLayout mTabBar;
     private final Viewport mViewport;
     private final float mTouchSlop;
-    private final Runnable mTabChangedListener = () -> post(this::refreshTabs);
+    private final Function<AssetEntry, ? extends CompletionStage<String>> mReadAsset;
+    private final Executor mUiExecutor;
+    private Runnable mTabChangedListener;
+    private long mCallbackGeneration;
     private final WorkspaceDragDropRegistry.DropTarget mDropTarget = this::acceptAssetDrop;
     private GraphSession mSelectedSession;
     private long mObservedOpenSessionSerial = -1L;
     private boolean mManualSessionSelection;
     private boolean mCallbacksRegistered;
     private boolean mDisposed;
+    private long mImportGeneration;
     private Consumer<GraphSession> mSessionChangedListener;
     private Consumer<GraphSession> mBeforeSessionSaveListener;
     private GraphSession mLastNotifiedSession;
     private Runnable mInteractionListener;
 
     public GraphViewportPanel(Context context) {
+        this(context, GraphAssetImports::read, MuiModApi::postToUiThread);
+    }
+
+    GraphViewportPanel(Context context, Function<AssetEntry, ? extends CompletionStage<String>> readAsset, Executor uiExecutor) {
         super(context);
+        mReadAsset = readAsset;
+        mUiExecutor = uiExecutor;
         setOrientation(LinearLayout.VERTICAL);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 
@@ -134,6 +141,7 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     public void deactivatePanel() {
+        mImportGeneration++;
         if (sFocusedPanel == this) {
             sFocusedPanel = null;
         }
@@ -152,7 +160,7 @@ public class GraphViewportPanel extends LinearLayout {
         mInteractionListener = null;
         mLastNotifiedSession = null;
         mSelectedSession = null;
-        mViewport.getController().dispose();
+        mViewport.dispose();
     }
 
     public void setSessionChangedListener(Consumer<GraphSession> listener) {
@@ -232,51 +240,31 @@ public class GraphViewportPanel extends LinearLayout {
         if (!isReadyForImport(targetSession)) return false;
         if (entry.sourceKind() == AssetSourceKind.LOCAL) {
             if (entry.localFile() == null || entry.localFile().isDirectory()) return false;
-            try {
-                mViewport.getController().executeImportGraphJson(Files.readString(entry.localFile().toPath()), viewportX, viewportY);
-                return true;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return false;
+        } else if (entry.sourceKind() != AssetSourceKind.REMOTE || !RemoteAssetClient.canDownload()) {
+            return false;
+        }
+        long generation = mImportGeneration;
+        var targetGraph = targetSession.editorContext.getCurrentGraph();
+        float uiX = mViewport.getCamera().screenToUIX(viewportX);
+        float uiY = mViewport.getCamera().screenToUIY(viewportY);
+        mReadAsset.apply(entry).whenCompleteAsync((json, error) -> {
+            if (error != null) {
+                System.err.println("[GraphViewportPanel] Graph import failed: " + error.getMessage());
+                return;
             }
-        }
-
-        if (entry.sourceKind() == AssetSourceKind.REMOTE && RemoteAssetClient.canDownload()) {
-            Path temporary = Path.of(System.getProperty("java.io.tmpdir"), "geometrynode-graph-import",
-                    UUID.randomUUID() + ".json");
-            UUID jobId = ClientAssetTransferService.INSTANCE.submit(java.util.List.of(
-                    ClientAssetTransferRequest.download(entry.path(), temporary, AssetTransferConflictPolicy.OVERWRITE)));
-            ClientAssetTransferService.INSTANCE.onCompletion(jobId, (job, transferError) -> {
-                CompletableFuture<String> content = transferError == null
-                        && job.completedFileCount() == job.files().size()
-                        ? CompletableFuture.supplyAsync(() -> {
-                            try {
-                                return Files.readString(temporary);
-                            } catch (Exception exception) {
-                                throw new java.util.concurrent.CompletionException(exception);
-                            } finally {
-                                try { Files.deleteIfExists(temporary); } catch (Exception ignored) { }
-                            }
-                        }) : CompletableFuture.failedFuture(transferError != null
-                                ? transferError : new IllegalStateException("remote asset download failed"));
-                content.whenCompleteAsync((json, throwable) -> {
-                    if (throwable != null) {
-                        System.err.println("[GraphViewportPanel] Remote graph import failed: " + throwable.getMessage());
-                        return;
-                    }
-                    if (isReadyForImport(targetSession)) {
-                        mViewport.getController().executeImportGraphJson(json, viewportX, viewportY);
-                    }
-                }, ClientThread.executor());
-            });
-            return true;
-        }
-        return false;
+            if (generation == mImportGeneration && isReadyForImport(targetSession)
+                    && targetSession.editorContext.getCurrentGraph() == targetGraph) {
+                mViewport.getController().executeImportGraphJson(json, uiX, uiY);
+            }
+        }, mUiExecutor);
+        return true;
     }
 
     private boolean isReadyForImport(GraphSession targetSession) {
         return mCallbacksRegistered
                 && targetSession != null
+                && !targetSession.fileReference().isDeleted()
+                && DocumentManager.INSTANCE.getSessions().contains(targetSession)
                 && mViewport.getController().getCurrentSession() == targetSession
                 && mViewport.getController().hasActiveSession();
     }
@@ -298,6 +286,7 @@ public class GraphViewportPanel extends LinearLayout {
         GraphSession selectedSession = resolveSelectedSession(docMgr);
         // Dirty/title/reorder notifications must preserve live widgets and pending input.
         if (mViewport.getController().getCurrentSession() != selectedSession) {
+            mImportGeneration++;
             mViewport.getController().bindSession(selectedSession);
         }
         if (mSessionChangedListener != null && selectedSession != mLastNotifiedSession) {
@@ -348,7 +337,7 @@ public class GraphViewportPanel extends LinearLayout {
             // Capture before save: saved/tab listeners may themselves make another edit.
             long savedRevision = session.revision();
             if (DocumentManager.INSTANCE.saveSession(session)) {
-                v.post(() -> docMgr.closeSessionIfSaved(session, savedRevision));
+                mUiExecutor.execute(() -> docMgr.closeSessionIfSaved(session, savedRevision));
             }
         });
         contentArea.addView(closeBtn);
@@ -395,7 +384,7 @@ public class GraphViewportPanel extends LinearLayout {
 
                 case MotionEvent.ACTION_UP:
                     if (isDragging[0]) {
-                        calculateAndMoveTab(event.getRawX(), index);
+                        calculateAndMoveTab(event.getRawX(), session);
                     }
                     isDragging[0] = false;
                     tabLayout.setAlpha(1.0f);
@@ -417,7 +406,7 @@ public class GraphViewportPanel extends LinearLayout {
     }
 
     private void selectSession(GraphSession session) {
-        if (session == null) return;
+        if (session == null || mDisposed || !DocumentManager.INSTANCE.getSessions().contains(session)) return;
         markFocused();
         mManualSessionSelection = true;
         mSelectedSession = session;
@@ -463,6 +452,10 @@ public class GraphViewportPanel extends LinearLayout {
         if (mCallbacksRegistered) {
             return;
         }
+        long generation = ++mCallbackGeneration;
+        mTabChangedListener = () -> post(() -> {
+            if (generation == mCallbackGeneration && mCallbacksRegistered && !mDisposed) refreshTabs();
+        });
         DocumentManager.INSTANCE.addOnTabChangedListener(mTabChangedListener);
         WorkspaceDragDropRegistry.register(mDropTarget);
         mCallbacksRegistered = true;
@@ -472,16 +465,21 @@ public class GraphViewportPanel extends LinearLayout {
         if (!mCallbacksRegistered) {
             return;
         }
+        mCallbackGeneration++;
         DocumentManager.INSTANCE.removeOnTabChangedListener(mTabChangedListener);
+        mTabChangedListener = null;
         WorkspaceDragDropRegistry.unregister(mDropTarget);
         mCallbacksRegistered = false;
     }
 
-    private void calculateAndMoveTab(float rawX, int currentIndex) {
+    private void calculateAndMoveTab(float rawX, GraphSession session) {
+        if (!mCallbacksRegistered || mDisposed) return;
         DocumentManager docMgr = DocumentManager.INSTANCE;
         int[] tabBarLoc = new int[2];
         mTabBar.getLocationOnScreen(tabBarLoc);
 
+        int currentIndex = docMgr.getSessions().indexOf(session);
+        if (currentIndex < 0) return;
         float dropX = rawX - tabBarLoc[0];
         int targetIdx = mTabBar.getChildCount();
 
@@ -500,7 +498,7 @@ public class GraphViewportPanel extends LinearLayout {
 
         if (targetIdx != currentIndex) {
             final int finalTarget = targetIdx;
-            mTabBar.post(() -> docMgr.moveSession(currentIndex, finalTarget));
+            docMgr.moveSession(currentIndex, finalTarget);
         }
     }
 

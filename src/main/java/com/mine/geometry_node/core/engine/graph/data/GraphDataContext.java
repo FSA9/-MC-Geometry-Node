@@ -71,5 +71,11 @@ public interface GraphDataContext {
 
     boolean hasPort(String portName);
 
+    /** Owner-backed custom metadata access. Execution callers invalidate their frame after writes. */
+    default com.mine.geometry_node.core.metadata.MetadataCapabilities.Access metadata(
+            com.mine.geometry_node.core.engine.metadata.GraphMetadataTarget target) {
+        return com.mine.geometry_node.core.engine.metadata.GraphMetadataTargets.resolve(this, target);
+    }
+
     @Nullable Object getScopedState(ScopedStateTarget target, String name);
 }

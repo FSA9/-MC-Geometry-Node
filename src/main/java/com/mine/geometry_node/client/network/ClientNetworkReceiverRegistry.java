@@ -52,6 +52,7 @@ public final class ClientNetworkReceiverRegistry {
         com.mine.geometry_node.client.feature.entity.index.ClientEntityIndex.INSTANCE.init();
         com.mine.geometry_node.client.feature.entity.edit.ClientEntityEditor.INSTANCE.init();
         com.mine.geometry_node.client.feature.faction.ClientFactionRepository.INSTANCE.init();
+        com.mine.geometry_node.client.feature.scopeddata.ClientScopedDataRepository.INSTANCE.init();
         com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient.INSTANCE.init();
         ClientboundPayloadRegistry.registerClientReceiver(
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse.TYPE,

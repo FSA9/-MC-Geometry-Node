@@ -27,6 +27,7 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
     private View mTooltipAnchor;
     private boolean mConfigListenerRegistered = true;
+    private boolean mDisposed;
 
     public ViewportToolbar(Context context, ViewportActionSink actionSink) {
         super(context);
@@ -82,6 +83,7 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
     }
 
     public void activateLifecycle() {
+        if (mDisposed) return;
         if (!mConfigListenerRegistered) {
             ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
             applyConfig(ConfigManager.INSTANCE.getConfig());
@@ -95,6 +97,13 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
             mConfigListenerRegistered = false;
         }
         hideTooltip();
+    }
+
+    public void dispose() {
+        if (mDisposed) return;
+        mDisposed = true;
+        deactivateLifecycle();
+        mActionSink = null;
     }
 
     public void setSnapToGridEnabled(boolean enabled) {

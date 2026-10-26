@@ -8,8 +8,8 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSideb
 import com.mine.geometry_node.client.ui.components.composite.sidebar.SidebarLayoutController;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
-import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
-import com.mine.geometry_node.client.ui.editor.graph.properties.session.GraphSessionPropertiesTarget;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.integration.graph.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.ui.workspace.state.EditorSidebarState;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
@@ -40,6 +40,7 @@ public class GraphEditorWindow extends LinearLayout
     private final EditorSidebar mRightSidebar;
     private final SidebarLayoutController mSidebarLayout;
     private final UiStateContext mUiStateContext;
+    private boolean mDisposed;
 
     public GraphEditorWindow(Context context) {
         this(context, UiStateContext.ephemeral());
@@ -132,6 +133,7 @@ public class GraphEditorWindow extends LinearLayout
 
     @Override
     public void onShow() {
+        if (mDisposed) return;
         mSidebarLayout.onOwnerShown();
         mGraphViewportPanel.activatePanel();
     }
@@ -145,6 +147,8 @@ public class GraphEditorWindow extends LinearLayout
 
     @Override
     public void onDispose() {
+        if (mDisposed) return;
+        mDisposed = true;
         try {
             mPropertiesPanel.bind(null);
         } finally {

@@ -9,6 +9,7 @@ import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
+import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import icyllis.modernui.core.Context;
@@ -17,6 +18,7 @@ import icyllis.modernui.core.Looper;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.View;
+import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -25,6 +27,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.components.integration.metadata.MetadataViews.*;
 
@@ -36,6 +40,11 @@ final class UiDataDictionaryContent extends FrameLayout {
     private final DataDictionarySession session;
     private final String initialKey;
     private final UiTextInput search;
+    private String searchQuery = "";
+    private final UiDataDictionaryEditor.CommitMode commitMode;
+    private final Map<String, EntryRow> entryRows = new LinkedHashMap<>();
+    private record EntryRow(LinearLayout row, UiCheckBox check, UiDisplayText name,
+                            UiDisplayText summary, UiDisplayText type) {}
     private final UiSelectButton filterButton;
     private final LinearLayout rows;
     private final UiDisplayText pageLabel;
@@ -81,6 +90,7 @@ final class UiDataDictionaryContent extends FrameLayout {
     private boolean adding;
     private boolean showingPreview;
     private boolean notifyingPendingChanges;
+    private boolean suspended;
     private UiContextMenu selector;
 
     UiDataDictionaryContent(Context context, View owner, DataDictionaryBinding binding, String initialKey,
@@ -90,7 +100,15 @@ final class UiDataDictionaryContent extends FrameLayout {
 
     UiDataDictionaryContent(Context context, View owner, DataDictionaryBinding binding, String initialKey,
                             UiTheme theme, boolean embedded, Runnable close, ViewGroup popupHost, float textSizeDp) {
+        this(context, owner, binding, initialKey, theme, embedded, close, popupHost, textSizeDp,
+                UiDataDictionaryEditor.CommitMode.EXPLICIT);
+    }
+
+    UiDataDictionaryContent(Context context, View owner, DataDictionaryBinding binding, String initialKey,
+                            UiTheme theme, boolean embedded, Runnable close, ViewGroup popupHost, float textSizeDp,
+                            UiDataDictionaryEditor.CommitMode commitMode) {
         super(context);
+        this.commitMode = Objects.requireNonNull(commitMode);
         if (!Float.isFinite(textSizeDp) || textSizeDp <= 0) throw new IllegalArgumentException("Invalid text size");
         this.textSizeDp = textSizeDp;
         this.theme = Objects.requireNonNull(theme, "theme");
@@ -109,6 +127,14 @@ final class UiDataDictionaryContent extends FrameLayout {
         filterButton = new UiSelectButton(context, tr("all_types"), textSizeDp, () -> 2, theme);
         LinearLayout.LayoutParams filterParams = params(104, 30); filterParams.leftMargin = px(6);
         toolbar.addView(filterButton, filterParams);
+        if (automatic()) {
+            var submitSearch = UiIconButton.createThemed(context, theme, SvgIconView.Icon.SEARCH, tr("search"));
+            LinearLayout.LayoutParams searchParams = params(30, 30); searchParams.leftMargin = px(6);
+            toolbar.addView(submitSearch, searchParams);
+            UiSearchSubmit.bind(submitSearch, () -> {
+                searchQuery = search.getText().toString(); page = 0; renderList();
+            }, search);
+        }
         filterButton.setOnClickListener(view -> choose(filterButton, true, type -> {
             filter = type; page = 0; filterButton.setValue(type == null ? tr("all_types") : typeLabel(type)); renderList();
         }));
@@ -192,17 +218,22 @@ final class UiDataDictionaryContent extends FrameLayout {
         booleanInput.setOnCheckedChangeListener((view, checked) -> {
             valueInput.setText(Boolean.toString(checked));
             // UiCheckBox only notifies for user clicks; setChecked during form loading is silent.
-            if (!adding && selectedKey != null) saveEntry();
+            if (automatic()) commitFocusedForm();
+            else if (!adding && selectedKey != null) saveEntry();
         });
         valueType.setOnClickListener(view -> choose(valueType, false, type -> {
-            selectedType = type; valueType.setValue(typeLabel(type)); formDirty = true; showingPreview = false;
-            valueInput.setText(defaultValue(type)); updateFormLayout(); updateButtons();
+            updating = true;
+            try {
+                selectedType = type; valueType.setValue(typeLabel(type)); formDirty = true; showingPreview = false;
+                valueInput.setText(defaultValue(type)); updateFormLayout(); updateButtons();
+            } finally { updating = false; }
+            if (automatic() && !adding) commitFocusedForm();
         }));
         tree = text(context, "", theme.text().secondary()); tree.setPadding(px(8), px(8), px(8), px(8));
         treeScroll = new UiScrollView(context, theme.scroll()); treeScroll.setBackground(fill(theme.control().input()));
         treeScroll.addView(tree, new FrameLayout.LayoutParams(-1, -2)); form.addView(treeScroll, params(-1, 180));
         View editDivider = divider(context); LinearLayout.LayoutParams editDividerParams = params(-1, 1); editDividerParams.topMargin = px(16);
-        form.addView(editDivider, editDividerParams);
+        if (!automatic()) form.addView(editDivider, editDividerParams);
         LinearLayout edits = row(context);
         stage = themedButton(context, "stage", this::saveEntry);
         restore = themedButton(context, "restore", this::restoreForm);
@@ -210,7 +241,8 @@ final class UiDataDictionaryContent extends FrameLayout {
         int entryActionWidth = Math.max(72, Math.round(textSizeDp * 4 + 24));
         edits.addView(restore, params(entryActionWidth, 28));
         LinearLayout.LayoutParams stageParams = params(entryActionWidth, 28); stageParams.leftMargin = px(6); edits.addView(stage, stageParams);
-        LinearLayout.LayoutParams editsParams = params(-1, 28); editsParams.topMargin = px(12); form.addView(edits, editsParams);
+        LinearLayout.LayoutParams editsParams = params(-1, 28); editsParams.topMargin = px(12);
+        if (!automatic()) form.addView(edits, editsParams);
         UiScrollView rightScroll = new UiScrollView(context, theme.scroll()); rightScroll.setHorizontalScrollBarEnabled(false);
         rightScroll.addView(right, new FrameLayout.LayoutParams(-1, -2));
         content.addView(rightScroll, new LinearLayout.LayoutParams(0, -1, 0.6f));
@@ -219,18 +251,38 @@ final class UiDataDictionaryContent extends FrameLayout {
         message = text(context, "", theme.text().muted()); message.setMaxLines(2);
         message.setEllipsize(TextUtils.TruncateAt.END);
         if (embedded) {
-            // Persistence controls belong to the parent; this child only displays status.
-            actions = null; reload = null;
+            actions = null;
             message.setPadding(px(16), px(4), px(16), px(4));
-            root.addView(message, params(-1, -2));
+            if (automatic()) {
+                LinearLayout status = row(context);
+                status.addView(message, new LinearLayout.LayoutParams(0, -2, 1));
+                reload = themedButton(context, "reload", this::reloadDraft);
+                status.addView(reload, params(92, 28));
+                root.addView(status, params(-1, -2));
+            } else {
+                reload = null;
+                root.addView(message, params(-1, -2));
+            }
         } else {
             actions = row(context); actions.addView(message, new LinearLayout.LayoutParams(0, -1, 1));
             reload = themedButton(context, "reload", this::reloadDraft);
             actions.addView(reload, params(76, 28));
         }
-        watch(search, () -> { page = 0; renderList(); });
+        if (!automatic()) watch(search, () -> { searchQuery = search.getText().toString(); page = 0; renderList(); });
         watch(keyInput, this::formChanged); watch(valueInput, this::formChanged);
         keyInput.setEditActions(this::saveEntry, null);
+        if (automatic()) {
+            keyInput.setEditActions(() -> commitFocusedForm(true), this::restoreForm);
+            valueInput.setEditActions(() -> commitFocusedForm(true), this::restoreForm);
+            // Completing the key of a new entry must let the user enter its value first.
+            keyInput.setOnFocusChangeListener((view, focused) -> { if (!focused && !adding) commitFocusedForm(); });
+            valueInput.setOnFocusChangeListener((view, focused) -> { if (!focused) commitFocusedForm(); });
+            valueInput.setOnKeyListener((view, key, event) -> {
+                if ((key != KeyEvent.KEY_ENTER && key != KeyEvent.KEY_KP_ENTER) || !event.isControlPressed()) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) commitFocusedForm(true);
+                return true;
+            });
+        }
         session.observe(() -> { if (active) receive(session.state()); });
         receive(session.state());
     }
@@ -244,8 +296,8 @@ final class UiDataDictionaryContent extends FrameLayout {
         receive(session.state());
         if (!embedded) session.refresh();
     }
-    void suspend() { rememberForm(); dismissSelector(); keyInput.clearFocus(); valueInput.clearFocus(); }
-    void resume() { if (active) session.refreshCommitted(); }
+    void suspend() { suspended = true; rememberForm(); dismissSelector(); keyInput.clearFocus(); valueInput.clearFocus(); }
+    void resume() { suspended = false; if (active) session.refreshCommitted(); }
     void refreshCommitted() { session.refreshCommitted(); }
     void dispose() {
         if (disposed) return;
@@ -254,6 +306,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         pendingChangesChanged = () -> {};
         session.close();
         draft = null; selectedKey = null; adding = false; formDirty = false;
+        entryRows.clear();
         updating = true;
         try { keyInput.setText(""); valueInput.setText(""); tree.setText(""); }
         finally { updating = false; }
@@ -290,7 +343,6 @@ final class UiDataDictionaryContent extends FrameLayout {
     }
     private void renderList() {
         if (rows == null) return;
-        rows.removeAllViews();
         List<String> keys = matchingKeys();
         updateSelection(keys);
         int pages = Math.max(1, (keys.size() + PAGE_SIZE - 1) / PAGE_SIZE);
@@ -298,39 +350,52 @@ final class UiDataDictionaryContent extends FrameLayout {
         pageLabel.setText(tr("page", page + 1, pages));
         listCount.setText(tr("count", keys.size())); previous.setEnabled(page > 0); next.setEnabled(page + 1 < pages);
         int start = page * PAGE_SIZE;
-        for (String key : keys.subList(start, Math.min(start + PAGE_SIZE, keys.size()))) {
-            LinearLayout row = row(getContext()); row.setPadding(px(16), px(5), px(16), px(5));
-            UiCheckBox checked = UiCheckBox.createThemed(getContext(), theme);
-            checked.setContentDescription(tr("select_entry", key)); checked.setChecked(checkedKeys.contains(key));
-            checked.setEnabled(editable());
-            checked.setOnCheckedChangeListener((view, selected) -> {
-                if (!editable()) return;
-                if (selected) checkedKeys.add(key); else checkedKeys.remove(key);
-                updateSelection(matchingKeys());
-            });
-            LinearLayout.LayoutParams checkedParams = params(14, 14); checkedParams.rightMargin = px(10);
-            row.addView(checked, checkedParams);
-            LinearLayout entry = column(getContext());
-            row.addView(entry, new LinearLayout.LayoutParams(0, -1, 1));
-            if (Objects.equals(key, selectedKey)) {
-                ShapeDrawable selectedBackground = new ShapeDrawable();
-                selectedBackground.setColor(theme.selection().fill()); row.setBackground(selectedBackground);
-            }
-            UiDisplayText name = text(getContext(), key, theme.text().normal()); name.setSingleLine(true);
-            name.setEllipsize(TextUtils.TruncateAt.END);
+        List<String> visible = keys.subList(start, Math.min(start + PAGE_SIZE, keys.size()));
+        for (String key : List.copyOf(entryRows.keySet())) if (!visible.contains(key))
+            rows.removeView(entryRows.remove(key).row());
+        for (int index = 0; index < visible.size(); index++) {
+            String key = visible.get(index);
+            EntryRow entry = entryRows.computeIfAbsent(key, this::createEntryRow);
+            entry.check().setChecked(checkedKeys.contains(key)); entry.check().setEnabled(editable());
+            entry.row().setBackground(Objects.equals(key, selectedKey) ? fill(theme.selection().fill()) : null);
             var orphan = session.orphanForm(key);
-            if (orphan != null) name.setText(key + " · " + tr("dirty"));
-            UiDisplayText summary = text(getContext(), orphan == null
-                    ? DataDictionaryDraft.summary(draft.values().get(key)) : orphan.valueText(), theme.text().muted());
-            summary.setSingleLine(true); summary.setEllipsize(TextUtils.TruncateAt.END);
-            LinearLayout heading = row(getContext());
-            heading.addView(name, new LinearLayout.LayoutParams(0, -1, 1));
-            UiDisplayText type = text(getContext(), typeLabel(orphan == null ? DataDictionaryDraft.type(draft.values().get(key)) : orphan.type()), theme.text().muted());
-            LinearLayout.LayoutParams typeParams = params(-2, -1); typeParams.leftMargin = px(8); heading.addView(type, typeParams);
-            entry.addView(heading, params(-1, 22)); entry.addView(summary, params(-1, 19));
-            row.setOnClickListener(view -> { rememberForm(); loadForm(key); renderList(); });
-            rows.addView(row, params(-1, 50));
+            entry.name().setText(orphan == null ? key : key + " · " + tr("dirty"));
+            entry.summary().setText(orphan == null ? DataDictionaryDraft.summary(draft.values().get(key)) : orphan.valueText());
+            entry.type().setText(typeLabel(orphan == null ? DataDictionaryDraft.type(draft.values().get(key)) : orphan.type()));
+            if (entry.row().getParent() == null) rows.addView(entry.row(), index, params(-1, 50));
         }
+        boolean reordered = false;
+        for (int index = 0; index < visible.size(); index++)
+            reordered |= rows.getChildAt(index) != entryRows.get(visible.get(index)).row();
+        if (reordered) for (String key : visible) rows.bringChildToFront(entryRows.get(key).row());
+    }
+    private EntryRow createEntryRow(String key) {
+        LinearLayout row = row(getContext()); row.setPadding(px(16), px(5), px(16), px(5));
+        UiCheckBox checked = UiCheckBox.createThemed(getContext(), theme);
+        checked.setContentDescription(tr("select_entry", key));
+        checked.setOnCheckedChangeListener((view, selected) -> {
+            if (!editable()) return;
+            if (selected) checkedKeys.add(key); else checkedKeys.remove(key);
+            updateSelection(matchingKeys());
+        });
+        LinearLayout.LayoutParams checkedParams = params(14, 14); checkedParams.rightMargin = px(10);
+        row.addView(checked, checkedParams);
+        LinearLayout entry = column(getContext()); row.addView(entry, new LinearLayout.LayoutParams(0, -1, 1));
+        UiDisplayText name = text(getContext(), key, theme.text().normal()); name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        UiDisplayText summary = text(getContext(), "", theme.text().muted()); summary.setSingleLine(true);
+        summary.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout heading = row(getContext()); heading.addView(name, new LinearLayout.LayoutParams(0, -1, 1));
+        UiDisplayText type = text(getContext(), "", theme.text().muted());
+        LinearLayout.LayoutParams typeParams = params(-2, -1); typeParams.leftMargin = px(8); heading.addView(type, typeParams);
+        entry.addView(heading, params(-1, 22)); entry.addView(summary, params(-1, 19));
+        EntryRow binding = new EntryRow(row, checked, name, summary, type);
+        row.setOnClickListener(view -> {
+            if (!active || disposed || entryRows.get(key) != binding) return;
+            if (automatic()) commitFocusedForm();
+            rememberForm(); loadForm(key); renderList();
+        });
+        return binding;
     }
     private void rememberForm() {
         if (selectedKey == null && !adding || !active || updating) return;
@@ -412,7 +477,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         } catch (IllegalArgumentException invalid) { valueInput.setErrorMessage(tr("invalid")); }
         updateButtons();
     }
-    /** Explicit Save Entry only; navigation and closure never parse unfinished forms. */
+    /** Submit validated, completed input. Suspension and closure never parse unfinished forms. */
     boolean saveEntry() {
         if (notifyingPendingChanges || !active || session.submitting()) return false;
         if (!formDirty) return session.submit();
@@ -439,7 +504,15 @@ final class UiDataDictionaryContent extends FrameLayout {
         updateButtons(); keyInput.requestFocus();
     }
     private List<String> matchingKeys() {
-        return session.entryKeys(search.getText().toString(), filter);
+        return session.entryKeys(searchQuery, filter);
+    }
+    private boolean automatic() { return commitMode == UiDataDictionaryEditor.CommitMode.ON_FOCUS_LOSS; }
+    private void commitFocusedForm() { commitFocusedForm(false); }
+    private void commitFocusedForm(boolean confirmEmptyValue) {
+        if (suspended || updating || disposed || !formDirty || !editable()) return;
+        if (adding && (keyInput.getText().toString().isBlank()
+                || !confirmEmptyValue && valueInput.getText().toString().isEmpty())) return;
+        saveEntry();
     }
     private void updateSelection(List<String> matching) {
         long selected = matching.stream().filter(checkedKeys::contains).count();
@@ -475,7 +548,10 @@ final class UiDataDictionaryContent extends FrameLayout {
         valueType.setEnabled(canEdit && selected && selectedType.editable());
         valueInput.setEnabled(canEdit && selected && selectedType.editable());
         add.setEnabled(canEdit); updateSelection(matchingKeys());
-        if (reload != null) reload.setEnabled(session.canReload() && (state == null || !state.saving()));
+        if (reload != null) {
+            reload.setEnabled(session.canReload() && (state == null || !state.saving()));
+            if (embedded) reload.setVisibility(session.error().isEmpty() ? GONE : VISIBLE);
+        }
         stage.setEnabled(canEdit && (formDirty || draft.dirty()) && selectedType.editable());
         if (message.getText().isEmpty() || message.getText().toString().equals(tr("dirty"))) {
             message.setText(formDirty || draft != null && draft.dirty() ? tr("dirty") : "");

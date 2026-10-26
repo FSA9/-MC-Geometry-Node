@@ -4,7 +4,7 @@
 
 | 直接子目录 | Area 入口与职责 |
 | --- | --- |
-| [graph](graph/README.md) | `GraphEditorWindow`：图标签、画布、节点/连线/Frame、交互及图属性侧栏。 |
+| [graph](graph/README.md) | `GraphEditorWindow`：图标签、画布、节点/连线/Frame、交互及公共图属性侧栏装配。 |
 | [game](game/README.md) | `GameViewportWindow`：游戏画面、编辑相机、场景选择和变换交互。 |
 | [asset](asset/README.md) | `AssetBrowserWindow`：将公共资产浏览组件装配为 Area，注入文档、属性和传输能力。 |
 | [datalibrary](datalibrary/README.md) | `DatabaseWindow`：世界对象、数据仓库和全局数据三页及属性侧栏。 |
@@ -21,3 +21,5 @@ View、草稿与交互在 UI 线程维护，异步返回先投递再检查有效
 图会话归 `GraphDocumentManager`，游戏渲染与世界数据归 `runtime`，仓库归 `feature`；Area 只拥有其展示绑定、surface 协议引用与订阅。已提交业务操作的完成处理必须独立于 View 是否存在。
 
 新增 Area 在对应新子目录实现窗口，在注册处装配 factory、surface 类型及状态；新增侧栏实现 `SidebarPanel`，按 scope 注册。UI 状态使用稳定键与 owner/连接 scope，业务命令留在 `feature`。
+
+本轮逐 Area 审查结论、职责调整和验证记录见项目 `docs/client/editor-directory-audit.md`。共享图属性组件已移至 `components/integration/graph/properties`；跨 Area 世界对象定位和图资产读取位于 `client/integration`，不在编辑器之间直接引用。

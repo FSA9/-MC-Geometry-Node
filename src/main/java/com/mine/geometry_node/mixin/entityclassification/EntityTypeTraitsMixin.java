@@ -1,7 +1,7 @@
 package com.mine.geometry_node.mixin.entityclassification;
 
-import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraitHolder;
-import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraits;
+import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraitHolder;
+import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraits;
 import net.minecraft.core.Holder;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;

@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.feature.entity.preview;
 
 import com.mine.geometry_node.client.platform.ClientServerIdentity;
 import com.mine.geometry_node.core.cache.CacheRegistry;
-import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewTarget;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewRequest;
 import com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewResponse;

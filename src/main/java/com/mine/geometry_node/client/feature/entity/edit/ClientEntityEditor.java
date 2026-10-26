@@ -1,6 +1,6 @@
 package com.mine.geometry_node.client.feature.entity.edit;
 
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest;
@@ -26,7 +26,7 @@ public final class ClientEntityEditor {
     private static final int MAX_PENDING = 16;
     private static final long REQUEST_GAP_NANOS = 125_000_000L;
     public record Reply(Map<String, Object> values, String revision, String message) {
-        public Reply { values = WorldObjectDataValues.snapshot(values); }
+        public Reply { values = GraphMetadataDataValues.snapshot(values); }
         public boolean success() { return message.isEmpty(); }
     }
     public record Request(CompletableFuture<Reply> result, Runnable cancel) implements AutoCloseable {
@@ -56,7 +56,7 @@ public final class ClientEntityEditor {
             try {
                 // Encoding on Netty's queue is too late to report an oversize edit to this window.
                 // Preflight on the Minecraft queue so malformed/oversize data never drops the connection.
-                WorldObjectDataValues.encode(packet.replacement(), registries, WorldObjectDataValues.MAX_WRITE_BYTES);
+                GraphMetadataDataValues.encode(packet.replacement(), registries, GraphMetadataDataValues.MAX_WRITE_BYTES);
             } catch (IllegalArgumentException invalid) { throw new RejectedPayload(); }
         }
         send.accept(packet);

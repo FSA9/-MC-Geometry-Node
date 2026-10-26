@@ -42,6 +42,7 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
     private final LocalAssetService mLocalAssetService = new LocalAssetService();
     private long mRemoteGeneration;
     private boolean mRemoteActive = true;
+    private boolean mDisposed;
     private final Set<Integer> mTransferPlanRequestIds = new HashSet<>();
 
     public AssetBrowserTransferController(ViewGroup owner, AssetFileBrowserPanel browser,
@@ -54,6 +55,7 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
 
     @Override
     public void showUploadDialog(List<File> selectedFiles) {
+        if (!mRemoteActive) return;
         if (selectedFiles == null || selectedFiles.isEmpty() || mBrowserPanel == null
                 || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.UPLOAD)) return;
         FolderPickerDialog dialog = FolderPickerDialog.remote(
@@ -67,6 +69,7 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
 
     @Override
     public void showDownloadDialog(List<AssetEntry> remoteEntries) {
+        if (!mRemoteActive) return;
         if (remoteEntries == null || remoteEntries.isEmpty() || mBrowserPanel == null
                 || !mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.DOWNLOAD)) return;
         FolderPickerDialog dialog = FolderPickerDialog.local(
@@ -392,18 +395,25 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
         });
     }
 
-    @Override public void activate() { mRemoteActive = true; }
+    @Override public void activate() {
+        if (mDisposed) return;
+        mRemoteActive = true;
+        mIoTasks.activate();
+    }
 
     @Override public void deactivate() {
+        if (!mRemoteActive) return;
         mRemoteActive = false;
         mRemoteGeneration++;
+        mIoTasks.deactivate();
         List<Integer> plans = List.copyOf(mTransferPlanRequestIds);
         mTransferPlanRequestIds.clear();
         for (int requestId : plans) ClientAssetTransferPlanState.cancel(requestId);
     }
 
     @Override public void dispose() {
-        mIoTasks.cancelAll();
+        if (mDisposed) return;
+        mDisposed = true;
         deactivate();
     }
 }

@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -60,9 +59,10 @@ public final class FrameMenu {
         int initialColor = ensureOpaque(frameData.color);
         final int[] selectedColor = {initialColor};
 
-        FrameLayout popupOverlay = new UiInputBarrier(uiContext);
+        GraphMenuOverlay popupOverlay = new GraphMenuOverlay(context,
+                () -> GraphMenuOverlay.containsIdentity(context.getAllFrameVisuals(), frame));
         popupOverlay.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        popupOverlay.setOnClickListener(v -> close(context, popupOverlay));
+        popupOverlay.setOnClickListener(v -> popupOverlay.close(true));
 
         LinearLayout panel = new LinearLayout(uiContext);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -113,8 +113,9 @@ public final class FrameMenu {
         panel.addView(actions, actionsLp);
 
         UiActionButton cancel = UiActionButton.create(uiContext, "取消", UiActionButton.Role.SECONDARY,
-                v -> close(context, popupOverlay));
+                v -> popupOverlay.close(true));
         UiActionButton apply = UiActionButton.create(uiContext, "应用", UiActionButton.Role.PRIMARY, v -> {
+            if (!popupOverlay.isCurrent()) return;
             String newTitle = titleInput.getText().toString().trim();
             if (newTitle.isEmpty()) newTitle = "New Frame";
             if (!newTitle.equals(oldTitle) || selectedColor[0] != initialColor) {
@@ -127,7 +128,7 @@ public final class FrameMenu {
                                 .build()
                 );
             }
-            close(context, popupOverlay);
+            popupOverlay.close(true);
         });
 
         LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT);
@@ -137,6 +138,7 @@ public final class FrameMenu {
 
         popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
         parent.addView(popupOverlay);
+        popupOverlay.bindLifetime();
         titleInput.requestFocus();
         titleInput.setSelection(0, oldTitle.length());
     }
@@ -186,17 +188,6 @@ public final class FrameMenu {
         view.setGravity(gravity);
         view.setSingleLine(true);
         return view;
-    }
-
-    private static void removeOverlay(FrameLayout overlay) {
-        if (overlay.getParent() instanceof ViewGroup parent) {
-            parent.removeView(overlay);
-        }
-    }
-
-    private static void close(InteractionContext context, FrameLayout overlay) {
-        removeOverlay(overlay);
-        context.requestViewportFocus();
     }
 
     private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {

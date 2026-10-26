@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.entityeditor;
 
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -14,13 +14,13 @@ public record PacketEntityEditorResult(long requestId, Map<String, Object> value
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketEntityEditorResult> STREAM_CODEC = StreamCodec.of(
             (b, p) -> {
                 b.writeLong(p.requestId()); b.writeUtf(p.revision(), 64); b.writeUtf(p.message(), 128);
-                b.writeByteArray(WorldObjectDataValues.encode(p.values(), b.registryAccess(), WorldObjectDataValues.MAX_READ_BYTES));
+                b.writeByteArray(GraphMetadataDataValues.encode(p.values(), b.registryAccess(), GraphMetadataDataValues.MAX_READ_BYTES));
             }, b -> {
                 long id = b.readLong(); String revision = b.readUtf(64), message = b.readUtf(128);
-                return new PacketEntityEditorResult(id, WorldObjectDataValues.decode(b.readByteArray(WorldObjectDataValues.MAX_READ_BYTES), b.registryAccess()), revision, message);
+                return new PacketEntityEditorResult(id, GraphMetadataDataValues.decode(b.readByteArray(GraphMetadataDataValues.MAX_READ_BYTES), b.registryAccess()), revision, message);
             });
     public PacketEntityEditorResult {
-        values = WorldObjectDataValues.snapshot(values);
+        values = GraphMetadataDataValues.snapshot(values);
         Objects.requireNonNull(revision); Objects.requireNonNull(message);
         if (message.length() > 128 || !revision.isEmpty() && !revision.matches("[0-9a-f]{64}")
                 || message.isEmpty() && revision.isEmpty() || !message.isEmpty() && (!revision.isEmpty() || !values.isEmpty()))

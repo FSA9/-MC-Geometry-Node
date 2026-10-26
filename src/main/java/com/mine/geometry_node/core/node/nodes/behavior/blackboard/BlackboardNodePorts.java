@@ -27,7 +27,7 @@ public final class BlackboardNodePorts {
                 .text("geometry_node.node.behavior_blackboard.comment.dynamic")
                 .text("geometry_node.node.behavior_blackboard.comment.instance")
                 .text("geometry_node.node.behavior_blackboard.comment.owner")
-                .text("geometry_node.node.behavior_blackboard.comment.shared")
+                .text("geometry_node.node.behavior_blackboard.comment.global")
                 .text("geometry_node.node.behavior_blackboard.comment.group")
                 .text("geometry_node.node.behavior_blackboard.comment.world")
                 .build();

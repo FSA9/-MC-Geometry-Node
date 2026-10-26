@@ -20,6 +20,8 @@ import static com.mine.geometry_node.client.ui.components.integration.metadata.M
 
 /** Shared custom-data manager, available as a standalone window or an embedded child view. */
 public final class UiDataDictionaryEditor extends ModalWindowView {
+    /** Controls when a complete entry is submitted; unfinished forms never gate navigation. */
+    public enum CommitMode { EXPLICIT, ON_FOCUS_LOSS }
     private final UiDataDictionaryContent content;
 
     public static boolean show(View anchor, DataDictionaryBinding binding) {
@@ -58,9 +60,14 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
 
     /** The host may choose its body text size without changing the shared editor defaults. */
     public static Embedded createEmbedded(View owner, DataDictionaryBinding binding, UiTheme theme, float textSizeDp) {
+        return createEmbedded(owner, binding, theme, textSizeDp, CommitMode.EXPLICIT);
+    }
+
+    public static Embedded createEmbedded(View owner, DataDictionaryBinding binding, UiTheme theme,
+                                          float textSizeDp, CommitMode commitMode) {
         Objects.requireNonNull(owner, "owner");
         UiDataDictionaryContent content = new UiDataDictionaryContent(owner.getContext(), owner, binding,
-                null, theme, true, () -> {}, null, textSizeDp);
+                null, theme, true, () -> {}, null, textSizeDp, commitMode);
         content.start();
         return new Embedded(content);
     }

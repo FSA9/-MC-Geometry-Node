@@ -63,6 +63,8 @@ public class ViewportMenu extends UiInputBarrier {
     private ViewportActionSink mActionSink;
     private float mMenuX, mMenuY;
     private AppConfig mConfig;
+    private long mGeneration;
+    private long mRowsGeneration;
     private final ConfigChangeListener mConfigChangeListener = this::applyConfig;
 
     private final Stack<NodeCategory> mHistory = new Stack<>();
@@ -71,13 +73,22 @@ public class ViewportMenu extends UiInputBarrier {
     public ViewportMenu(Context context) {
         super(context);
         mConfig = ConfigManager.INSTANCE.getConfig();
-        ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
         initUI(context);
         navigateTo(NodeRegistry.INSTANCE.ROOT);
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        ConfigManager.INSTANCE.addChangeListener(mConfigChangeListener);
+        applyConfig(ConfigManager.INSTANCE.getConfig());
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
+        mGeneration++;
+        mContext = null;
+        mActionSink = null;
         ConfigManager.INSTANCE.removeChangeListener(mConfigChangeListener);
         super.onDetachedFromWindow();
     }
@@ -130,6 +141,7 @@ public class ViewportMenu extends UiInputBarrier {
     }
 
     public void showAt(float x, float y, InteractionContext context, ViewportActionSink actionSink) {
+        long generation = ++mGeneration;
         this.mContext = context;
         this.mActionSink = actionSink;
         mMenuX = x;
@@ -140,16 +152,23 @@ public class ViewportMenu extends UiInputBarrier {
         if (parent != null) layoutPanel(parent, x, y);
 
         mSearchBox.post(() -> {
-            if (getParent() == null || getVisibility() != VISIBLE) return;
+            if (generation != mGeneration || !isCurrent()) return;
             mSearchBox.setText("");
             mSearchBox.requestFocus();
         });
     }
 
     public void dismiss() {
-        if (mContext != null) {
-            mContext.closeMenu();
-        }
+        if (!isCurrent()) return;
+        InteractionContext owner = mContext;
+        mGeneration++;
+        mContext = null;
+        mActionSink = null;
+        owner.closeMenu();
+    }
+
+    private boolean isCurrent() {
+        return mContext != null && getParent() == mContext && getVisibility() == VISIBLE;
     }
 
     private void navigateTo(NodeCategory folder) {
@@ -166,17 +185,16 @@ public class ViewportMenu extends UiInputBarrier {
     }
 
     private void renderCurrentFolder() {
+        mRowsGeneration++;
         mListContainer.removeAllViews();
 
         if (mCurrentFolder == NodeRegistry.INSTANCE.ROOT) {
             addSectionLabel("操作");
             addActionItem(ViewportActionId.SAVE, v -> {
                 performAction(ViewportActionId.SAVE, ViewportActionRequest.EMPTY);
-                post(this::dismiss);
             });
             addActionItem(ViewportActionId.EXPORT_IMAGE, v -> {
                 performAction(ViewportActionId.EXPORT_IMAGE, ViewportActionRequest.EMPTY);
-                post(this::dismiss);
             });
 
             boolean behaviorTree = mActionSink != null && GraphTypeRegistry.BEHAVIOR_TREE.id()
@@ -184,19 +202,16 @@ public class ViewportMenu extends UiInputBarrier {
             if (mContext != null && mContext.isInsideGroupScope()) {
                 addActionItem(ViewportActionId.EXIT_GROUP, v -> {
                     performAction(ViewportActionId.EXIT_GROUP, ViewportActionRequest.EMPTY);
-                    post(this::dismiss);
                 });
             } else {
                 addActionItem(ViewportActionId.GROUP_INTO_FRAME, v -> {
                     performAction(ViewportActionId.GROUP_INTO_FRAME, ViewportActionRequest.EMPTY);
-                    post(this::dismiss);
                 });
             }
 
             if (!behaviorTree) {
                 addActionItem(ViewportActionId.GROUP_INTO_NODE_GROUP, v -> {
                     performAction(ViewportActionId.GROUP_INTO_NODE_GROUP, ViewportActionRequest.EMPTY);
-                    post(this::dismiss);
                 });
             }
 
@@ -221,7 +236,6 @@ public class ViewportMenu extends UiInputBarrier {
                         .screen(mMenuX, mMenuY)
                         .typeId(node.getTypeId())
                         .build());
-                post(this::dismiss);
             });
         }
 
@@ -231,6 +245,7 @@ public class ViewportMenu extends UiInputBarrier {
 
     private void performSearch(String query) {
         if (query.trim().isEmpty()) { renderCurrentFolder(); return; }
+        mRowsGeneration++;
         mListContainer.removeAllViews();
         List<NodeDef> visibleDefinitions = new ArrayList<>();
         for (NodeDef definition : NodeRegistry.INSTANCE.getAllDefinitions()) {
@@ -245,7 +260,6 @@ public class ViewportMenu extends UiInputBarrier {
                         .screen(mMenuX, mMenuY)
                         .typeId(def.typeId())
                         .build());
-                post(this::dismiss);
             });
         }
         if (results.total() == 0) addEmptyItem("未找到匹配节点");
@@ -258,12 +272,22 @@ public class ViewportMenu extends UiInputBarrier {
         TextView tv = UiMenuItems.row(getContext(), text, false, true, () -> {});
         tv.setTextColor(UiMenuItems.textColors(color));
         tv.setGravity(Gravity.CENTER_VERTICAL);
-        tv.setOnClickListener(listener);
+        tv.setOnClickListener(currentRow(listener));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(ITEM_HEIGHT_DP));
         int marginV = UIUtils.dp2pxInt(1);
         lp.setMargins(0, marginV, 0, marginV);
         mListContainer.addView(tv, lp);
+    }
+
+    private View.OnClickListener currentRow(View.OnClickListener listener) {
+        long generation = mGeneration;
+        long rowsGeneration = mRowsGeneration;
+        return view -> {
+            if (generation != mGeneration || rowsGeneration != mRowsGeneration
+                    || (mContext != null && !isCurrent())) return;
+            listener.onClick(view);
+        };
     }
 
     private void addShortcutItem(String text, String shortcut, int color, View.OnClickListener listener) {
@@ -274,7 +298,7 @@ public class ViewportMenu extends UiInputBarrier {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
-        row.setOnClickListener(listener);
+        row.setOnClickListener(currentRow(listener));
 
         TextView label = new TextView(getContext());
         label.setText(text);
@@ -456,8 +480,11 @@ public class ViewportMenu extends UiInputBarrier {
     }
 
     private void performAction(ViewportActionId id, ViewportActionRequest request) {
-        if (mActionSink != null) {
-            mActionSink.performAction(id, request);
-        }
+        if (!isCurrent() || mActionSink == null) return;
+        long generation = mGeneration;
+        mActionSink.performAction(id, request);
+        post(() -> {
+            if (generation == mGeneration) dismiss();
+        });
     }
 }

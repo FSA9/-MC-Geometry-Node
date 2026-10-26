@@ -31,8 +31,11 @@ public interface AssetBrowserAreaBindings {
         void showUploadDialog(List<File> files);
         void showDownloadDialog(List<AssetEntry> entries);
         void createRemoteGraph(String targetPath, Runnable onSuccess);
+        /** Resume owner tasks and UI delivery after a temporary hide; ignored after dispose. */
         void activate();
+        /** Temporarily stop planning/tasks and invalidate old UI callbacks; submitted transfers still finish maintenance. */
         void deactivate();
+        /** Idempotent permanent retirement; later activate calls must not revive this owner. */
         void dispose();
     }
 }

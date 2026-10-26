@@ -28,7 +28,9 @@ import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -58,6 +60,11 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     private final ScrollView scroll;
     private final LinearLayout content;
     private final Map<Section, Boolean> expandedSections = new EnumMap<>(Section.class);
+    private final Map<Section, SectionContent> sections = new EnumMap<>(Section.class);
+    private final Map<AssetTransferFileSnapshot, View> completedRows = new HashMap<>();
+    private final Map<AssetTransferFileSnapshot, View> failedRows = new HashMap<>();
+    private final View clearCompleted;
+    private final LinearLayout failedActions;
     private ClientAssetTransferService.Subscription subscription;
     private long subscriptionGeneration;
     private AssetTransferSnapshot pendingSnapshot = AssetTransferSnapshot.empty();
@@ -78,6 +85,17 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(scroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        clearCompleted = iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
+                tr("geometry_node.asset_transfer.action.clear"),
+                () -> ClientAssetTransferService.INSTANCE.clearCompletedHistory());
+        failedActions = new LinearLayout(context);
+        failedActions.setOrientation(LinearLayout.HORIZONTAL);
+        failedActions.addView(iconButton(SvgIconView.Icon.RESET, COLOR_MUTED,
+                tr("geometry_node.asset_transfer.action.retry_all"),
+                () -> ClientAssetTransferService.INSTANCE.retryAll()), new LinearLayout.LayoutParams(px(24), px(24)));
+        failedActions.addView(iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
+                tr("geometry_node.asset_transfer.action.clear"),
+                () -> ClientAssetTransferService.INSTANCE.clearFailedHistory()), new LinearLayout.LayoutParams(px(24), px(24)));
         render(AssetTransferSnapshot.empty());
     }
 
@@ -113,7 +131,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private void render(AssetTransferSnapshot snapshot) {
-        content.removeAllViews();
+        // Keep input targets attached while unrelated transfer progress changes.
         addActiveSection(snapshot.activeJobs());
         addTotalSection(snapshot.activeJobs());
         addCompletedSection(snapshot.completedHistory());
@@ -121,7 +139,8 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private void addActiveSection(List<AssetTransferJobSnapshot> jobs) {
-        addSection(Section.ACTIVE, tr("geometry_node.asset_transfer.panel.active"), null, host -> {
+        addSection(Section.ACTIVE, tr("geometry_node.asset_transfer.panel.active"), null, jobs, host -> {
+            host.removeAllViews();
             if (jobs.isEmpty()) {
                 addEmpty(host, tr("geometry_node.asset_transfer.panel.no_active"));
                 return;
@@ -168,7 +187,9 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         long totalFiles = jobs.stream().mapToLong(job -> job.files().size()).sum();
         long processedFiles = jobs.stream().mapToLong(AssetTransferJobSnapshot::processedFileCount).sum();
 
-        addSection(Section.TOTAL, tr("geometry_node.asset_transfer.panel.total"), null, host -> {
+        addSection(Section.TOTAL, tr("geometry_node.asset_transfer.panel.total"), null,
+                List.of(processedFiles, totalFiles), host -> {
+            host.removeAllViews();
             LinearLayout block = new LinearLayout(getContext());
             block.setOrientation(LinearLayout.VERTICAL);
             block.setPadding(px(8), px(7), px(8), px(7));
@@ -180,37 +201,38 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private void addCompletedSection(List<AssetTransferFileSnapshot> history) {
-        View action = history.isEmpty() ? null : iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
-                tr("geometry_node.asset_transfer.action.clear"),
-                ClientAssetTransferService.INSTANCE::clearCompletedHistory);
-        addSection(Section.COMPLETED, tr("geometry_node.asset_transfer.panel.completed"), action, host -> {
-            if (history.isEmpty()) {
-                addEmpty(host, tr("geometry_node.asset_transfer.panel.no_completed"));
-                return;
-            }
-            for (AssetTransferFileSnapshot file : history) host.addView(historyRow(file, false), match(42));
-        });
+        clearCompleted.setVisibility(history.isEmpty() ? View.GONE : View.VISIBLE);
+        addSection(Section.COMPLETED, tr("geometry_node.asset_transfer.panel.completed"), clearCompleted,
+                history, host -> updateHistory(host, history, false, completedRows));
     }
 
     private void addFailedSection(List<AssetTransferFileSnapshot> history) {
-        LinearLayout actions = null;
-        if (!history.isEmpty()) {
-            actions = new LinearLayout(getContext());
-            actions.setOrientation(LinearLayout.HORIZONTAL);
-            actions.addView(iconButton(SvgIconView.Icon.RESET, COLOR_MUTED,
-                    tr("geometry_node.asset_transfer.action.retry_all"),
-                    ClientAssetTransferService.INSTANCE::retryAll), new LinearLayout.LayoutParams(px(24), px(24)));
-            actions.addView(iconButton(SvgIconView.Icon.CLEAR, COLOR_MUTED,
-                    tr("geometry_node.asset_transfer.action.clear"),
-                    ClientAssetTransferService.INSTANCE::clearFailedHistory), new LinearLayout.LayoutParams(px(24), px(24)));
+        failedActions.setVisibility(history.isEmpty() ? View.GONE : View.VISIBLE);
+        addSection(Section.FAILED, tr("geometry_node.asset_transfer.panel.failed"), failedActions,
+                history, host -> updateHistory(host, history, true, failedRows));
+    }
+
+    private void updateHistory(LinearLayout host, List<AssetTransferFileSnapshot> history, boolean failed,
+                               Map<AssetTransferFileSnapshot, View> rows) {
+        rows.keySet().retainAll(history);
+        List<View> desired = new ArrayList<>();
+        for (AssetTransferFileSnapshot file : history) {
+            desired.add(rows.computeIfAbsent(file, key -> historyRow(key, failed)));
         }
-        addSection(Section.FAILED, tr("geometry_node.asset_transfer.panel.failed"), actions, host -> {
-            if (history.isEmpty()) {
-                addEmpty(host, tr("geometry_node.asset_transfer.panel.no_failed"));
-                return;
-            }
-            for (AssetTransferFileSnapshot file : history) host.addView(historyRow(file, true), match(48));
-        });
+        for (int i = host.getChildCount() - 1; i >= 0; i--) {
+            if (!desired.contains(host.getChildAt(i))) host.removeViewAt(i);
+        }
+        if (history.isEmpty()) {
+            addEmpty(host, tr(failed ? "geometry_node.asset_transfer.panel.no_failed"
+                    : "geometry_node.asset_transfer.panel.no_completed"));
+            return;
+        }
+        for (int i = 0; i < desired.size(); i++) {
+            View row = desired.get(i);
+            if (host.getChildAt(i) == row) continue;
+            if (row.getParent() == host) host.removeView(row);
+            host.addView(row, i, match(failed ? 48 : 42));
+        }
     }
 
     private View historyRow(AssetTransferFileSnapshot file, boolean failed) {
@@ -245,7 +267,16 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         return row;
     }
 
-    private void addSection(Section section, String title, View action, Consumer<LinearLayout> bodyBuilder) {
+    private void addSection(Section section, String title, View action, Object state,
+                            Consumer<LinearLayout> bodyBuilder) {
+        SectionContent existing = sections.get(section);
+        if (existing != null) {
+            if (!existing.state().equals(state)) {
+                bodyBuilder.accept(existing.body());
+                sections.put(section, new SectionContent(existing.body(), state));
+            }
+            return;
+        }
         LinearLayout sectionView = new LinearLayout(getContext());
         sectionView.setOrientation(LinearLayout.VERTICAL);
         sectionView.setBackground(rect(COLOR_SECTION, 1, COLOR_BORDER));
@@ -269,6 +300,7 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         LinearLayout body = new LinearLayout(getContext());
         body.setOrientation(LinearLayout.VERTICAL);
         bodyBuilder.accept(body);
+        sections.put(section, new SectionContent(body, state));
         body.setVisibility(expanded ? View.VISIBLE : View.GONE);
         sectionView.addView(body, wrapMatch());
 
@@ -356,4 +388,5 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
     }
 
     private enum Section { ACTIVE, TOTAL, COMPLETED, FAILED }
+    private record SectionContent(LinearLayout body, Object state) { }
 }

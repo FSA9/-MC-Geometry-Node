@@ -11,6 +11,19 @@ public final class FactionUi {
     public static String tr(String key, Object... arguments) {
         return Component.translatable("geometry_node.faction." + key, arguments).getString();
     }
+    public static String errorMessage(Throwable failure) {
+        if (failure == null) return "";
+        while ((failure instanceof java.util.concurrent.CompletionException
+                || failure instanceof java.util.concurrent.ExecutionException) && failure.getCause() != null)
+            failure = failure.getCause();
+        String key = failure instanceof IllegalArgumentException
+                ? "geometry_node.faction.error.invalid" : failure.getMessage();
+        return errorMessage(key == null || !key.startsWith("geometry_node.")
+                ? "geometry_node.faction.error.failed" : key);
+    }
+    public static String errorMessage(String key) {
+        return key == null || key.isEmpty() ? "" : Component.translatable(key).getString();
+    }
     public static ShapeDrawable fill(int color) {
         ShapeDrawable drawable = new ShapeDrawable(); drawable.setColor(color); return drawable;
     }

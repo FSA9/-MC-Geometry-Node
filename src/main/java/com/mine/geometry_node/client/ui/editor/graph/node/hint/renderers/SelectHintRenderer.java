@@ -12,9 +12,11 @@ import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButto
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.client.feature.faction.ClientFactionRepository;
+import com.mine.geometry_node.client.ui.components.integration.faction.FactionCatalogSubscription;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
@@ -32,10 +34,7 @@ public class SelectHintRenderer implements UIHintRenderer {
     @Override
     public View createView(Context context, NodeData nodeData, PortRow row, EditorContext editorContext) {
         // 1. 获取选项列表
-        var minecraft = net.minecraft.client.Minecraft.getInstance();
-        PortOptionResolver.Resolution resolution = PortOptionResolver.resolve(row,
-                minecraft.level == null ? null : minecraft.level.registryAccess(),
-                key -> net.minecraft.network.chat.Component.translatable(key).getString());
+        PortOptionResolver.Resolution resolution = resolveOptions(row);
         List<String> resolvedOptions = resolution.options().stream().map(PortOptionResolver.Option::id).toList();
         Map<String, String> optionLabels = resolution.options().stream().collect(java.util.stream.Collectors.toMap(
                 PortOptionResolver.Option::id, PortOptionResolver.Option::label, (first, ignored) -> first,
@@ -54,8 +53,32 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         UiSelectButton dropdownBtn = new UiSelectButton(context, displayVal, NodeUiMetrics.TEXT_SIZE_LABEL,
                 () -> ConfigManager.INSTANCE.getConfig().node.cornerRadius);
+        boolean factionOptions = RegistryDataManager.FACTION_REGISTRY_ID.equals(resolution.registryId());
+        LiveMenu liveMenu = new LiveMenu();
+
+        if (factionOptions) {
+            var subscription = new FactionCatalogSubscription(dropdownBtn, ClientFactionRepository.INSTANCE, () -> {
+                PortOptionResolver.Resolution latest = resolveOptions(row);
+                liveMenu.catalogChanged(latest);
+                Object current = UIHintValueBinder.getValue(nodeData, row.leftPort());
+                String id = current == null ? "" : current.toString();
+                String label = latest.options().stream().filter(option -> option.id().equals(id))
+                        .map(PortOptionResolver.Option::label).findFirst().orElse(id);
+                dropdownBtn.setValue(label);
+            });
+            dropdownBtn.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override public void onViewAttachedToWindow(View view) { subscription.open(); }
+                @Override public void onViewDetachedFromWindow(View view) { subscription.close(); liveMenu.close(); }
+            });
+        }
 
         dropdownBtn.setOnClickListener(v -> {
+            // Catalogs can change while a graph stays open; never retain the initial option list.
+            PortOptionResolver.Resolution currentResolution = resolveOptions(row);
+            List<String> currentOptions = currentResolution.options().stream().map(PortOptionResolver.Option::id).toList();
+            Map<String, String> currentLabels = currentResolution.options().stream().collect(java.util.stream.Collectors.toMap(
+                    PortOptionResolver.Option::id, PortOptionResolver.Option::label, (first, ignored) -> first,
+                    java.util.LinkedHashMap::new));
             icyllis.modernui.view.ViewParent parent = v.getParent();
 
             while (parent != null && !(parent instanceof InteractionContext)) {
@@ -64,20 +87,64 @@ public class SelectHintRenderer implements UIHintRenderer {
 
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
                 java.util.function.Consumer<String> commit = selectedVal -> {
-                    dropdownBtn.setValue(optionLabels.getOrDefault(selectedVal, selectedVal));
+                    // A catalog reply can arrive before its UI notification closes an old menu.
+                    PortOptionResolver.Resolution latest = factionOptions ? resolveOptions(row) : currentResolution;
+                    if (factionOptions && !LiveMenu.canSelect(latest, selectedVal)) {
+                        liveMenu.close();
+                        return;
+                    }
+                    String label = latest.options().stream().filter(option -> option.id().equals(selectedVal))
+                            .map(PortOptionResolver.Option::label).findFirst().orElse(selectedVal);
+                    dropdownBtn.setValue(label);
                     UIHintValueBinder.commit(editorContext, nodeData, portId, selectedVal);
                 };
-                var presentation = SelectMenuPresentations.get(resolution.registryId());
+                var presentation = SelectMenuPresentations.get(currentResolution.registryId());
                 if (presentation != null && interactionContext instanceof FrameLayout host) {
                     Object current = UIHintValueBinder.getValue(nodeData, row.leftPort());
-                    presentation.show(context, title, resolution,
+                    presentation.show(context, title, currentResolution,
                             current == null ? selectedValue : current.toString(), v, host, commit);
                 } else if (interactionContext instanceof ViewGroup host) {
-                    new UiSearchableMenu(context, title, resolvedOptions, optionLabels, commit).showAt(v, host);
+                    var menu = new UiSearchableMenu(context, title, currentOptions, currentLabels, commit);
+                    if (factionOptions) liveMenu.open(currentResolution, menu::dismiss);
+                    menu.showAt(v, host);
                 }
             }
         });
         return dropdownBtn;
+    }
+
+    /** A transient menu's catalog snapshot becomes invalid when IDs, labels, or availability change. */
+    static final class LiveMenu {
+        private PortOptionResolver.Resolution snapshot;
+        private Runnable dismiss;
+
+        void open(PortOptionResolver.Resolution options, Runnable close) {
+            close();
+            snapshot = options;
+            dismiss = close;
+        }
+
+        void catalogChanged(PortOptionResolver.Resolution options) {
+            if (snapshot != null && !snapshot.equals(options)) close();
+        }
+
+        void close() {
+            Runnable action = dismiss;
+            dismiss = null;
+            snapshot = null;
+            if (action != null) action.run();
+        }
+
+        static boolean canSelect(PortOptionResolver.Resolution options, String id) {
+            return options.available() && options.options().stream().anyMatch(option -> option.id().equals(id));
+        }
+    }
+
+    private static PortOptionResolver.Resolution resolveOptions(PortRow row) {
+        var minecraft = net.minecraft.client.Minecraft.getInstance();
+        return PortOptionResolver.resolve(row,
+                minecraft.level == null ? null : minecraft.level.registryAccess(),
+                key -> net.minecraft.network.chat.Component.translatable(key).getString());
     }
 
     @Override
@@ -90,7 +157,7 @@ public class SelectHintRenderer implements UIHintRenderer {
 
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
         int leftMarginPx = UIUtils.dp2pxInt(startX);
-        int widthPx = hasDynamicRemoveButton(row)
+        int widthPx = UIHintUtils.hasDynamicRemoveButton(row)
                 ? InlineActionButton.rightColumnLeftPx(nodeWidth) - leftMarginPx
                 : UIUtils.dp2pxInt(endX - startX);
         int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
@@ -107,13 +174,6 @@ public class SelectHintRenderer implements UIHintRenderer {
         lp.topMargin = UIUtils.dp2pxInt(currentY + NodeUiMetrics.ROW_HEIGHT + verticalMargin);
 
         view.setLayoutParams(lp);
-    }
-
-    private static boolean hasDynamicRemoveButton(PortRow row) {
-        return row != null
-                && row.hintParams() != null
-                && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC))
-                && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
     }
 
     private static String selectTitle(NodeData nodeData, PortRow row) {

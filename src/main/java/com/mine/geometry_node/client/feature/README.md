@@ -6,6 +6,7 @@
 - `datalibrary`：数据仓库访问契约、连接快照、修改与传输适配。
 - `entity`：实体编辑请求、登记索引和外观快照；不负责窗口或实体绘制。
 - `faction`、`worldquery`：各自的连接访问和查询能力。
+- `scopeddata`：GLOBAL 与所有服务端维度公共字典的目录、读取和比较后替换会话；复用 scoped state 存储。
 - `graph`：图文档、修改命令、历史适配、文件所有权、查询及元数据。
 - `scene`：场景修改、冲突、确认与历史。
 - `ai`：命令协议、目录、校验和 MCP 传输；具体工作区和 ModernUI 的适配位于 `integration/ai`。

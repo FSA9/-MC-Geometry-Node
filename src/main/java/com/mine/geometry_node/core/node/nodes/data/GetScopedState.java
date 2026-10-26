@@ -32,6 +32,7 @@ public final class GetScopedState extends BaseNode {
     private NodeDef buildDefinition(ScopedStateScope scope) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
                         Component.translatable("geometry_node.node.get_scoped_state"))
+                .addMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, true)
                 .addRow(new PortRow(null, StandardPorts.ANY_VALUE.toOutput(), UIHint.DEFAULT, null, null));
         ScopedStateNodeSupport.addScopeInput(builder);
         if (ScopedStateNodeSupport.usesEntity(scope)) {

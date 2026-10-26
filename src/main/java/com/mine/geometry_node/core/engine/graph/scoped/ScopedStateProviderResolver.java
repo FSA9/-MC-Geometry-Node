@@ -45,7 +45,7 @@ public final class ScopedStateProviderResolver {
             return new AreaScopedStateProvider(context.level(), areaTarget.area(), namespace);
         }
         if (target instanceof ScopedStateTarget.SharedTarget) {
-            return shared(context.level(), namespace);
+            return global(context.level(), namespace);
         }
         if (target instanceof ScopedStateTarget.GroupTarget groupTarget) {
             return group(groupTarget.entity(), namespace);
@@ -63,8 +63,13 @@ public final class ScopedStateProviderResolver {
                 ScopedStateServerConfig.maxEntries(namespace));
     }
 
+    public static ScopedStateProvider global(ServerLevel level, ScopedStateNamespace namespace) {
+        return stored(level, namespace, ScopedStateScope.GLOBAL, "server");
+    }
+
+    @Deprecated
     public static ScopedStateProvider shared(ServerLevel level, ScopedStateNamespace namespace) {
-        return stored(level, namespace, ScopedStateScope.SHARED, "server");
+        return global(level, namespace);
     }
 
     public static ScopedStateProvider area(ServerLevel level, AreaRef area, ScopedStateNamespace namespace) {

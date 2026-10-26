@@ -27,6 +27,7 @@ import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import static com.mine.geometry_node.client.ui.components.integration.faction.FactionUi.*;
 
@@ -35,6 +36,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     private record Row(LinearLayout view, UiCheckBox check, UiActionButton name) {}
     private final ClientFactionRepository repository;
     private final UiStateContext state;
+    private final Consumer<Runnable> postToUi;
     private final UiTheme theme = UiThemes.EDITOR;
     private final UiFixedSplitLayout factionSplit;
     private final UiSearchInput search;
@@ -50,11 +52,15 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     private String scope, query = "", section = "info", localError = "";
     private UUID selected;
     private boolean shown, disposed, writing;
-    private long generation;
+    private long generation, navigationRevision;
 
     FactionCatalogView(Context context, UiStateContext state) { this(context, state, ClientFactionRepository.INSTANCE); }
     FactionCatalogView(Context context, UiStateContext state, ClientFactionRepository repository) {
+        this(context, state, repository, MuiModApi::postToUiThread);
+    }
+    FactionCatalogView(Context context, UiStateContext state, ClientFactionRepository repository, Consumer<Runnable> postToUi) {
         super(context); this.repository = Objects.requireNonNull(repository); this.state = Objects.requireNonNull(state);
+        this.postToUi = Objects.requireNonNull(postToUi);
         setOrientation(VERTICAL); setBackground(fill(theme.surface().canvas()));
         LinearLayout catalog = column(context); catalog.setBackground(fill(theme.surface().root()));
         LinearLayout toolbar = row(context); toolbar.setPadding(px(10), px(8), px(10), px(8));
@@ -64,7 +70,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         add = icon(context, SvgIconView.Icon.PLUS, "add"); remove = icon(context, SvgIconView.Icon.CLEAR, "delete");
         toolbar.addView(add, actionParams()); toolbar.addView(remove, actionParams());
         UiSearchSubmit.bind(submitSearch, () -> {
-            query = search.getText().toString().trim(); savePage(); refresh();
+            navigationRevision++; query = search.getText().toString().trim(); savePage(); refresh();
         }, search);
         catalog.addView(toolbar, new LayoutParams(-1, -2));
         LinearLayout selection = row(context); selection.setPadding(px(10), 0, px(10), 0);
@@ -98,7 +104,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     }
     @Override public void onHide() {
         if (!shown) return;
-        savePage(); saveSplit(); shown = false; subscription.close();
+        savePage(); saveSplit(); shown = false; navigationRevision++; subscription.close();
         editors.values().forEach(editor -> editor.setActive(false));
     }
     @Override public void onDispose() {
@@ -160,7 +166,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         UiActionButton name = UiTableStyle.rowButton(getContext(), theme); name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         UIUtils.setLockedTextSize(name, UiMetrics.TEXT_BODY);
         name.setPadding(px(6), 0, 0, 0); name.setSingleLine(true);
-        name.setOnClickListener(button -> { selected = id; savePage(); showDetail(); updateSelection(); });
+        name.setOnClickListener(button -> { navigationRevision++; selected = id; savePage(); showDetail(); updateSelection(); });
         view.addView(name, new LayoutParams(0, -1, 1)); return new Row(view, check, name);
     }
     private void updateSelection() {
@@ -180,7 +186,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         if (selected != null && repository.snapshot().find(selected).isPresent()) {
             FactionEditorView current = editors.computeIfAbsent(selected, id -> {
                 var editor = new FactionEditorView(getContext(), theme, id, repository, state, scope, this::canEdit,
-                        this::submit, next -> { section = next; savePage(); refreshStatus(); });
+                        this::submit, next -> { navigationRevision++; section = next; savePage(); refreshStatus(); });
                 details.addView(editor, new FrameLayout.LayoutParams(-1, -1)); return editor;
             });
             editors.forEach((id, editor) -> { boolean active = id.equals(selected); editor.setActive(shown && active); editor.setVisibility(active ? VISIBLE : GONE); });
@@ -202,8 +208,10 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         String base = tr("new_faction"), name = base; int suffix = 2;
         while (!repository.snapshot().nameAvailable(RichTextValue.plain(name), null)) name = base + " " + suffix++;
         RichTextValue newName = RichTextValue.plain(name);
-        submit(() -> repository.create(newName).thenRun(() -> MuiModApi.postToUiThread(() -> {
-            if (!disposed && Objects.equals(scope, UiStateScopes.current())) {
+        long expectedGeneration = generation, expectedNavigation = navigationRevision;
+        submit(() -> repository.create(newName).thenRun(() -> postToUi.accept(() -> {
+            if (shown && !disposed && generation == expectedGeneration && navigationRevision == expectedNavigation
+                    && Objects.equals(scope, UiStateScopes.current())) {
                 repository.snapshot().factions().stream().filter(f -> !before.contains(f.id())).findFirst().ifPresent(f -> selected = f.id());
                 query = ""; search.setText(""); section = "info"; savePage(); refresh();
             }
@@ -213,7 +221,8 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         if (!canEdit()) return;
         writing = true; localError = ""; long expected = generation;
         try {
-            operation.get().whenComplete((ignored, failed) -> MuiModApi.postToUiThread(() -> {
+            // Navigation may retire the automatic selection, but must not strand command bookkeeping.
+            operation.get().whenComplete((ignored, failed) -> postToUi.accept(() -> {
                 if (disposed || generation != expected) return;
                 writing = false;
                 localError = failed == null ? "" : repository.error().isEmpty()

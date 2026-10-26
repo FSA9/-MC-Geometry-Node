@@ -112,7 +112,7 @@ final class TemplateEditorHintLayout extends FrameLayout implements ViewportScal
         transformedHint.setViewportTransform(
                 viewportScale,
                 windowLeftPx + previewLeftPx * viewportScale,
-                windowTopPx,
+                windowTopPx + (previewParams != null ? previewParams.topMargin : preview.getTop()) * viewportScale,
                 previewOrder
         );
     }

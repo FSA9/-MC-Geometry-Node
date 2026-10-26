@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.entityeditor;
 
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,12 +15,12 @@ public record PacketEntityEditorRequest(long requestId, String dimension, UUID e
             (b, p) -> {
                 b.writeLong(p.requestId()); b.writeUtf(p.dimension(), 128); b.writeUUID(p.entity());
                 b.writeUtf(p.expectedRevision(), 64);
-                if (p.edit()) b.writeByteArray(WorldObjectDataValues.encode(p.replacement(), b.registryAccess(), WorldObjectDataValues.MAX_WRITE_BYTES));
+                if (p.edit()) b.writeByteArray(GraphMetadataDataValues.encode(p.replacement(), b.registryAccess(), GraphMetadataDataValues.MAX_WRITE_BYTES));
             }, b -> {
                 long id = b.readLong(); String dimension = b.readUtf(128); UUID entity = b.readUUID();
                 String revision = b.readUtf(64);
                 Map<String, Object> values = revision.isEmpty() ? Map.of()
-                        : WorldObjectDataValues.decode(b.readByteArray(WorldObjectDataValues.MAX_WRITE_BYTES), b.registryAccess());
+                        : GraphMetadataDataValues.decode(b.readByteArray(GraphMetadataDataValues.MAX_WRITE_BYTES), b.registryAccess());
                 return new PacketEntityEditorRequest(id, dimension, entity, revision, values);
             });
     public PacketEntityEditorRequest {
@@ -28,7 +28,7 @@ public record PacketEntityEditorRequest(long requestId, String dimension, UUID e
         if (dimension.isEmpty() || dimension.length() > 128 || Identifier.tryParse(dimension) == null
                 || !expectedRevision.isEmpty() && !expectedRevision.matches("[0-9a-f]{64}"))
             throw new IllegalArgumentException("Invalid entity editor request identity");
-        replacement = WorldObjectDataValues.snapshot(replacement);
+        replacement = GraphMetadataDataValues.snapshot(replacement);
         if (expectedRevision.isEmpty() && !replacement.isEmpty()) throw new IllegalArgumentException("Read cannot carry changes");
     }
     public boolean edit() { return !expectedRevision.isEmpty(); }

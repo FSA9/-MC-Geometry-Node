@@ -37,6 +37,8 @@ public final class ClientboundPayloadRegistry {
     private static final Map<Identifier, Entry<?>> ENTRIES = new LinkedHashMap<>();
 
     static {
+        add(com.mine.geometry_node.core.network.packet.scopeddata.PacketScopedDataResult.TYPE,
+                com.mine.geometry_node.core.network.packet.scopeddata.PacketScopedDataResult.STREAM_CODEC);
         add(com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexResult.TYPE,
                 com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexResult.STREAM_CODEC);
         add(com.mine.geometry_node.core.network.packet.faction.PacketFactionResult.TYPE,

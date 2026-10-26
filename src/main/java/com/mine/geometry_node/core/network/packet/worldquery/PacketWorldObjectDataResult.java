@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.worldquery;
 
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -14,13 +14,13 @@ public record PacketWorldObjectDataResult(long requestId, Map<String, Object> va
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketWorldObjectDataResult> STREAM_CODEC = StreamCodec.of(
             (b, p) -> {
                 b.writeLong(p.requestId()); b.writeUtf(p.revision(), 64); b.writeUtf(p.message(), 128);
-                b.writeByteArray(WorldObjectDataValues.encode(p.values(), b.registryAccess(), WorldObjectDataValues.MAX_READ_BYTES));
+                b.writeByteArray(GraphMetadataDataValues.encode(p.values(), b.registryAccess(), GraphMetadataDataValues.MAX_READ_BYTES));
             }, b -> {
                 long id = b.readLong(); String revision = b.readUtf(64), message = b.readUtf(128);
-                return new PacketWorldObjectDataResult(id, WorldObjectDataValues.decode(b.readByteArray(WorldObjectDataValues.MAX_READ_BYTES), b.registryAccess()), revision, message);
+                return new PacketWorldObjectDataResult(id, GraphMetadataDataValues.decode(b.readByteArray(GraphMetadataDataValues.MAX_READ_BYTES), b.registryAccess()), revision, message);
             });
     public PacketWorldObjectDataResult {
-        values = WorldObjectDataValues.snapshot(values);
+        values = GraphMetadataDataValues.snapshot(values);
         Objects.requireNonNull(revision); Objects.requireNonNull(message);
         if (message.length() > 128 || !revision.isEmpty() && !revision.matches("[0-9a-f]{64}"))
             throw new IllegalArgumentException("Invalid custom data result");

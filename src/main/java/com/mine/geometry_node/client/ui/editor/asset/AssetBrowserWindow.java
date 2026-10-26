@@ -32,7 +32,6 @@ import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
-import net.minecraft.network.chat.Component;
 import java.io.File;
 import java.util.HashSet;
 import java.util.List;
@@ -52,6 +51,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     // Capability requests and the owner generation are confined to the UI thread.
     private long mRemoteGeneration;
     private boolean mRemoteActive = true;
+    private boolean mDisposed;
     private final Set<Integer> mRemoteRequestIds = new HashSet<>();
     private final EditorSessionState.AssetBrowserState mSessionState;
     private final Runnable mSessionChanged;
@@ -141,9 +141,12 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
                         new EditorSidebarState(visible, weight, mPropertiesSidebar.getSelectedPanelId())));
         mPropertiesSidebar.setOnCollapseRequested(() -> mSidebarLayout.setVisible(false, true));
         mPropertiesSidebar.setOnSelectedPanelChanged(id -> persistSidebarState());
-        mBrowserPanel.setSelectionChangedListener(entries ->
-                mPropertiesPanel.bind(entries, mBrowserPanel::refreshFileList));
-        mBrowserPanel.setLocationChangedListener(this::captureLocationState);
+        mBrowserPanel.setSelectionChangedListener(this::bindPropertiesSelection);
+        mBrowserPanel.setLocationChangedListener(() -> {
+            if (mRestoringLocation || mDisposed) return;
+            mPendingRemoteRestore = null;
+            captureLocationState();
+        });
         mSidebarLayout.initialize(sidebarState.visible());
 
         restoreInitialLocation();
@@ -152,6 +155,11 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     private void persistSidebarState() {
         mSidebarLayout.persistState();
+    }
+
+    private void bindPropertiesSelection(List<AssetEntry> selection) {
+        long generation = mRemoteGeneration;
+        mPropertiesPanel.bind(selection, () -> postRemote(generation, mBrowserPanel::refreshFileList));
     }
 
     /**
@@ -211,19 +219,21 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onShow() {
+        if (mDisposed) return;
         boolean reactivate = !mRemoteActive;
         mRemoteActive = true;
         if (reactivate) requestRemoteCapabilities();
         mSidebarLayout.onOwnerShown();
         mTransfers.activate();
         if (mSavedSubscription == null) {
-            mSavedSubscription = mBindings.onDocumentSaved(path -> postRemote(mRemoteGeneration, () ->
+            long generation = mRemoteGeneration;
+            mSavedSubscription = mBindings.onDocumentSaved(path -> postRemote(generation, () ->
                     mBrowserPanel.refreshIfDisplayingLocalFile(path)));
         }
         if (mBrowserPanel != null) {
             mBrowserPanel.activatePanel();
-        }
-        if (mBrowserPanel != null) {
+            // Refresh clears visible entries while loading; rebind the retained selection first.
+            bindPropertiesSelection(mBrowserPanel.getSelectedEntriesSnapshot());
             mBrowserPanel.refreshFileList();
         }
         if (mNavigationPanel != null) {
@@ -233,21 +243,39 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void onHide() {
+        if (mDisposed) return;
+        deactivateOwner();
+        mSidebarLayout.persistState();
+    }
+
+    private void deactivateOwner() {
         cancelRemoteRequests();
         closeSavedSubscription();
         mSidebarLayout.onOwnerHidden();
-        mSidebarLayout.persistState();
+        mTransfers.deactivate();
         if (mBrowserPanel != null) {
             mBrowserPanel.deactivatePanel();
         }
     }
 
     @Override
+    public void onDispose() {
+        if (mDisposed) return;
+        mDisposed = true;
+        deactivateOwner();
+        mSidebarLayout.persistState();
+        mPendingRemoteRestore = null;
+        mRestoringLocation = false;
+        try {
+            mPropertiesPanel.commitPendingEdits();
+        } finally {
+            mTransfers.dispose();
+        }
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
-        closeSavedSubscription();
-        mPropertiesPanel.commitPendingEdits();
-        mTransfers.dispose();
-        cancelRemoteRequests();
+        onHide();
         super.onDetachedFromWindow();
     }
 
@@ -277,47 +305,51 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         return drawable;
     }
 
-    private static String tr(String key) {
-        return Component.translatable(key).getString();
-    }
-
     private void requestRemoteCapabilities() {
         if (!mRemoteActive) return;
         long generation = mRemoteGeneration;
         int requestId = beginRemoteRequest();
         try {
-            RemoteAssetClient.requestCapabilities(requestId, response ->
+            requestRemoteCapabilities(requestId, () ->
                     postRemoteRequest(requestId, generation, () -> {
                         if (mNavigationPanel != null) mNavigationPanel.buildSidebar();
                         if (isRemoteCurrent(generation)) restorePendingRemoteLocation();
-                    }), () -> postRemoteRequest(requestId, generation, () -> { }));
+                    }), () -> postRemoteRequest(requestId, generation, this::abandonPendingRemoteRestore));
         } catch (RuntimeException failure) {
             mRemoteRequestIds.remove(requestId);
+            abandonPendingRemoteRestore();
             System.getLogger(AssetBrowserWindow.class.getName()).log(
                     System.Logger.Level.WARNING, "Could not request remote asset capabilities", failure);
         }
     }
 
+    /** Transport callbacks may arrive off the UI thread; the owner fences their delivery above. */
+    protected void requestRemoteCapabilities(int requestId, Runnable onResult, Runnable onUnavailable) {
+        RemoteAssetClient.requestCapabilities(requestId, response -> onResult.run(), onUnavailable);
+    }
+
     private void restoreInitialLocation() {
         mRestoringLocation = true;
-        String location = mSessionState.location == null ? "LOCAL" : mSessionState.location;
-        if ("FAVORITES".equals(location)) {
-            dispatchNavigateToFavorites();
-            mRestoringLocation = false;
-            return;
-        }
-        if ("REMOTE".equals(location)) {
-            mPendingRemoteRestore = mSessionState.remotePath == null ? "" : mSessionState.remotePath;
-            dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
-            return;
-        }
+        try {
+            String location = mSessionState.location == null ? "LOCAL" : mSessionState.location;
+            if ("FAVORITES".equals(location)) {
+                dispatchNavigateToFavorites();
+                return;
+            }
+            if ("REMOTE".equals(location)) {
+                mPendingRemoteRestore = mSessionState.remotePath == null ? "" : mSessionState.remotePath;
+                dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
+                return;
+            }
 
-        File restored = AssetBrowserPathPolicy.resolveConfigPath(mSessionState.localPath);
-        dispatchNavigateTo(restored != null && restored.isDirectory()
-                ? restored
-                : AssetBrowserPathPolicy.getLocalDraftsDir());
-        mRestoringLocation = false;
-        captureLocationState();
+            File restored = AssetBrowserPathPolicy.resolveConfigPath(mSessionState.localPath);
+            dispatchNavigateTo(restored != null && restored.isDirectory()
+                    ? restored
+                    : AssetBrowserPathPolicy.getLocalDraftsDir());
+        } finally {
+            mRestoringLocation = false;
+            if (mPendingRemoteRestore == null) captureLocationState();
+        }
     }
 
     private void restorePendingRemoteLocation() {
@@ -326,11 +358,20 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         }
         String remotePath = mPendingRemoteRestore;
         mPendingRemoteRestore = null;
-        if (mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
-            mBrowserPanel.navigateToRemote(remotePath);
+        mRestoringLocation = true;
+        try {
+            if (mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
+                mBrowserPanel.navigateToRemote(remotePath);
+            }
+        } finally {
             mRestoringLocation = false;
-            return;
+            captureLocationState();
         }
+    }
+
+    private void abandonPendingRemoteRestore() {
+        if (mPendingRemoteRestore == null) return;
+        mPendingRemoteRestore = null;
         mRestoringLocation = false;
         captureLocationState();
     }
@@ -373,7 +414,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private boolean isRemoteCurrent(long generation) {
-        return mRemoteActive && generation == mRemoteGeneration;
+        return !mDisposed && mRemoteActive && generation == mRemoteGeneration;
     }
 
     private void postRemote(long generation, Runnable action) {
@@ -400,11 +441,11 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
     }
 
     private void cancelRemoteRequests() {
+        if (!mRemoteActive) return;
         mRemoteActive = false;
         mRemoteGeneration++;
         List<Integer> requests = List.copyOf(mRemoteRequestIds);
         mRemoteRequestIds.clear();
         for (int requestId : requests) RemoteAssetClient.cancel(requestId);
-        mTransfers.deactivate();
     }
 }

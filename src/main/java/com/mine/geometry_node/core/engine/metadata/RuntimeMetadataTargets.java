@@ -8,6 +8,7 @@ import com.mine.geometry_node.core.engine.graph.collision.GeometryCollisionServi
 import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
+import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
 import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import net.minecraft.server.MinecraftServer;
@@ -89,6 +90,10 @@ public final class RuntimeMetadataTargets {
                         target.reference(), ScopedStateNamespace.PUBLIC));
     }
 
+    /**
+     * Shared node-facing resource entry point. Extension graph resource types register an adapter under
+     * their resource type ID with {@link GraphTarget}; no node-specific type switch is required.
+     */
     public static MetadataCapabilities.Access resolve(MinecraftServer server, GraphResourceReferences.Reference reference) {
         return resolve(MetadataCapabilities.GLOBAL, server, reference);
     }
@@ -114,7 +119,14 @@ public final class RuntimeMetadataTargets {
                         new ForceFieldTarget(server, new ForceFieldAddress(address.dimension(), address.key())));
                 case SCHEMATIC_PLACEMENT -> registry.resolve(PlacementMetadataTargets.KIND,
                         PlacementMetadataTargets.target(requireLevel(server, address.dimension()), address.key()));
-                case MARKER -> throw new UnsupportedOperationException("Marker metadata capability is not registered");
+                case MARKER -> registry.resolve(MarkerMetadataTargets.KIND, MarkerMetadataTargets.target(server,
+                        address.viewerId() == null ? MarkerAddress.all(address.key())
+                                : MarkerAddress.self(address.viewerId(), address.key())));
+                case MODEL_COLLISION -> registry.resolve(MODEL_COLLISION,
+                        new ModelCollisionTarget(requireLevel(server, address.dimension()),
+                                GraphResourceReferences.modelCollisionIdentity(address)));
+                case SCENE_OBJECT -> registry.resolve(SceneMetadataTargets.KIND,
+                        SceneMetadataTargets.target(server, address.dimension().identifier().toString(), UUID.fromString(address.key())));
             };
         };
     }

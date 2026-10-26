@@ -28,6 +28,7 @@ final class EntityCatalogView extends FrameLayout implements GlobalDataSection, 
     private final SidebarLayoutController sidebarLayout;
     private final UiStateKey<DatabaseViewState.Sidebar> sidebarKey;
     private DatabaseSelection selection;
+    private boolean disposed;
 
     EntityCatalogView(Context context, UiStateContext state) {
         this(context, state, null);
@@ -59,11 +60,21 @@ final class EntityCatalogView extends FrameLayout implements GlobalDataSection, 
         if (details != null) details.refresh();
     }
     private void saveSidebar() {
+        if (disposed) return;
         state.write(sidebarKey, UiStateScopes.GLOBAL,
                 new DatabaseViewState.Sidebar(split.preferredExtentDp(), sidebarLayout.isVisible()));
     }
     @Override public View view() { return this; }
-    @Override public void onShow() { sidebarLayout.onOwnerShown(); table.onShow(); setSelection(table.presentationSelection()); }
-    @Override public void onHide() { table.onHide(); sidebarLayout.onOwnerHidden(); saveSidebar(); }
-    @Override public void onDispose() { onHide(); table.onDispose(); }
+    @Override public void onShow() {
+        if (disposed) return;
+        sidebarLayout.onOwnerShown(); table.onShow(); setSelection(table.presentationSelection());
+    }
+    @Override public void onHide() {
+        if (disposed) return;
+        table.onHide(); sidebarLayout.onOwnerHidden(); saveSidebar();
+    }
+    @Override public void onDispose() {
+        if (disposed) return;
+        onHide(); disposed = true; table.onDispose();
+    }
 }

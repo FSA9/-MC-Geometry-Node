@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGra
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import java.util.Map;
 
-/** Presentation preferences only: never query results, selections or business objects. */
+/** Presentation preferences and in-memory selection keys; never query results or business objects. */
 public final class DatabaseViewState {
     private DatabaseViewState() {}
     public static final String GLOBAL = "global";

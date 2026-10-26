@@ -39,7 +39,7 @@ public final class GraphResourceReferences {
         }
     }
 
-    public enum PublicKind { AREA, FORCE_FIELD, MARKER, SCHEMATIC_PLACEMENT }
+    public enum PublicKind { AREA, FORCE_FIELD, MARKER, SCHEMATIC_PLACEMENT, MODEL_COLLISION, SCENE_OBJECT }
 
     public record PublicReference(PublicKind kind, ResourceKey<Level> dimension, UUID viewerId, String key)
             implements Reference {
@@ -69,6 +69,32 @@ public final class GraphResourceReferences {
             PublicReference validated = new PublicReference(PublicKind.SCHEMATIC_PLACEMENT, dimension, null, key);
             key = validated.key();
         }
+    }
+
+    /** Preserve String and UUID collision identities even when their text is identical. */
+    public record ModelCollisionAddress(ResourceKey<Level> dimension, Object instanceId) {
+        public ModelCollisionAddress {
+            Objects.requireNonNull(dimension, "dimension");
+            if (!(instanceId instanceof String) && !(instanceId instanceof UUID))
+                throw new IllegalArgumentException("Model collision identity must be a String or UUID");
+            new PublicReference(PublicKind.MODEL_COLLISION, dimension, null,
+                    collisionKey(instanceId));
+        }
+    }
+
+    public record SceneObjectAddress(ResourceKey<Level> dimension, UUID objectId) {
+        public SceneObjectAddress {
+            Objects.requireNonNull(dimension, "dimension");
+            Objects.requireNonNull(objectId, "objectId");
+        }
+    }
+
+    public static Object modelCollisionIdentity(PublicReference reference) {
+        if (reference.kind() != PublicKind.MODEL_COLLISION)
+            throw new IllegalArgumentException("Resource is not a model collision");
+        if (reference.key().startsWith("string:")) return value(reference.key().substring(7));
+        if (reference.key().startsWith("uuid:")) return UUID.fromString(reference.key().substring(5));
+        throw new IllegalArgumentException("Invalid model collision identity kind");
     }
 
     /** Reserved prefixes are never treated as ordinary names, including unknown future versions. */
@@ -151,6 +177,19 @@ public final class GraphResourceReferences {
 
     public static String encode(PlacementAddress address) {
         return new PublicReference(PublicKind.SCHEMATIC_PLACEMENT, address.dimension(), null, address.key()).encoded();
+    }
+
+    public static String encode(ModelCollisionAddress address) {
+        return new PublicReference(PublicKind.MODEL_COLLISION, address.dimension(), null,
+                collisionKey(address.instanceId())).encoded();
+    }
+
+    private static String collisionKey(Object identity) {
+        return identity instanceof UUID ? "uuid:" + identity : "string:" + part((String) identity);
+    }
+
+    public static String encode(SceneObjectAddress address) {
+        return new PublicReference(PublicKind.SCENE_OBJECT, address.dimension(), null, address.objectId().toString()).encoded();
     }
 
     private static PublicReference resolvePublic(GraphDataContext context, String stableNodeId, String input,

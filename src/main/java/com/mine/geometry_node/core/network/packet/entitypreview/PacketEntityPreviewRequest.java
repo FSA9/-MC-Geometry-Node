@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.network.packet.entitypreview;
 
-import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewLimits;
-import com.mine.geometry_node.core.engine.system.entitypreview.protocol.EntityPreviewTarget;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewLimits;
+import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;

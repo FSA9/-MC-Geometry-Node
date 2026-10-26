@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.shell.registration;
 
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelRegistry;
-import com.mine.geometry_node.client.ui.editor.graph.sidebar.properties.GraphPropertiesPanel;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.ui.editor.asset.sidebar.transfer.AssetTransferPanel;
 import com.mine.geometry_node.client.ui.editor.game.sidebar.GameViewportSidebarPanel;
 

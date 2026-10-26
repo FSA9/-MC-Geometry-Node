@@ -33,3 +33,11 @@ Each entity may belong to multiple factions, each with its own signed 32-bit ran
 Deleting factions removes the definitions and incoming faction relationships in one commit. It never loads chunks or scans persisted entities. Entity memberships and scores referencing deleted factions remain inert stale references: unchanged entries may survive unrelated edits or be removed; adding or changing a stale entry is rejected. New factions receive new server-generated UUIDs. Profile reads and writes use entity attachments, not vanilla scoreboard teams or tags. Unloaded/dead edit targets are rejected by the existing entity editor before mutation.
 
 The unified cache entry `geometry_node:faction.server.snapshot` owns only the derived encoded snapshot. Clearing it never deletes faction data or resets revisions. The authoritative catalogue is not a clearable cache. The registration closes when its owning server stops.
+
+
+Faction definitions also own custom tags and typed data through `OwnerMetadata`.
+`FactionMetadataTargets` registers both capabilities using server + faction UUID;
+entity membership profiles remain separate. Catalog format 2 preserves metadata
+as bounded NBT and reads format 1 as empty metadata. Empty metadata is omitted so
+upgrading a full legacy catalog does not grow its encoded size. The service rejects
+reentrant writes and persists before notifying subscribed catalog clients.

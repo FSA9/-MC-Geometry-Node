@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.feature.worldquery;
 
 import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
@@ -36,7 +36,7 @@ public final class ClientWorldObjectRepository {
     }
     public record DataSnapshot(Map<String, Object> values, boolean loading, boolean available,
                                boolean editable, boolean pending, String message, boolean fetched) {
-        public DataSnapshot { values = WorldObjectDataValues.snapshot(values); }
+        public DataSnapshot { values = GraphMetadataDataValues.snapshot(values); }
         public DataSnapshot(Map<String, Object> values, boolean loading, boolean available,
                             boolean editable, boolean pending, String message) {
             this(values, loading, available, editable, pending, message, editable);
@@ -387,7 +387,7 @@ public final class ClientWorldObjectRepository {
                 if (edit && entry.references().containsKey(WorldObjectDataEdits.READ_ONLY_REFERENCE)) return false;
                 if (!edit && slot != null && (slot.loading || slot.pending || !reload && !slot.revision.isEmpty())) return true;
                 if (edit && (slot == null || slot.loading || slot.pending || slot.revision.isEmpty()
-                        || !WorldObjectDataValues.equivalent(slot.values, expected))) return false;
+                        || !GraphMetadataDataValues.equivalent(slot.values, expected))) return false;
                 if (slot == null) {
                     if (dataSlots.size() >= 16) {
                         String oldest = dataSlots.entrySet().stream().filter(item -> item.getValue().requestId == 0)
@@ -436,7 +436,7 @@ public final class ClientWorldObjectRepository {
                 if (!row.key().equals(slot.key) || !slot.token.equals(row.references().get(WorldObjectDataEdits.TARGET_REFERENCE))) return row;
                 Map<String, String> refs = new LinkedHashMap<>(row.references());
                 refs.put(WorldObjectDataEdits.COUNT_REFERENCE, Integer.toString(slot.values.size()));
-                refs.put(WorldObjectDataEdits.SUMMARY_REFERENCE, WorldObjectDataValues.summary(slot.values));
+                refs.put(WorldObjectDataEdits.SUMMARY_REFERENCE, GraphMetadataDataValues.summary(slot.values));
                 if (refs.equals(row.references())) return row;
                 return new WorldObjectEntry(row.key(), row.provider(), row.type(), row.name(), row.dimension(), row.position(), row.bounds(),
                         row.tags(), row.source(), row.lifetime(), row.sceneObjectId(), row.entityId(), refs, row.graphs(), row.entityState());

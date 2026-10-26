@@ -79,7 +79,7 @@ public final class ShopTradeUseStore {
         return GraphEngineServices.INSTANCE.scopedState().get(
                 new GraphRuntimeContext(level, owner),
                 ScopedStateNamespace.SHOP,
-                ScopedStateTarget.shared(),
+                ScopedStateTarget.global(),
                 ShopTradeStateKeyCodec.encode(key)
         );
     }
@@ -89,7 +89,7 @@ public final class ShopTradeUseStore {
         GraphEngineServices.INSTANCE.scopedState().set(
                 new GraphRuntimeContext(level, owner),
                 ScopedStateNamespace.SHOP,
-                ScopedStateTarget.shared(),
+                ScopedStateTarget.global(),
                 ShopTradeStateKeyCodec.encode(key),
                 value
         );

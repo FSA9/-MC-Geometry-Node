@@ -154,15 +154,16 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
 
     public void drawNodeForExport(Canvas canvas, ViewportCamera camera) {
         boolean overlayWasMounted = mOverlayController.isMounted();
-        if (!mOverlayController.ensureMounted(getContext())) {
-            drawNode(canvas, camera);
-            return;
-        }
-
         boolean selected = mIsSelected;
         int commentVisibility = -1;
         boolean canvasSaved = false;
         try {
+            mIsSelected = false;
+            if (!mOverlayController.ensureMounted(getContext())) {
+                drawNode(canvas, camera);
+                return;
+            }
+
             int widthPx = UIUtils.dp2pxInt(mWidth);
             int heightPx = UIUtils.dp2pxInt(mTotalHeight);
             int left = getLeft();
@@ -174,7 +175,6 @@ public class UINode extends FrameLayout implements NodeVisualAdapter {
             layout(left, top, left + widthPx, top + heightPx);
 
             commentVisibility = mOverlayController.hideCommentPopupForExport();
-            mIsSelected = false;
             canvas.save();
             canvasSaved = true;
             canvas.translate(camera.uiToScreenX(mLogicX), camera.uiToScreenY(mLogicY));

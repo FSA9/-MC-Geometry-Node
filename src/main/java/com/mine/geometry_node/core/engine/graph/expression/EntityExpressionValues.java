@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.graph.expression;
 
-import com.mine.geometry_node.core.engine.system.display.DisplayTransformController;
+import com.mine.geometry_node.core.engine.system.entity.display.DisplayTransformController;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.util.Mth;

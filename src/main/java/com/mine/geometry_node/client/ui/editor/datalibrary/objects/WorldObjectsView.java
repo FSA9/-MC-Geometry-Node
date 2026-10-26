@@ -7,6 +7,9 @@ import com.mine.geometry_node.client.input.binding.KeyBinding;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
 import com.mine.geometry_node.client.feature.worldquery.ClientWorldObjectRepository;
 import com.mine.geometry_node.client.feature.entity.index.ClientEntityIndex;
+import com.mine.geometry_node.client.feature.faction.ClientFactionRepository;
+import com.mine.geometry_node.client.ui.components.integration.faction.FactionCatalogSubscription;
+import com.mine.geometry_node.client.ui.components.integration.faction.FactionUi;
 import com.mine.geometry_node.client.ui.components.integration.entity.EntityRegistrationView;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.list.UiNavigationRow;
@@ -48,6 +51,8 @@ import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObject
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import static com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter.*;
+import static com.mine.geometry_node.client.ui.editor.datalibrary.objects.WorldObjectPresentation.*;
+import com.mine.geometry_node.client.integration.game.WorkspaceWorldObjectNavigation;
 import com.mine.geometry_node.core.node.RegistryDataManager;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
@@ -83,6 +88,7 @@ public final class WorldObjectsView extends FrameLayout {
     private final LinearLayout rows;
     private final UiTableBatchWork rowBatch;
     private final NativeTypeLabels nativeTypeLabels;
+    private final FactionCatalogSubscription factionSubscription;
 
     /** Client registry seam: tests supply labels without booting Minecraft or an FML loader. */
     interface NativeTypeLabels {
@@ -128,7 +134,6 @@ public final class WorldObjectsView extends FrameLayout {
         else values.addAll(List.of(
             UiTableStyle.column("name", 240),
             UiTableStyle.column("type", 140),
-            UiTableStyle.column("registry_type", 180),
             UiTableStyle.column("value", 120),
             UiTableStyle.column("dimension", 150),
             UiTableStyle.column("position", 180),
@@ -137,7 +142,8 @@ public final class WorldObjectsView extends FrameLayout {
             UiTableStyle.column("tags", 180),
             UiTableStyle.column("data", 220),
             UiTableStyle.column("graphs", 220)));
-        if (mode == Mode.ENTITIES) values.add(UiTableStyle.column("updated", 180));
+        if (mode == Mode.ENTITIES) values.addAll(List.of(
+                UiTableStyle.column("factions", 220), UiTableStyle.column("updated", 180)));
         return new UiTableColumns(values, UiTableColumns.Sizing.INDEPENDENT);
     }
     private int columnIndex(String id) {
@@ -221,6 +227,8 @@ public final class WorldObjectsView extends FrameLayout {
         super(context);
         if (faction != null && mode != Mode.ENTITIES) throw new IllegalArgumentException("Faction members require entity mode");
         this.faction = faction;
+        factionSubscription = mode == Mode.ENTITIES
+                ? new FactionCatalogSubscription(this, ClientFactionRepository.INSTANCE, this::refreshFactionCells) : null;
         factionOwnerScope = UiStateScopes.current();
         this.mode = Objects.requireNonNull(mode); columns = createColumns(mode);
         entityFilter = new WorldObjectEntityFilter(mode == Mode.ENTITIES ? Scope.ENTITIES : Scope.WORLD_OBJECTS,
@@ -288,7 +296,9 @@ public final class WorldObjectsView extends FrameLayout {
             String key = columns.column(index).id();
             String caption = key.equals("data") ? "data.title" : key.equals("updated") ? "updated"
                     : mode == Mode.ENTITIES && key.equals("value") ? "entity_preview" : null;
-            if (caption != null)
+            if (key.equals("factions"))
+                tableHeader.addView(UiTableStyle.cell(context, FactionUi.tr("factions"), UiThemes.EDITOR.text().normal()), new ViewGroup.LayoutParams(-1, -1));
+            else if (caption != null)
                 tableHeader.addView(UiTableStyle.cell(context, tr(caption), UiThemes.EDITOR.text().normal()), new ViewGroup.LayoutParams(-1, -1));
             else addHeader(key);
         }
@@ -378,7 +388,7 @@ public final class WorldObjectsView extends FrameLayout {
         WorldObjectQuery nextQuery = buildQuery(next, nextRange, nextRegistryType, nextGraphFilter, category, provider);
         cancelMount();
         columnFilters = next;
-        registryTypeFilter = nextRegistryType;
+        registryTypeFilter = mode == Mode.ENTITIES ? nextRegistryType : "";
         graphFilter = nextGraphFilter;
         range = nextRange;
         selected.clear(); anchorKey = null; resetDoubleClick();
@@ -461,7 +471,11 @@ public final class WorldObjectsView extends FrameLayout {
                     graphFilter.type(), graphFilter.name(), this::applyGraphs);
         }
     }
-    private void queryNow() { if (restoringState) return; saveState(); query(); }
+    private void queryNow() {
+        if (restoringState || !shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        saveState();
+        query();
+    }
     private void query() {
         if (!shown || disposed || faction != null && !Objects.equals(factionOwnerScope, UiStateScopes.current())) return;
         cancelMount();
@@ -492,7 +506,7 @@ public final class WorldObjectsView extends FrameLayout {
         return new WorldObjectQuery(nextRange, "", one(nextProvider), Set.of(), "",
                 Set.of(), Set.of(), Set.of(),
                 128, WorldObjectQuery.MAX_RESULTS, effectiveFilters, Set.of(), compileNameFallbacks(filters.name()),
-                nextRegistryType, nextGraphFilter).withEntityFilter(effectiveEntityFilter());
+                mode == Mode.ENTITIES ? nextRegistryType : "", nextGraphFilter).withEntityFilter(effectiveEntityFilter());
     }
     private Set<String> compileNameFallbacks(String keyword) {
         if (keyword.isEmpty()) return Set.of();
@@ -630,7 +644,7 @@ public final class WorldObjectsView extends FrameLayout {
     private List<WorldObjectEntry> sortedEntries() {
         Comparator<WorldObjectEntry> comparator = switch (sort) {
             case "registered" -> Comparator.comparing(e -> e.entityState() != null && e.entityState().registered());
-            case "loaded" -> Comparator.comparing(WorldObjectsView::isLoaded);
+            case "loaded" -> Comparator.comparing(WorldObjectPresentation::isLoaded);
             case "type" -> Comparator.comparing(this::displayType, String.CASE_INSENSITIVE_ORDER);
             case "registry_type" -> Comparator.comparing(WorldObjectEntries::registryType, String.CASE_INSENSITIVE_ORDER);
             case "dimension" -> Comparator.comparing(WorldObjectEntry::dimension);
@@ -647,7 +661,7 @@ public final class WorldObjectsView extends FrameLayout {
         return snapshot.entries().stream().filter(e -> mode != Mode.ENTITIES || effectiveEntityFilter().matches(e))
                 .filter(e -> category == null || category.matches(e))
                 .filter(e -> provider.isEmpty() || provider.equals(e.provider()))
-                .filter(e -> WorldObjectQuery.matchesRegistryType(e, registryTypeFilter))
+                .filter(e -> mode != Mode.ENTITIES || WorldObjectQuery.matchesRegistryType(e, registryTypeFilter))
                 .filter(e -> graphFilter.matches(e.graphs()))
                 .filter(e -> columnFilters.matches(displayName(e), WorldObjectQuery.filterType(e), WorldObjectQuery.numericValue(e),
                         e.dimension(), e.position().x, e.position().y, e.position().z, e.lifetime(), e.tags())).sorted(comparator.thenComparing(WorldObjectEntry::key)).toList();
@@ -657,9 +671,6 @@ public final class WorldObjectsView extends FrameLayout {
         return presentation == null ? typeLabel(entry.provider(), entry.type()) : Component.translatable(presentation.labelKey()).getString();
     }
     private String displayName(WorldObjectEntry entry) { return entry.name().isEmpty() ? typeLabel(entry.provider(), entry.type()) : entry.name(); }
-    private static List<String> graphNames(WorldObjectEntry entry) {
-        return entry.graphs().stream().map(graph -> graph.name().isEmpty() ? graph.id() : graph.name()).toList();
-    }
     private void rebuildRows() {
         List<WorldObjectEntry> entries = sortedEntries();
         if (entries.equals(mountedEntries) && typeCatalog.equals(mountedTypes)) {
@@ -721,7 +732,7 @@ public final class WorldObjectsView extends FrameLayout {
         if (mode == Mode.WORLD) updateText(cells, columnIndex("name"), displayName(entry));
         if (mode == Mode.ENTITIES) bindRegistration((EntityRegistrationView)cells.getChildAt(columnIndex(typeColumnId())), entry);
         else updateText(cells, columnIndex(typeColumnId()), displayType(entry));
-        updateText(cells, columnIndex("registry_type"), WorldObjectEntries.registryType(entry));
+        if (mode == Mode.ENTITIES) updateText(cells, columnIndex("registry_type"), WorldObjectEntries.registryType(entry));
         binding.checkbox().setContentDescription(displayName(entry));
         int valueColumn = columnIndex("value");
         View value = cells.getChildAt(valueColumn);
@@ -741,9 +752,11 @@ public final class WorldObjectsView extends FrameLayout {
         if (mode == Mode.ENTITIES) updateText(cells, columnIndex("updated"), capturedAt(entry));
         ((UiTagStrip) cells.getChildAt(columnIndex("tags"))).setTags(entry.tags());
         ((UiTagStrip) cells.getChildAt(columnIndex("graphs"))).setTags(graphNames(entry));
+        if (mode == Mode.ENTITIES)
+            ((UiTagStrip) cells.getChildAt(columnIndex("factions"))).setTags(factionNames(entry));
         WorldObjectEntry previous = binding.entry();
         if (dataCount(previous) != dataCount(entry) || !previous.references().equals(entry.references())
-                || isNativeEntity(previous) != isNativeEntity(entry))
+                || isNativeEntity(previous) != isNativeEntity(entry) || isLoaded(previous) != isLoaded(entry))
             bindDataSummary((UiDataSummaryCell) cells.getChildAt(columnIndex("data")), entry);
         int baseColor = UiTableStyle.rowColor(index % 2 != 0);
         binding.button().setPalette(UiTableStyle.rowPalette(selected.contains(key), baseColor));
@@ -757,8 +770,16 @@ public final class WorldObjectsView extends FrameLayout {
         TextView cell = (TextView) row.getChildAt(column);
         if (!value.contentEquals(cell.getText())) cell.setText(value);
     }
-    private static boolean hasEntityPreview(WorldObjectEntry entry) {
-        return entry.provider().equals("native") && !entry.type().equals("minecraft:interaction");
+    private List<String> factionNames(WorldObjectEntry entry) {
+        var repository = ClientFactionRepository.INSTANCE;
+        return WorldObjectPresentation.factionNames(entry, repository.snapshot(),
+                FactionUi.tr(repository.loaded() ? "deleted" : "unavailable"));
+    }
+    /** Catalog renames update only the existing chips, preserving rows, focus and entity previews. */
+    private void refreshFactionCells() {
+        if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
+        for (RowBinding binding : rowBindings.values())
+            ((UiTagStrip) binding.cells().getChildAt(columnIndex("factions"))).setTags(factionNames(binding.entry()));
     }
     private View createValueCell(WorldObjectEntry entry, UiTableRow row) {
         if (!hasEntityPreview(entry)) return UiTableStyle.cell(getContext(), "", UiThemes.EDITOR.text().normal());
@@ -773,21 +794,6 @@ public final class WorldObjectsView extends FrameLayout {
         catch (IllegalArgumentException ignored) { }
         // The shared preview setter is idempotent for an unchanged UUID and dimension.
         preview.setReference(entityId, entry.dimension());
-    }
-    private static UUID entityId(WorldObjectEntry entry) {
-        return entry.entityState() != null ? entry.entityState().entityUuid()
-                : UUID.fromString(entry.references().getOrDefault("entityUuid", ""));
-    }
-    private static boolean isLoaded(WorldObjectEntry entry) {
-        return entry.entityState() == null || entry.entityState().loaded();
-    }
-    private static boolean isAlive(WorldObjectEntry entry) {
-        return entry.entityState() == null || entry.entityState().alive();
-    }
-    private static String capturedAt(WorldObjectEntry entry) {
-        if (entry.entityState() == null || entry.entityState().capturedAtMillis() <= 0) return "—";
-        return java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-                .withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.ofEpochMilli(entry.entityState().capturedAtMillis()));
     }
     private static void bindRegistration(EntityRegistrationView view, WorldObjectEntry entry) {
         var state = entry.entityState();
@@ -832,9 +838,13 @@ public final class WorldObjectsView extends FrameLayout {
                     bindRegistration(registration, entry); line.addView(registration, new ViewGroup.LayoutParams(-1, -1));
                 }
                 case "value" -> line.addView(createValueCell(entry, line), new ViewGroup.LayoutParams(-1, -1));
-                case "tags", "graphs" -> {
+                case "tags", "graphs", "factions" -> {
                     UiTagStrip tags = new UiTagStrip(getContext());
-                    tags.setTags(id.equals("tags") ? entry.tags() : graphNames(entry));
+                    tags.setTags(switch (id) {
+                        case "tags" -> entry.tags();
+                        case "graphs" -> graphNames(entry);
+                        default -> factionNames(entry);
+                    });
                     line.addView(tags, new ViewGroup.LayoutParams(-1, -1));
                 }
                 case "data" -> {
@@ -1040,10 +1050,6 @@ public final class WorldObjectsView extends FrameLayout {
                         ? new DatabaseSelection.DataEditor(stateScope + ":" + entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
                         dataCount(entry), dataBinding(entry), !nativeEntity) : null);
     }
-    private static int dataCount(WorldObjectEntry entry) {
-        try { return Math.max(0, Integer.parseInt(entry.references().getOrDefault(WorldObjectDataEdits.COUNT_REFERENCE, "0"))); }
-        catch (NumberFormatException invalid) { return 0; }
-    }
     private DataDictionaryBinding dataBinding(WorldObjectEntry entry) {
         var source = session;
         String scope = stateScope;
@@ -1060,13 +1066,6 @@ public final class WorldObjectsView extends FrameLayout {
         updateSelection();
         UiDataDictionaryEditor.show(this, displayName(live) + " · " + tr(mode == Mode.ENTITIES ? "entities" : "world"), dataBinding(live));
     }
-    private static DatabaseSelection.EntityPreview entityPreview(WorldObjectEntry entry) {
-        if (!entry.provider().equals("native") || entry.type().equals("minecraft:interaction")) return null;
-        try {
-            return new DatabaseSelection.EntityPreview(entityId(entry),
-                    entry.dimension(), null);
-        } catch (IllegalArgumentException invalid) { return null; }
-    }
     private void submitTagEdit(WorldObjectEntry expected, String tag, boolean add) {
         if (!canSelect() || selected.size() != 1 || !selected.contains(expected.key()))
             throw new IllegalStateException("Stale tag selection");
@@ -1079,15 +1078,6 @@ public final class WorldObjectsView extends FrameLayout {
         if (!(add ? session.addTag(live, tag) : session.removeTag(live, tag)))
             throw new IllegalStateException("Tag edit rejected");
     }
-    private static String number(double value) {return String.format(Locale.ROOT,"%.2f",value);}
-    private static String position(WorldObjectEntry entry) {
-        return String.format(Locale.ROOT, "%.1f, %.1f, %.1f", entry.position().x, entry.position().y, entry.position().z);
-    }
-    private static boolean isNativeEntity(WorldObjectEntry entry) {
-        if (!entry.provider().equals("native")) return false;
-        try { entityId(entry); return true; }
-        catch (IllegalArgumentException invalid) { return false; }
-    }
     private static String entityEditLabel() {
         return Component.translatable("geometry_node.entity_editor.edit").getString();
     }
@@ -1098,7 +1088,7 @@ public final class WorldObjectsView extends FrameLayout {
             WorkspaceEntityEditor.show(this, entries.getFirst(), this::queryNow);
     }
     private void focusSelected() {
-        if (canSelect() && !selectedEntries().isEmpty()) setStatus(WorldObjectNavigation.focus(selectedEntries()));
+        if (canSelect() && !selectedEntries().isEmpty()) setStatus(WorkspaceWorldObjectNavigation.focus(selectedEntries()));
     }
     private void saveState() {
         if (restoringState || stateScope == null) return;
@@ -1112,7 +1102,7 @@ public final class WorldObjectsView extends FrameLayout {
         uiState.write(mode == Mode.ENTITIES ? DatabaseViewState.ENTITIES : DatabaseViewState.WORLD, tableStateScope(), new DatabaseViewState.World(
                 "", "", range.name(),
                 "", provider, "", "", "", category == null ? "" : category.id(),
-                extraProvider, sort, sortAscending, registryTypeFilter));
+                extraProvider, sort, sortAscending, mode == Mode.ENTITIES ? registryTypeFilter : ""));
     }
     private void switchScope() {
         cancelMount();
@@ -1150,7 +1140,7 @@ public final class WorldObjectsView extends FrameLayout {
                     selected.clear(); selected.addAll(uiState.read(DatabaseViewState.ENTITY_SELECTION, stateScope).keys());
                 }
             }
-            registryTypeFilter = value.registryType();
+            registryTypeFilter = mode == Mode.ENTITIES ? value.registryType() : "";
             try { range = WorldObjectQuery.Range.valueOf(value.range()); }
             catch (IllegalArgumentException ignored) { range = WorldObjectQuery.Range.GLOBAL; }
             // Migrate former single-choice filters into the independent in-memory column state.
@@ -1165,6 +1155,7 @@ public final class WorldObjectsView extends FrameLayout {
             if (mode == Mode.ENTITIES || category != null && category.id().equals("entity")) category = null;
             if (mode == Mode.ENTITIES) { provider = extraProvider = ""; range = WorldObjectQuery.Range.GLOBAL; }
             sort = mode == Mode.ENTITIES && value.sort().equals("name") ? "registry_type" : value.sort();
+            if (mode == Mode.WORLD && sort.equals("registry_type")) sort = "name";
             sortAscending = value.ascending();
         } finally { restoringState = false; }
     }
@@ -1174,6 +1165,7 @@ public final class WorldObjectsView extends FrameLayout {
             switchScope();
         }
         shown = true;
+        if (factionSubscription != null && !Boolean.getBoolean("gn.standalone")) factionSubscription.open();
         if (mode == Mode.ENTITIES) ClientEntityIndex.INSTANCE.addChangeListener(registrationChanged);
         if (!Boolean.getBoolean("gn.standalone")) queryNow(); else refresh();
     }
@@ -1181,6 +1173,7 @@ public final class WorldObjectsView extends FrameLayout {
         cancelMount();
         saveState();
         shown = false; resetDoubleClick(); removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); dismissMenu();
+        if (factionSubscription != null) factionSubscription.close();
         ClientEntityIndex.INSTANCE.removeChangeListener(registrationChanged); removeCallbacks(registrationTask);
         updateInteractionState();
     }

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint;
 
 import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
-import com.mine.geometry_node.client.ui.editor.graph.preview.EditorPreviewController;
+import com.mine.geometry_node.client.integration.graph.GraphEditorPreviews;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays.ShopEditorOverlay;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.dialogue.OpenShop;
@@ -32,11 +32,11 @@ public final class ButtonHintActionDispatcher {
             return;
         }
         if (ShowDialoguePage.ACTION_PREVIEW.equals(safeAction)) {
-            EditorPreviewController.previewDialogue(nodeData);
+            GraphEditorPreviews.previewDialogue(nodeData);
             return;
         }
         if (OpenShop.ACTION_PREVIEW.equals(safeAction)) {
-            EditorPreviewController.previewShop(nodeData);
+            GraphEditorPreviews.previewShop(nodeData);
             return;
         }
 

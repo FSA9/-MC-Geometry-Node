@@ -69,7 +69,10 @@ public final class ViewportSceneMenus {
                 String name=Component.translatable(entry.labelKey()).getString();
                 if(!name.toLowerCase(java.util.Locale.ROOT).contains(needle)&&!entry.typeId().contains(needle))continue;
                 View row=createItem(name,snapshot.canEdit()&&!snapshot.pending(),()->{
-                    if(token!=epoch||!isOpen())return;dismiss();
+                    if(token!=epoch||!isOpen())return;
+                    var current=ClientSceneService.INSTANCE.snapshot();
+                    if(current.worldGeneration()!=snapshot.worldGeneration()||!current.canEdit()||current.pending())return;
+                    dismiss();
                     if(entry.layer()!=null){state.setVisible(entry.layer(),true);state.setSelectable(entry.layer(),true);}
                     if(entry.layer()==ViewportVisualization.Layer.INTERACTION)state.setHelpers(true);
                     entry.create().accept(snapshot.worldGeneration(),position);created.run();changed.run();
@@ -89,11 +92,13 @@ public final class ViewportSceneMenus {
     public void modes(View anchor, com.mine.geometry_node.client.ui.editor.game.ViewportMode current,
                       Consumer<com.mine.geometry_node.client.ui.editor.game.ViewportMode> select) {
         dismiss();
+        long token = epoch;
         LinearLayout column = column();
         for (var mode : com.mine.geometry_node.client.ui.editor.game.ViewportMode.values()) {
             String name = Component.translatable("geometry_node.game_view.mode."
                     + mode.name().toLowerCase(java.util.Locale.ROOT)).getString();
             column.addView(createItem((mode == current ? "✓ " : "   ") + name, true, () -> {
+                if (token != epoch || !isOpen()) return;
                 dismiss();
                 select.accept(mode);
             }), new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(30)));

@@ -46,7 +46,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -226,10 +225,7 @@ final class DataLibraryValueEditors {
         if (entry.type() == PortType.ENTITY || entry.type() == PortType.ENTITY_TEMPLATE) {
             EntityTemplatePreviewView preview = createEntityPreview(entry, current);
             if (entry.value() instanceof EntityTemplateValue template) preview.setDisplayTemplate(template);
-            else if (entry.value() instanceof UUID entityId) {
-                Entity entity = resolveClientEntity(entityId);
-                if (entity != null) preview.setDisplayTemplate(EntityTemplateValue.capture(entity));
-            }
+            else if (entry.value() instanceof UUID entityId) preview.setDisplayReference(entityId, "");
             UiIconButton edit = editButton(tr(entry.type() == PortType.ENTITY
                     ? "geometry_node.data_library.choose_entity" : "geometry_node.ui.edit_template"));
             edit.setOnClickListener(v -> editEntityValue(entry, current));
@@ -679,12 +675,6 @@ final class DataLibraryValueEditors {
         } catch (RuntimeException ignored) {
             // Keep the previous valid value; malformed text never corrupts the library file.
         }
-    }
-
-    private static Entity resolveClientEntity(UUID entityId) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft == null || minecraft.level == null) return null;
-        return minecraft.level.getEntity(entityId);
     }
 
     private static String tr(String key) {

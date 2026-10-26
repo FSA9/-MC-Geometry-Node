@@ -70,7 +70,7 @@ final class ScopedStateNodeSupport {
         return switch (scope) {
             case AREA -> area != null ? ScopedStateTarget.area(area) : null;
             case OWNER -> entity != null ? ScopedStateTarget.owner(entity) : null;
-            case SHARED -> ScopedStateTarget.shared();
+            case GLOBAL -> ScopedStateTarget.global();
             case GROUP -> entity != null ? ScopedStateTarget.group(entity) : null;
             case WORLD -> {
                 String dimension = dimension(context);

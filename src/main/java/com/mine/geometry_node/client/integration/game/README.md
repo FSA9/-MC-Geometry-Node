@@ -5,6 +5,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `WorkspaceViewportIntegration` | 应用启动时安装发布工厂、工作区宿主策略和原生场景订阅条件。 |
+| `WorkspaceWorldObjectNavigation` | 在动作发生时查找仍有效的可见视口，将查询结果定位到场景；隔离数据库与具体游戏 Area 的交叉引用。 |
 | `GameFrameImage` | GAME 画面查询/绘制和 EDIT 的 `drawPresented` 入口；从 runtime 借用已有通道，保持 session 准入与录制锁范围。 |
 | `GameFrameImage.Channel` | `ViewportFramePublication` 的具体实现，将 MC 的外部 GL 纹理包装成 Arc3D 图像，管理发布引用和 Canvas 录制。 |
 

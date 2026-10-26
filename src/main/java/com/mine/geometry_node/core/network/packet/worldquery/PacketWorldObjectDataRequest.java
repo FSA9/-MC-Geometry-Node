@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network.packet.worldquery;
 
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -15,11 +15,11 @@ public record PacketWorldObjectDataRequest(long requestId, String target, String
             (b, p) -> {
                 b.writeLong(p.requestId()); b.writeUtf(p.target(), 36); b.writeUtf(p.key(), 1024);
                 b.writeUtf(p.expectedRevision(), 64);
-                if (p.edit()) b.writeByteArray(WorldObjectDataValues.encode(p.replacement(), b.registryAccess(), WorldObjectDataValues.MAX_WRITE_BYTES));
+                if (p.edit()) b.writeByteArray(GraphMetadataDataValues.encode(p.replacement(), b.registryAccess(), GraphMetadataDataValues.MAX_WRITE_BYTES));
             }, b -> {
                 long id = b.readLong(); String target = b.readUtf(36), key = b.readUtf(1024), revision = b.readUtf(64);
                 Map<String, Object> values = revision.isEmpty() ? Map.of()
-                        : WorldObjectDataValues.decode(b.readByteArray(WorldObjectDataValues.MAX_WRITE_BYTES), b.registryAccess());
+                        : GraphMetadataDataValues.decode(b.readByteArray(GraphMetadataDataValues.MAX_WRITE_BYTES), b.registryAccess());
                 return new PacketWorldObjectDataRequest(id, target, key, revision, values);
             });
     public PacketWorldObjectDataRequest {
@@ -28,7 +28,7 @@ public record PacketWorldObjectDataRequest(long requestId, String target, String
                 || !expectedRevision.isEmpty() && !expectedRevision.matches("[0-9a-f]{64}"))
             throw new IllegalArgumentException("Invalid custom data request identity");
         UUID.fromString(target);
-        replacement = WorldObjectDataValues.snapshot(replacement);
+        replacement = GraphMetadataDataValues.snapshot(replacement);
         if (expectedRevision.isEmpty() && !replacement.isEmpty()) throw new IllegalArgumentException("Read cannot carry replacement data");
     }
     public boolean edit() { return !expectedRevision.isEmpty(); }

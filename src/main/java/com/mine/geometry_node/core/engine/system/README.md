@@ -11,6 +11,7 @@
 | `asset/transfer` | 传输入口及限制；`model` 是任务、文件、策略、状态和结果快照，`io` 是有界 IO、散列和原子提交。入口只有一个服务，不单设 `service` 空层。 |
 | `chunkloading` | 实体持有的强加载配置、票据恢复和持久化。三个类共同组成一个功能，不拆成单类配置/服务/存储包。 |
 | `datalibrary` | `model` 管理条目、目录树、身份、指纹、值表示；`storage` 管理文档 JSON、加载诊断、文件原子写入和路径；`service` 管理权威快照、元数据能力和异步仓库接入；`runtime` 管理蓝图写入及等待。 |
+| `scopeddata` | GLOBAL／维度 PUBLIC 数据的远程权限、目录、读取、CAS 与连接限速；复用 scoped state 存储，不承载 UI 或新的字典容器。 |
 | `dialogue` | 根包是运行时、会话生命周期、等待及交易执行的内部协作簇。`model`/`model/shop` 定义页面数据，`presenter` 定义展示通道，`richtext` 处理文本规范和解析，`storage` 管理交易次数的持久状态。 |
 | `display` | 原生 Display 实体的姿态、pivot 和变换控制；不与 CPU 模型的数学表示混放。 |
 | `entity` | 原生 Interaction 实体创建边界；不额外建立单类 `factory` 包。 |

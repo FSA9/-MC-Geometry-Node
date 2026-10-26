@@ -397,12 +397,7 @@ public final class DataLibraryView extends LinearLayout {
                                          List<DataLibraryRepository.Entry> right) {
         if (right == null || left.size() != right.size()) return false;
         for (int i = 0; i < left.size(); i++) {
-            var entry = left.get(i);
-            var previous = right.get(i);
-            if (!entry.id().equals(previous.id()) || entry.type() != previous.type()
-                    || !Objects.equals(entry.parentId(), previous.parentId())
-                    || !Objects.equals(entry.key(), previous.key())
-                    || !Objects.equals(entry.tags(), previous.tags()) || !sameValue(entry, previous)) return false;
+            if (!left.get(i).sameContent(right.get(i))) return false;
         }
         return true;
     }

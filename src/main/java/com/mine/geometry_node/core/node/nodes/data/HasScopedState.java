@@ -31,6 +31,7 @@ public final class HasScopedState extends BaseNode {
     private NodeDef buildDefinition(ScopedStateScope scope) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.DATA,
                         Component.translatable("geometry_node.node.has_scoped_state"))
+                .addMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, true)
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .output(StandardPorts.BOOL, "bool")

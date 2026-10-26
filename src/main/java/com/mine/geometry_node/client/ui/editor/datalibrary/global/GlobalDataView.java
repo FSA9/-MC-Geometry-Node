@@ -46,7 +46,8 @@ public final class GlobalDataView extends LinearLayout {
     public GlobalDataView(Context context, UiStateContext state) {
         this(context, state, List.of(
                 new Section("entities", "geometry_node.database.entities", EntityCatalogView::new),
-                new Section("factions", "geometry_node.faction.factions", FactionCatalogView::new)));
+                new Section("factions", "geometry_node.faction.factions", FactionCatalogView::new),
+                new Section("data", "geometry_node.database.data.title", ScopedDataCatalogView::new)));
     }
     public GlobalDataView(Context context, UiStateContext state, List<Section> definitions) {
         super(context); this.state = Objects.requireNonNull(state); setOrientation(VERTICAL);

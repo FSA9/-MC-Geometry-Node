@@ -44,6 +44,7 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
     private DatabaseSelection current;
     private boolean initialized;
     private boolean active;
+    private long actionGeneration;
     private View previewView;
     private List<View> sectionViews = List.of();
 
@@ -95,6 +96,7 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
         current = selection;
         updateDataSelection(selection);
         if (unchanged) return;
+        long expectedActions = ++actionGeneration;
         initialized = true;
         if (selection == null) {
             previewView = null;
@@ -127,7 +129,8 @@ public final class DatabaseDetailsPanel extends LinearLayout implements SidebarP
             // Callbacks can change with a new snapshot even if all displayed values stay identical.
             List<DatabaseSelection.Action> actions = IntStream.range(0, selection.actions().size())
                     .mapToObj(index -> new DatabaseSelection.Action(selection.actions().get(index).label(), () -> {
-                        if (current != null && index < current.actions().size()) current.actions().get(index).run().run();
+                        if (active && actionGeneration == expectedActions && current != null && index < current.actions().size())
+                            current.actions().get(index).run().run();
                     })).toList();
             View buttons = DatabaseInspectorViews.actions(getContext(), actions);
             buttons.setLayoutParams(params);

@@ -7,15 +7,16 @@
 | 目录 | 职责 |
 | --- | --- |
 | `library` | 数据仓库的目录树、条目表格、值编辑、拖拽手势与移动校验、条目检查器模型。`DataLibrarySnapshot` 只是渲染索引，不是第二份权威仓库。 |
-| `objects` | 世界对象与实体共用的服务端查询表格，以及定位到视口的区域操作。全局实体和阵营成员复用同一套列、筛选、预览和行更新。 |
-| `global` | 全局数据的分类导航、实体页、阵营列表及单个阵营的基本信息/关系/等级/成员子页。保留表单和订阅的生命周期归该目录所有。 |
+| `objects` | 世界对象与实体共用的服务端查询表格，以及定位动作的展示反馈。全局实体和阵营成员复用同一套列、筛选、预览和行更新。 |
+| `global` | 全局数据的分类导航、实体页、阵营列表及其子页，以及 GLOBAL/维度数据目录。保留表单和订阅的生命周期归该目录所有；具体子页职责见该目录 README。 |
 | `inspector` | 本区域的选择展示模型、选择提供者协议和已注册的属性侧栏。展示等价性不比较回调；保留的控件始终派发到最新选择。 |
 | `state` | 本区域的页签、筛选、列宽、侧栏和分割位置等 UI 状态。包调整不改变已有键名、版本和生命周期。 |
 | `presentation` | 数据库翻译词汇和本区域的紧凑操作按钮样式。通用表格、尺寸转换、预览等直接使用公共组件。 |
 
 ## 公共逻辑边界
 
-- `client/feature/datalibrary`、`client/feature/worldquery`、`client/feature/faction`：仓库 API、异步命令、网络适配和客户端数据处理；不依赖编辑器视图。
+- `client/feature/datalibrary`、`client/feature/worldquery`、`client/feature/faction`、`client/feature/scopeddata`：仓库 API、异步命令、网络适配和客户端数据处理；不依赖编辑器视图。
+- `ui/components/integration/metadata/ScopedDataDictionaryBinding`：将 GLOBAL/维度数据会话适配到公共字典编辑器；会话由父页面拥有，隐藏时保留表单，销毁或连接变化时释放。
 - `client/feature/datalibrary/DataLibraryEntryValues`：条目替换、值比较和序列化；视图不重复实现持久化规则。
 - `ui/components/integration/metadata/RepositoryDataDictionaryBindings`：把仓库能力接到公共数据编辑器；该适配器提供独立编辑会话和冲突保护；独立管理窗口拥有 `openSession()` 返回的 binding 并在写入完成后释放，嵌入编辑器的共享 binding 由父宿主关闭。
 - `ui/workspace/drag/payload/DataLibraryDragPayload`：跨区域传输协议。数据库手势和内部移动校验留在 `library`，图编辑器只依赖此协议。
@@ -37,12 +38,14 @@
 
 阵营 UUID 仅作为内部引用，不在名称、提示和搜索中显示。
 `FactionCatalogSubscription.open()` 负责进入页面时刷新，关闭只分离展示订阅。
-`FactionRichField`、`FactionRelationsView` 等公共控件仍由 `components/integration/faction` 维护。
+`FactionRichField`、`FactionRelationsView`、`FactionTagsView` 等公共控件仍由 `components/integration/faction` 维护。
+`FactionDataDictionaryBinding` 把阵营自身 metadata 接入公共字典编辑器，数据页位于阵营成员之后。
+数据页懒创建并保留草稿；切出前 suspend，返回 resume，删除或连接变化时 dispose。标签增删和字典替换都提交到原有阵营仓库，不在 UI 中保存第二份业务数据。
 
 ## 关键文件与新增代码位置
 
 - `library/DataLibraryView` 协调仓库快照、树/表格、过滤和选择；`DataLibraryTreeLayout`、`EntryCard`、`Toolbar` 负责布局与行展示；`ValuePresentation/ValueEditors` 分开格式化和编辑提交。`DataLibrarySelection`、`ScrollAnchor` 保存展示状态，`EntityTypes` 获取实体类型展示信息，`DragSurface/DropPolicy` 管理数据库手势与内部落点校验。新增仓库视图交互放 `library`，条目替换/序列化规则放 `feature/datalibrary`。
-- `objects/WorldObjectsView` 拥有 `ClientWorldObjectRepository.Session`、列与行绑定，`WorldObjectNavigation` 把选中对象定位到场景视口。它服务世界对象、全局实体与阵营成员查询；新增公共查询规则放 `feature/worldquery`，新表格交互留在此包。
+- `objects/WorldObjectsView` 拥有 `ClientWorldObjectRepository.Session`、列与行绑定，`WorldObjectPresentation` 只处理 DTO 展示投影；定位通过 `integration/game/WorkspaceWorldObjectNavigation` 查找当前有效视口。它服务世界对象、全局实体与阵营成员查询；新增公共查询规则放 `feature/worldquery`，新表格交互留在此包。
 - `global/GlobalDataView` 通过 `Section` 定义和 `GlobalDataSection` 生命周期接口组织分类；`EntityCatalogView` 复用对象表格，`FactionCatalogView` 管理列表与保留的 `FactionEditorView`，`FactionRanksView/FactionViewState` 管理等级子页和局部状态。新增全局分类在此实现 section，不新增 Area。
 - `inspector/DatabaseSelection/DatabaseSelectionSource` 提供跨子页的选择投影；`DatabaseDetailsPanel` 是注册侧栏，`DatabaseInspectorViews` 负责控件复用。新增详情展示走此协议；外部可复用实体/数据编辑弹窗进入 `components/integration`。
 - `state/DatabaseViewState` 定义本 Area 稳定状态键、版本和清洗，`presentation/DatabasePresentation` 提供翻译及本区域按钮外观。它们不承接仓库或公共主题职责。

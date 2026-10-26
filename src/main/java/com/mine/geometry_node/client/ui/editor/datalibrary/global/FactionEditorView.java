@@ -5,6 +5,8 @@ import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.navigation.UiSubTabs;
 import com.mine.geometry_node.client.ui.components.integration.faction.*;
+import com.mine.geometry_node.client.ui.components.integration.metadata.UiDataDictionaryEditor;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateScopes;
@@ -33,11 +35,15 @@ final class FactionEditorView extends LinearLayout {
     private final UiDisplayText heading;
     private final FactionRelationsView relations;
     private final FactionRanksView ranks;
+    private final FactionTagsView tags;
     private final UiStateContext state;
     private final String scope;
+    private final long repositoryGeneration;
     private final FrameLayout membersHost;
+    private final FrameLayout dataHost;
     private EntityCatalogView members;
-    private boolean membersShown, disposed;
+    private UiDataDictionaryEditor.Embedded data;
+    private boolean membersShown, dataShown, disposed;
     private final Set<String> initializedSections = new HashSet<>();
     private String section = "info";
     private boolean active;
@@ -47,6 +53,7 @@ final class FactionEditorView extends LinearLayout {
                       Consumer<Supplier<CompletableFuture<Void>>> submit, Consumer<String> changedTab) {
         super(context); this.id = id; this.theme = theme; this.repository = repository;
         this.state = state; this.scope = scope;
+        repositoryGeneration = repository.generation();
         this.editable = editable; this.submit = submit; this.changedTab = changedTab; setOrientation(VERTICAL);
         setBackground(fill(theme.surface().sidebar()));
         LinearLayout identity = new LinearLayout(context); identity.setOrientation(VERTICAL); identity.setPadding(px(18), px(17), px(18), px(17));
@@ -55,8 +62,11 @@ final class FactionEditorView extends LinearLayout {
         addView(identity, new LayoutParams(-1, -2));
         addDivider();
         tabs = new UiSubTabs(context, theme);
-        for (String key : List.of("info", "relations", "ranks", "members")) {
-            tabs.addTab(key, tr(key), () -> { showSection(key); changedTab.accept(key); });
+        for (String key : List.of("info", "relations", "ranks", "members", "data")) {
+            tabs.addTab(key, tr(key), () -> {
+                if (!active || !ownerCurrent()) return;
+                showSection(key); changedTab.accept(key);
+            });
         }
         addView(tabs, new LayoutParams(-1, px(UiSubTabs.HEIGHT)));
         addDivider();
@@ -73,6 +83,13 @@ final class FactionEditorView extends LinearLayout {
             var current = current();
             if (canEdit() && current != null) submit.accept(() -> repository.describe(id, next));
         }); info.addView(description, new LayoutParams(-1, -2));
+        LayoutParams tagsLabel = new LayoutParams(-1, px(28)); tagsLabel.topMargin = px(20);
+        info.addView(label(tr("tags")), tagsLabel);
+        tags = new FactionTagsView(context, theme,
+                () -> { var faction = current(); return faction == null ? List.of() : faction.metadata().tags(); },
+                this::ownerCurrent, () -> canEdit() && section.equals("info"),
+                tag -> repository.addTag(id, tag), tag -> repository.removeTag(id, tag));
+        info.addView(tags, new LayoutParams(-1, -2));
         UiScrollView scroll = new UiScrollView(context, theme.scroll()); scroll.addView(info, new FrameLayout.LayoutParams(-1, -2));
         pages.put("info", scroll);
         relations = new FactionRelationsView(context, theme, repository::snapshot,
@@ -91,11 +108,17 @@ final class FactionEditorView extends LinearLayout {
         pages.put("ranks", ranks);
         membersHost = new FrameLayout(context);
         pages.put("members", membersHost);
+        dataHost = new FrameLayout(context);
+        pages.put("data", dataHost);
         pages.values().forEach(page -> host.addView(page, new FrameLayout.LayoutParams(-1, -1)));
         showSection("info");
     }
     void showSection(String value) {
+        if (disposed) return;
         if (!pages.containsKey(value)) value = "info";
+        // Programmatic focus loss must never complete an unfinished entry.
+        if (!value.equals("data")) syncData(false);
+        if (!value.equals("info")) tags.suspend();
         if (!value.equals("relations")) relations.suspend();
         section = value;
         pages.forEach((key, page) -> page.setVisibility(key.equals(section) ? VISIBLE : GONE));
@@ -103,8 +126,9 @@ final class FactionEditorView extends LinearLayout {
         refresh();
     }
     void setActive(boolean value) {
+        if (disposed) return;
         active = value;
-        if (!value) relations.suspend();
+        if (!value) { syncData(false); tags.suspend(); relations.suspend(); }
         ranks.setActive(value && section.equals("ranks")); refresh();
     }
     void refresh() {
@@ -112,6 +136,9 @@ final class FactionEditorView extends LinearLayout {
         FactionDefinition faction = current(); if (faction == null) { deactivate(); return; }
         syncMembers(active && section.equals("members") && repository.loaded()
                 && Objects.equals(scope, UiStateScopes.current()));
+        syncData(active && section.equals("data") && repository.loaded() && ownerCurrent());
+        if (active && section.equals("info")) tags.resume(); else tags.suspend();
+        if (data != null) data.refreshCommitted();
         heading.setText(FactionTextViews.display(faction.name())); name.refresh(faction.name()); description.refresh(faction.description());
         name.setEditable(canEdit() && section.equals("info")); description.setEditable(canEdit() && section.equals("info"));
         relations.setEditable(() -> canEdit() && section.equals("relations"));
@@ -133,14 +160,38 @@ final class FactionEditorView extends LinearLayout {
         membersShown = show;
         if (show) members.onShow(); else if (members != null) members.onHide();
     }
-    private void deactivate() { syncMembers(false); name.setEditable(false); description.setEditable(false); ranks.setActive(false); relations.setEditable(() -> false); relations.suspend(); }
+    private void syncData(boolean show) {
+        if (show && data == null) {
+            var binding = new FactionDataDictionaryBinding(repository, id, this::ownerCurrent,
+                    () -> canEdit() && section.equals("data"));
+            data = UiDataDictionaryEditor.createEmbedded(this, binding, theme, UiMetrics.TEXT_BODY,
+                    UiDataDictionaryEditor.CommitMode.ON_FOCUS_LOSS);
+            dataHost.addView(data.view(), new FrameLayout.LayoutParams(-1, -1));
+        }
+        if (show == dataShown) return;
+        dataShown = show;
+        if (data != null) { if (show) data.resume(); else data.suspend(); }
+    }
+    private void deactivate() {
+        syncData(false); tags.suspend(); syncMembers(false); name.setEditable(false); description.setEditable(false);
+        ranks.setActive(false); relations.setEditable(() -> false); relations.suspend();
+    }
     void dispose() {
         if (disposed) return;
         active = false; deactivate(); disposed = true; relations.dispose();
+        tags.dispose();
+        if (data != null) data.dispose();
         if (members != null) members.onDispose();
     }
-    private boolean canEdit() { return active && editable.getAsBoolean() && current() != null; }
-    private FactionDefinition current() { return repository.snapshot().find(id).orElse(null); }
+    private boolean ownerCurrent() {
+        return !disposed && repositoryGeneration == repository.generation()
+                && Objects.equals(scope, UiStateScopes.current()) && !scope.equals("disconnected");
+    }
+    private boolean canEdit() {
+        return ownerCurrent() && active && repository.loaded() && !repository.loading()
+                && editable.getAsBoolean() && current() != null;
+    }
+    private FactionDefinition current() { return ownerCurrent() ? repository.snapshot().find(id).orElse(null) : null; }
     private UiDisplayText label(String text) { return new UiDisplayText(getContext(), text, 13, theme.text().muted()); }
     private void addDivider() {
         View divider = new View(getContext()); divider.setBackground(fill(theme.border().divider()));

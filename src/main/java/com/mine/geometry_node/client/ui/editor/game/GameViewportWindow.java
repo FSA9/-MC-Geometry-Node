@@ -76,6 +76,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private boolean registered;
     private boolean disposed;
     private boolean dismissingMenuGesture;
+    private volatile long viewMenuGeneration;
     private String statusKey;
     private final TextView transformStatus;
     private boolean toolOrthographic;
@@ -174,6 +175,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     }
 
     void closeViewMenu() {
+        viewMenuGeneration++;
         if (viewMenu != null) viewMenu.dismiss();
         menuKey.reset();
     }
@@ -185,11 +187,18 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         else viewMenu.dismiss();
     }
 
-    @Override public void onViewMenuCancelled() { post(this::closeViewMenu); }
+    @Override public void onViewMenuCancelled() {
+        long generation = viewMenuGeneration;
+        post(() -> {
+            if (generation == viewMenuGeneration && !disposed) closeViewMenu();
+        });
+    }
 
     /** Flight input calls on the client thread; preserve press/release order on the UI queue. */
     @Override public void onViewMenuKey(int key, boolean pressed) {
+        long generation = viewMenuGeneration;
         post(() -> {
+            if (generation != viewMenuGeneration || disposed) return;
             if (pressed) {
                 if (!registered || disposed || mode() != ViewportMode.FLY || !viewport.canNavigate()
                         || areaLifecycle != null && !areaLifecycle.isActive()) return;
@@ -244,12 +253,23 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     void selectFlightMode() { setMode(ViewportMode.FLY); }
     @Override public View getView() { return this; }
     @Override public void bindSurfaceRegistration(UiSurfaceRegistry.Registration registration) { this.registration = registration; }
-    @Override public void onShow() { shown = true; sidebarLayout.onOwnerShown(); updateVisibility(); }
+    @Override public void onShow() {
+        if (disposed || shown) return;
+        shown = true; sidebarLayout.onOwnerShown(); updateVisibility();
+    }
     @Override public void onHide() { shown = false; sidebarLayout.onOwnerHidden(); updateVisibility(); }
-    @Override public void onDispose() { disposed = true; onHide(); }
+    @Override public void onDispose() {
+        if (disposed) return;
+        onHide();
+        disposed = true;
+        areaSubscription.close();
+        areaSubscription = AreaLifecycle.Subscription.NONE;
+        areaLifecycle = null;
+    }
 
     @Override protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        if (disposed) return;
         areaSubscription.close();
         areaLifecycle = AreaLifecycle.find(this);
         if (areaLifecycle != null) areaSubscription = areaLifecycle.subscribe(this::onAreaEvent);

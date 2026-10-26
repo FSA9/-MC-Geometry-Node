@@ -5,9 +5,10 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
+import net.minecraft.nbt.*;
 import java.nio.charset.StandardCharsets;
-import java.io.IOException;
-import java.io.StringReader;
+import java.io.*;
 import java.util.*;
 
 /** Versioned, bounded canonical representation shared by world storage and catalogue transport. */
@@ -21,22 +22,32 @@ public final class FactionJsonCodec {
         for (var faction : catalog.factions()) {
             Map<String, Object> ranks = new LinkedHashMap<>();
             faction.ranks().forEach((level, label) -> ranks.put(level.toString(), label.toMap()));
-            definitions.add(Map.of("id", faction.id().toString(), "name", faction.name().toMap(),
-                    "description", faction.description().toMap(), "relations", stringKeys(faction.relations()), "ranks", ranks));
+            Map<String, Object> definition = new LinkedHashMap<>();
+            definition.put("id", faction.id().toString());
+            definition.put("name", faction.name().toMap());
+            definition.put("description", faction.description().toMap());
+            definition.put("relations", stringKeys(faction.relations()));
+            definition.put("ranks", ranks);
+            // Empty owners must add no bytes when a legacy catalogue is already at the document limit.
+            if (!faction.metadata().isEmpty()) definition.put("metadata", encodeMetadata(faction.metadata()));
+            definitions.add(definition);
         }
-        return bounded(JSON.toJson(Map.of("version", 1, "revision", catalog.revision(), "factions", definitions)));
+        return bounded(JSON.toJson(Map.of("version", 2, "revision", catalog.revision(), "factions", definitions)));
     }
 
     public static FactionCatalog decode(String source) {
         Map<String, Object> root = parse(source);
         keys(root, Set.of("version", "revision", "factions"));
-        if (integer(root.get("version")) != 1) throw new IllegalArgumentException("Unsupported faction format");
+        int version = integer(root.get("version"));
+        if (version != 1 && version != 2) throw new IllegalArgumentException("Unsupported faction format");
         long revision = longInteger(root.get("revision"));
         List<?> raw = list(root.get("factions"), FactionRules.MAX_FACTIONS);
         List<FactionDefinition> definitions = new ArrayList<>();
         for (Object item : raw) {
             Map<String, Object> faction = dictionary(item);
-            keys(faction, Set.of("id", "name", "description", "relations", "ranks"));
+            keys(faction, version == 2 && faction.containsKey("metadata")
+                    ? Set.of("id", "name", "description", "relations", "ranks", "metadata")
+                    : Set.of("id", "name", "description", "relations", "ranks"));
             Map<Integer, RichTextValue> ranks = new LinkedHashMap<>();
             Map<String, Object> rawRanks = dictionary(faction.get("ranks"));
             if (rawRanks.size() > FactionRules.MAX_RANKS) throw new IllegalArgumentException("Too many ranks");
@@ -48,9 +59,36 @@ public final class FactionJsonCodec {
                     throw new IllegalArgumentException("Duplicate or noncanonical rank level");
             });
             definitions.add(new FactionDefinition(uuid(faction.get("id")), text(faction.get("name"), false),
-                    text(faction.get("description"), true), scores(faction.get("relations"), FactionRules.MAX_FACTIONS), ranks));
+                    text(faction.get("description"), true), scores(faction.get("relations"), FactionRules.MAX_FACTIONS), ranks,
+                    version == 1 || !faction.containsKey("metadata") ? OwnerMetadata.EMPTY : decodeMetadata(faction.get("metadata"))));
         }
         return new FactionCatalog(revision, definitions);
+    }
+
+    // Binary NBT preserves every registered graph value and exact numeric type without decoding at save time.
+    private static String encodeMetadata(OwnerMetadata metadata) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            NbtIo.write(metadata.save(), new DataOutputStream(bytes));
+            return Base64.getEncoder().encodeToString(bytes.toByteArray());
+        } catch (IOException failure) {
+            throw new IllegalArgumentException("Invalid faction metadata", failure);
+        }
+    }
+
+    private static OwnerMetadata decodeMetadata(Object value) {
+        if (!(value instanceof String encoded) || encoded.length() > 4 * ((OwnerMetadata.MAX_ENCODED_BYTES + 2) / 3))
+            throw new IllegalArgumentException("Invalid faction metadata encoding");
+        byte[] bytes = Base64.getDecoder().decode(encoded);
+        if (bytes.length > OwnerMetadata.MAX_ENCODED_BYTES) throw new IllegalArgumentException("Faction metadata exceeds byte limit");
+        try (ByteArrayInputStream input = new ByteArrayInputStream(bytes)) {
+            CompoundTag metadata = NbtIo.read(new DataInputStream(input),
+                    new NbtAccounter(OwnerMetadata.MAX_ENCODED_BYTES, OwnerMetadata.MAX_ENCODED_DEPTH + 1));
+            if (input.available() != 0) throw new IllegalArgumentException("Trailing faction metadata NBT");
+            return OwnerMetadata.load(metadata);
+        } catch (IOException | RuntimeException failure) {
+            throw new IllegalArgumentException("Invalid faction metadata NBT", failure);
+        }
     }
 
     public static Map<String, Object> profileValues(EntityFactionProfile profile) {

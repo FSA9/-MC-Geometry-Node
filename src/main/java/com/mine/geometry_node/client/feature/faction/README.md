@@ -6,7 +6,7 @@
 
 `snapshot()` 返回最近发布的 `FactionCatalog`；调用方同时读取 `loaded()`、`loading()`、`error()` 并通过 change listener 刷新展示。目录来自服务端，发布时避免旧 revision 覆盖已有的新目录。错误使用消息键，由界面翻译。
 
-依赖方向是 `UI → ClientFactionRepository → core.engine.system.faction、core.network、client.network.request`，线程和连接适配使用 Minecraft/NeoForge。发送前按 core 的 `WorldObjectDataValues` 校验载荷，不能直接把可变 UI 草稿放入命令队列。
+依赖方向是 `UI → ClientFactionRepository → core.engine.system.faction、core.network、client.network.request`，线程和连接适配使用 Minecraft/NeoForge。发送前按 core 的 `GraphMetadataDataValues` 校验载荷，不能直接把可变 UI 草稿放入命令队列。
 
 ## 命令与连接生命周期
 

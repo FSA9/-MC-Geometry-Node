@@ -23,7 +23,31 @@ import com.mine.geometry_node.core.cache.*;
 
 public class RegistryDataManager {
     public static final String DIMENSION_REGISTRY_ID = "minecraft:dimension";
+    public static final String FACTION_REGISTRY_ID = "geometry_node:faction";
     public static final String DEFAULT_DIMENSION = "minecraft:overworld";
+
+    /** Literal labels and stable ids supplied by a connection-owned client catalog. */
+    public record DynamicOptions(List<String> ids, Map<String, String> labels, boolean available) {
+        public DynamicOptions {
+            ids = List.copyOf(ids);
+            labels = Map.copyOf(labels);
+        }
+    }
+    private static final Map<String, Supplier<DynamicOptions>> LIVE_OPTIONS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void registerDynamicOptions(String registryId, Supplier<DynamicOptions> source) {
+        if (registryId == null || registryId.isBlank() || source == null)
+            throw new IllegalArgumentException("A registry id and option source are required");
+        if (LIVE_OPTIONS.putIfAbsent(registryId, source) != null)
+            throw new IllegalStateException("Duplicate dynamic option source: " + registryId);
+    }
+
+    @Nullable
+    public static DynamicOptions getLiveDynamicOptions(String registryId) {
+        Supplier<DynamicOptions> source = registryId == null ? null : LIVE_OPTIONS.get(registryId);
+        if (source != null) return source.get();
+        return FACTION_REGISTRY_ID.equals(registryId) ? new DynamicOptions(List.of(), Map.of(), false) : null;
+    }
 
     private RegistryDataManager() {}
 
@@ -167,6 +191,8 @@ public class RegistryDataManager {
      */
     public static List<String> getDynamicOptions(String registryId, RegistryAccess access) {
         if (registryId == null) return List.of();
+        DynamicOptions live = getLiveDynamicOptions(registryId);
+        if (live != null) return live.ids();
 
         return switch (registryId) {
             case MultiblockStructureManager.DYNAMIC_REGISTRY_ID -> MultiblockStructureManager.getInstance().getAllIds();

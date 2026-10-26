@@ -95,6 +95,7 @@ public final class ViewportSceneInteraction {
         if(result)changed.run();return result;
     }
     private EditViewportCamera.Axis dragAxis;
+    private boolean dragValid;
     private Vec3 dragOrigin;
     private Map<UUID,Vec3> originals=Map.of();
     private UUID hovered;
@@ -145,11 +146,12 @@ public final class ViewportSceneInteraction {
     }
     public void clearFrame(){frame=null;bounds=null;cancel();}
     public boolean busy(){return pressed||transforming();}
-    public void cancel(){snapping.end();if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
+    public void cancel(){snapping.end();if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=dragValid=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
     public boolean down(float x,float y,boolean shift){return down(x,y,shift,false);}
     public boolean down(float x,float y,boolean shift,boolean control){
         if(!current(frame)||bounds==null||!bounds.contains(x,y))return false;
         gestureFrame=frame;gestureBounds=bounds;startX=currentX=x;startY=currentY=y;subtractive=control;additive=shift&&!control;pressed=true;selectionAtPress=combinedSelection();
+        dragValid=false;
         dragAxis=shift||control?null:hitAxis(x,y);
         if(dragAxis!=null){
             var snapshot=service.snapshot();
@@ -178,21 +180,23 @@ public final class ViewportSceneInteraction {
     public boolean move(float x,float y){
         if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}currentX=x;currentY=y;
         if(dragAxis!=null){
+            // A failed computation cannot leave the previous position confirmable on release.
+            dragValid=false;
             if(!service.previewActive(this)){snapping.end();pressed=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;}
             double amount=ViewportSceneMath.axisDrag(gestureFrame,dragOrigin,dragAxis,u(gestureBounds,startX),v(gestureBounds,startY),u(gestureBounds,x),v(gestureBounds,y));
             if(Double.isFinite(amount)){
                 Vec3 movement=new Vec3(dragAxis.x*amount,dragAxis.y*amount,dragAxis.z*amount);
                 int mask=dragAxis.x!=0?1:dragAxis.y!=0?2:4;
                 Vec3 delta=snapping.apply(dragOrigin,movement,mask,x,y);
-                Map<UUID,Vec3> next=new LinkedHashMap<>();originals.forEach((id,p)->next.put(id,p.add(delta)));try { service.previewPositions(this,next); } catch (IllegalArgumentException invalid) { cancel(); }
-            }
+                Map<UUID,Vec3> next=new LinkedHashMap<>();originals.forEach((id,p)->next.put(id,p.add(delta)));try { service.previewPositions(this,next); dragValid=true; } catch (IllegalArgumentException invalid) { cancel(); }
+            } else snapping.suspend();
         }else if(Math.hypot(x-startX,y-startY)>UIUtils.dp2px(4))marquee=true;
         changed.run();return true;
     }
     public boolean up(float x,float y){
         if(!pressed)return false;if(!current(gestureFrame)){cancel();return true;}move(x,y);
         if(!pressed)return true;
-        if(dragAxis!=null){service.commitPreview(this);snapping.end();}
+        if(dragAxis!=null){if(dragValid)service.commitPreview(this);else service.cancelPreview(this);snapping.end();}
         else {
             Set<ViewportTarget.Key> hits=new LinkedHashSet<>();
             if(marquee){
@@ -217,7 +221,7 @@ public final class ViewportSceneInteraction {
                     !marquee&&!hits.isEmpty()?hits.iterator().next():null);
             if(hits.isEmpty()&&!additive&&!subtractive)worldActions.clear();
         }
-        pressed=marquee=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;
+        pressed=marquee=dragValid=false;dragAxis=null;gestureFrame=null;originals=Map.of();changed.run();return true;
     }
     public void hover(float x,float y){UUID next=frame==null?null:pick(frame,bounds,x,y);if(!Objects.equals(next,hovered)){hovered=next;changed.run();}}
     private UUID pick(PresentedViewportFrame f,GameViewportLayout b,float x,float y){

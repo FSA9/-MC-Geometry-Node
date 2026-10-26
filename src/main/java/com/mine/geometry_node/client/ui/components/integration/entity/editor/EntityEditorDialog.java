@@ -348,7 +348,7 @@ public final class EntityEditorDialog extends ModalWindowView {
     private boolean equipmentChanged() {
         if (equipment == null || draft == null) return false;
         return !equipment.dropped().isEmpty()
-                || !com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues.equivalent(
+                || !com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues.equivalent(
                 Map.of("equipment", draft.dictionary("equipment"), "inventory", draft.snapshot().get("inventory")),
                 Map.of("equipment", equipment.equipment(), "inventory", equipment.inventory()));
     }

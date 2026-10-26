@@ -5,6 +5,7 @@ import com.mine.geometry_node.client.ui.components.base.input.UiNumericInput;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 
+import java.math.BigDecimal;
 import java.util.Locale;
 
 /**
@@ -71,16 +72,19 @@ public record NumericInputSpec(
         if (parsed == null) {
             return null;
         }
+        // Keep exact LONG values when no range adjustment is required.
+        if (type == PortType.LONG
+                && (min == null || compareLongToBound((Long) parsed, min) >= 0)
+                && (max == null || compareLongToBound((Long) parsed, max) <= 0)) {
+            return parsed;
+        }
         return coerce(clamp(numberValue(parsed)));
     }
 
     public Object coerceDragged(double value) {
         double clamped = clamp(value);
-        if (type == PortType.INTEGER) {
-            return (int) Math.round(clamped);
-        }
-        if (type == PortType.LONG) {
-            return Math.round(clamped);
+        if (type == PortType.INTEGER || type == PortType.LONG) {
+            return coerce(clamped);
         }
         return (float) roundToDecimals(clamped, decimals);
     }
@@ -129,12 +133,18 @@ public record NumericInputSpec(
 
     private Object coerce(double value) {
         if (type == PortType.INTEGER) {
-            return (int) Math.round(value);
+            return (int) Math.round(Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, value)));
         }
         if (type == PortType.LONG) {
             return Math.round(value);
         }
         return (float) value;
+    }
+
+    private static int compareLongToBound(long value, double bound) {
+        return Double.isFinite(bound)
+                ? BigDecimal.valueOf(value).compareTo(BigDecimal.valueOf(bound))
+                : Double.compare(value, bound);
     }
 
     private double clamp(double value) {

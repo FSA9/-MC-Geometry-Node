@@ -9,6 +9,8 @@ import icyllis.modernui.core.Context;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.config.ConfigManager;
 import com.mine.geometry_node.core.node.definition.port.PortType;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
@@ -22,6 +24,14 @@ public class UIHintUtils {
 
     public static float getStandardInputHeight() {
         return NodeUiMetrics.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
+    }
+
+    public static boolean hasDynamicRemoveButton(PortRow row) {
+        return row != null
+                && row.hintParams() != null
+                && Boolean.TRUE.equals(row.hintParams().get(PortMetaKeys.IS_DYNAMIC))
+                && !Boolean.FALSE.equals(row.hintParams().get(PortMetaKeys.DYNAMIC_REMOVE_BUTTON))
+                && row.hintParams().get(PortMetaKeys.DYNAMIC_INDEX) instanceof Integer;
     }
 
     public static EditText createInput(Context context) {

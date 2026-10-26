@@ -84,6 +84,12 @@ public final class ServerFactionRequests {
         });
     }
 
+    /** Metadata changes from nodes use the same subscribed catalogue stream as authored changes. */
+    public static void metadataChanged(MinecraftServer server) {
+        try { publish(server, null, ServerFactionService.INSTANCE.encodedSnapshot(server)); }
+        catch (IOException | RuntimeException failure) { log("Faction metadata publication failed", failure); }
+    }
+
     private static String readable(MinecraftServer server) {
         try { return ServerFactionService.INSTANCE.encodedSnapshot(server); }
         catch (IOException | RuntimeException unavailable) { return ""; }

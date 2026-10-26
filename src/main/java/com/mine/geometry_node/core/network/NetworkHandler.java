@@ -67,21 +67,21 @@ public class NetworkHandler {
                     if (context.getPlayer() instanceof ServerPlayer player)
                         com.mine.geometry_node.core.engine.system.faction.service.ServerFactionRequests.receive(player, payload);
                 }));
-        com.mine.geometry_node.core.engine.system.entityeditor.ServerEntityEditorService.init();
+        com.mine.geometry_node.core.engine.system.entity.edit.ServerEntityEditorService.init();
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,
                 com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest.TYPE,
                 com.mine.geometry_node.core.network.packet.entityeditor.PacketEntityEditorRequest.STREAM_CODEC,
                 (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player)
-                        com.mine.geometry_node.core.engine.system.entityeditor.ServerEntityEditorService.receive(player, payload);
+                        com.mine.geometry_node.core.engine.system.entity.edit.ServerEntityEditorService.receive(player, payload);
                 }));
-        com.mine.geometry_node.core.engine.system.entitypreview.ServerEntityPreviewService.init();
+        com.mine.geometry_node.core.engine.system.entity.preview.ServerEntityPreviewService.init();
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewRequest.TYPE,
                 com.mine.geometry_node.core.network.packet.entitypreview.PacketEntityPreviewRequest.STREAM_CODEC,
                 (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player)
-                        com.mine.geometry_node.core.engine.system.entitypreview.ServerEntityPreviewService.receive(player, payload);
+                        com.mine.geometry_node.core.engine.system.entity.preview.ServerEntityPreviewService.receive(player, payload);
                 }));
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,
                 com.mine.geometry_node.core.network.packet.worldquery.PacketWorldObjectTagEdit.TYPE,
@@ -96,6 +96,14 @@ public class NetworkHandler {
                 (payload, context) -> context.queue(() -> {
                     if (context.getPlayer() instanceof ServerPlayer player)
                         com.mine.geometry_node.core.engine.system.worldquery.ServerWorldObjectQueries.receive(player, payload);
+                }));
+        com.mine.geometry_node.core.engine.system.scopeddata.ServerScopedDataService.init();
+        NetworkManager.registerReceiver(NetworkManager.Side.C2S,
+                com.mine.geometry_node.core.network.packet.scopeddata.PacketScopedDataRequest.TYPE,
+                com.mine.geometry_node.core.network.packet.scopeddata.PacketScopedDataRequest.STREAM_CODEC,
+                (payload, context) -> context.queue(() -> {
+                    if (context.getPlayer() instanceof ServerPlayer player)
+                        com.mine.geometry_node.core.engine.system.scopeddata.ServerScopedDataService.receive(player, payload);
                 }));
         com.mine.geometry_node.core.engine.system.worldquery.ServerWorldObjectQueries.init();
         NetworkManager.registerReceiver(NetworkManager.Side.C2S,

@@ -10,6 +10,7 @@
 | `feature/datalibrary` | repository 契约、连接快照、网络 gateway、映射与传输。图引用和仓库窗口共享服务。 |
 | `feature/entity` | 实体编辑请求、登记索引和外观快照；`edit`、`index`、`preview` 分别保留自己的协议和生命周期。 |
 | `feature/faction`、`feature/worldquery` | 阵营访问及世界对象查询与修改，不拥有具体窗口。 |
+| `feature/scopeddata` | GLOBAL／维度公共 data 的目录与编辑会话，不拥有存储或具体窗口。 |
 | `feature/graph/document` | 文档注册、文件身份、加载、保存、revision 和共享开图流程。 |
 | `feature/graph/edit` | 图修改命令、历史和通知，不依赖 View；真实尺寸计算通过 `FrameBoundsPolicy` 注入。 |
 | `feature/graph/persistence` | 图 JSON、元数据读写、原子文件存储、文档 claim 和结构事务。 |

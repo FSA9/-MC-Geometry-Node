@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionId;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
@@ -70,9 +69,10 @@ public final class GroupNodeMenu {
         int initialColor = ensureOpaque(nodeData.getHeaderColor(NodeData.DEFAULT_GROUP_COLOR));
         final int[] selectedColor = {initialColor};
 
-        FrameLayout popupOverlay = new UiInputBarrier(uiContext);
+        GraphMenuOverlay popupOverlay = new GraphMenuOverlay(context,
+                () -> GraphMenuOverlay.containsIdentity(context.getAllNodeVisuals(), node));
         popupOverlay.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        popupOverlay.setOnClickListener(v -> close(context, popupOverlay));
+        popupOverlay.setOnClickListener(v -> popupOverlay.close(true));
 
         LinearLayout panel = new LinearLayout(uiContext);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -139,15 +139,17 @@ public final class GroupNodeMenu {
         panel.addView(actions, actionsLp);
 
         UiActionButton dissolve = UiActionButton.create(uiContext, "解散", UiActionButton.Role.DANGER, v -> {
-            close(context, popupOverlay);
+            if (!popupOverlay.isCurrent()) return;
+            popupOverlay.close(true);
             context.getActionSink().performAction(
                     ViewportActionId.DISSOLVE_NODE_GROUP,
                     ViewportActionRequest.builder().nodeId(nodeData.id).build()
             );
         });
         UiActionButton cancel = UiActionButton.create(uiContext, "取消", UiActionButton.Role.SECONDARY,
-                v -> close(context, popupOverlay));
+                v -> popupOverlay.close(true));
         UiActionButton apply = UiActionButton.create(uiContext, "应用", UiActionButton.Role.PRIMARY, v -> {
+            if (!popupOverlay.isCurrent()) return;
             String newTitle = titleInput.getText().toString().trim();
             if (newTitle.isEmpty()) newTitle = defaultTitle;
             String newComment = commentInput.getText().toString().trim();
@@ -164,7 +166,7 @@ public final class GroupNodeMenu {
                                 .build()
                 );
             }
-            close(context, popupOverlay);
+            popupOverlay.close(true);
         });
 
         LinearLayout.LayoutParams dissolveLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
@@ -177,6 +179,7 @@ public final class GroupNodeMenu {
 
         popupOverlay.addView(panel, createPanelLayout(parent, screenX, screenY));
         parent.addView(popupOverlay);
+        popupOverlay.bindLifetime();
         titleInput.requestFocus();
         titleInput.setSelection(0, oldTitle.length());
     }
@@ -226,17 +229,6 @@ public final class GroupNodeMenu {
         view.setGravity(gravity);
         view.setSingleLine(true);
         return view;
-    }
-
-    private static void removeOverlay(FrameLayout overlay) {
-        if (overlay.getParent() instanceof ViewGroup parent) {
-            parent.removeView(overlay);
-        }
-    }
-
-    private static void close(InteractionContext context, FrameLayout overlay) {
-        removeOverlay(overlay);
-        context.requestViewportFocus();
     }
 
     private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {

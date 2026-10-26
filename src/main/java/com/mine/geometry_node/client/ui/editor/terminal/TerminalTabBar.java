@@ -61,7 +61,7 @@ public class TerminalTabBar extends LinearLayout {
     }
 
     public void rebuildTabs(List<String> titles, int selectedIndex) {
-        generation++;
+        int rowsGeneration = ++generation;
         mIndicatorX = -1;
         removeAllViews();
         mTabs.clear();
@@ -92,10 +92,10 @@ public class TerminalTabBar extends LinearLayout {
 
             UiIconButton closeBtn = iconButton(context, SvgIconView.Icon.CLOSE, "tab.close");
             closeBtn.setEnabled(mTabs.size() > 1);
-            closeBtn.setOnClickListener(v -> { if (mListener != null) mListener.onTabClosed(index); });
+            closeBtn.setOnClickListener(v -> { if (rowsGeneration == generation && mListener != null) mListener.onTabClosed(index); });
             tabItem.addView(closeBtn, new LayoutParams(UIUtils.dp2pxInt(24), ViewGroup.LayoutParams.MATCH_PARENT));
 
-            title.setOnClickListener(v -> { if (mListener != null) mListener.onTabSelected(index); });
+            title.setOnClickListener(v -> { if (rowsGeneration == generation && mListener != null) mListener.onTabSelected(index); });
 
             attachDragListener(dragHandle, tabItem, index);
 
@@ -105,7 +105,7 @@ public class TerminalTabBar extends LinearLayout {
         // 添加 '+' 按钮
         UiIconButton addBtn = iconButton(context, SvgIconView.Icon.PLUS, "tab.create");
         addBtn.setEnabled(mTabs.size() < 32);
-        addBtn.setOnClickListener(v -> { if (mListener != null) mListener.onTabCreated(); });
+        addBtn.setOnClickListener(v -> { if (rowsGeneration == generation && mListener != null) mListener.onTabCreated(); });
         addView(addBtn, new LayoutParams(UIUtils.dp2pxInt(28), ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
@@ -116,10 +116,16 @@ public class TerminalTabBar extends LinearLayout {
     }
 
     private void attachDragListener(View handle, View tabLayout, int currentIndex) {
+        final int rowsGeneration = generation;
         final float[] startX = {0};
         final boolean[] isDragging = {false};
 
         handle.setOnTouchListener((v, event) -> {
+            if (rowsGeneration != generation) {
+                isDragging[0] = false;
+                tabLayout.setAlpha(1.0f);
+                return true;
+            }
             int action = event.getActionMasked();
             switch (action) {
                 case MotionEvent.ACTION_DOWN:
@@ -199,6 +205,13 @@ public class TerminalTabBar extends LinearLayout {
                 }
             });
         }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        // Detach retires pending gestures; a restored Area needs fresh chrome callbacks.
+        rebuildTabs(List.copyOf(mTabs), mSelectedIndex);
     }
 
     @Override

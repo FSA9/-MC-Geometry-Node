@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.engine.system.worldquery.metadata;
 
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 
 import com.mine.geometry_node.core.metadata.*;
@@ -61,7 +62,7 @@ public final class WorldObjectDataEdits {
         leases.put(token, new Lease(entry.key(), data, now, editable)); tokensByKey.put(entry.key(), token);
         Map<String, String> refs = new LinkedHashMap<>(entry.references());
         refs.put(TARGET_REFERENCE, token); refs.put(COUNT_REFERENCE, Integer.toString(values.size()));
-        refs.put(SUMMARY_REFERENCE, WorldObjectDataValues.summary(values));
+        refs.put(SUMMARY_REFERENCE, GraphMetadataDataValues.summary(values));
         if (!editable) refs.put(READ_ONLY_REFERENCE, "true"); else refs.remove(READ_ONLY_REFERENCE);
         return new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(), entry.dimension(),
                 entry.position(), entry.bounds(), entry.tags(), entry.source(), entry.lifetime(), entry.sceneObjectId(), entry.entityId(), refs, entry.graphs(), entry.entityState());
@@ -71,10 +72,10 @@ public final class WorldObjectDataEdits {
         Lease lease = current(token, key);
         if (lease == null) return Result.error("unavailable");
         try {
-            Map<String, Object> values = WorldObjectDataValues.snapshot(lease.data().values());
-            WorldObjectDataValues.encode(values, registries, WorldObjectDataValues.MAX_READ_BYTES);
+            Map<String, Object> values = GraphMetadataDataValues.snapshot(lease.data().values());
+            GraphMetadataDataValues.encode(values, registries, GraphMetadataDataValues.MAX_READ_BYTES);
             renew(token, lease);
-            return new Result(values, WorldObjectDataValues.revision(values, registries), "");
+            return new Result(values, GraphMetadataDataValues.revision(values, registries), "");
         } catch (IllegalArgumentException invalid) { return Result.error("too_large"); }
         catch (IllegalStateException | UnsupportedOperationException stale) { return Result.error("unavailable"); }
     }
@@ -88,18 +89,18 @@ public final class WorldObjectDataEdits {
         if (lastEdit != Long.MIN_VALUE && now - lastEdit < 100_000_000L) return Result.error("failed");
         lastEdit = now;
         try {
-            Map<String, Object> next = WorldObjectDataValues.snapshot(replacement);
-            WorldObjectDataValues.encode(next, registries, WorldObjectDataValues.MAX_WRITE_BYTES);
+            Map<String, Object> next = GraphMetadataDataValues.snapshot(replacement);
+            GraphMetadataDataValues.encode(next, registries, GraphMetadataDataValues.MAX_WRITE_BYTES);
             lease.data().update(current -> {
-                if (!WorldObjectDataValues.revision(current, registries).equals(expectedRevision)) throw new Conflict();
+                if (!GraphMetadataDataValues.revision(current, registries).equals(expectedRevision)) throw new Conflict();
                 return next;
             });
             // Some historical scoped stores signal capacity rejection with false instead of throwing.
             // A no-op is also false, so verify the authoritative value before reporting success.
-            Map<String, Object> committed = WorldObjectDataValues.snapshot(lease.data().values());
-            if (!WorldObjectDataValues.equivalent(committed, next)) return Result.error("invalid");
+            Map<String, Object> committed = GraphMetadataDataValues.snapshot(lease.data().values());
+            if (!GraphMetadataDataValues.equivalent(committed, next)) return Result.error("invalid");
             renew(token, lease);
-            return new Result(committed, WorldObjectDataValues.revision(committed, registries), "");
+            return new Result(committed, GraphMetadataDataValues.revision(committed, registries), "");
         } catch (Conflict conflict) { return Result.error("conflict"); }
         catch (IllegalArgumentException invalid) { return Result.error("invalid"); }
         catch (IllegalStateException | UnsupportedOperationException stale) { return Result.error("unavailable"); }

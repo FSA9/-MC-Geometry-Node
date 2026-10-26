@@ -32,6 +32,7 @@ public final class ClearScopedState extends BaseNode {
     private NodeDef buildDefinition(ScopedStateScope scope) {
         NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION,
                         Component.translatable("geometry_node.node.clear_scoped_state"))
+                .addMeta(com.mine.geometry_node.core.node.meta.SchemaKeys.HIDDEN_FROM_MENU, true)
                 .comment(NodeComment.builder(TYPE_ID)
                         .text("summary")
                         .input(StandardPorts.NAME, "name")

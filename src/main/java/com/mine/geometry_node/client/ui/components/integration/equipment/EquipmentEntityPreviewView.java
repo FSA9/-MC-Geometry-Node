@@ -4,7 +4,7 @@ import com.mine.geometry_node.client.feature.entity.preview.EntityPreviewClient;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.EntityTemplatePreviewView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.core.engine.system.entitypreview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceCapture;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
 import net.minecraft.client.Minecraft;

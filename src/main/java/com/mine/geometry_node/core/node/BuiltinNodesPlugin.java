@@ -293,6 +293,11 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 
         // --- DATA ---
         registry.register("data/world", new TargetSelector());
+        for (var operation : com.mine.geometry_node.core.node.nodes.metadata.CustomDataNode.Operation.values())
+            registry.register("data/custom_data", new com.mine.geometry_node.core.node.nodes.metadata.CustomDataNode(operation));
+        for (var operation : com.mine.geometry_node.core.node.nodes.metadata.CustomTagNode.Operation.values())
+            registry.register("data/custom_tag", new com.mine.geometry_node.core.node.nodes.metadata.CustomTagNode(operation));
+        // Old IDs remain executable for saved graphs, but are hidden from the node menu.
         registry.register("data", new GetScopedState());
         registry.register("data", new SetScopedState());
         registry.register("data", new HasScopedState());

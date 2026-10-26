@@ -1,8 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.entity.editor;
 
 import com.mine.geometry_node.client.ui.components.integration.metadata.DataDictionaryBinding;
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
-import com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorChanges;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;
 import java.util.*;
@@ -16,15 +16,15 @@ final class EntityEditDraft {
     private final LocalDataBinding data = new LocalDataBinding();
 
     EntityEditDraft(Map<String, Object> snapshot, Runnable changed) {
-        baseline = WorldObjectDataValues.snapshot(snapshot);
-        values = new LinkedHashMap<>(WorldObjectDataValues.snapshot(snapshot));
+        baseline = GraphMetadataDataValues.snapshot(snapshot);
+        values = new LinkedHashMap<>(GraphMetadataDataValues.snapshot(snapshot));
         this.changed = Objects.requireNonNull(changed);
     }
-    Map<String, Object> snapshot() { return WorldObjectDataValues.snapshot(values); }
+    Map<String, Object> snapshot() { return GraphMetadataDataValues.snapshot(values); }
     Map<String, Object> changes() {
-        return com.mine.geometry_node.core.engine.system.entityeditor.EntityEditorChanges.between(baseline, values);
+        return com.mine.geometry_node.core.engine.system.entity.edit.EntityEditorChanges.between(baseline, values);
     }
-    boolean dirty() { return !WorldObjectDataValues.equivalent(baseline, values); }
+    boolean dirty() { return !GraphMetadataDataValues.equivalent(baseline, values); }
     boolean flag(String key) { return Boolean.TRUE.equals(values.get(key)); }
     @SuppressWarnings("unchecked") Map<String, Object> dictionary(String key) {
         Object value = values.get(key); return value instanceof Map<?, ?> ? (Map<String, Object>) value : Map.of();
@@ -41,7 +41,7 @@ final class EntityEditDraft {
     }
     /** Publish a detached batch once, after all sections are consistent. */
     void setAll(Map<String, Object> replacements) {
-        Map<String, Object> detached = WorldObjectDataValues.snapshot(replacements);
+        Map<String, Object> detached = GraphMetadataDataValues.snapshot(replacements);
         boolean different = detached.entrySet().stream().anyMatch(entry ->
                 !values.containsKey(entry.getKey()) || !EntityEditorChanges.same(values.get(entry.getKey()), entry.getValue()));
         if (!different) return;
@@ -50,7 +50,7 @@ final class EntityEditDraft {
     }
     /** Accept a full reply without publishing another edit. sentSnapshot is the full local state sent. */
     boolean acknowledge(Map<String, Object> authoritative, Map<String, Object> sentSnapshot) {
-        Map<String, Object> confirmed = WorldObjectDataValues.snapshot(authoritative);
+        Map<String, Object> confirmed = GraphMetadataDataValues.snapshot(authoritative);
         Map<String, Object> merged = new LinkedHashMap<>(confirmed);
         boolean unavailableAttributeEdit = false;
         for (var entry : values.entrySet()) {
@@ -83,7 +83,7 @@ final class EntityEditDraft {
                 merged.put(key, entry.getValue());
             }
         }
-        Map<String, Object> detached = WorldObjectDataValues.snapshot(merged);
+        Map<String, Object> detached = GraphMetadataDataValues.snapshot(merged);
         baseline = confirmed;
         values.clear(); values.putAll(detached);
         data.notifyChanged();
@@ -102,7 +102,7 @@ final class EntityEditDraft {
         @Override public State snapshot() { return new State(dictionary("data"), false, true, true, false, ""); }
         @Override public void refresh() {}
         @Override public void apply(Map<String, Object> expected, Map<String, Object> replacement, Consumer<String> completion) {
-            if (!WorldObjectDataValues.equivalent(expected, dictionary("data"))) { completion.accept(EntityEditorViews.tr("error.conflict")); return; }
+            if (!GraphMetadataDataValues.equivalent(expected, dictionary("data"))) { completion.accept(EntityEditorViews.tr("error.conflict")); return; }
             try { set("data", replacement); }
             catch (IllegalArgumentException invalid) { completion.accept(EntityEditorViews.tr("error.invalid")); return; }
             completion.accept(null);

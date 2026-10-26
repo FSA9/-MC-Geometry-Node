@@ -43,6 +43,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     private final TerminalRuntimeFactory mRuntimeFactory;
     private boolean mInitializing;
     private boolean mWindowActive;
+    private boolean mDisposed;
 
     public TerminalWindow(
             Context context,
@@ -110,7 +111,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     }
 
     private void switchToTab(int index) {
-        if (index < 0 || index >= mTabs.size()) return;
+        if (mDisposed || index < 0 || index >= mTabs.size()) return;
         for (TerminalTab tab : mTabs) tab.shellView.deactivate();
         mCurrentIndex = index;
         mContainer.removeAllViews();
@@ -128,11 +129,13 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
         mTabBar.rebuildTabs(titles, mCurrentIndex);
         mTabScrollView.post(this::scrollActiveTabIntoView);
 
-        if (activeTab.session.mode() == TerminalMode.SHELL) {
-            if (mWindowActive) activeTab.shellView.activate();
-            activeTab.shellView.ensureStarted();
+        if (mWindowActive) {
+            if (activeTab.session.mode() == TerminalMode.SHELL) {
+                activeTab.shellView.activate();
+                activeTab.shellView.ensureStarted();
+            }
+            activeTab.requestInputFocus();
         }
-        activeTab.requestInputFocus();
         updateModeBar(activeTab.session.mode());
         captureSessionState();
     }
@@ -161,7 +164,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override
     public void onTabClosed(int index) {
-        if (mTabs.size() <= 1 || index < 0 || index >= mTabs.size()) return; // 剩最后一个不让关
+        if (mDisposed || mTabs.size() <= 1 || index < 0 || index >= mTabs.size()) return; // 剩最后一个不让关
         mTabs.remove(index).close();
         if (mCurrentIndex > index) {
             mCurrentIndex--;
@@ -173,7 +176,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override
     public void onTabMoved(int fromIndex, int toIndex) {
-        if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0
+        if (mDisposed || fromIndex == toIndex || fromIndex < 0 || toIndex < 0
                 || fromIndex >= mTabs.size() || toIndex >= mTabs.size()) {
             return;
         }
@@ -194,7 +197,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override
     public void onTabCreated() {
-        if (mTabs.size() >= MAX_SESSION_TABS) return;
+        if (mDisposed || mTabs.size() >= MAX_SESSION_TABS) return;
         mTabs.add(createTerminalTab(null));
         switchToTab(mTabs.size() - 1);
     }
@@ -202,15 +205,20 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     @Override public View getView() { return this; }
     @Override
     public void onShow() {
+        if (mDisposed) return;
         mWindowActive = true;
         if (mCurrentIndex >= 0) {
             TerminalTab activeTab = mTabs.get(mCurrentIndex);
-            if (activeTab.session.mode() == TerminalMode.SHELL) activeTab.shellView.activate();
+            if (activeTab.session.mode() == TerminalMode.SHELL) {
+                activeTab.shellView.activate();
+                activeTab.shellView.ensureStarted();
+            }
             activeTab.requestInputFocus();
         }
     }
     @Override
     public void onHide() {
+        if (mDisposed) return;
         mWindowActive = false;
         captureSessionState();
         if (mCurrentIndex >= 0 && mCurrentIndex < mTabs.size()) {
@@ -220,14 +228,21 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
 
     @Override
     public void onDispose() {
+        if (mDisposed) return;
+        mDisposed = true;
         mWindowActive = false;
         mTabBar.setListener(null);
-        captureSessionState();
-        for (TerminalTab tab : mTabs) {
-            tab.close();
+        try {
+            captureSessionState();
+        } finally {
+            try {
+                for (TerminalTab tab : mTabs) tab.close();
+            } finally {
+                mCurrentIndex = -1;
+                mTabs.clear();
+                mContainer.removeAllViews();
+            }
         }
-        mTabs.clear();
-        mContainer.removeAllViews();
     }
 
     private TerminalTab createTerminalTab(EditorSessionState.TerminalTabState saved) {
@@ -280,7 +295,7 @@ public class TerminalWindow extends LinearLayout implements AreaEditorWindow, Te
     }
 
     private void switchMode(TerminalMode mode) {
-        if (mCurrentIndex < 0) return;
+        if (mDisposed || mCurrentIndex < 0) return;
         TerminalTab tab = mTabs.get(mCurrentIndex);
         if (tab.session.mode() == mode) return;
         if (tab.session.state().hasActiveBackend() || tab.shellView.isStartPending()) {

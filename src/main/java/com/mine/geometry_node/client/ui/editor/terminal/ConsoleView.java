@@ -3,6 +3,7 @@ package com.mine.geometry_node.client.ui.editor.terminal;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.feature.ai.command.CommandCatalog;
 import com.mine.geometry_node.client.feature.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
@@ -10,6 +11,8 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.resources.TypedValue;
+import icyllis.modernui.text.Editable;
+import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.ViewGroup;
@@ -24,7 +27,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
-public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.LogCallback {
+public class ConsoleView extends FrameLayout implements ConsoleCommandAdapter.Output {
     private static final int MAX_VISIBLE_SUGGESTIONS = 8;
     private static final int VIEW_FOCUS_DOWN = 130;
     private static final int MAX_COMMAND_HISTORY = 200;
@@ -33,6 +36,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
     private static final int MAX_LOG_ENTRY_CHARACTERS = 50_000;
     private static final int LOG_TRIM_BATCH = 32;
 
+    private final ConsoleCommandAdapter mCommandAdapter = new ConsoleCommandAdapter(CommandCatalog.registry());
     private final LinearLayout mLogContainer;
     private final EditText mInputBox;
     private final ScrollView mScrollView;
@@ -112,6 +116,11 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         mSuggestionContainer.addView(mMoreSuggestionsView);
 
         // 3. 事件监听
+        mInputBox.addTextChangedListener(new TextWatcher() {
+            @Override public void afterTextChanged(Editable text) { updateSuggestions(text.toString()); }
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
+        });
         mInputBox.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 switch (keyCode) {
@@ -119,12 +128,6 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
                     case KeyEvent.KEY_DOWN: return handleDownKey();
                     case KeyEvent.KEY_TAB: return handleTabKey();
                     case KeyEvent.KEY_ENTER: return handleEnterKey();
-                }
-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                if (keyCode != KeyEvent.KEY_UP && keyCode != KeyEvent.KEY_DOWN &&
-                        keyCode != KeyEvent.KEY_LEFT && keyCode != KeyEvent.KEY_RIGHT &&
-                        keyCode != KeyEvent.KEY_ENTER && keyCode != KeyEvent.KEY_TAB) {
-                    updateSuggestions(mInputBox.getText().toString());
                 }
             }
             return false;
@@ -176,8 +179,6 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
 
             mInputBox.setText(newText);
             mInputBox.setSelection(newText.length());
-
-            updateSuggestions(newText);
         }
         return true;
     }
@@ -200,7 +201,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         }
 
         GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
-        mCurrentSuggestions.addAll(ConsoleCommandRegistry.suggestions(input, activeSession));
+        mCurrentSuggestions.addAll(mCommandAdapter.suggestions(input, activeSession));
 
         if (mCurrentSuggestions.isEmpty()) {
             mSuggestionContainer.setVisibility(View.GONE);
@@ -250,7 +251,7 @@ public class ConsoleView extends FrameLayout implements ConsoleCommandRegistry.L
         onLog("geom-node $ " + line, UiThemes.EDITOR.text().strong());
 
         GraphSession activeSession = DocumentManager.INSTANCE.getActiveSession();
-        ConsoleCommandRegistry.executeLine(line, activeSession, this);
+        mCommandAdapter.executeLine(line, activeSession, this);
     }
 
     @Override

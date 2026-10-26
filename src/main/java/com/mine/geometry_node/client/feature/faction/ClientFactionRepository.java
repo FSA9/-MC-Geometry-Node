@@ -2,13 +2,15 @@ package com.mine.geometry_node.client.feature.faction;
 
 import com.mine.geometry_node.client.network.request.ClientRequestTracker;
 import com.mine.geometry_node.core.cache.*;
+import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.engine.system.faction.storage.FactionJsonCodec;
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataValues;
+import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import com.mine.geometry_node.core.network.ClientboundPayloadRegistry;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.faction.*;
 import com.mine.geometry_node.core.node.value.RichTextValue;
+import com.mine.geometry_node.core.node.RegistryDataManager;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -25,7 +27,7 @@ public final class ClientFactionRepository {
             packet -> {
                 var minecraft = Minecraft.getInstance();
                 if (minecraft.level == null) throw new IllegalStateException("No client level");
-                WorldObjectDataValues.encode(packet.values(), minecraft.level.registryAccess(), WorldObjectDataValues.MAX_WRITE_BYTES);
+                GraphMetadataDataValues.encode(packet.values(), minecraft.level.registryAccess(), GraphMetadataDataValues.MAX_WRITE_BYTES);
                 NetworkHandler.sendToServer(packet);
             }, task -> Minecraft.getInstance().execute(task),
             () -> Minecraft.getInstance().getConnection() != null);
@@ -59,6 +61,7 @@ public final class ClientFactionRepository {
     public synchronized void init() {
         if (initialized) return;
         initialized = true;
+        RegistryDataManager.registerDynamicOptions(RegistryDataManager.FACTION_REGISTRY_ID, this::selectOptions);
         ClientboundPayloadRegistry.registerClientReceiver(PacketFactionResult.TYPE, (packet, context) -> {
             long expected = generation();
             context.queue(() -> accept(packet, expected));
@@ -88,6 +91,16 @@ public final class ClientFactionRepository {
     }
 
     public FactionCatalog snapshot() { return catalog; }
+    /** A fresh detached option snapshot: renames affect labels, never graph values. */
+    public RegistryDataManager.DynamicOptions selectOptions() {
+        FactionCatalog current = catalog;
+        List<FactionDefinition> sorted = current.factions().stream()
+                .sorted(Comparator.comparing((FactionDefinition faction) -> faction.name().plain(),
+                        String.CASE_INSENSITIVE_ORDER).thenComparing(FactionDefinition::id)).toList();
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (FactionDefinition faction : sorted) labels.put(faction.id().toString(), faction.name().plain());
+        return new RegistryDataManager.DynamicOptions(List.copyOf(labels.keySet()), labels, loaded);
+    }
     public boolean loaded() { return loaded; }
     public boolean loading() { return loading; }
     public String error() { return error; }
@@ -136,9 +149,20 @@ public final class ClientFactionRepository {
         return enqueue("REMOVE_RANK", Map.of("id", faction, "level", level));
     }
 
+    public CompletableFuture<Void> addTag(UUID id, String tag) {
+        return enqueue("ADD_TAG", Map.of("id", id, "tag", TagPolicy.EXACT.normalize(tag)));
+    }
+    public CompletableFuture<Void> removeTag(UUID id, String tag) {
+        return enqueue("REMOVE_TAG", Map.of("id", id, "tag", TagPolicy.EXACT.normalize(tag)));
+    }
+    /** The editor baseline travels unchanged even if newer catalog pushes arrive before dispatch. */
+    public CompletableFuture<Void> replaceData(UUID id, Map<String, Object> expected, Map<String, Object> replacement) {
+        return enqueue("REPLACE_DATA", Map.of("id", id, "expected", expected, "replacement", replacement));
+    }
+
     private CompletableFuture<Void> enqueue(String operation, Map<String, Object> values) {
         CompletableFuture<Void> result = new CompletableFuture<>();
-        Map<String, Object> detached = WorldObjectDataValues.snapshot(values);
+        Map<String, Object> detached = GraphMetadataDataValues.snapshot(values);
         long expectedGeneration = generation();
         clientQueue.accept(() -> {
             synchronized (this) {

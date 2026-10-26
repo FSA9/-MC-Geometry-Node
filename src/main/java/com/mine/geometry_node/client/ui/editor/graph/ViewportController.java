@@ -67,6 +67,8 @@ public class ViewportController implements EditorContext.EditorListener,
     }
 
     public void bindSession(GraphSession session) {
+        // A gesture/menu holds visual identities from its original document.
+        mViewport.cancelTransientUi();
         saveCurrentSessionState();
         pruneClosedSessionStates();
 
@@ -364,10 +366,9 @@ public class ViewportController implements EditorContext.EditorListener,
         mEditorContext.getCommandManager().execute(cmd);
     }
 
-    public void executeImportGraphJson(String json, float screenX, float screenY) {
+    /** Import coordinates are captured in canvas dp when the drop is accepted. */
+    public void executeImportGraphJson(String json, float uiX, float uiY) {
         if (mEditorContext == null || json == null || json.isBlank()) return;
-        float uiX = mViewport.getCamera().screenToUIX(screenX);
-        float uiY = mViewport.getCamera().screenToUIY(screenY);
         CmdPasteElements cmd = new CmdPasteElements(mEditorContext.getGraphController(), json, uiX, uiY);
         mEditorContext.getCommandManager().execute(cmd);
         selectPastedElements(cmd);
@@ -501,8 +502,8 @@ public class ViewportController implements EditorContext.EditorListener,
             case GROUP_INTO_NODE_GROUP -> groupIntoNodeGroupFromAction();
             case EXIT_GROUP -> executeExitGroup();
             case ADD_NODE -> executeAddNode(
-                    actionRequest.screenXOr(mViewport.getLastMouseUiX()),
-                    actionRequest.screenYOr(mViewport.getLastMouseUiY()),
+                    actionRequest.screenXOr(mViewport.getCamera().uiToScreenX(mViewport.getLastMouseUiX())),
+                    actionRequest.screenYOr(mViewport.getCamera().uiToScreenY(mViewport.getLastMouseUiY())),
                     actionRequest.typeId()
             );
             case ADD_FRAME -> executeAddFrame(

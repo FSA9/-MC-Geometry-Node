@@ -106,7 +106,7 @@ public final class BehaviorTreeProcess {
         if (level != null && owner != null) {
             ScopedStateNamespace namespace = ScopedStateNamespace.PUBLIC;
             blackboard.installProvider(ScopedStateProviderResolver.owner(owner, namespace));
-            blackboard.installProvider(ScopedStateProviderResolver.shared(level, namespace));
+            blackboard.installProvider(ScopedStateProviderResolver.global(level, namespace));
             blackboard.installProvider(ScopedStateProviderResolver.currentGroup(owner, namespace));
             blackboard.installProvider(ScopedStateProviderResolver.world(level, namespace));
         }

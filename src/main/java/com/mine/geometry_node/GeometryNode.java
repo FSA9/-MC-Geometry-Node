@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.system.datalibrary.runtime.DataLibraryWriteRuntime;
 import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.blueprint.attachment.EntityImmunityAttachment;
-import com.mine.geometry_node.core.engine.system.entityclassification.EntityTypeTraitOverrides;
+import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraitOverrides;
 import com.mine.geometry_node.core.engine.blueprint.projectile.ProjectileControlAttachment;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingRuntimeIndex;
@@ -27,7 +27,7 @@ import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 import com.mine.geometry_node.core.engine.system.quest.screen.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
-import com.mine.geometry_node.core.engine.system.chunkloading.EntityChunkLoadingService;
+import com.mine.geometry_node.core.engine.system.entity.chunkloading.EntityChunkLoadingService;
 import com.mine.geometry_node.core.engine.system.image.ServerImageAssetService;
 import com.mine.geometry_node.core.config.GeometryNodeServerConfig;
 import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetMetadataCache;
@@ -198,7 +198,7 @@ public class GeometryNode {
         // 初始化图运行时注册表
         com.mine.geometry_node.core.engine.resource.residency.ResourceResidency.init();
         ServerEngineDriver.init();
-        ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.system.entityindex.ServerEntityIndexService.INSTANCE);
+        ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GraphResourceLifecycleManager.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(GeometryCollisionService.INSTANCE);
         ServerEngineRegistry.INSTANCE.register(com.mine.geometry_node.core.engine.graph.light.GraphLightService.INSTANCE);
