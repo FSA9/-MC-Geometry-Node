@@ -8,7 +8,7 @@ import com.mine.geometry_node.client.feature.ai.command.CommandRegistry;
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 import com.mine.geometry_node.client.feature.ai.command.CommandSpec;
 import com.mine.geometry_node.client.integration.ai.graph.BoundGraphTarget;
-import com.mine.geometry_node.client.integration.ai.graph.GraphReadSnapshotCache;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphReadSnapshotCache;
 import com.mine.geometry_node.client.integration.ai.graph.NodeCatalogQueryTarget;
 import com.mine.geometry_node.client.integration.ai.graph.PreparedGraphQueryTarget;
 import com.mine.geometry_node.client.integration.ai.graph.PreparedGraphPatchTarget;

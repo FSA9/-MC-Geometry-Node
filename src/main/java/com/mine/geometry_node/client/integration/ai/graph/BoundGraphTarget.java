@@ -1,11 +1,14 @@
 package com.mine.geometry_node.client.integration.ai.graph;
 
 import com.google.gson.JsonObject;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphQueryService;
 
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 import com.mine.geometry_node.client.feature.ai.command.GraphQueryTarget;
 import com.mine.geometry_node.client.feature.ai.command.GraphPatchCommandTarget;
 import com.mine.geometry_node.client.feature.ai.graph.GraphPatch;
+import com.mine.geometry_node.client.feature.ai.graph.patch.GraphPatchIdempotencyStore;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphReadSnapshotCache;
 import com.mine.geometry_node.client.feature.ai.command.CommandInvocationContext;
 import com.mine.geometry_node.client.feature.graph.document.GraphDocumentManager;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
@@ -73,7 +76,7 @@ public final class BoundGraphTarget implements GraphQueryTarget, GraphPatchComma
         return withScope(queries().getGraphStats(typeId, category, groupBy, offset, limit));
     }
     @Override public CommandResult getGraphMetadata(java.util.List<String> select) {
-        return withScope(new GraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select));
+        return withScope(GraphQueryCapture.queries(session.editorContext.getGraph()).getGraphMetadata(select));
     }
     @Override public CommandResult queryGraphFrames(java.util.List<String> frameIds, String query,
                                                     java.util.List<String> tags, String parentFrame,
@@ -109,18 +112,21 @@ public final class BoundGraphTarget implements GraphQueryTarget, GraphPatchComma
     }
 
     public PreparedGraphQueryTarget prepareRead(GraphReadSnapshotCache cache) {
+        icyllis.modernui.core.Core.checkUiThread();
         NodeGraph graph = resolve();
         if (graph == null) throw new IllegalStateException("bound graph scope is closed");
         long capturedRevision = revision();
         GraphReadSnapshotCache.Key key = new GraphReadSnapshotCache.Key(sessionId(), scopeId(), capturedRevision);
-        return new PreparedGraphQueryTarget(cache.capture(key, graph), sessionId(), scopeId(), surfaceRef,
-                capturedRevision, GraphQueryService.currentRegistryAccess());
+        GraphReadSnapshotCache.Handle snapshot = cache.find(key);
+        if (snapshot == null) snapshot = cache.capture(key, GraphQueryCapture.document(graph));
+        return new PreparedGraphQueryTarget(snapshot, sessionId(), scopeId(), surfaceRef,
+                capturedRevision, GraphQueryCapture.currentRegistryAccess());
     }
 
     private NodeGraph resolve() { return scope.resolve(session.editorContext.getGraph()); }
     private GraphQueryService queries() {
         NodeGraph graph = resolve();
         if (graph == null) throw new IllegalStateException("bound graph scope is closed");
-        return new GraphQueryService(graph);
+        return GraphQueryCapture.queries(graph);
     }
 }

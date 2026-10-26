@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.integration.ai.graph;
 
+import com.mine.geometry_node.client.feature.ai.graph.patch.GraphPatchIdempotencyStore;
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceId;

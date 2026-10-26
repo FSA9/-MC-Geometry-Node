@@ -22,6 +22,8 @@ import java.util.function.Consumer;
 
 public final class VanillaInventoryPicker {
     private static final Component INVENTORY_TITLE = Component.translatable("container.crafting");
+    private static volatile long connectionGeneration;
+    private static PickerScreen<?> active;
 
     private VanillaInventoryPicker() {
     }
@@ -41,24 +43,38 @@ public final class VanillaInventoryPicker {
     ) {
         Minecraft minecraft = Minecraft.getInstance();
         if (!minecraft.isSameThread()) {
-            minecraft.execute(() -> open(selection, onPicked, onDismissed));
+            long generation = connectionGeneration;
+            minecraft.execute(() -> {
+                if (generation != connectionGeneration || !open(selection, onPicked, onDismissed)) {
+                    if (onDismissed != null) MuiModApi.postToUiThread(onDismissed);
+                }
+            });
             return true;
         }
 
         Player player = minecraft.player;
-        if (player == null) {
+        if (active != null || player == null || minecraft.level == null) {
             return false;
         }
 
         Screen previousScreen = minecraft.screen;
-        minecraft.setScreen(new PickerScreen<>(
+        PickerScreen<T> picker = new PickerScreen<>(
                 player,
                 previousScreen,
                 selection,
                 onPicked,
                 onDismissed
-        ));
+        );
+        active = picker;
+        minecraft.setScreen(picker);
         return true;
+    }
+
+    /** Invalidates queued opens/results without restoring a screen from the previous connection. */
+    public static void reset() {
+        connectionGeneration++;
+        PickerScreen<?> previous = active;
+        if (previous != null) previous.finish(null, false);
     }
 
     @Nullable
@@ -161,24 +177,39 @@ public final class VanillaInventoryPicker {
             cancel();
         }
 
-        private void pick(T selected) {
+        @Override
+        public void removed() {
+            // Replacing the picker (including logout) must also release the waiting editor.
+            finish(null, false);
+            super.removed();
+        }
+
+        private void finish(@Nullable T selected, boolean restoreScreen) {
             if (mFinished) return;
             mFinished = true;
-            Minecraft.getInstance().setScreen(mPreviousScreen);
+            if (active == this) active = null;
+            Minecraft minecraft = Minecraft.getInstance();
+            if (restoreScreen && minecraft.screen == this && minecraft.player == mPlayer) {
+                minecraft.setScreen(mPreviousScreen);
+            }
+            long generation = connectionGeneration;
             MuiModApi.postToUiThread(() -> {
                 try {
-                    if (mOnPicked != null) mOnPicked.accept(selected);
+                    if (generation == connectionGeneration && selected != null && mOnPicked != null) {
+                        mOnPicked.accept(selected);
+                    }
                 } finally {
                     notifyDismissed();
                 }
             });
         }
 
+        private void pick(T selected) {
+            finish(selected, true);
+        }
+
         private void cancel() {
-            if (mFinished) return;
-            mFinished = true;
-            Minecraft.getInstance().setScreen(mPreviousScreen);
-            MuiModApi.postToUiThread(this::notifyDismissed);
+            finish(null, true);
         }
 
         private void notifyDismissed() {

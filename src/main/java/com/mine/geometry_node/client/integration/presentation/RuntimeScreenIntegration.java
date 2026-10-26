@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.integration.runtime;
+package com.mine.geometry_node.client.integration.presentation;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.dialogue.DialoguePresentation;
@@ -12,7 +12,7 @@ import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import java.util.UUID;
 
 /** Concrete screen wiring. Install before registering any client network receivers. */
-public final class RuntimeUiIntegration {
+public final class RuntimeScreenIntegration {
     private static final DialoguePresentation DIALOGUE = new DialoguePresentation() {
         @Override public boolean supports(String styleId) { return DialogueStyleRenderer.supports(styleId); }
         @Override public void open(PacketOpenDialogue packet) { DialogueStyleRenderer.open(packet); }
@@ -26,7 +26,7 @@ public final class RuntimeUiIntegration {
         @Override public void clear() { QuestScreenRenderer.clear(); }
     };
 
-    private RuntimeUiIntegration() {}
+    private RuntimeScreenIntegration() {}
 
     public static void install() {
         ClientDialogueState.installPresentation(DIALOGUE);

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.integration.ai.graph;
+package com.mine.geometry_node.client.feature.ai.graph.patch;
 
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 
@@ -8,12 +8,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Run-scoped GraphPatch idempotency state shared by every dynamically resolved viewport target. */
-final class GraphPatchIdempotencyStore {
-    static final int MAX_KEYS = 1_024;
+public final class GraphPatchIdempotencyStore {
+    public static final int MAX_KEYS = 1_024;
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
 
-    synchronized Reservation reserve(String key, String patchHash) {
+    public synchronized Reservation reserve(String key, String patchHash) {
         Entry existing = entries.get(key);
         if (existing != null) {
             return new Reservation(existing, false, existing.patchHash.equals(patchHash), false);
@@ -26,13 +26,13 @@ final class GraphPatchIdempotencyStore {
         return new Reservation(created, true, true, false);
     }
 
-    void complete(Entry entry, CommandResult result) {
+    public void complete(Entry entry, CommandResult result) {
         entry.complete(result);
     }
 
-    record Reservation(Entry entry, boolean owner, boolean hashMatches, boolean limitReached) {}
+    public record Reservation(Entry entry, boolean owner, boolean hashMatches, boolean limitReached) {}
 
-    enum State {
+    public enum State {
         PENDING,
         PLANNING,
         COMMITTING,
@@ -40,7 +40,7 @@ final class GraphPatchIdempotencyStore {
         COMPLETED
     }
 
-    static final class Entry {
+    public static final class Entry {
         private final String patchHash;
         private final AtomicReference<State> state = new AtomicReference<>(State.PENDING);
         private final CompletableFuture<CommandResult> result = new CompletableFuture<>();
@@ -49,31 +49,31 @@ final class GraphPatchIdempotencyStore {
             this.patchHash = patchHash;
         }
 
-        String patchHash() {
+        public String patchHash() {
             return patchHash;
         }
 
-        State state() {
+        public State state() {
             return state.get();
         }
 
-        CompletableFuture<CommandResult> result() {
+        public CompletableFuture<CommandResult> result() {
             return result;
         }
 
-        void beginPlanning() {
+        public void beginPlanning() {
             if (!state.compareAndSet(State.PENDING, State.PLANNING)) {
                 throw new IllegalStateException("GraphPatch transaction is already owned");
             }
         }
 
-        void beginCommit() {
+        public void beginCommit() {
             if (!state.compareAndSet(State.PLANNING, State.COMMITTING)) {
                 throw new IllegalStateException("GraphPatch transaction cannot enter commit from " + state.get());
             }
         }
 
-        void markUnknown() {
+        public void markUnknown() {
             state.compareAndSet(State.COMMITTING, State.UNKNOWN);
         }
 

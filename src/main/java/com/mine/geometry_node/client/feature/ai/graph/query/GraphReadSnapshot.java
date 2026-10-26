@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.integration.ai.graph;
+package com.mine.geometry_node.client.feature.ai.graph.query;
 
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.Connection;
@@ -22,9 +22,9 @@ import java.util.Map;
 import java.util.Set;
 
 /** Immutable connection indexes for one read-only view of the current graph. */
-final class GraphReadSnapshot {
+public final class GraphReadSnapshot {
     /** Serialized while the editor model is owned by the UI thread, then consumed only by query workers. */
-    record CapturedDocument(String json) {}
+    public record CapturedDocument(String json) {}
 
     record Edge(String kind, String outputNodeId, String outputPortId, String inputNodeId, String inputPortId) {
         static final Comparator<Edge> ORDER = Comparator.comparing(Edge::outputNodeId)
@@ -55,15 +55,11 @@ final class GraphReadSnapshot {
         this.direct = freezeIndex(direct);
     }
 
-    static GraphReadSnapshot capture(NodeGraph graph) {
-        return build(captureDocument(graph));
-    }
-
-    static CapturedDocument captureDocument(NodeGraph graph) {
+    public static CapturedDocument captureDocument(NodeGraph graph) {
         return new CapturedDocument(graph == null ? "" : GraphJsonIO.toJson(graph));
     }
 
-    static GraphReadSnapshot build(CapturedDocument document) {
+    public static GraphReadSnapshot build(CapturedDocument document) {
         NodeGraph source = document == null || document.json().isEmpty()
                 ? null : GraphJsonIO.fromJson(document.json());
         Map<String, NodeData> nodes = new LinkedHashMap<>();

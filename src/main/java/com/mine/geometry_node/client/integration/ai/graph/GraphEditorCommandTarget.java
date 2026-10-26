@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.integration.ai.graph;
 
 import com.google.gson.JsonObject;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphQueryService;
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 import com.mine.geometry_node.client.feature.ai.command.GraphCommandTarget;
 import com.mine.geometry_node.client.feature.ai.command.GraphQueryTarget;
@@ -160,7 +161,7 @@ public record GraphEditorCommandTarget(GraphSession session) implements GraphCom
 
     @Override
     public CommandResult getGraphMetadata(List<String> select) {
-        return new GraphQueryService(session.editorContext.getGraph()).getGraphMetadata(select);
+        return GraphQueryCapture.queries(session.editorContext.getGraph()).getGraphMetadata(select);
     }
 
     @Override
@@ -185,7 +186,7 @@ public record GraphEditorCommandTarget(GraphSession session) implements GraphCom
     }
 
     private GraphQueryService queries() {
-        return new GraphQueryService(session.editorContext.getCurrentGraph());
+        return GraphQueryCapture.queries(session.editorContext.getCurrentGraph());
     }
 
     private static CommandResult graphRequired() {

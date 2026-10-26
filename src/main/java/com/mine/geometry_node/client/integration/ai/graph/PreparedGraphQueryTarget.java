@@ -3,6 +3,8 @@ package com.mine.geometry_node.client.integration.ai.graph;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.feature.ai.command.CommandResult;
 import com.mine.geometry_node.client.feature.ai.command.GraphQueryTarget;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphQueryService;
+import com.mine.geometry_node.client.feature.ai.graph.query.GraphReadSnapshotCache;
 import net.minecraft.core.RegistryAccess;
 
 import java.util.List;

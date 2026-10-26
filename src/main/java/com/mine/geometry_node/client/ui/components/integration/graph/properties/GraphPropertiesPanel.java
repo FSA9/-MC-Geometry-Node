@@ -11,9 +11,6 @@ import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;
-import com.mine.geometry_node.client.integration.graph.GraphEditorPreviews;
-import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesSnapshot;
-import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanel;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelContext;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelDefinition;
@@ -79,6 +76,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     private final List<String> mTags = new ArrayList<>();
     private final Executor mUiExecutor;
 
+    private GraphPropertiesPreview mPreview;
     private GraphPropertiesTarget mTarget;
     private GraphPropertiesSnapshot mLoaded;
     private int mGeneration;
@@ -222,6 +220,11 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     @Override
     public void onDeselected() {
         commitPendingEdits();
+    }
+
+    /** Supplies the host preview action independently of the storage target. Null clears it. */
+    public void setPreview(GraphPropertiesPreview preview) {
+        mPreview = preview;
     }
 
     public void bind(GraphPropertiesTarget target) {
@@ -486,10 +489,13 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
     }
 
     private void previewQuest() {
-        if (!GraphTypeRegistry.QUEST.id().equals(mTypeSelector.selectedId()) || mLoaded == null) return;
+        GraphPropertiesPreview preview = mPreview;
+        GraphPropertiesSnapshot snapshot = mLoaded;
+        if (preview == null || snapshot == null
+                || !GraphTypeRegistry.QUEST.id().equals(mTypeSelector.selectedId())) return;
         QuestDefinition definition = mQuestSection.definition();
         commitPendingEdits();
-        GraphEditorPreviews.previewQuest(mLoaded.fileName(), definition, mLoaded.conditionOverview());
+        preview.previewQuest(snapshot.fileName(), definition, snapshot.conditionOverview());
     }
 
 }

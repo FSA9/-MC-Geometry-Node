@@ -1,11 +1,7 @@
-package com.mine.geometry_node.client.integration.asset;
+package com.mine.geometry_node.client.integration.graph;
 
-import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
-import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
-import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesSnapshot;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
-import com.mine.geometry_node.client.integration.graph.GraphSessionPropertiesTarget;
 import com.mine.geometry_node.client.feature.graph.persistence.GraphTagIO;
 import com.mine.geometry_node.client.feature.graph.persistence.file.GraphFileReference;
 import com.mine.geometry_node.client.feature.graph.persistence.file.GraphFileRegistry;
@@ -13,7 +9,7 @@ import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 
-import java.io.File;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -22,9 +18,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Exposes one selected local graph file through the shared properties target contract.
+ * Exposes a local graph file, preferring its open document session, through the shared properties target contract.
  */
-public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
+public final class GraphFilePropertiesTarget implements GraphPropertiesTarget {
     private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "GeometryNode-GraphProperties-IO");
         thread.setDaemon(true);
@@ -34,14 +30,9 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
     private final GraphFileReference mFileReference;
     private final Runnable mOnSaved;
 
-    private AssetFilePropertiesTarget(File file, Runnable onSaved) {
-        mFileReference = GraphFileRegistry.INSTANCE.reference(file.toPath());
+    public GraphFilePropertiesTarget(Path file, Runnable onSaved) {
+        mFileReference = GraphFileRegistry.INSTANCE.reference(file);
         mOnSaved = onSaved;
-    }
-
-    public static AssetFilePropertiesTarget fromSelection(List<AssetEntry> entries, Runnable onSaved) {
-        File file = resolveSelectedFile(entries);
-        return file != null ? new AssetFilePropertiesTarget(file, onSaved) : null;
     }
 
     @Override
@@ -90,17 +81,6 @@ public final class AssetFilePropertiesTarget implements GraphPropertiesTarget {
     @Override
     public void onSaveSucceeded(GraphPropertiesSnapshot snapshot) {
         if (mOnSaved != null) mOnSaved.run();
-    }
-
-    private static File resolveSelectedFile(List<AssetEntry> entries) {
-        if (entries == null || entries.size() != 1) return null;
-        AssetEntry entry = entries.get(0);
-        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL
-                || !AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
-                || entry.localFile() == null || !entry.localFile().isFile()) {
-            return null;
-        }
-        return entry.localFile();
     }
 
     private GraphSessionPropertiesTarget openSessionTarget() {

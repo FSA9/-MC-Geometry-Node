@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.integration.ai.graph;
+package com.mine.geometry_node.client.feature.ai.graph.query;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -24,7 +24,6 @@ import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;
 import com.mine.geometry_node.core.node.definition.port.PortOptionContext;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.chat.Component;
 
@@ -36,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Implements P2 queries against read-only registry and graph snapshots. */
-final class GraphQueryService {
+public final class GraphQueryService {
     private static final Gson GSON = new Gson();
     private static final int DETAILS_COLLECTION_LIMIT = 200;
     private static final int VALUE_TEXT_LIMIT = 4096;
@@ -44,23 +43,16 @@ final class GraphQueryService {
     private final GraphReadSnapshot snapshot;
     private final RegistryAccess registryAccess;
 
-    GraphQueryService(NodeGraph graph) {
-        this.snapshot = GraphReadSnapshot.capture(graph);
-        this.registryAccess = currentRegistryAccess();
+    public static GraphQueryService forSnapshot(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
+        return new GraphQueryService(snapshot, registryAccess);
     }
 
-    static GraphQueryService forSnapshot(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
-        return new GraphQueryService(new PreparedInputs(snapshot, registryAccess));
+    private GraphQueryService(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {
+        this.snapshot = java.util.Objects.requireNonNull(snapshot, "snapshot");
+        this.registryAccess = registryAccess;
     }
 
-    private GraphQueryService(PreparedInputs inputs) {
-        this.snapshot = java.util.Objects.requireNonNull(inputs.snapshot(), "snapshot");
-        this.registryAccess = inputs.registryAccess();
-    }
-
-    private record PreparedInputs(GraphReadSnapshot snapshot, RegistryAccess registryAccess) {}
-
-    CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
+    public CommandResult searchNodeTypes(String query, String path, boolean recursive, int offset, int limit) {
         String normalizedPath;
         try {
             normalizedPath = NodeCatalogIndex.normalizePath(path);
@@ -90,7 +82,7 @@ final class GraphQueryService {
         return CommandResult.success("NODE_TYPES_FOUND", "找到 " + page.total() + " 个匹配的节点类型", data);
     }
 
-    CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
+    public CommandResult browseNodeCatalog(String path, boolean recursive, int offset, int limit) {
         String normalizedPath;
         try {
             normalizedPath = NodeCatalogIndex.normalizePath(path);
@@ -127,7 +119,7 @@ final class GraphQueryService {
 
     private record CatalogItem(boolean directory, String value) {}
 
-    CommandResult getNodeTypeDetails(String typeId) {
+    public CommandResult getNodeTypeDetails(String typeId) {
         String canonicalTypeId;
         try {
             canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
@@ -176,7 +168,7 @@ final class GraphQueryService {
         return CommandResult.success("NODE_TYPE_DETAILS", "已读取节点类型默认定义 " + typeId, data);
     }
 
-    CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
+    public CommandResult getNodeTypePortOptions(String typeId, String portId, String query, int offset, int limit) {
         String canonicalTypeId;
         try {
             canonicalTypeId = NodeCatalogIndex.canonicalTypeId(typeId);
@@ -213,7 +205,7 @@ final class GraphQueryService {
         return CommandResult.success("NODE_TYPE_PORT_OPTIONS", "已读取节点类型端口选项", data);
     }
 
-    CommandResult queryGraphNodes(List<String> nodeIds, List<String> typeIds, String directory, String query,
+    public CommandResult queryGraphNodes(List<String> nodeIds, List<String> typeIds, String directory, String query,
                                   String commentFilter, String connectionState, List<String> select,
                                   String connectionDirection, List<String> connectionKinds,
                                   int offset, int limit) {
@@ -277,7 +269,7 @@ final class GraphQueryService {
         return CommandResult.success("GRAPH_NODES_QUERIED", "在蓝图中找到 " + page.total() + " 个匹配节点", data);
     }
 
-    CommandResult getGraphMetadata(List<String> select) {
+    public CommandResult getGraphMetadata(List<String> select) {
         GraphReadSnapshot snapshot = snapshot();
         NodeGraph current = snapshot.graph();
         if (current == null) return CommandResult.failure("NO_ACTIVE_GRAPH", "当前没有可用的 Graph");
@@ -290,7 +282,7 @@ final class GraphQueryService {
         return CommandResult.success("GRAPH_METADATA", "已读取 Graph 元数据", data);
     }
 
-    CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags, String parentFrame,
+    public CommandResult queryGraphFrames(List<String> frameIds, String query, List<String> tags, String parentFrame,
                                    List<String> select, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         Set<String> requestedIds = Set.copyOf(frameIds);
@@ -330,7 +322,7 @@ final class GraphQueryService {
         return CommandResult.success("GRAPH_FRAMES_QUERIED", "在当前 Scope 中找到 " + page.total() + " 个匹配 Frame", data);
     }
 
-    CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
+    public CommandResult getGraphStats(String typeId, String category, String groupBy, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         String canonicalTypeId = "";
         if (!typeId.isEmpty()) {
@@ -392,7 +384,7 @@ final class GraphQueryService {
         return CommandResult.success("GRAPH_STATS", "已读取蓝图统计", data);
     }
 
-    CommandResult validateGraph(int offset, int limit) {
+    public CommandResult validateGraph(int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         List<ValidationDiagnostic> diagnostics = validate(snapshot);
         PageSlice<ValidationDiagnostic> page = page(diagnostics, offset, limit);
@@ -409,7 +401,7 @@ final class GraphQueryService {
         return CommandResult.success("GRAPH_VALIDATION", errors == 0 ? "蓝图只读校验通过" : "蓝图存在校验错误", data);
     }
 
-    CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
+    public CommandResult getPortOptions(String nodeId, String portId, String query, int offset, int limit) {
         GraphReadSnapshot snapshot = snapshot();
         NodeData node = snapshot.node(nodeId);
         if (node == null) return missingNode(nodeId);
@@ -897,11 +889,6 @@ final class GraphQueryService {
     private static boolean hasText(String value) { return value != null && !value.isBlank(); }
 
     private static double finite(float value) { return Float.isFinite(value) ? value : 0.0; }
-
-    static RegistryAccess currentRegistryAccess() {
-        Minecraft minecraft = Minecraft.getInstance();
-        return minecraft.level == null ? null : minecraft.level.registryAccess();
-    }
 
     private static ValidationDiagnostic error(String code, String message, String nodeId, String portId) {
         return new ValidationDiagnostic("error", code, message, text(nodeId), text(portId));

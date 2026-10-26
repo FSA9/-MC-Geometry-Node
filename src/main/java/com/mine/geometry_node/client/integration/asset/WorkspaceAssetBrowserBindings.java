@@ -1,6 +1,11 @@
 package com.mine.geometry_node.client.integration.asset;
 
 import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
+import com.mine.geometry_node.client.integration.graph.GraphEditorPreviews;
+import com.mine.geometry_node.client.integration.graph.GraphFilePropertiesTarget;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.client.ui.components.composite.sidebar.EditorSidebar;
 import com.mine.geometry_node.client.ui.components.integration.asset.browser.AssetBrowserDocumentActions;
@@ -23,12 +28,24 @@ public final class WorkspaceAssetBrowserBindings implements AssetBrowserAreaBind
 
     @Override public Properties properties(EditorSidebar sidebar) {
         GraphPropertiesPanel panel = sidebar.requirePanel(GraphPropertiesPanel.PANEL_ID, GraphPropertiesPanel.class);
+        panel.setPreview(GraphEditorPreviews::previewQuest);
         return new Properties() {
             @Override public void bind(List<AssetEntry> selection, Runnable onSaved) {
-                panel.bind(AssetFilePropertiesTarget.fromSelection(selection, onSaved));
+                panel.bind(propertiesTarget(selection, onSaved));
             }
             @Override public void commitPendingEdits() { panel.commitPendingEdits(); }
         };
+    }
+
+    static GraphPropertiesTarget propertiesTarget(List<AssetEntry> selection, Runnable onSaved) {
+        if (selection == null || selection.size() != 1) return null;
+        AssetEntry entry = selection.getFirst();
+        if (entry == null || entry.sourceKind() != AssetSourceKind.LOCAL
+                || !AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
+                || entry.localFile() == null || !entry.localFile().isFile()) {
+            return null;
+        }
+        return new GraphFilePropertiesTarget(entry.localFile().toPath(), onSaved);
     }
 
     @Override public Transfers transfers(ViewGroup owner, AssetFileBrowserPanel browser) {

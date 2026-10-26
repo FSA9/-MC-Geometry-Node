@@ -10,6 +10,7 @@ import com.mine.geometry_node.client.ui.components.composite.sidebar.api.Sidebar
 import com.mine.geometry_node.client.ui.components.composite.sidebar.api.SidebarPanelScope;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesPanel;
 import com.mine.geometry_node.client.integration.graph.GraphSessionPropertiesTarget;
+import com.mine.geometry_node.client.integration.graph.GraphEditorPreviews;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.ui.workspace.state.EditorSidebarState;
 import com.mine.geometry_node.client.ui.workspace.state.UiStateContext;
@@ -81,6 +82,7 @@ public class GraphEditorWindow extends LinearLayout
         mPropertiesPanel = mRightSidebar.requirePanel(
                 GraphPropertiesPanel.PANEL_ID,
                 GraphPropertiesPanel.class);
+        mPropertiesPanel.setPreview(GraphEditorPreviews::previewQuest);
         mRightSidebar.restoreSelectedPanel(sidebarState.tab());
         workspace.addView(mRightSidebar, createWeightParams(sidebarWeight));
 

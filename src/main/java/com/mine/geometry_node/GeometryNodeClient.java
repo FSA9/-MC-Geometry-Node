@@ -2,7 +2,7 @@ package com.mine.geometry_node;
 
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.runtime.behavior.ClientBehaviorDebugStore;
-import com.mine.geometry_node.client.integration.runtime.RuntimeUiIntegration;
+import com.mine.geometry_node.client.integration.presentation.RuntimeScreenIntegration;
 import com.mine.geometry_node.client.integration.model.ModelHudIntegration;
 import com.mine.geometry_node.client.input.ClientBlueprintInputManager;
 import com.mine.geometry_node.client.input.KeyBindings;
@@ -53,7 +53,7 @@ public class GeometryNodeClient {
         com.mine.geometry_node.client.feature.graph.metadata.GraphTagMetadata.register(
                 com.mine.geometry_node.core.metadata.MetadataCapabilities.GLOBAL);
         com.mine.geometry_node.client.runtime.model.ModelClientLifecycle.register(modBus);
-        RuntimeUiIntegration.install();
+        RuntimeScreenIntegration.install();
         ModelHudIntegration.register(modBus);
         ClientNetworkReceiverRegistry.init();
         // 注册按键
@@ -104,7 +104,7 @@ public class GeometryNodeClient {
         }
 
         ClientVisualManager.tick();
-        RuntimeUiIntegration.tick();
+        RuntimeScreenIntegration.tick();
 
         ClientBlueprintInputManager.tick();
     }
@@ -140,6 +140,7 @@ public class GeometryNodeClient {
         ClientBehaviorDebugStore.clear();
         EntityTemplatePickerController.reset();
         DataLibraryEntityPickerController.reset();
+        com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker.reset();
         clearClientRenderState();
     }
 

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.integration.ai.graph;
+package com.mine.geometry_node.client.feature.ai.graph.query;
 
 import com.mine.geometry_node.core.cache.CacheClearRequest;
 import com.mine.geometry_node.core.cache.CacheDescriptor;
@@ -6,8 +6,6 @@ import com.mine.geometry_node.core.cache.CacheExecutors;
 import com.mine.geometry_node.core.cache.CacheRegistry;
 import com.mine.geometry_node.core.cache.CacheStats;
 import com.mine.geometry_node.core.cache.ManagedCache;
-import com.mine.geometry_node.core.node.document.NodeGraph;
-import icyllis.modernui.core.Core;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,21 +20,21 @@ import java.util.concurrent.CompletionException;
 public final class GraphReadSnapshotCache implements AutoCloseable {
     private static final int MAX_REVISIONS = 16;
 
-    record Key(String sessionId, String scopeId, long revision) {
-        Key {
+    public record Key(String sessionId, String scopeId, long revision) {
+        public Key {
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(scopeId, "scopeId");
         }
     }
 
-    static final class Handle {
+    public static final class Handle {
         private final Entry entry;
 
         private Handle(Entry entry) {
             this.entry = entry;
         }
 
-        GraphReadSnapshot resolve() { return entry.resolve(); }
+        public GraphReadSnapshot resolve() { return entry.resolve(); }
     }
 
     private final Map<Key, Entry> entries = new LinkedHashMap<>(16, 0.75f, true);
@@ -60,16 +58,21 @@ public final class GraphReadSnapshotCache implements AutoCloseable {
     /** Existing query handles retain immutable captured documents; only future lookup reuse is evicted. */
     synchronized void clearCachedSnapshots() { entries.clear(); }
 
-
-    /** Must be called while the editor model is owned by the UI thread. */
-    synchronized Handle capture(Key key, NodeGraph graph) {
-        if (!Core.isOnUiThread()) {
-            throw new IllegalStateException("graph read snapshots must be captured on the ModernUI thread");
-        }
+    /** Reuses a revision without asking the editor to serialize the document again. */
+    public synchronized Handle find(Key key) {
         if (closed) throw new IllegalStateException("graph read snapshot cache is closed");
+        Entry entry = entries.get(Objects.requireNonNull(key, "key"));
+        return entry == null ? null : new Handle(entry);
+    }
+
+    /** Accepts a document already captured by the owner of the editor model. */
+    public synchronized Handle capture(Key key, GraphReadSnapshot.CapturedDocument document) {
+        if (closed) throw new IllegalStateException("graph read snapshot cache is closed");
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(document, "document");
         Entry entry = entries.get(key);
         if (entry == null) {
-            entry = new Entry(GraphReadSnapshot.captureDocument(graph));
+            entry = new Entry(document);
             entries.put(key, entry);
             trim();
         }
