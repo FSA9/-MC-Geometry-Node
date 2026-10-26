@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.schematic;
+package com.mine.geometry_node.core.engine.system.schematic.projection;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import net.minecraft.world.phys.AABB;

@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.schematic;
+package com.mine.geometry_node.core.engine.system.schematic.placement;
 
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;
 import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;

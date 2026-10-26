@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -26,7 +26,7 @@ public record AssetPreviewRevision(
     public String cacheKey() {
         String canonical = identity.remotePath() + '\0' + identity.kind().id() + '\0'
                 + sourceSize + '\0' + sourceLastModified + '\0' + formatVersion;
-        var digest = AssetTransferHashing.newSha256();
-        return AssetTransferHashing.toHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        var digest = AssetHashing.newSha256();
+        return AssetHashing.toHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
     }
 }

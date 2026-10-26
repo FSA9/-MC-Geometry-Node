@@ -7,7 +7,7 @@ import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibrary
 import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibraryLoadResult;
 
 import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -21,8 +21,8 @@ import java.util.concurrent.CompletableFuture;
 public final class RemoteDataLibraryRepositoryService {
     public static final RemoteDataLibraryRepositoryService INSTANCE = new RemoteDataLibraryRepositoryService();
 
-    private final AssetTransferIoExecutor io =
-            new AssetTransferIoExecutor("GeometryNode-DataLibrary-IO", 2, 64);
+    private final BoundedIoExecutor io =
+            new BoundedIoExecutor("GeometryNode-DataLibrary-IO", 2, 64);
 
     private RemoteDataLibraryRepositoryService() {
     }

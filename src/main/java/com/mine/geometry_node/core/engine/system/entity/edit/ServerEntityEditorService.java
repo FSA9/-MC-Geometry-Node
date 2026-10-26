@@ -4,8 +4,8 @@ import com.mine.geometry_node.core.engine.metadata.*;
 import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraits;
 import com.mine.geometry_node.core.engine.system.entity.classification.EntityTypeTraitOverrides;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
-import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
 import com.mine.geometry_node.core.engine.metadata.GraphMetadataDataValues;
 import com.mine.geometry_node.core.metadata.*;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -54,7 +54,7 @@ public final class ServerEntityEditorService {
         if (player == null || player.connection != original.connection || player.hasDisconnected() || !server.isRunning()) return;
         PacketEntityEditorResult result;
         try {
-            if (!RemoteAssetPermissions.canManageAssets(player)) throw new Rejected("permission_denied");
+            if (!WorldEditPermissions.canManageWorld(player)) throw new Rejected("permission_denied");
             if (!player.isAlive() || player.isSpectator()) throw new Rejected("unavailable");
             EntityEditorSessions session = SESSIONS.computeIfAbsent(player.connection, ignored -> new EntityEditorSessions());
             if (!session.acquire()) throw new Rejected("rate_limited");
@@ -86,7 +86,7 @@ public final class ServerEntityEditorService {
         String target = level.dimension().identifier() + "/" + entity.getUUID();
         EntityEditorAdapter adapter = EntityEditorAdapters.resolve(entity);
         EntityEditorSessions.Read read = EntityEditorOperations.execute(new EntityEditorOperations.Access() {
-            public boolean permitted() { return RemoteAssetPermissions.canManageAssets(player); }
+            public boolean permitted() { return WorldEditPermissions.canManageWorld(player); }
             public String target() { return target; }
             public Object incarnation() { return entity; }
             public Map<String, Object> snapshot() {
@@ -179,7 +179,7 @@ public final class ServerEntityEditorService {
         allAttributes.putAll(attributes); projected.put("attributes", allAttributes);
         ensureReadable(projected, level.getServer());
         requireLoaded(level, entity);
-        if (!RemoteAssetPermissions.canManageAssets(player)) throw new Rejected("permission_denied");
+        if (!WorldEditPermissions.canManageWorld(player)) throw new Rejected("permission_denied");
         if (transfer != null) requireInventoryAuthority(player, current);
 
         Deque<Runnable> undo = new ArrayDeque<>();

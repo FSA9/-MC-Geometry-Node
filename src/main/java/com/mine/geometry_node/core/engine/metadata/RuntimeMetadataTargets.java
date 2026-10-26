@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.graph.resource.*;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.system.model.collision.runtime.ModelCollisionScene;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
+import com.mine.geometry_node.core.engine.system.schematic.projection.SchematicProjectionService;
 import com.mine.geometry_node.core.metadata.MetadataCapabilities;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;

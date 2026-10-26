@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.scopeddata;
 
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.metadata.ScopedMetadataTargets;
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.metadata.DataAccess;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.scopeddata.*;
@@ -40,7 +40,7 @@ public final class ServerScopedDataService {
             // Limit failures as well as successful reads/edits, independently for every connection.
             if (!CONNECTIONS.acquire(player.connection)) result = PacketScopedDataResult.error(request, "failed");
             else result = ScopedDataOperations.execute(request, new ScopedDataOperations.Access() {
-                public boolean permitted() { return RemoteAssetPermissions.canManageAssets(player); }
+                public boolean permitted() { return WorldEditPermissions.canManageWorld(player); }
                 public Iterable<String> dimensions() {
                     // Lazy mapping lets Operations enforce its scan bound before enumerating the whole server.
                     return () -> new Iterator<>() {

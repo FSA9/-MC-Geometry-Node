@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQue
 import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProvider;
 import com.mine.geometry_node.core.engine.system.worldquery.provider.WorldObjectProviders;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.worldquery.*;
@@ -57,7 +57,7 @@ public final class ServerWorldObjectQueries {
         ServerPlayer currentPlayer = currentPlayer(server, player.connection);
         if (currentPlayer == null || !server.isRunning()) return;
         player = currentPlayer;
-        if (!RemoteAssetPermissions.canManageAssets(player)) {
+        if (!WorldEditPermissions.canManageWorld(player)) {
             send(player, WorldObjectPage.empty(request.requestId(), "permission_denied")); return;
         }
         var queue = QUEUES.computeIfAbsent(server, ignored -> new WorldObjectQueryScheduler<>(
@@ -77,7 +77,7 @@ public final class ServerWorldObjectQueries {
         if (current == null || !server.isRunning()) return;
         String message;
         try {
-            boolean permitted = RemoteAssetPermissions.canManageAssets(current);
+            boolean permitted = WorldEditPermissions.canManageWorld(current);
             var edits = TAG_EDITS.get(current.connection);
             message = !permitted ? WorldObjectTagEdits.PREFIX + "forbidden"
                     : edits == null ? WorldObjectTagEdits.PREFIX + "unavailable"
@@ -95,7 +95,7 @@ public final class ServerWorldObjectQueries {
         if (current == null || !server.isRunning()) return;
         WorldObjectDataEdits.Result result;
         try {
-            boolean permitted = RemoteAssetPermissions.canManageAssets(current);
+            boolean permitted = WorldEditPermissions.canManageWorld(current);
             var edits = DATA_EDITS.get(current.connection);
             result = !permitted ? WorldObjectDataEdits.Result.error("forbidden")
                     : edits == null ? WorldObjectDataEdits.Result.error("unavailable")
@@ -129,7 +129,7 @@ public final class ServerWorldObjectQueries {
         NetworkHandler.sendToPlayer(player, new PacketWorldObjectPage(page));
     }
     static WorldObjectPage execute(ServerPlayer player, PacketWorldObjectQuery request) {
-        if (!RemoteAssetPermissions.canManageAssets(player)) return WorldObjectPage.empty(request.requestId(), "permission_denied");
+        if (!WorldEditPermissions.canManageWorld(player)) return WorldObjectPage.empty(request.requestId(), "permission_denied");
         WorldObjectQuery query = request.query(); MinecraftServer server = player.level().getServer();
         String current = player.level().dimension().identifier().toString();
         if (query.range() == WorldObjectQuery.Range.NEARBY && !query.dimension().isEmpty() && !query.dimension().equals(current))

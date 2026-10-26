@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewCache
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewMetadataCodec;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.AssetPreviewCacheMaintenance;
 
 import java.io.BufferedInputStream;
@@ -80,7 +80,7 @@ public final class ClientAssetPreviewCache {
                 revision.cacheKey(), descriptor.format());
         if (!Files.isRegularFile(artifact) || Files.isSymbolicLink(artifact)
                 || Files.size(artifact) != descriptor.encodedBytes()
-                || !AssetTransferHashing.sha256(artifact).equals(descriptor.sha256())) {
+                || !AssetHashing.sha256(artifact).equals(descriptor.sha256())) {
             return Optional.empty();
         }
         AssetPreviewCacheMaintenance.touch(artifact);
@@ -94,7 +94,7 @@ public final class ClientAssetPreviewCache {
             throws IOException {
         if (!isCurrent(serverIdentity, generation)) return Optional.empty();
         if (content == null || content.length != descriptor.encodedBytes()
-                || !AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(content))
+                || !AssetHashing.toHex(AssetHashing.newSha256().digest(content))
                 .equals(descriptor.sha256())) {
             throw new IOException("Preview content does not match its descriptor");
         }

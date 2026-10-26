@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExtern
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecutionHandle;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -28,7 +28,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, BlueprintExt
 
     private static final int QUEUE_CAPACITY = 256;
 
-    private final Map<MinecraftServer, AssetTransferIoExecutor> executors = new ConcurrentHashMap<>();
+    private final Map<MinecraftServer, BoundedIoExecutor> executors = new ConcurrentHashMap<>();
     private final Map<BlueprintExecutionHandle, PendingWrite> pendingWrites = new ConcurrentHashMap<>();
 
     private DataLibraryWriteRuntime() {
@@ -55,8 +55,8 @@ public final class DataLibraryWriteRuntime implements ServerEngine, BlueprintExt
         }
 
         MinecraftServer server = level.getServer();
-        AssetTransferIoExecutor executor = executors.computeIfAbsent(server,
-                ignored -> new AssetTransferIoExecutor("GeometryNode-DataLibrary-Graph-IO", 1, QUEUE_CAPACITY));
+        BoundedIoExecutor executor = executors.computeIfAbsent(server,
+                ignored -> new BoundedIoExecutor("GeometryNode-DataLibrary-Graph-IO", 1, QUEUE_CAPACITY));
         AtomicBoolean cancelled = new AtomicBoolean();
         CompletableFuture<DataLibraryEntry> future = executor.submit(() -> {
             if (cancelled.get()) {
@@ -120,7 +120,7 @@ public final class DataLibraryWriteRuntime implements ServerEngine, BlueprintExt
                 pending.cancel();
             }
         });
-        AssetTransferIoExecutor executor = executors.remove(server);
+        BoundedIoExecutor executor = executors.remove(server);
         if (executor != null) {
             executor.close();
         }

@@ -9,7 +9,7 @@ import com.mine.geometry_node.client.ui.components.integration.graph.properties.
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
+import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
@@ -42,7 +42,7 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
                 graph.comment,
                 graph.tags,
                 graph.quest,
-                QuestConditionOverview.fromGraph(graph)));
+                QuestConditionOverviewFactory.fromGraph(graph)));
     }
 
     @Override

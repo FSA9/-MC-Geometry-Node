@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.runtime.render.debug;
 
 import com.mine.geometry_node.core.network.packet.s2c.PacketSchematicProjection;
 import com.mine.geometry_node.core.engine.resource.residency.ResourceResidency;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionDefinition;
+import com.mine.geometry_node.core.engine.system.schematic.projection.SchematicProjectionDefinition;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import com.mine.geometry_node.core.schematic.SchematicBlockEntityUtils;

@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.system.dialogue.DialogueRuntime;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetOperationResult;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.ServerAssetTransferService;
@@ -503,7 +504,7 @@ public class NetworkHandler {
             var repository = RemoteDataLibraryRepositoryService.INSTANCE;
             switch (payload.operation()) {
                 case CREATE_FOLDER -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    requireDataLibraryPermission(WorldEditPermissions.canManageWorld(player));
                     MinecraftServer server = player.level().getServer();
                     repository.createFolderAsync(player, payload.parentId(), payload.name())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
@@ -512,7 +513,7 @@ public class NetworkHandler {
                                             : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
                 }
                 case UPDATE_FOLDER -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    requireDataLibraryPermission(WorldEditPermissions.canManageWorld(player));
                     if (payload.objectId() == null) throw new IllegalArgumentException("Folder UUID is required");
                     MinecraftServer server = player.level().getServer();
                     repository.updateFolderAsync(player, payload.objectId(), payload.parentId(), payload.name(),
@@ -523,7 +524,7 @@ public class NetworkHandler {
                                             : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
                 }
                 case MOVE_ENTRY -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    requireDataLibraryPermission(WorldEditPermissions.canManageWorld(player));
                     MinecraftServer server = player.level().getServer();
                     repository.moveEntryAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
@@ -532,7 +533,7 @@ public class NetworkHandler {
                                             : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
                 }
                 case MOVE_FOLDER -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    requireDataLibraryPermission(WorldEditPermissions.canManageWorld(player));
                     MinecraftServer server = player.level().getServer();
                     repository.moveFolderAsync(player, payload.objectId(), payload.parentId(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,
@@ -541,7 +542,7 @@ public class NetworkHandler {
                                             : new PacketRemoteDataLibraryResponse(payload.requestId(), false, failureMessage(error), ""))));
                 }
                 case DELETE -> {
-                    requireDataLibraryPermission(RemoteAssetPermissions.canManageAssets(player));
+                    requireDataLibraryPermission(WorldEditPermissions.canManageWorld(player));
                     MinecraftServer server = player.level().getServer();
                     repository.deleteAsync(player, payload.keys(), payload.expectedFingerprint())
                             .whenComplete((ignored, error) -> server.execute(() -> sendToPlayer(player,

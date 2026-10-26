@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.metadata;
 
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementStorage;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.SchematicPlacementRecord;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementStorage;
 import com.mine.geometry_node.core.metadata.*;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.ResourceKey;

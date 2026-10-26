@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.asset.transfer.io;
+package com.mine.geometry_node.core.engine.system.asset;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,8 +8,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-public final class AssetTransferHashing {
-    private AssetTransferHashing() {
+public final class AssetHashing {
+    private AssetHashing() {
     }
 
     public static MessageDigest newSha256() {

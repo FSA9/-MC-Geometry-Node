@@ -3,6 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.transfer;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetRepositoryService;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
@@ -176,7 +177,7 @@ public final class ServerAssetTransferService {
     private static boolean hasUploadPermission(ServerPlayer player, AssetTransferPurpose purpose) {
         return switch (purpose) {
             case ASSET_REPOSITORY -> RemoteAssetPermissions.canUploadAssets(player);
-            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE -> RemoteAssetPermissions.canManageAssets(player);
+            case DATA_LIBRARY_CREATE, DATA_LIBRARY_UPDATE -> WorldEditPermissions.canManageWorld(player);
             case DATA_LIBRARY_DOWNLOAD -> false;
         };
     }

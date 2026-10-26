@@ -16,6 +16,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeInd
 import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.document.NodeGraph;
@@ -64,7 +65,7 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
                 ? QuestDefinition.fromJson(root.get("quest"))
                 : QuestDefinition.EMPTY;
         QuestConditionOverview questConditionOverview = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
-                ? QuestConditionOverview.fromGraph(GSON.fromJson(root, NodeGraph.class))
+                ? QuestConditionOverviewFactory.fromGraph(GSON.fromJson(root, NodeGraph.class))
                 : QuestConditionOverview.EMPTY;
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 

@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.asset.preview.store;
 
 import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetFileService;
 import com.mine.geometry_node.core.engine.system.asset.preview.*;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import net.minecraft.server.MinecraftServer;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewServerConfig;
 
@@ -13,7 +13,7 @@ import java.util.Comparator;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 
 /** Persistent immutable nativepreview artifacts owned by one server world. */
 public final class ServerAssetPreviewStore {
@@ -33,7 +33,7 @@ public final class ServerAssetPreviewStore {
         this.maximumBytes = maximumBytes;
     }
 
-    public static <T> T withPublicationGuard(BooleanSupplier allowed, AssetTransferIoExecutor.IoSupplier<T> operation)
+    public static <T> T withPublicationGuard(BooleanSupplier allowed, BoundedIoExecutor.IoSupplier<T> operation)
             throws Exception {
         BooleanSupplier previous = PUBLICATION_GUARD.get();
         PUBLICATION_GUARD.set(allowed);
@@ -111,7 +111,7 @@ public final class ServerAssetPreviewStore {
             content = input.readNBytes(descriptor.encodedBytes() + 1);
         }
         if (content.length != descriptor.encodedBytes()
-                || !AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(content))
+                || !AssetHashing.toHex(AssetHashing.newSha256().digest(content))
                         .equals(descriptor.sha256())) {
             throw new IOException("Preview artifact does not match its descriptor");
         }

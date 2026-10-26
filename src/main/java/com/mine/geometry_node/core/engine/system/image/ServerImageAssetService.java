@@ -14,7 +14,7 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExtern
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
 import com.mine.geometry_node.core.engine.service.GraphEngineServices;
 import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.neoforge.common.NeoForge;
@@ -233,7 +233,7 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
 
     private static final class ServerState {
         private final MinecraftServer server;
-        private final AssetTransferIoExecutor io;
+        private final BoundedIoExecutor io;
         private final Map<String, CompletableFuture<GraphEngineServices.VisualAsset>> inFlight =
                 new ConcurrentHashMap<>();
         private final LinkedHashMap<Path, CachedAsset> cache = new LinkedHashMap<>(16, 0.75f, true);
@@ -245,7 +245,7 @@ public final class ServerImageAssetService implements ServerEngine, BlueprintExt
 
         private ServerState(MinecraftServer server) {
             this.server = server;
-            this.io = new AssetTransferIoExecutor("GeometryNode-ServerImage-IO", 1, IO_QUEUE_CAPACITY);
+            this.io = new BoundedIoExecutor("GeometryNode-ServerImage-IO", 1, IO_QUEUE_CAPACITY);
             this.cacheRegistration = CacheRegistry.GLOBAL.register(new CacheDescriptor("geometry_node:runtime.server_images",
                     "geometry_node.cache.runtime.server_images", CacheDescriptor.Domain.SERVER,
                     CacheDescriptor.Storage.MEMORY, CacheDescriptor.Lifetime.CONNECTION), new ManagedCache() {

@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.viewport.entity;
 
 import com.mine.geometry_node.GeometryNode;
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.scene.SceneChange;
 import com.mine.geometry_node.core.engine.system.scene.SceneDocument;
 import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
@@ -397,7 +397,7 @@ public final class ViewportNativeEntityEditing {
     }
     static long nextVersion() { return VERSION_CLOCK.updateAndGet(Math::incrementExact); }
     private static boolean canEdit(ServerPlayer player) {
-        return RemoteAssetPermissions.canManageAssets(player);
+        return WorldEditPermissions.canManageWorld(player);
     }
     private static boolean available(ServerPlayer player, Entity entity) {
         return !entity.isRemoved() && entity.isAlive() && entity.level() == player.level() && validPosition(player, entity.position());

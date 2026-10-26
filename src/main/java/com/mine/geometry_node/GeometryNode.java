@@ -35,9 +35,9 @@ import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetRep
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementDebugSync;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicExecutionService;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicProjectionService;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementDebugSync;
+import com.mine.geometry_node.core.engine.system.schematic.execution.SchematicExecutionService;
+import com.mine.geometry_node.core.engine.system.schematic.projection.SchematicProjectionService;
 import dev.architectury.registry.ReloadListenerRegistry;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;

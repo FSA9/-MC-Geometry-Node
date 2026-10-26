@@ -1,10 +1,10 @@
 package com.mine.geometry_node.core.engine.system.entity.preview;
 
-import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
 import com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService;
 import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.entitypreview.*;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
@@ -38,7 +38,7 @@ public final class ServerEntityPreviewService {
         ServerPlayer player = server.getPlayerList().getPlayer(original.getUUID());
         if (player == null || player.connection != original.connection || player.hasDisconnected() || !server.isRunning()) return;
         boolean allowed = LIMITS.computeIfAbsent(player.connection, ignored -> new EntityPreviewRateLimit()).acquire(System.nanoTime());
-        String failure = !allowed ? "rate_limited" : !RemoteAssetPermissions.canManageAssets(player) ? "permission_denied" : "";
+        String failure = !allowed ? "rate_limited" : !WorldEditPermissions.canManageWorld(player) ? "permission_denied" : "";
         List<PacketEntityPreviewResponse.Entry> entries = new ArrayList<>(request.targets().size());
         for (EntityPreviewTarget target : request.targets()) entries.add(failure.isEmpty() ? resolve(server, target) : unavailable(target, failure));
         NetworkHandler.sendToPlayer(player, new PacketEntityPreviewResponse(request.requestId(), entries));

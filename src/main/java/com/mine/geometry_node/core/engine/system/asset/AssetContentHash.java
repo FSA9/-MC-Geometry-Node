@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.asset.transfer.model;
+package com.mine.geometry_node.core.engine.system.asset;
 
 import java.util.Locale;
 

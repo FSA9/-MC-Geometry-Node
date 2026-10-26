@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.asset.transfer.io;
+package com.mine.geometry_node.core.utils.io;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -8,10 +8,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class AssetTransferIoExecutor implements AutoCloseable {
+public final class BoundedIoExecutor implements AutoCloseable {
     private final ExecutorService executor;
 
-    public AssetTransferIoExecutor(String threadPrefix, int threadCount, int queueCapacity) {
+    public BoundedIoExecutor(String threadPrefix, int threadCount, int queueCapacity) {
         AtomicInteger threadIds = new AtomicInteger();
         executor = new ThreadPoolExecutor(
                 Math.max(1, threadCount), Math.max(1, threadCount), 0L, TimeUnit.MILLISECONDS,
@@ -30,11 +30,11 @@ public final class AssetTransferIoExecutor implements AutoCloseable {
                 try {
                     return operation.get();
                 } catch (Exception exception) {
-                    throw new AssetTransferIoException(exception);
+                    throw new IoExecutionException(exception);
                 }
             }, executor);
         } catch (RejectedExecutionException exception) {
-            return CompletableFuture.failedFuture(new AssetTransferIoException(exception));
+            return CompletableFuture.failedFuture(new IoExecutionException(exception));
         }
     }
 
@@ -53,7 +53,7 @@ public final class AssetTransferIoExecutor implements AutoCloseable {
     @FunctionalInterface public interface IoSupplier<T> { T get() throws Exception; }
     @FunctionalInterface public interface IoRunnable { void run() throws Exception; }
 
-    public static final class AssetTransferIoException extends RuntimeException {
-        private AssetTransferIoException(Throwable cause) { super(cause); }
+    public static final class IoExecutionException extends RuntimeException {
+        private IoExecutionException(Throwable cause) { super(cause); }
     }
 }

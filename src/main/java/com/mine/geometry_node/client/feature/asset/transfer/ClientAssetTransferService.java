@@ -3,7 +3,7 @@ package com.mine.geometry_node.client.feature.asset.transfer;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.client.platform.ClientThread;
 import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferErrorCode;
@@ -49,8 +49,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
     private static final int HISTORY_LIMIT = 50;
     private static final long RESPONSE_TIMEOUT_SECONDS = 10L;
 
-    private final AssetTransferIoExecutor io =
-            new AssetTransferIoExecutor("GeometryNode-AssetTransfer-ClientIO", 1, 64);
+    private final BoundedIoExecutor io =
+            new BoundedIoExecutor("GeometryNode-AssetTransfer-ClientIO", 1, 64);
     private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor(task -> {
         Thread thread = new Thread(task, "GeometryNode-AssetTransfer-Deadline");
         thread.setDaemon(true);

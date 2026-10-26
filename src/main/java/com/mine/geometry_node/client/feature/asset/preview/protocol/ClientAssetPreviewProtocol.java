@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.network.request.ClientRequestTracker;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
@@ -92,7 +92,7 @@ public final class ClientAssetPreviewProtocol {
                     || content.length != descriptor.encodedBytes()) {
                 throw new IllegalStateException("Invalid native preview response");
             }
-            String sha256 = AssetTransferHashing.toHex(AssetTransferHashing.newSha256().digest(content));
+            String sha256 = AssetHashing.toHex(AssetHashing.newSha256().digest(content));
             if (!sha256.equals(descriptor.sha256())) throw new IllegalStateException("Preview SHA-256 mismatch");
             listener.completed(descriptor, content);
         }

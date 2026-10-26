@@ -1,7 +1,5 @@
-package com.mine.geometry_node.core.engine.system.entity.preview.appearance;
+package com.mine.geometry_node.core.engine.system.entity.appearance;
 
-import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewLimits;
-import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewNbt;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 
 import com.mine.geometry_node.mixin.entitypreview.EntityAppearanceInvoker;
@@ -108,7 +106,7 @@ public final class EntityAppearanceCapture {
     private static Component copyText(Component source) {
         MutableComponent result;
         if (source.getContents() instanceof PlainTextContents literal) {
-            if (literal.text().length() > EntityPreviewLimits.MAX_STRING_LENGTH)
+            if (literal.text().length() > EntityAppearanceLimits.MAX_STRING_LENGTH)
                 throw new IllegalArgumentException("Appearance text too long");
             result = Component.literal(literal.text());
         } else if (source.getContents() instanceof TranslatableContents translated) {
@@ -116,7 +114,7 @@ public final class EntityAppearanceCapture {
             for (int i = 0; i < arguments.length; i++) {
                 Object argument = arguments[i];
                 if (argument instanceof Component component) arguments[i] = copyText(component);
-                else if (argument instanceof String string && string.length() <= EntityPreviewLimits.MAX_STRING_LENGTH
+                else if (argument instanceof String string && string.length() <= EntityAppearanceLimits.MAX_STRING_LENGTH
                         || argument instanceof Number || argument instanceof Boolean) { /* Static argument. */ }
                 else throw new IllegalArgumentException("Unsupported appearance text argument");
             }
@@ -153,9 +151,9 @@ public final class EntityAppearanceCapture {
         }
         private void put(String name, Tag value) {
             if (EntityAppearanceSanitizer.allows(name)) {
-                EntityPreviewNbt.validate(value);
+                EntityAppearanceNbt.validate(value);
                 result.put(name, value);
-                EntityPreviewNbt.validate(result);
+                EntityAppearanceNbt.validate(result);
             }
         }
         @Override public <T> void storeNullable(String name, Codec<T> codec, T value) { if (value != null) store(name, codec, value); }
@@ -169,7 +167,7 @@ public final class EntityAppearanceCapture {
         @Override public void putDouble(String name, double value) { put(name, DoubleTag.valueOf(value)); }
         @Override public void putString(String name, String value) {
             if (EntityAppearanceSanitizer.allows(name)) {
-                if (value.length() > EntityPreviewLimits.MAX_STRING_LENGTH) throw new IllegalArgumentException("Appearance string too long");
+                if (value.length() > EntityAppearanceLimits.MAX_STRING_LENGTH) throw new IllegalArgumentException("Appearance string too long");
                 put(name, StringTag.valueOf(value));
             }
         }
@@ -218,11 +216,11 @@ public final class EntityAppearanceCapture {
         BoundedOps() { super(NbtOps.INSTANCE); }
         private void charge(int amount) {
             bytes += amount;
-            if (++operations > 8192 || bytes > EntityPreviewLimits.MAX_NBT_HEAP_BYTES)
+            if (++operations > 8192 || bytes > EntityAppearanceLimits.MAX_NBT_HEAP_BYTES)
                 throw new IllegalArgumentException("Entity appearance encoding complexity exceeded");
         }
         @Override public Tag createString(String value) {
-            if (value.length() > EntityPreviewLimits.MAX_STRING_LENGTH) throw new IllegalArgumentException("Appearance string too long");
+            if (value.length() > EntityAppearanceLimits.MAX_STRING_LENGTH) throw new IllegalArgumentException("Appearance string too long");
             charge(32 + value.length() * 3);
             return super.createString(value);
         }
@@ -235,8 +233,8 @@ public final class EntityAppearanceCapture {
         @Override public Tag createDouble(double v) { charge(16); return super.createDouble(v); }
         @Override public Tag createBoolean(boolean v) { return createByte((byte)(v ? 1 : 0)); }
         private <T> List<T> bounded(Stream<T> stream) {
-            List<T> result = stream.limit(EntityPreviewLimits.MAX_COLLECTION_LENGTH + 1).toList();
-            if (result.size() > EntityPreviewLimits.MAX_COLLECTION_LENGTH) throw new IllegalArgumentException("Appearance collection too long");
+            List<T> result = stream.limit(EntityAppearanceLimits.MAX_COLLECTION_LENGTH + 1).toList();
+            if (result.size() > EntityAppearanceLimits.MAX_COLLECTION_LENGTH) throw new IllegalArgumentException("Appearance collection too long");
             charge(32 + 8 * result.size());
             return result;
         }

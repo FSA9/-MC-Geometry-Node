@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.schematic;
+package com.mine.geometry_node.core.engine.system.schematic.execution;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.config.SchematicServerConfig;
@@ -6,7 +6,8 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExecut
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitHandler;
 import com.mine.geometry_node.core.engine.blueprint.runtime.wait.BlueprintExternalWaitRequest;
 import com.mine.geometry_node.core.engine.runtime.ServerEngine;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.schematic.SchematicData;
 import com.mine.geometry_node.core.schematic.SchematicPaths;
@@ -34,7 +35,7 @@ public final class SchematicExecutionService implements ServerEngine, BlueprintE
     private static final int OPERATIONS_PER_LEVEL_TICK = 4_096;
     private static final int OPERATIONS_PER_TASK_QUANTUM = 512;
 
-    private final Map<MinecraftServer, AssetTransferIoExecutor> executors = new ConcurrentHashMap<>();
+    private final Map<MinecraftServer, BoundedIoExecutor> executors = new ConcurrentHashMap<>();
     private final Map<BlueprintExecutionHandle, PendingExecution> pending = new ConcurrentHashMap<>();
     private final Map<ServerLevel, ArrayDeque<BlueprintExecutionHandle>> readyQueues = new ConcurrentHashMap<>();
     private final Map<ServerLevel, Set<String>> reservedPlacementKeys = new ConcurrentHashMap<>();
@@ -80,8 +81,8 @@ public final class SchematicExecutionService implements ServerEngine, BlueprintE
         if (level == null) return false;
 
         MinecraftServer server = level.getServer();
-        AssetTransferIoExecutor executor = executors.computeIfAbsent(server,
-                ignored -> new AssetTransferIoExecutor("GeometryNode-Schematic-IO", 1, IO_QUEUE_CAPACITY));
+        BoundedIoExecutor executor = executors.computeIfAbsent(server,
+                ignored -> new BoundedIoExecutor("GeometryNode-Schematic-IO", 1, IO_QUEUE_CAPACITY));
         AtomicBoolean cancelled = new AtomicBoolean();
         CompletableFuture<SchematicData> future = executor.submit(() -> {
             if (cancelled.get()) throw new CancellationException("Schematic load was cancelled");
@@ -200,7 +201,7 @@ public final class SchematicExecutionService implements ServerEngine, BlueprintE
         pending.forEach((handle, execution) -> {
             if (execution.server == server && pending.remove(handle, execution)) execution.cancel();
         });
-        AssetTransferIoExecutor executor = executors.remove(server);
+        BoundedIoExecutor executor = executors.remove(server);
         if (executor != null) executor.close();
     }
 

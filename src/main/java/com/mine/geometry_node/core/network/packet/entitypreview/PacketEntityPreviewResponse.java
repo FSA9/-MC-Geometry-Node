@@ -1,8 +1,9 @@
 package com.mine.geometry_node.core.network.packet.entitypreview;
 
-import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceSanitizer;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceLimits;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
 import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewLimits;
-import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewNbt;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceNbt;
 import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewTarget;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -20,8 +21,8 @@ public record PacketEntityPreviewResponse(long requestId, List<PacketEntityPrevi
                 for (Entry entry : p.entries()) {
                     EntityPreviewPacketCodecs.target(b, entry.target());
                     b.writeUtf(entry.message(), EntityPreviewLimits.MAX_MESSAGE_LENGTH);
-                    b.writeUtf(entry.template().entityTypeId(), EntityPreviewLimits.MAX_TYPE_LENGTH);
-                    if (!entry.template().isEmpty()) b.writeByteArray(EntityPreviewNbt.encode(entry.template().data()));
+                    b.writeUtf(entry.template().entityTypeId(), EntityAppearanceLimits.MAX_TYPE_LENGTH);
+                    if (!entry.template().isEmpty()) b.writeByteArray(EntityAppearanceNbt.encode(entry.template().data()));
                 }
                 if (b.writerIndex() - start > EntityPreviewLimits.MAX_RESPONSE_BYTES) throw new IllegalArgumentException("Entity preview response too large");
             }, b -> {
@@ -31,11 +32,11 @@ public record PacketEntityPreviewResponse(long requestId, List<PacketEntityPrevi
                 for (int i = 0; i < count; i++) {
                     EntityPreviewTarget target = EntityPreviewPacketCodecs.target(b);
                     String message = b.readUtf(EntityPreviewLimits.MAX_MESSAGE_LENGTH);
-                    String type = b.readUtf(EntityPreviewLimits.MAX_TYPE_LENGTH);
+                    String type = b.readUtf(EntityAppearanceLimits.MAX_TYPE_LENGTH);
                     EntityTemplateValue template = EntityTemplateValue.EMPTY;
                     if (!type.isEmpty()) {
                         if (Identifier.tryParse(type) == null) throw new IllegalArgumentException("Invalid appearance entity type");
-                        var data = EntityPreviewNbt.decode(b.readByteArray(EntityPreviewLimits.MAX_APPEARANCE_BYTES));
+                        var data = EntityAppearanceNbt.decode(b.readByteArray(EntityAppearanceLimits.MAX_APPEARANCE_BYTES));
                         var sanitized = EntityAppearanceSanitizer.sanitize(data);
                         if (!data.equals(sanitized)) throw new IllegalArgumentException("Nonappearance data in entity preview");
                         template = new EntityTemplateValue(type, sanitized);
@@ -51,12 +52,12 @@ public record PacketEntityPreviewResponse(long requestId, List<PacketEntityPrevi
     public record Entry(EntityPreviewTarget target, EntityTemplateValue template, String message) {
         public Entry {
             Objects.requireNonNull(target); Objects.requireNonNull(template); Objects.requireNonNull(message);
-            if (message.length() > EntityPreviewLimits.MAX_MESSAGE_LENGTH || template.entityTypeId().length() > EntityPreviewLimits.MAX_TYPE_LENGTH)
+            if (message.length() > EntityPreviewLimits.MAX_MESSAGE_LENGTH || template.entityTypeId().length() > EntityAppearanceLimits.MAX_TYPE_LENGTH)
                 throw new IllegalArgumentException("Entity preview text limit exceeded");
             if (template.isEmpty() != !message.isEmpty()) throw new IllegalArgumentException("Inconsistent entity preview result");
             if (!template.isEmpty()) {
                 var safe = EntityAppearanceSanitizer.sanitize(template.data());
-                EntityPreviewNbt.encode(safe);
+                EntityAppearanceNbt.encode(safe);
                 template = new EntityTemplateValue(template.entityTypeId(), safe);
             }
         }

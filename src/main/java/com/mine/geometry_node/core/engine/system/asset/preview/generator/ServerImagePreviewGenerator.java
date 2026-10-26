@@ -6,7 +6,7 @@ import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewForma
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewLimits;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import com.mine.geometry_node.core.engine.system.image.ImageAssetFormats;
 import net.minecraft.server.MinecraftServer;
 
@@ -54,7 +54,7 @@ public final class ServerImagePreviewGenerator implements ServerAssetPreviewGene
                 throw new PreviewUnavailableException("Encoded image nativepreview exceeds protocol limit");
             }
             AssetPreviewDescriptor descriptor = new AssetPreviewDescriptor(revision, AssetPreviewFormat.PNG,
-                    scaled.getWidth(), scaled.getHeight(), encodedBytes, AssetTransferHashing.sha256(staging));
+                    scaled.getWidth(), scaled.getHeight(), encodedBytes, AssetHashing.sha256(staging));
             return store.publish(server, staging, descriptor);
         } finally {
             Files.deleteIfExists(staging);

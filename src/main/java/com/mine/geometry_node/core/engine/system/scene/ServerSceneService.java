@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.scene;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneEdit;
 import com.mine.geometry_node.core.network.packet.scene.PacketSceneSnapshot;
@@ -71,14 +71,14 @@ public final class ServerSceneService {
         Receipt receipt = receipts.get(request.requestId());
         if (receipt != null) {
             if (!receipt.request.equals(request)) reply(player, request.requestId(), false, "Request ID reused with different content");
-            else NetworkHandler.sendToPlayer(player, receipt.response(RemoteAssetPermissions.canManageAssets(player)));
+            else NetworkHandler.sendToPlayer(player, receipt.response(WorldEditPermissions.canManageWorld(player)));
             return;
         }
         boolean success = false;
         String message = "";
         boolean changed = false;
         try {
-            if (!RemoteAssetPermissions.canManageAssets(player)) throw new SecurityException("Scene editing requires world management permission");
+            if (!WorldEditPermissions.canManageWorld(player)) throw new SecurityException("Scene editing requires world management permission");
             VOLUMES.computeIfAbsent(player.level(), ignored -> new com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeRuntime())
                     .prepareChanges(request.changes());
             changed = SceneSavedData.get(player.level().getServer()).apply(request.dimension(), request.changes());
@@ -105,7 +105,7 @@ public final class ServerSceneService {
     private static PacketSceneSnapshot snapshot(ServerPlayer player, UUID id, boolean success, String message) {
         String dimension = player.level().dimension().identifier().toString();
         SceneDocument document = SceneSavedData.get(player.level().getServer()).document(dimension);
-        return new PacketSceneSnapshot(id, dimension, success, message, RemoteAssetPermissions.canManageAssets(player),
+        return new PacketSceneSnapshot(id, dimension, success, message, WorldEditPermissions.canManageWorld(player),
                 document.revision(), document.objects(), document.deletedVersions());
     }
     record Receipt(PacketSceneEdit request, PacketSceneSnapshot response) {

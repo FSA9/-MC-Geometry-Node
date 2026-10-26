@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.feature.asset.preview;
 
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewCachePaths;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import dev.architectury.platform.Platform;
 
 import java.nio.charset.StandardCharsets;
@@ -19,8 +19,8 @@ public final class ClientAssetPreviewPaths {
         if (stableServerIdentity == null || stableServerIdentity.isBlank()) {
             throw new IllegalArgumentException("stableServerIdentity must not be blank");
         }
-        var digest = AssetTransferHashing.newSha256();
-        String key = AssetTransferHashing.toHex(
+        var digest = AssetHashing.newSha256();
+        String key = AssetHashing.toHex(
                 digest.digest(stableServerIdentity.trim().getBytes(StandardCharsets.UTF_8)));
         return root().resolve(AssetPreviewCachePaths.validateCacheKey(key)).normalize();
     }

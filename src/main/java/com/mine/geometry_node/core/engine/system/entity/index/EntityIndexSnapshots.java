@@ -5,7 +5,7 @@ import com.mine.geometry_node.core.engine.attachment.EntityGraphAttachment;
 import com.mine.geometry_node.core.engine.graph.scoped.ScopedStateNamespace;
 import com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository;
 import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
-import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceCapture;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture;
 import com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities;
 import com.mine.geometry_node.core.engine.system.faction.service.EntityFactions;
 import com.mine.geometry_node.core.engine.system.worldquery.model.*;

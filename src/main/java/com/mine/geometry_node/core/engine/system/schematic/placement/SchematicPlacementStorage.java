@@ -1,14 +1,14 @@
-package com.mine.geometry_node.core.engine.system.schematic;
+package com.mine.geometry_node.core.engine.system.schematic.placement;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.BlockSnapshot;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.ChangedBlock;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.PlacedEntity;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.SchematicPlacementRecord;
-import com.mine.geometry_node.core.engine.system.schematic.SchematicPlacementManager.TransformInfo;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.BlockSnapshot;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.ChangedBlock;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.PlacedEntity;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.SchematicPlacementRecord;
+import com.mine.geometry_node.core.engine.system.schematic.placement.SchematicPlacementManager.TransformInfo;
 import com.mojang.serialization.Codec;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;

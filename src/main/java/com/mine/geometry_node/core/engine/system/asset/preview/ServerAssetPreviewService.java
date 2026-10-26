@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.system.asset.preview.generator.Preview
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGenerator;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.ServerAssetPreviewGeneratorRegistry;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewCancel;
 import com.mine.geometry_node.core.network.packet.asset.preview.PacketAssetPreviewRequest;
@@ -41,7 +41,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
 
     private final ServerAssetPreviewStore store = new ServerAssetPreviewStore();
     private final ServerAssetPreviewGeneratorRegistry generators = new ServerAssetPreviewGeneratorRegistry(store);
-    private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ServerIO", 2, 64);
+    private final BoundedIoExecutor io = new BoundedIoExecutor("GeometryNode-Preview-ServerIO", 2, 64);
     private final Map<MinecraftServer, ServerState> states = new ConcurrentHashMap<>();
     private boolean initialized;
 
@@ -295,7 +295,7 @@ public final class ServerAssetPreviewService implements AutoCloseable {
     }
 
     private CompletableFuture<Void> scheduleMaintenance(ServerState state,
-            AssetTransferIoExecutor.IoRunnable operation) {
+            BoundedIoExecutor.IoRunnable operation) {
         synchronized (state) {
             CompletableFuture<?>[] pending = new CompletableFuture<?>[state.workers.size() + 1];
             pending[0] = state.maintenance;

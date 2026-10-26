@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.engine.system.asset.preview.generator.schemat
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnailProjection;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnailReader;
 import com.mine.geometry_node.core.engine.system.asset.preview.store.ServerAssetPreviewStore;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferHashing;
+import com.mine.geometry_node.core.engine.system.asset.AssetHashing;
 import net.minecraft.server.MinecraftServer;
 
 import javax.imageio.ImageIO;
@@ -69,7 +69,7 @@ public final class ServerSchematicPreviewGenerator implements ServerAssetPreview
                 throw new PreviewUnavailableException("Encoded schematic preview exceeds protocol limit");
             }
             AssetPreviewDescriptor descriptor = new AssetPreviewDescriptor(revision, AssetPreviewFormat.PNG,
-                    cropped.getWidth(), cropped.getHeight(), encodedBytes, AssetTransferHashing.sha256(staging));
+                    cropped.getWidth(), cropped.getHeight(), encodedBytes, AssetHashing.sha256(staging));
             return store.publish(server, staging, descriptor);
         } finally {
             Files.deleteIfExists(staging);

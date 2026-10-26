@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.system.viewport.entity;
 
 import com.mine.geometry_node.core.engine.behavior.runtime.ExternalMovementLease;
 import com.mine.geometry_node.core.engine.behavior.runtime.navigation.BehaviorNavigationService;
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.viewport.EditCameraChunkService;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.viewport.*;
@@ -31,7 +31,7 @@ public final class ViewportEntityOrders {
                 long tick = level.getGameTime();
                 if (mob.isRemoved() || !mob.isAlive() || mob.level() != level || mob.isNoAi() || mob.isPassenger()
                         || order.player.hasDisconnected() || !order.player.isAlive() || order.player.level() != level
-                        || !RemoteAssetPermissions.canManageAssets(order.player)
+                        || !WorldEditPermissions.canManageWorld(order.player)
                         || tick >= order.expires || (order.started && (mob.position().distanceToSqr(order.target) <= .8 * .8
                         || mob.getNavigation().isDone()))) { stop(mob); continue; }
                 if (!order.started) continue;
@@ -66,7 +66,7 @@ public final class ViewportEntityOrders {
         if (QUEUED.size() >= 8 && QUEUED.stream().noneMatch(b -> b.player == player)) {
             reply(player,packet,0,BlockPos.ZERO,"rate_limit"); return;
         }
-        if (!player.isAlive() || !RemoteAssetPermissions.canManageAssets(player)
+        if (!player.isAlive() || !WorldEditPermissions.canManageWorld(player)
                 || !level.dimension().identifier().equals(packet.dimension())
                 || EditCameraChunkService.positions(player).stream().noneMatch(p -> p.distanceToSqr(packet.camera()) <= 64 * 64)) {
             reply(player,packet,0,BlockPos.ZERO,"permission"); return;
@@ -102,7 +102,7 @@ public final class ViewportEntityOrders {
             skipped = 0;
             var chunk = level.getChunkSource().getChunkNow(batch.block.getX() >> 4, batch.block.getZ() >> 4);
             if (batch.player.hasDisconnected() || !batch.player.isAlive() || batch.player.level()!=level
-                    || !RemoteAssetPermissions.canManageAssets(batch.player)
+                    || !WorldEditPermissions.canManageWorld(batch.player)
                     || chunk == null || chunk.getBlockState(batch.block).isAir()) {
                 cancelPending(batch);
                 if (!batch.player.hasDisconnected()) reply(batch.player,batch.packet,batch.accepted,batch.block,

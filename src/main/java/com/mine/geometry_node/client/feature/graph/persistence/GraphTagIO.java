@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
+import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.metadata.TagPolicy;
@@ -79,7 +80,7 @@ public final class GraphTagIO {
                 comment,
                 readTags(root),
                 QuestDefinition.fromJson(root.get("quest")),
-                QuestConditionOverview.fromGraph(GSON.fromJson(root, NodeGraph.class)));
+                QuestConditionOverviewFactory.fromGraph(GSON.fromJson(root, NodeGraph.class)));
     }
 
     public static List<String> readTags(JsonObject root) {

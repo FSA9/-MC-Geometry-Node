@@ -1,6 +1,4 @@
-package com.mine.geometry_node.core.engine.system.entity.preview.appearance;
-
-import com.mine.geometry_node.core.engine.system.entity.preview.protocol.EntityPreviewNbt;
+package com.mine.geometry_node.core.engine.system.entity.appearance;
 
 import net.minecraft.nbt.*;
 
@@ -33,13 +31,13 @@ public final class EntityAppearanceSanitizer {
     public static boolean allows(String field) { return SCALARS.contains(field) || COMPLEX.contains(field); }
 
     public static CompoundTag sanitize(CompoundTag source) {
-        EntityPreviewNbt.validate(source);
+        EntityAppearanceNbt.validate(source);
         CompoundTag result = new CompoundTag();
         for (var entry : source.entrySet()) {
             Tag value = field(entry.getKey(), entry.getValue());
             if (value != null) result.put(entry.getKey(), value);
         }
-        EntityPreviewNbt.validate(result);
+        EntityAppearanceNbt.validate(result);
         return result;
     }
 

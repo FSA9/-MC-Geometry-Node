@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.feature.asset.preview.protocol.ClientAssetP
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewResultCode;
 import com.mine.geometry_node.core.engine.system.asset.preview.AssetPreviewRevision;
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 
 import com.mine.geometry_node.core.cache.*;
 import java.util.HashSet;
@@ -25,7 +25,7 @@ public final class ClientAssetPreviewService implements AutoCloseable {
     public static final ClientAssetPreviewService INSTANCE = new ClientAssetPreviewService();
 
     private final ClientAssetPreviewCache cache = new ClientAssetPreviewCache();
-    private final AssetTransferIoExecutor io = new AssetTransferIoExecutor("GeometryNode-Preview-ClientIO", 2, 64);
+    private final BoundedIoExecutor io = new BoundedIoExecutor("GeometryNode-Preview-ClientIO", 2, 64);
     private final Map<CacheKey, Entry> entries = new LinkedHashMap<>();
     // A completed preview still owns its on-disk artifact until the view unsubscribes.
     private final Map<UUID, CacheKey> holders = new LinkedHashMap<>();

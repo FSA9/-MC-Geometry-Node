@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.faction.service;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.faction.*;
 import net.minecraft.server.MinecraftServer;
@@ -37,7 +37,7 @@ public final class ServerFactionRequests {
         }
         ServerPlayer player = server.getPlayerList().getPlayer(original.getUUID());
         if (player == null || player.connection != original.connection || player.hasDisconnected() || !server.isRunning()) return;
-        if (!RemoteAssetPermissions.canManageAssets(player)) {
+        if (!WorldEditPermissions.canManageWorld(player)) {
             SESSIONS.remove(player.connection);
             send(player, new PacketFactionResult(request.requestId(), false, "permission_denied", "")); return;
         }
@@ -79,7 +79,7 @@ public final class ServerFactionRequests {
             ServerPlayer viewer = connection.getPlayer();
             if (viewer == author || !session.subscribed || viewer.level().getServer() != server) return;
             if (viewer.hasDisconnected() || server.getPlayerList().getPlayer(viewer.getUUID()) != viewer
-                    || !RemoteAssetPermissions.canManageAssets(viewer)) { session.subscribed = false; return; }
+                    || !WorldEditPermissions.canManageWorld(viewer)) { session.subscribed = false; return; }
             send(viewer, update);
         });
     }

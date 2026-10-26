@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.entity.index;
 
 import com.mine.geometry_node.core.engine.metadata.OwnerMetadata;
-import com.mine.geometry_node.core.engine.system.entity.preview.appearance.EntityAppearanceSanitizer;
+import com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceSanitizer;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import java.util.Objects;

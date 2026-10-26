@@ -2,6 +2,8 @@
 
 这里拥有连接级实体请求、注册命令和外观快照；具体窗口、草稿和绘制控件由 UI 拥有。本包不保存完整实体对象或编辑器视图。
 
+核心侧的对应能力聚合在 `core/engine/system/entity`：`edit`、`index`、`preview` 管理权威操作，`appearance` 提供共同的外观规则与编解码。两侧按所有权划分，不要求目录完全镜像；完整边界见[引擎功能系统](../../../core/engine/system/README.md)。
+
 | 目录 | 职责与生命周期 |
 | --- | --- |
 | `edit` | [ClientEntityEditor](edit/ClientEntityEditor.java) 管理实体读取和带预期 revision 的修改；共用有界 FIFO、单个在途请求、发送间隔、超时和连接代次隔离。发送前校验修改载荷，返回结构化结果及失败消息键。 |

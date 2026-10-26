@@ -1,4 +1,4 @@
-package com.mine.geometry_node.core.engine.system.entity.preview.protocol;
+package com.mine.geometry_node.core.engine.system.entity.appearance;
 
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.ByteBufOutputStream;
@@ -8,14 +8,14 @@ import net.minecraft.nbt.*;
 import java.io.IOException;
 
 /** Bounds are checked before recursive copies and writes, and before allocations on reads. */
-public final class EntityPreviewNbt {
-    private EntityPreviewNbt() {}
+public final class EntityAppearanceNbt {
+    private EntityAppearanceNbt() {}
 
     public static void validate(Tag tag) { new Budget().visit(tag, 0); }
 
     public static byte[] encode(CompoundTag tag) {
         validate(tag);
-        var buffer = Unpooled.buffer(256, EntityPreviewLimits.MAX_APPEARANCE_BYTES);
+        var buffer = Unpooled.buffer(256, EntityAppearanceLimits.MAX_APPEARANCE_BYTES);
         try {
             NbtIo.write(tag, new ByteBufOutputStream(buffer));
             byte[] result = new byte[buffer.readableBytes()];
@@ -27,12 +27,12 @@ public final class EntityPreviewNbt {
     }
 
     public static CompoundTag decode(byte[] bytes) {
-        if (bytes.length > EntityPreviewLimits.MAX_APPEARANCE_BYTES)
+        if (bytes.length > EntityAppearanceLimits.MAX_APPEARANCE_BYTES)
             throw new IllegalArgumentException("Entity appearance byte limit exceeded");
         var buffer = Unpooled.wrappedBuffer(bytes);
         try {
             CompoundTag result = NbtIo.read(new ByteBufInputStream(buffer),
-                    new NbtAccounter(EntityPreviewLimits.MAX_NBT_HEAP_BYTES, EntityPreviewLimits.MAX_NBT_DEPTH));
+                    new NbtAccounter(EntityAppearanceLimits.MAX_NBT_HEAP_BYTES, EntityAppearanceLimits.MAX_NBT_DEPTH));
             if (buffer.isReadable()) throw new IllegalArgumentException("Trailing appearance data");
             validate(result);
             return result;
@@ -45,21 +45,21 @@ public final class EntityPreviewNbt {
         int nodes, bytes;
         void charge(int amount) {
             bytes += amount;
-            if (bytes > EntityPreviewLimits.MAX_APPEARANCE_BYTES)
+            if (bytes > EntityAppearanceLimits.MAX_APPEARANCE_BYTES)
                 throw new IllegalArgumentException("Entity appearance byte limit exceeded");
         }
         void string(String value) {
-            if (value.length() > EntityPreviewLimits.MAX_STRING_LENGTH)
+            if (value.length() > EntityAppearanceLimits.MAX_STRING_LENGTH)
                 throw new IllegalArgumentException("Entity appearance string limit exceeded");
             // Modified UTF-8 is bounded above by three bytes per UTF-16 code unit.
             charge(2 + 3 * value.length());
         }
         void length(int length) {
-            if (length > EntityPreviewLimits.MAX_COLLECTION_LENGTH)
+            if (length > EntityAppearanceLimits.MAX_COLLECTION_LENGTH)
                 throw new IllegalArgumentException("Entity appearance collection limit exceeded");
         }
         void visit(Tag tag, int depth) {
-            if (depth >= EntityPreviewLimits.MAX_NBT_DEPTH || ++nodes > EntityPreviewLimits.MAX_NBT_NODES)
+            if (depth >= EntityAppearanceLimits.MAX_NBT_DEPTH || ++nodes > EntityAppearanceLimits.MAX_NBT_NODES)
                 throw new IllegalArgumentException("Entity appearance complexity limit exceeded");
             charge(9);
             if (tag instanceof CompoundTag compound) {

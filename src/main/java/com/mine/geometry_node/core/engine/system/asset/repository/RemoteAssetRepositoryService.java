@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.asset.repository;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetLifecycleDispatcher;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.io.AssetTransferIoExecutor;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
 import com.mine.geometry_node.core.engine.system.asset.transfer.io.AtomicAssetCommitter;
 import com.mine.geometry_node.core.engine.system.asset.transfer.AssetTransferLimits;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
@@ -26,10 +26,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public final class RemoteAssetRepositoryService implements ServerEngine {
     public static final RemoteAssetRepositoryService INSTANCE = new RemoteAssetRepositoryService();
 
-    private final AssetTransferIoExecutor reads =
-            new AssetTransferIoExecutor("GeometryNode-AssetRepository-ReadIO", 2, 128);
-    private final AssetTransferIoExecutor mutations =
-            new AssetTransferIoExecutor("GeometryNode-AssetRepository-MutationIO", 2, 64);
+    private final BoundedIoExecutor reads =
+            new BoundedIoExecutor("GeometryNode-AssetRepository-ReadIO", 2, 128);
+    private final BoundedIoExecutor mutations =
+            new BoundedIoExecutor("GeometryNode-AssetRepository-MutationIO", 2, 64);
     private final Object transactionLock = new Object();
     private final Map<MinecraftServer, ServerTransactions> transactions =
             new IdentityHashMap<>();

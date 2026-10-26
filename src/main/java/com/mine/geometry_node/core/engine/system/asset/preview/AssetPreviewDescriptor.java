@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.engine.system.asset.preview;
 
-import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetContentHash;
+import com.mine.geometry_node.core.engine.system.asset.AssetContentHash;
 
 import java.util.Objects;
 

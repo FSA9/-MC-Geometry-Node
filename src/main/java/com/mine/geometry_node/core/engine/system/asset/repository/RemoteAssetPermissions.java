@@ -1,7 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.repository;
 
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 
 public final class RemoteAssetPermissions {
     private RemoteAssetPermissions() {
@@ -24,6 +24,6 @@ public final class RemoteAssetPermissions {
     }
 
     public static boolean canManageAssets(ServerPlayer player) {
-        return player != null && player.permissions().hasPermission(Permissions.COMMANDS_OWNER);
+        return WorldEditPermissions.canManageWorld(player);
     }
 }

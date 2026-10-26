@@ -1,6 +1,6 @@
 package com.mine.geometry_node.core.network;
 
-import com.mine.geometry_node.core.engine.system.asset.repository.RemoteAssetPermissions;
+import com.mine.geometry_node.core.engine.security.WorldEditPermissions;
 import com.mine.geometry_node.core.engine.system.entity.index.ServerEntityIndexService;
 import com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexRequest;
 import com.mine.geometry_node.core.network.packet.entityindex.PacketEntityIndexResult;
@@ -36,7 +36,7 @@ public final class ServerEntityIndexRequests {
         long revision = 0;
         String message = "";
         try {
-            if (!RemoteAssetPermissions.canManageAssets(player)) message = "permission_denied";
+            if (!WorldEditPermissions.canManageWorld(player)) message = "permission_denied";
             else {
                 long now = System.nanoTime();
                 Long previous = LAST_REQUEST.get(player.connection);
