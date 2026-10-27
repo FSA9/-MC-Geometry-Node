@@ -13,7 +13,9 @@ import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTrans
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
 import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectKey;
 import com.mine.geometry_node.core.engine.system.datalibrary.model.DataLibraryObjectFingerprint;
-import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibraryFileStore;
+import com.mine.geometry_node.core.utils.io.BoundedIoExecutor;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibraryJsonCodec;
 import com.mine.geometry_node.core.engine.system.datalibrary.storage.DataLibraryLoadResult;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -22,6 +24,8 @@ import com.mine.geometry_node.core.network.packet.data.library.PacketRemoteDataL
 import com.mine.geometry_node.core.network.packet.data.library.RemoteDataLibraryOperation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.HolderLookup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -34,17 +38,21 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Remote Data Library control plane; document bytes use the shared file transfer service. */
 public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryGateway {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GeometryNode.class);
     public static final NetworkRemoteDataLibraryGateway INSTANCE = new NetworkRemoteDataLibraryGateway();
     private static final ClientRequestTracker.Group REQUESTS =
             ClientRequestTracker.group("remote-data-library", ClientThread::execute);
     private final AtomicReference<Snapshot> snapshot = new AtomicReference<>(Snapshot.EMPTY);
     private final Consumer<Runnable> clientQueue;
+    private final JsonIo jsonIo;
+    private final Supplier<HolderLookup.Provider> registrySource;
     private final Deque<Runnable> mutations = new ArrayDeque<>();
     private boolean mutationRunning;
     private long connectionGeneration;
@@ -54,7 +62,23 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     }
 
     NetworkRemoteDataLibraryGateway(Consumer<Runnable> clientQueue) {
+        this(clientQueue, DownloadIoHolder.IO::submit, NetworkRemoteDataLibraryGateway::registries);
+    }
+
+    NetworkRemoteDataLibraryGateway(Consumer<Runnable> clientQueue, JsonIo jsonIo,
+                                    Supplier<HolderLookup.Provider> registrySource) {
         this.clientQueue = java.util.Objects.requireNonNull(clientQueue);
+        this.jsonIo = java.util.Objects.requireNonNull(jsonIo);
+        this.registrySource = java.util.Objects.requireNonNull(registrySource);
+    }
+
+    @FunctionalInterface
+    interface JsonIo {
+        CompletableFuture<JsonElement> submit(BoundedIoExecutor.IoSupplier<JsonElement> read);
+    }
+
+    private static final class DownloadIoHolder {
+        private static final BoundedIoExecutor IO = new BoundedIoExecutor("GeometryNode-DataLibrary-Read", 1, 32);
     }
 
     @Override public List<DataLibraryRepository.Folder> folderSnapshot() { return snapshot.get().folders(); }
@@ -339,28 +363,58 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
         UUID job = ClientAssetTransferService.INSTANCE.submit(List.of(
                 DataLibraryTransferRequests.download(target)));
         ClientAssetTransferService.INSTANCE.onCompletion(job, (result, error) -> {
+            if (!isGenerationActive(generation)) {
+                deleteQuietly(target);
+                return;
+            }
+            if (error == null && result != null
+                    && result.files().stream().allMatch(file -> file.state() == AssetTransferState.COMPLETED)) {
+                loadDownloadedSnapshot(generation, target, completion);
+                return;
+            }
             try {
-                if (!isGenerationActive(generation)) return;
-                if (error != null || result.files().stream().anyMatch(file -> file.state() != AssetTransferState.COMPLETED)) {
-                    rejectSnapshot(generation, result);
-                    failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD,
-                            transferFailure(result, error, "Data Library download failed"));
-                    return;
-                }
-                if (!Files.isRegularFile(target)) {
-                    throw new java.io.IOException("Downloaded Data Library file is missing");
-                }
-                DataLibraryLoadResult loaded = DataLibraryFileStore.read(target, registries());
-                publishLoadedSnapshot(generation, loaded);
-            } catch (Exception exception) {
-                if (isGenerationActive(generation)) {
-                    failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, exception.getMessage());
-                }
+                rejectSnapshot(generation, result);
+                failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD,
+                        transferFailure(result, error, "Data Library download failed"));
             } finally {
                 deleteQuietly(target);
                 if (isGenerationActive(generation)) run(completion);
             }
         });
+    }
+
+    void loadDownloadedSnapshot(long generation, Path target, Runnable completion) {
+        CompletableFuture<JsonElement> reading;
+        try {
+            reading = jsonIo.submit(() -> {
+                if (!isGenerationActive(generation)) return null;
+                return readDownloadedJson(target);
+            });
+        } catch (RuntimeException rejected) {
+            reading = CompletableFuture.failedFuture(rejected);
+        }
+        reading.whenComplete((parsed, error) -> {
+            // Normally on the worker; an already completed/rejected read only needs metadata cleanup.
+            deleteQuietly(target);
+            clientQueue.accept(() -> {
+                if (!isGenerationActive(generation)) return;
+                try {
+                    if (error != null) failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, rootMessage(error));
+                    else publishLoadedSnapshot(generation, DataLibraryJsonCodec.decodeParsed(parsed, registrySource.get()));
+                } catch (Exception invalid) {
+                    failure(AssetTransferPurpose.DATA_LIBRARY_DOWNLOAD, invalid.getMessage());
+                } finally {
+                    if (isGenerationActive(generation)) run(completion);
+                }
+            });
+        });
+    }
+
+    static JsonElement readDownloadedJson(Path target) throws java.io.IOException {
+        if (!Files.isRegularFile(target)) throw new java.io.IOException("Downloaded Data Library file is missing");
+        try (var reader = Files.newBufferedReader(target, StandardCharsets.UTF_8)) {
+            return JsonParser.parseReader(reader);
+        }
     }
 
     void publishLoadedSnapshot(long generation, DataLibraryLoadResult loaded) {
@@ -409,7 +463,7 @@ public final class NetworkRemoteDataLibraryGateway implements RemoteDataLibraryG
     }
 
     private static void failure(Object operation, String message) {
-        GeometryNode.LOGGER.warn("Remote Data Library operation {} failed: {}", operation, message);
+        LOGGER.warn("Remote Data Library operation {} failed: {}", operation, message);
     }
 
     private static String transferFailure(AssetTransferJobSnapshot result, Throwable error, String fallback) {

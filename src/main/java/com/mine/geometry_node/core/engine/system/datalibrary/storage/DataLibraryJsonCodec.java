@@ -86,6 +86,12 @@ public final class DataLibraryJsonCodec {
 
     public static DataLibraryLoadResult decode(String json, HolderLookup.Provider registries) {
         JsonElement parsed = JsonParser.parseString(java.util.Objects.requireNonNull(json, "Data Library JSON is required"));
+        return decodeParsed(parsed, registries);
+    }
+
+    /** Value codecs run on the caller's owner thread after syntax parsing may have completed elsewhere. */
+    public static DataLibraryLoadResult decodeParsed(JsonElement parsed, HolderLookup.Provider registries) {
+        java.util.Objects.requireNonNull(parsed, "Data Library JSON is required");
         if (!parsed.isJsonObject()) throw new IllegalArgumentException("Data Library root must be a JSON object");
         JsonObject root = parsed.getAsJsonObject();
 

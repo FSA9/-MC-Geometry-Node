@@ -24,8 +24,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 public class MultiblockStructureManager extends SimplePreparableReloadListener<Map<Identifier, JsonElement>> {
     public static final String DYNAMIC_REGISTRY_ID = "geometry_node:multiblock_structure";
@@ -35,8 +37,7 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
     private static final String FOLDER_NAME = "multiblocks";
     private static MultiblockStructureManager INSTANCE;
 
-    private Map<String, MultiblockStructure> structures = Collections.emptyMap();
-    private List<String> optionIds = List.of(ANY_STRUCTURE_ID);
+    private volatile StructureIndex structureIndex = StructureIndex.compile(Map.of());
 
     public MultiblockStructureManager() {
         INSTANCE = this;
@@ -50,7 +51,7 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
     }
 
     public List<String> getAllIds() {
-        return optionIds;
+        return structureIndex.optionIds();
     }
 
     @Override
@@ -83,13 +84,13 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
             }
         });
 
-        List<String> options = new ArrayList<>(loaded.keySet());
-        Collections.sort(options);
-        options.add(0, ANY_STRUCTURE_ID);
+        replaceStructures(loaded);
+        GeometryNode.LOGGER.info("[MultiblockStructureManager] Loaded {} multiblock structure(s)", loaded.size());
+    }
 
-        this.structures = Map.copyOf(loaded);
-        this.optionIds = List.copyOf(options);
-        GeometryNode.LOGGER.info("[MultiblockStructureManager] Loaded {} multiblock structure(s)", structures.size());
+    /** Publishes definitions, anchor indexes, and picker options as one reload snapshot. */
+    void replaceStructures(Map<String, MultiblockStructure> structures) {
+        structureIndex = StructureIndex.compile(structures);
     }
 
     public List<Match> findMatches(ServerLevel level, BlockPos changedPos, BlockState changedState, Set<String> interestedStructureIds) {
@@ -102,62 +103,87 @@ public class MultiblockStructureManager extends SimplePreparableReloadListener<M
             return List.of();
         }
 
-        List<MultiblockStructure> candidates = resolveCandidates(interestedStructureIds);
-        if (candidates.isEmpty()) {
-            return List.of();
-        }
+        return findMatches(changedPos, changedBlockId, interestedStructureIds,
+                worldPos -> BuiltInRegistries.BLOCK.getKey(level.getBlockState(worldPos).getBlock()));
+    }
 
+    /** World-independent matching entry point; the lookup is only called for relevant anchors. */
+    List<Match> findMatches(BlockPos changedPos, Identifier changedBlockId,
+                            Set<String> interestedStructureIds,
+                            Function<BlockPos, Identifier> blockAt) {
+        StructureIndex index = structureIndex;
+        if (!index.anchorsByBlock().containsKey(changedBlockId)) return List.of();
         List<Match> matches = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (MultiblockStructure structure : candidates) {
-            for (BlockEntry anchorEntry : structure.blocks()) {
-                if (!anchorEntry.blockId().equals(changedBlockId)) {
-                    continue;
-                }
-
-                BlockPos origin = changedPos.offset(
-                        -anchorEntry.offset().getX(),
-                        -anchorEntry.offset().getY(),
-                        -anchorEntry.offset().getZ()
-                );
-                if (!matchesAt(level, origin, structure)) {
-                    continue;
-                }
-
-                String key = structure.id() + "@" + origin.getX() + "," + origin.getY() + "," + origin.getZ();
-                if (seen.add(key)) {
-                    matches.add(new Match(structure.id(), origin, changedPos));
+        if (interestedStructureIds.contains(ANY_STRUCTURE_ID)) {
+            appendMatches(index.anchorsByBlock().getOrDefault(changedBlockId, List.of()),
+                    changedPos, blockAt, matches, seen);
+        } else {
+            // Preserve caller iteration order, as the former candidate list did.
+            for (String id : interestedStructureIds) {
+                Map<Identifier, List<Anchor>> anchors = index.anchorsByStructure().get(id);
+                if (anchors != null) {
+                    appendMatches(anchors.getOrDefault(changedBlockId, List.of()),
+                            changedPos, blockAt, matches, seen);
                 }
             }
         }
         return matches.isEmpty() ? List.of() : List.copyOf(matches);
     }
 
-    private List<MultiblockStructure> resolveCandidates(Set<String> interestedStructureIds) {
-        if (interestedStructureIds.contains(ANY_STRUCTURE_ID)) {
-            return List.copyOf(structures.values());
-        }
+    private static void appendMatches(List<Anchor> anchors, BlockPos changedPos,
+                                      Function<BlockPos, Identifier> blockAt,
+                                      List<Match> matches, Set<String> seen) {
+        for (Anchor anchor : anchors) {
+            MultiblockStructure structure = anchor.structure();
+            BlockPos origin = changedPos.offset(-anchor.offset().getX(),
+                    -anchor.offset().getY(), -anchor.offset().getZ());
+            if (!matchesAt(blockAt, origin, structure)) continue;
 
-        List<MultiblockStructure> candidates = new ArrayList<>();
-        for (String id : interestedStructureIds) {
-            MultiblockStructure structure = structures.get(id);
-            if (structure != null) {
-                candidates.add(structure);
-            }
+            String key = structure.id() + "@" + origin.getX() + "," + origin.getY() + "," + origin.getZ();
+            if (seen.add(key)) matches.add(new Match(structure.id(), origin, changedPos));
         }
-        return candidates;
     }
 
-    private boolean matchesAt(ServerLevel level, BlockPos origin, MultiblockStructure structure) {
+    private static boolean matchesAt(Function<BlockPos, Identifier> blockAt,
+                                      BlockPos origin, MultiblockStructure structure) {
         for (BlockEntry entry : structure.blocks()) {
             BlockPos worldPos = origin.offset(entry.offset().getX(), entry.offset().getY(), entry.offset().getZ());
-            BlockState state = level.getBlockState(worldPos);
-            Identifier blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-            if (!entry.blockId().equals(blockId)) {
-                return false;
-            }
+            if (!entry.blockId().equals(blockAt.apply(worldPos))) return false;
         }
         return true;
+    }
+
+    private record Anchor(MultiblockStructure structure, BlockPos offset) {}
+
+    private record StructureIndex(Map<String, Map<Identifier, List<Anchor>>> anchorsByStructure,
+                                  Map<Identifier, List<Anchor>> anchorsByBlock,
+                                  List<String> optionIds) {
+        private static StructureIndex compile(Map<String, MultiblockStructure> structures) {
+            // Match the former immutable map's wildcard structure iteration order.
+            Map<String, MultiblockStructure> definitions = Map.copyOf(structures);
+            Map<String, Map<Identifier, List<Anchor>>> byStructure = new HashMap<>();
+            Map<Identifier, List<Anchor>> byBlock = new HashMap<>();
+            for (Map.Entry<String, MultiblockStructure> definition : definitions.entrySet()) {
+                Map<Identifier, List<Anchor>> local = new LinkedHashMap<>();
+                for (BlockEntry entry : definition.getValue().blocks()) {
+                    Anchor anchor = new Anchor(definition.getValue(), entry.offset());
+                    local.computeIfAbsent(entry.blockId(), ignored -> new ArrayList<>()).add(anchor);
+                    byBlock.computeIfAbsent(entry.blockId(), ignored -> new ArrayList<>()).add(anchor);
+                }
+                byStructure.put(definition.getKey(), immutableLists(local));
+            }
+            List<String> options = new ArrayList<>(definitions.keySet());
+            Collections.sort(options);
+            options.add(0, ANY_STRUCTURE_ID);
+            return new StructureIndex(Map.copyOf(byStructure), immutableLists(byBlock), List.copyOf(options));
+        }
+
+        private static <K> Map<K, List<Anchor>> immutableLists(Map<K, List<Anchor>> source) {
+            Map<K, List<Anchor>> result = new HashMap<>();
+            source.forEach((key, anchors) -> result.put(key, List.copyOf(anchors)));
+            return Map.copyOf(result);
+        }
     }
 
     private static MultiblockStructure parseStructure(String id, JsonElement json) {

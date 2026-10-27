@@ -192,14 +192,21 @@ public final class LocalAssetRepository implements AssetRepository {
         return tags;
     }
 
-    private static void sortFiles(List<File> files, File baseDirectory, boolean favorites) {
-        files.sort((first, second) -> {
-            if (first.isDirectory() && !second.isDirectory()) return -1;
-            if (!first.isDirectory() && second.isDirectory()) return 1;
-            return relativeLabel(first, baseDirectory, favorites)
-                    .compareToIgnoreCase(relativeLabel(second, baseDirectory, favorites));
+    static void sortFiles(List<File> files, File baseDirectory, boolean favorites) {
+        // Filesystem metadata and display paths are stable inputs for this listing. Read each
+        // once, rather than doing disk stat calls and path allocation inside every comparison.
+        List<SortEntry> entries = new ArrayList<>(files.size());
+        for (File file : files) {
+            entries.add(new SortEntry(file, file.isDirectory(), relativeLabel(file, baseDirectory, favorites)));
+        }
+        entries.sort((first, second) -> {
+            if (first.directory() != second.directory()) return first.directory() ? -1 : 1;
+            return first.label().compareToIgnoreCase(second.label());
         });
+        for (int i = 0; i < entries.size(); i++) files.set(i, entries.get(i).file());
     }
+
+    private record SortEntry(File file, boolean directory, String label) {}
 
     public static String pathKey(File file) {
         try {

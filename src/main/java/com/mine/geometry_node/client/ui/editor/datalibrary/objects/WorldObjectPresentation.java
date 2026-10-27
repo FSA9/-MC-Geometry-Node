@@ -1,6 +1,5 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary.objects;
 
-import com.mine.geometry_node.client.ui.editor.datalibrary.inspector.DatabaseSelection;
 import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectDataEdits;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionCatalog;
@@ -10,7 +9,7 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.UUID;
 
-/** DTO-only projections shared by table cells and their inspector; owns no query or View state. */
+/** Presentation helpers for world-object table cells; owns no query or View state. */
 final class WorldObjectPresentation {
     private WorldObjectPresentation() {}
 
@@ -46,14 +45,6 @@ final class WorldObjectPresentation {
         try { return Math.max(0, Integer.parseInt(entry.references().getOrDefault(WorldObjectDataEdits.COUNT_REFERENCE, "0"))); }
         catch (NumberFormatException invalid) { return 0; }
     }
-    static DatabaseSelection.EntityPreview entityPreview(WorldObjectEntry entry) {
-        if (!entry.provider().equals("native") || entry.type().equals("minecraft:interaction")) return null;
-        try {
-            return new DatabaseSelection.EntityPreview(entityId(entry),
-                    entry.dimension(), null);
-        } catch (IllegalArgumentException invalid) { return null; }
-    }
-    static String number(double value) {return String.format(Locale.ROOT,"%.2f",value);}
     static String position(WorldObjectEntry entry) {
         return String.format(Locale.ROOT, "%.1f, %.1f, %.1f", entry.position().x, entry.position().y, entry.position().z);
     }

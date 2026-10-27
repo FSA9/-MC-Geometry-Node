@@ -58,7 +58,7 @@ final class UiDataDictionaryContent extends FrameLayout {
     private final UiActionButton editMode;
     private final UiActionButton restore;
     private final UiDisplayText message;
-    private final UiDisplayText selectionHint;
+    private final UiDisplayText readonlyHint;
     private final UiTextInput keyInput;
     private final UiSelectButton valueType;
     private final UiTextInput valueInput;
@@ -183,7 +183,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         content.addView(left, new LinearLayout.LayoutParams(0, -1, 0.4f)); content.addView(divider(context), params(1, -1));
 
         LinearLayout right = column(context); right.setPadding(px(20), px(16), px(20), px(16));
-        selectionHint = text(context, tr("select"), theme.text().muted()); right.addView(selectionHint, params(-1, 28));
+        readonlyHint = text(context, tr("readonly"), theme.text().muted()); right.addView(readonlyHint, params(-1, 28));
         form = column(context); right.addView(form, params(-1, -2));
         LinearLayout meta = row(context);
         LinearLayout keyColumn = column(context);
@@ -423,7 +423,6 @@ final class UiDataDictionaryContent extends FrameLayout {
             valueType.setValue(typeLabel(selectedType));
             try { tree.setText(DataDictionaryDraft.tree(DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), value))); }
             catch (IllegalArgumentException invalid) { tree.setText(""); showingPreview = false; }
-            selectionHint.setText(newEntry ? tr("add") : key == null ? tr("select") : selectedType.editable() ? "" : tr("readonly"));
             updateFormLayout();
             if (saved != null) {
                 keyInput.setSelection(Math.max(0, saved.keyStart()), Math.max(0, saved.keyEnd()));
@@ -541,7 +540,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         boolean canEdit = editable() && draft != null;
         boolean selected = selectedKey != null || adding;
         form.setVisibility(selected ? VISIBLE : GONE);
-        selectionHint.setVisibility(!selected || !selectedType.editable() ? VISIBLE : GONE);
+        readonlyHint.setVisibility(selected && !selectedType.editable() ? VISIBLE : GONE);
         booleanInput.setEnabled(canEdit && selected); booleanRow.setEnabled(canEdit && selected);
         restore.setEnabled(canEdit && selected && formDirty);
         keyInput.setEnabled(canEdit && selected && selectedType.editable());

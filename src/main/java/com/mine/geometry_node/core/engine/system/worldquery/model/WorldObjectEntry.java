@@ -3,7 +3,7 @@ package com.mine.geometry_node.core.engine.system.worldquery.model;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import java.nio.charset.StandardCharsets;
+import com.mine.geometry_node.core.utils.ColumnFilters;
 import java.util.*;
 
 /** Immutable metadata only. An empty name/tags/source means the owner supplies no such metadata. */
@@ -66,7 +66,7 @@ public record WorldObjectEntry(String key, String provider, String type, String 
         if (entityState != null) size += 53 + 16 * entityState.factions().size();
         return size;
     }
-    private static int bytes(String value) { return 5 + value.getBytes(StandardCharsets.UTF_8).length; }
+    private static int bytes(String value) { return ColumnFilters.wireTextBytes(value); }
     /** Length framing avoids collisions when a provider's own IDs contain delimiters. */
     public static String key(String provider, String dimension, String identity) {
         return provider.length() + ":" + provider + dimension.length() + ":" + dimension + identity;

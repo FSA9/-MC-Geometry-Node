@@ -130,11 +130,21 @@ public final class ClientWorldObjectRepository {
             if (target == null || target.closed || target.tagRequestId != packet.requestId()) return;
             target.tagRequestId = 0;
             if (target.scopeRevision == target.tagScopeRevision) target.tagMessage = packet.message();
+            if (target.dataOnly && target.scopeRevision == target.tagScopeRevision
+                    && Set.of(WorldObjectTagEdits.PREFIX + "conflict", WorldObjectTagEdits.PREFIX + "unavailable",
+                    WorldObjectTagEdits.PREFIX + "forbidden").contains(packet.message())) {
+                // A pinned editor cannot reacquire an authorized tag snapshot through the table's filters.
+                // Keep its identity/data lifetime, but require reopening before another tag mutation.
+                target.tagTargetInvalid = true;
+            }
             if ((packet.message().isEmpty() || packet.message().equals(WorldObjectTagEdits.PREFIX + "unavailable")
                     || packet.message().equals(WorldObjectTagEdits.PREFIX + "conflict")) && target.scopeRevision == target.tagScopeRevision) {
                 var snapshot = target.published; var page = snapshot.page();
                 var entries = page.entries().stream().map(entry -> {
-                    if (!packet.message().isEmpty() || !entry.equals(target.tagEntry)) return entry;
+                    if (!packet.message().isEmpty() || !entry.key().equals(target.tagEntry.key())
+                            || !Objects.equals(entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
+                            target.tagEntry.references().get(WorldObjectTagEdits.TARGET_REFERENCE))
+                            || !entry.tags().equals(target.tagEntry.tags())) return entry;
                     var tags = target.tagAdded
                             ? com.mine.geometry_node.core.metadata.TagSet.add(entry.tags(), List.of(target.editedTag), com.mine.geometry_node.core.metadata.TagPolicy.EXACT)
                             : com.mine.geometry_node.core.metadata.TagSet.remove(entry.tags(), List.of(target.editedTag), com.mine.geometry_node.core.metadata.TagPolicy.EXACT);
@@ -144,8 +154,12 @@ public final class ClientWorldObjectRepository {
                 try {
                     target.published = new Snapshot(snapshot.query(), new WorldObjectPage(page.requestId(), entries, page.truncated(),
                             page.dimensionIds(), page.types(), page.coverage(), page.message(), page.counts()), false, snapshot.sequence() + 1);
-                } catch (IllegalArgumentException pageLimit) { /* Refresh below still runs. */ }
-                refresh = target.prepareQuery(snapshot.query(), true);
+                } catch (IllegalArgumentException pageLimit) {
+                    if (target.dataOnly) target.tagTargetInvalid = true;
+                }
+                // Metadata sessions retain exactly one target. A broad query could exclude the edited row
+                // and also cancel a concurrent dictionary save when rebuilding the query scope.
+                if (!target.dataOnly) refresh = target.prepareQuery(snapshot.query(), true);
             }
         }
         // Minecraft.execute may run inline on the client thread. Never dispatch while holding
@@ -207,7 +221,7 @@ public final class ClientWorldObjectRepository {
     }
     private void expire() { expire(System.nanoTime()); }
     void expire(long now) {
-        List<Session> changed = new ArrayList<>();
+        Set<Session> changed = new LinkedHashSet<>();
         List<PendingData> expiredData = new ArrayList<>();
         synchronized (this) {
             var data = pendingData.entrySet().iterator();
@@ -252,7 +266,7 @@ public final class ClientWorldObjectRepository {
         private volatile String tagMessage = "";
         private WorldObjectEntry tagEntry;
         private String editedTag;
-        private boolean tagAdded, retainingRows;
+        private boolean tagAdded, retainingRows, tagTargetInvalid;
         private volatile boolean closed;
         private final long sessionId;
         private final LinkedHashMap<String, DataSlot> dataSlots = new LinkedHashMap<>(16, .75f, true);
@@ -266,7 +280,7 @@ public final class ClientWorldObjectRepository {
         /** Current row has a server-advertised capability. Stays true during edits; disable controls with isTagUpdatePending(). */
         public boolean canEditTags(WorldObjectEntry entry) {
             synchronized (ClientWorldObjectRepository.this) {
-                if (closed || entry == null || published.loading()
+                if (closed || tagTargetInvalid || entry == null || published.loading()
                         || !published.entries().contains(entry) || !entry.references().containsKey(WorldObjectTagEdits.TARGET_REFERENCE)) return false;
                 try {
                     new PacketWorldObjectTagEdit(0, entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE), entry.key(), entry.tags(), "x", true);
@@ -278,7 +292,7 @@ public final class ClientWorldObjectRepository {
         /** Empty after success; otherwise database.tag_update_{pending,failed,conflict,forbidden,unavailable,invalid}. */
         public String tagUpdateMessage() { return tagMessage; }
         /** Returns true for a local no-op or when accepted for dispatch; false for invalid/stale rows or an already pending edit.
-         * Completion uses change listeners; success refreshes the original query while retaining visible rows. */
+         * Completion uses change listeners; table sessions refresh their query, pinned editors update only their target. */
         public boolean addTag(WorldObjectEntry entry, String tag) { return editTag(entry, tag, true); }
         public boolean removeTag(WorldObjectEntry entry, String tag) { return editTag(entry, tag, false); }
         private boolean editTag(WorldObjectEntry entry, String tag, boolean add) {
@@ -475,6 +489,7 @@ public final class ClientWorldObjectRepository {
             final List<PendingData> canceledData = new ArrayList<>();
             synchronized (ClientWorldObjectRepository.this) {
                 if (closed) throw new IllegalStateException("World query session is closed");
+                if (dataOnly) throw new IllegalStateException("Data edit sessions cannot replace their target");
                 retainingRows = retainRows;
                 if (!retainRows) {
                     scopeRevision++; tagMessage = "";

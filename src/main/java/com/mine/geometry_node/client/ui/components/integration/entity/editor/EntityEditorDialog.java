@@ -317,7 +317,6 @@ public final class EntityEditorDialog extends ModalWindowView {
             if (count >= 0) {
                 SpannableString counted = new SpannableString(label + "  " + count);
                 counted.setSpan(new ForegroundColorSpan(theme.text().muted()), label.length(), counted.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                counted.setSpan(new RelativeSizeSpan(.85f), label.length(), counted.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 caption = counted;
             }
             if (!button.getText().toString().contentEquals(caption)) button.setText(caption);

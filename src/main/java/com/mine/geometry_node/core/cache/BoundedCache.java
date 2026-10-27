@@ -24,6 +24,8 @@ public final class BoundedCache<K, V> implements AutoCloseable {
     private final LinkedHashMap<K, Value<V>> values = new LinkedHashMap<>(16, .75f, true);
     private final IdentityHashMap<V, Integer> owners = new IdentityHashMap<>();
     private long weight, generation;
+    private long earliestWrite;
+    private boolean expiryScheduled;
     private boolean closed;
 
     public BoundedCache(int maxEntries, long maxWeight, Duration ttl, ToLongFunction<V> weigher, Consumer<V> disposer) {
@@ -79,7 +81,11 @@ public final class BoundedCache<K, V> implements AutoCloseable {
                 weight -= eldest.weight;
                 release(eldest.value, retired);
             }
-            values.put(key, new Value<>(value, valueWeight, clock.getAsLong()));
+            long written = clock.getAsLong();
+            // Writes use a monotonic clock. A removed earliest entry may leave a conservative
+            // deadline; the next expiry pass will recompute it without maintaining another index.
+            if (values.isEmpty()) { earliestWrite = written; expiryScheduled = ttlNanos != 0; }
+            values.put(key, new Value<>(value, valueWeight, written));
             weight += valueWeight;
         }
         try { dispose(retired); }
@@ -112,6 +118,7 @@ public final class BoundedCache<K, V> implements AutoCloseable {
             retired = new ArrayList<>();
             for (Value<V> value : values.values()) release(value.value, retired);
             values.clear();
+            expiryScheduled = false;
             owners.clear();
             weight = 0;
         }
@@ -125,8 +132,11 @@ public final class BoundedCache<K, V> implements AutoCloseable {
         dispose(retired);
     }
     private void expire(List<V> retired) {
-        if (ttlNanos == 0) return;
+        if (ttlNanos == 0 || values.isEmpty()) return;
         long now = clock.getAsLong();
+        // Subtraction preserves nanoTime wraparound. LRU access order is independent of TTL.
+        if (expiryScheduled && now - earliestWrite < ttlNanos) return;
+        expiryScheduled = false;
         var iterator = values.values().iterator();
         while (iterator.hasNext()) {
             Value<V> entry = iterator.next();
@@ -134,6 +144,9 @@ public final class BoundedCache<K, V> implements AutoCloseable {
                 iterator.remove();
                 weight -= entry.weight;
                 release(entry.value, retired);
+            } else if (!expiryScheduled || now - entry.written > now - earliestWrite) {
+                earliestWrite = entry.written;
+                expiryScheduled = true;
             }
         }
     }

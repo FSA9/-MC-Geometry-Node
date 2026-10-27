@@ -1,4 +1,4 @@
-package com.mine.geometry_node.client.ui.editor.game.sidebar.properties;
+package com.mine.geometry_node.client.ui.components.integration.scene.properties;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
@@ -16,14 +16,14 @@ import icyllis.modernui.widget.TextView;
 import java.util.function.Consumer;
 
 /** One schema field; synchronization never invokes the user-change callback. */
-public final class ScenePropertyControl {
+final class ScenePropertyControl {
     private final Field field;
     private final View view;
     private final Runnable changed;
     private String choiceValue = "";
     private String choiceLabel;
 
-    public ScenePropertyControl(Context context, Field field, Runnable changed, Consumer<ScenePropertyControl> showChoices) {
+    ScenePropertyControl(Context context, Field field, Runnable changed, Consumer<ScenePropertyControl> showChoices) {
         this.field = field;
         this.changed = changed;
         if (!field.editable()) {

@@ -7,7 +7,6 @@ import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
-import net.minecraft.network.chat.Component;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.graphics.Matrix;
@@ -135,11 +134,6 @@ public class UiSearchableMenu extends UiPopupOverlay {
 
     private void renderList() {
         mListContainer.removeAllViews();
-        if (mFilteredOptions.isEmpty()) {
-            addEmptyItem(Component.translatable("geometry_node.data_library.no_results").getString());
-            updateScrollHeight(1);
-            return;
-        }
 
         for (String item : mFilteredOptions) {
             TextView tv = UiMenuItems.row(getContext(), mOptionLabels.getOrDefault(item, item),
@@ -160,24 +154,8 @@ public class UiSearchableMenu extends UiPopupOverlay {
         updateScrollHeight(mFilteredOptions.size());
     }
 
-    private void addEmptyItem(String text) {
-        TextView tv = new TextView(getContext());
-        tv.setText(text);
-        tv.setTextSize(0, UIUtils.dp2px(12));
-        tv.setTextColor(theme.text().disabled());
-        tv.setSingleLine(true);
-        tv.setGravity(Gravity.CENTER_VERTICAL);
-        tv.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                UIUtils.dp2pxInt(ITEM_HEIGHT_DP)
-        );
-        mListContainer.addView(tv, lp);
-    }
-
     private void updateScrollHeight(int itemCount) {
-        int visibleItems = Math.min(Math.max(itemCount, 1), style.maxVisibleItems());
+        int visibleItems = Math.min(Math.max(itemCount, 0), style.maxVisibleItems());
         int targetHeightPx = visibleItems * (UIUtils.dp2pxInt(ITEM_HEIGHT_DP) + 2 * UIUtils.dp2pxInt(1));
         if (preferredScrollHeight != targetHeightPx) {
             preferredScrollHeight = targetHeightPx;

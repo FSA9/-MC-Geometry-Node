@@ -111,14 +111,17 @@ public final class GraphReadSnapshotCache implements AutoCloseable {
             if (buildHere) {
                 try {
                     snapshot.complete(GraphReadSnapshot.build(document));
-                } catch (RuntimeException failure) {
+                } catch (RuntimeException | Error failure) {
                     snapshot.completeExceptionally(failure);
+                    // Always release waiters before allowing a fatal builder failure to escape.
+                    if (failure instanceof Error error) throw error;
                 }
             }
             try {
                 return snapshot.join();
             } catch (CompletionException failure) {
                 if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
+                if (failure.getCause() instanceof Error error) throw error;
                 throw failure;
             }
         }

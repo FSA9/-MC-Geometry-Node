@@ -32,7 +32,7 @@ import java.util.function.Consumer;
 /** GLOBAL and server dimension selection. Data operations belong to the borrowed dictionary binding. */
 final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSection {
     private static final String GLOBAL = "GLOBAL";
-    private record Row(LinearLayout view, UiNavigationRow navigation, UiDisplayText count) {}
+    private record Row(UiNavigationRow view) {}
 
     private final ClientScopedDataRepository repository;
     private final UiStateContext state;
@@ -41,8 +41,8 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
     private final UiFixedSplitLayout split;
     private final UiSearchInput search;
     private final UiScrollView scroll;
-    private final LinearLayout globalRows, dimensionRows, feedback;
-    private final UiDisplayText globalGroup, dimensionGroup, count, catalogStatus, title, targetId, kind, dataStatus, placeholder;
+    private final LinearLayout targetRows, feedback;
+    private final UiDisplayText count, catalogStatus, title, kind, dataStatus, placeholder;
     private final UiIconButton retry;
     private final FrameLayout details;
     private final Map<String, Row> rows = new LinkedHashMap<>();
@@ -80,22 +80,17 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         catalog.addView(divider(context), new LayoutParams(-1, px(UiMetrics.BORDER)));
         catalogStatus = label(context, "", UiMetrics.TEXT_CAPTION, theme.text().muted());
         catalogStatus.setPadding(px(16), px(6), px(16), px(6)); catalog.addView(catalogStatus, new LayoutParams(-1, -2));
-        LinearLayout list = column(context);
-        globalGroup = group(context, "global"); globalRows = column(context);
-        dimensionGroup = group(context, "dimensions"); dimensionRows = column(context);
-        list.addView(globalGroup); list.addView(globalRows); list.addView(dimensionGroup); list.addView(dimensionRows);
-        scroll = new UiScrollView(context, theme.scroll()); scroll.addView(list, new FrameLayout.LayoutParams(-1, -2));
+        targetRows = column(context);
+        scroll = new UiScrollView(context, theme.scroll()); scroll.addView(targetRows, new FrameLayout.LayoutParams(-1, -2));
         catalog.addView(scroll, new LayoutParams(-1, 0, 1));
 
         LinearLayout detail = column(context); detail.setBackground(fill(theme.surface().sidebar()));
         LinearLayout identity = row(context); identity.setPadding(px(18), px(14), px(18), px(14));
-        identity.setMinimumHeight(px(83));
+        identity.setMinimumHeight(px(60));
         LinearLayout names = column(context);
         title = label(context, "", UiMetrics.TEXT_BODY, theme.text().normal()); title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
-        targetId = label(context, "", UiMetrics.TEXT_CAPTION, theme.text().muted()); targetId.setSingleLine(true);
-        targetId.setEllipsize(TextUtils.TruncateAt.END);
-        names.addView(title, new LayoutParams(-1, px(26))); names.addView(targetId, new LayoutParams(-1, px(22)));
+        names.addView(title, new LayoutParams(-1, px(26)));
         identity.addView(names, new LayoutParams(0, -2, 1));
         kind = label(context, "", UiMetrics.TEXT_CAPTION, theme.text().muted());
         identity.addView(kind, new LayoutParams(-2, -2)); detail.addView(identity, new LayoutParams(-1, -2));
@@ -151,7 +146,7 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         var page = state.read(ScopedDataViewState.PAGE, scope);
         selected = page.target(); query = page.query(); savedScroll = page.scroll(); search.setText(query);
         restoreScroll = true; scrollRestoreQueued = false;
-        rows.clear(); globalRows.removeAllViews(); dimensionRows.removeAllViews();
+        rows.clear(); targetRows.removeAllViews();
         session = repository.newSession();
         var expected = session;
         sessionChanged = () -> postToUi.accept(() -> {
@@ -200,27 +195,24 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         Set<String> live = new HashSet<>(targets);
         // Updating counts must not replace the pressed navigation button between down and up.
         for (String target : List.copyOf(rows.keySet())) if (!live.contains(target)) {
-            Row row = rows.remove(target); (target.equals(GLOBAL) ? globalRows : dimensionRows).removeView(row.view());
+            Row row = rows.remove(target); targetRows.removeView(row.view());
         }
-        String needle = query.toLowerCase(Locale.ROOT); int visible = 0, dimensions = 0;
+        String needle = query.toLowerCase(Locale.ROOT); int visible = 0;
         for (String target : targets) {
             Row row = rows.computeIfAbsent(target, this::createRow);
-            boolean matches = (target + " " + displayName(target)).toLowerCase(Locale.ROOT).contains(needle);
+            boolean matches = target.toLowerCase(Locale.ROOT).contains(needle);
             row.view().setVisibility(matches ? VISIBLE : GONE);
-            if (matches) { visible++; if (!target.equals(GLOBAL)) dimensions++; }
+            if (matches) visible++;
             var data = session.data(target);
-            row.count().setText(data.fetched() && data.available() ? tr("entries", data.values().size())
+            row.view().setBadgeText(data.fetched() && data.available() ? tr("entries", data.values().size())
                     : data.fetched() ? tr("unavailable") : tr("unread"));
             boolean current = target.equals(selected);
-            row.navigation().setPalette(UiTableStyle.rowPalette(current, theme.surface().root(), theme));
-            row.view().setBackground(fill(current ? theme.selection().fill() : theme.surface().root()));
+            row.view().setPalette(UiTableStyle.rowPalette(current, theme.surface().root(), theme));
         }
-        globalGroup.setVisibility(rows.get(GLOBAL).view().getVisibility()); dimensionGroup.setVisibility(dimensions > 0 ? VISIBLE : GONE);
         count.setText(catalog.loaded() ? tr("scope_count", visible, targets.size()) : tr("catalog_unknown"));
         String message = ScopedDataDictionaryBinding.message(catalog.message());
         if (catalog.loading()) message = join(tr("catalog_loading"), message);
         else if (!catalog.loaded() && message.isEmpty()) message = tr("catalog_unknown");
-        else if (catalog.loaded() && visible == 0) message = tr("no_matches");
         catalogStatus.setText(message); catalogStatus.setVisibility(message.isEmpty() ? GONE : VISIBLE);
         catalogStatus.setTextColor(catalog.message().isEmpty() ? theme.text().muted() : theme.status().error());
         if (shown && restoreScroll && !scrollRestoreQueued && catalog.loaded()) {
@@ -235,26 +227,14 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         }
     }
     private Row createRow(String target) {
-        LinearLayout view = column(getContext());
-        view.setMinimumHeight(px(60)); view.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout heading = row(getContext());
-        UiNavigationRow navigation = new UiNavigationRow(getContext(), displayName(target), theme);
-        navigation.button().setOnClickListener(button -> select(target));
-        heading.addView(navigation, new LayoutParams(0, px(32), 1));
-        UiDisplayText badge = label(getContext(), tr("unread"), UiMetrics.TEXT_CAPTION, theme.text().muted());
-        badge.setPadding(0, 0, px(12), 0); heading.addView(badge, new LayoutParams(-2, -2)); view.addView(heading);
-        if (!target.equals(GLOBAL)) {
-            UiDisplayText id = label(getContext(), target, UiMetrics.TEXT_COMPACT, theme.text().muted());
-            id.setSingleLine(true); id.setEllipsize(TextUtils.TruncateAt.END); id.setPadding(px(10), 0, px(10), px(6));
-            view.addView(id, new LayoutParams(-1, px(24)));
-        }
-        view.setOnClickListener(button -> select(target)); view.setTooltipText(target);
-        (target.equals(GLOBAL) ? globalRows : dimensionRows).addView(view, new LayoutParams(-1, -2));
-        return new Row(view, navigation, badge);
+        UiNavigationRow view = new UiNavigationRow(getContext(), target, tr("unread"), theme);
+        view.button().setOnClickListener(button -> select(target)); view.setTooltipText(target);
+        targetRows.addView(view, new LayoutParams(-1, px(UiTableStyle.ROW_HEIGHT)));
+        return new Row(view);
     }
     private void renderDetail() {
-        title.setText(displayName(selected)); targetId.setText(selected); targetId.setTooltipText(selected);
-        targetId.setVisibility(selected.equals(GLOBAL) ? GONE : VISIBLE); kind.setText(tr(selected.equals(GLOBAL) ? "global" : "dimension"));
+        title.setText(selected); title.setTooltipText(selected);
+        kind.setText(tr(selected.equals(GLOBAL) ? "global" : "dimension"));
         var data = session.data(selected);
         String message = ScopedDataDictionaryBinding.message(data.message());
         if (data.loading()) message = join(tr("loading"), message);
@@ -299,19 +279,6 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
     }
     private void saveSplit() {
         if (!disposed) state.write(ScopedDataViewState.SPLIT, UiStateScopes.GLOBAL, new ScopedDataViewState.Split(split.preferredExtentDp()));
-    }
-    private String displayName(String target) {
-        return switch (target) {
-            case GLOBAL -> GLOBAL;
-            case "minecraft:overworld" -> tr("overworld");
-            case "minecraft:the_nether" -> tr("nether");
-            case "minecraft:the_end" -> tr("end");
-            default -> Component.translatableWithFallback("dimension." + target.replace(':', '.').replace('/', '.'), target).getString();
-        };
-    }
-    private UiDisplayText group(Context context, String key) {
-        UiDisplayText text = label(context, tr(key), UiMetrics.TEXT_CAPTION, theme.text().muted());
-        text.setPadding(px(16), px(14), px(16), px(8)); return text;
     }
     private View divider(Context context) { View view = new View(context); view.setBackground(fill(theme.border().divider())); return view; }
     private static UiDisplayText label(Context context, String text, float size, int color) { return new UiDisplayText(context, text, size, color); }

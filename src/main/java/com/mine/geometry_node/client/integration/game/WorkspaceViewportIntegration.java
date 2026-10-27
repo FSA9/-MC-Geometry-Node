@@ -24,6 +24,6 @@ public final class WorkspaceViewportIntegration {
         });
         SceneEditBackends.configureNativeSubscription(() ->
                 ViewportHostPolicy.snapshot(Minecraft.getInstance().screen).workspace()
-                        && ViewportVisualization.requestedNativeEntities());
+                        && (ViewportVisualization.requestedNativeEntities() || WorkspaceWorldObjectEditor.requestsNativeObjects()));
     }
 }

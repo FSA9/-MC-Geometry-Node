@@ -35,8 +35,8 @@ import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRowFrame;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
-import com.mine.geometry_node.client.ui.editor.datalibrary.inspector.DatabaseSelection;
 import com.mine.geometry_node.client.integration.entity.WorkspaceEntityEditor;
+import com.mine.geometry_node.client.integration.game.WorkspaceWorldObjectEditor;
 import com.mine.geometry_node.client.ui.editor.datalibrary.state.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -47,7 +47,6 @@ import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEnt
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraphFilter;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
-import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter;
 import static com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntityFilter.*;
@@ -70,7 +69,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import java.util.*;
-import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.editor.datalibrary.presentation.DatabasePresentation.*;
 
 /** Server query presentation. Only immutable summaries cross from the client thread to this UI. */
@@ -84,7 +82,6 @@ public final class WorldObjectsView extends FrameLayout {
     private final Runnable registrationChanged = () -> { removeCallbacks(registrationTask); post(registrationTask); };
     private ClientWorldObjectRepository.Session session;
     private boolean awaitingScopeResponse;
-    private final Consumer<DatabaseSelection> selectionChanged;
     private final LinearLayout rows;
     private final UiScrollView scroll;
     private ScrollAnchor pendingScrollAnchor;
@@ -109,7 +106,7 @@ public final class WorldObjectsView extends FrameLayout {
         }
     }
     private final TextView status;
-    private final UiActionButton focusButton;
+    private final UiActionButton focusButton, editButton;
     private UiSearchBar entitySearch;
     private ColumnFilters columnFilters = ColumnFilters.empty();
     private WorldObjectGraphFilter graphFilter = WorldObjectGraphFilter.empty();
@@ -159,7 +156,6 @@ public final class WorldObjectsView extends FrameLayout {
     private final LinearLayout table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
-    private WorldObjectQuery completedQuery;
     private List<WorldObjectEntry> mountedEntries;
     private RowOrder rowOrder;
     /** Only the current presentation is retained; selection/status changes reuse its order. */
@@ -169,8 +165,6 @@ public final class WorldObjectsView extends FrameLayout {
                             ColumnFilters columns, String sort, boolean ascending,
                             List<WorldObjectEntry> entries) {}
     private List<WorldObjectType> mountedTypes;
-    private DatabaseSelection publishedSelection;
-    private boolean inspectorWaitingForQuery;
     private List<WorldObjectType> typeCatalog = List.of();
     private List<WorldObjectType> indexedTypeCatalog;
     private final Map<String, WorldObjectType> typeLookup = new HashMap<>();
@@ -210,29 +204,29 @@ public final class WorldObjectsView extends FrameLayout {
         if (!disposed && shown) { removeCallbacks(renderTask); removeCallbacks(fallbackQueryTask); post(renderTask); }
     };
 
-    public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged) {
-        this(context, selectionChanged, UiStateContext.ephemeral());
+    public WorldObjectsView(Context context) {
+        this(context, UiStateContext.ephemeral());
     }
-    public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state) {
-        this(context, selectionChanged, state, new RegistryNativeTypeLabels());
+    public WorldObjectsView(Context context, UiStateContext state) {
+        this(context, state, new RegistryNativeTypeLabels());
     }
-    public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state, Mode mode) {
-        this(context, selectionChanged, state, new RegistryNativeTypeLabels(), mode);
+    public WorldObjectsView(Context context, UiStateContext state, Mode mode) {
+        this(context, state, new RegistryNativeTypeLabels(), mode);
     }
-    WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state,
+    WorldObjectsView(Context context, UiStateContext state,
                      NativeTypeLabels nativeTypeLabels) {
-        this(context, selectionChanged, state, nativeTypeLabels, Mode.WORLD);
+        this(context, state, nativeTypeLabels, Mode.WORLD);
     }
-    /** A fixed faction constraint reuses the entity table, including its inspector and row actions. */
-    public WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state,
+    /** A fixed faction constraint reuses the entity table, including its row actions. */
+    public WorldObjectsView(Context context, UiStateContext state,
                             UUID faction) {
-        this(context, selectionChanged, state, new RegistryNativeTypeLabels(), Mode.ENTITIES, Objects.requireNonNull(faction));
+        this(context, state, new RegistryNativeTypeLabels(), Mode.ENTITIES, Objects.requireNonNull(faction));
     }
-    WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state,
+    WorldObjectsView(Context context, UiStateContext state,
                      NativeTypeLabels nativeTypeLabels, Mode mode) {
-        this(context, selectionChanged, state, nativeTypeLabels, mode, null);
+        this(context, state, nativeTypeLabels, mode, null);
     }
-    WorldObjectsView(Context context, Consumer<DatabaseSelection> selectionChanged, UiStateContext state,
+    WorldObjectsView(Context context, UiStateContext state,
                      NativeTypeLabels nativeTypeLabels, Mode mode, UUID faction) {
         super(context);
         if (faction != null && mode != Mode.ENTITIES) throw new IllegalArgumentException("Faction members require entity mode");
@@ -249,7 +243,6 @@ public final class WorldObjectsView extends FrameLayout {
         columns.restoreCustomWidths(uiState.read(widthsKey(), DatabaseViewState.GLOBAL).columns());
         columns.addUserStateListener(() -> uiState.write(widthsKey(), DatabaseViewState.GLOBAL,
                 new DatabaseViewState.Widths(columns.exportCustomWidths())));
-        this.selectionChanged = selectionChanged;
         session = ClientWorldObjectRepository.INSTANCE.newSession();
         snapshot = session.snapshot(); session.addChangeListener(changed);
         UiFixedSplitLayout body = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
@@ -294,7 +287,14 @@ public final class WorldObjectsView extends FrameLayout {
         resultTitle.setSingleLine(true);resultTitle.setEllipsize(TextUtils.TruncateAt.END);
         resultBar.addView(resultTitle,new LinearLayout.LayoutParams(0,-1,1));
         focusButton=button(context,tr("focus"),this::focusSelected); focusButton.setEnabled(false);
-        resultBar.addView(focusButton,new LinearLayout.LayoutParams(-2,UIUtils.dp2pxInt(28)));
+        editButton=button(context,entityEditLabel(),this::editSelected); editButton.setEnabled(false);
+        for (UiActionButton action : List.of(focusButton, editButton)) {
+            action.setMinWidth(UIUtils.dp2pxInt(48));
+            action.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, UIUtils.dp2pxInt(28));
+            if (action == editButton) params.leftMargin = UIUtils.dp2pxInt(6);
+            resultBar.addView(action, params);
+        }
         column.addView(resultBar,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.RESULT_BAR_HEIGHT)));
         tableHeader=UiTableStyle.header(context, columns);
         tableHeader.addView(UiTableStyle.rowNumberCell(context, 0),new ViewGroup.LayoutParams(-1,-1));
@@ -322,7 +322,7 @@ public final class WorldObjectsView extends FrameLayout {
         table.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         UiTableViewport tableViewport=new UiTableViewport(context, columns, table);
         column.addView(tableViewport,new LinearLayout.LayoutParams(-1,0,1));
-        status=UiTableStyle.statusBar(context,tr("query_hint"),UiThemes.EDITOR);
+        status=UiTableStyle.statusBar(context,"",UiThemes.EDITOR);
         column.addView(status,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.STATUS_BAR_HEIGHT)));
         selectAll.setEnabled(false);
         restoreState();
@@ -509,7 +509,7 @@ public final class WorldObjectsView extends FrameLayout {
         ColumnFilters effectiveFilters = filters;
         if (nextCategory != null) {
             String id = "category:" + nextCategory.id();
-            // Compile sidebar and column choices into one AND predicate before the server result limit.
+            // Compile navigation and column choices into one AND predicate before the server result limit.
             Set<String> selectedTypes = filters.types().matches(id) ? Set.of(id) : Set.of();
             effectiveFilters = filters.withTypes(new ColumnFilters.Choice(true, selectedTypes));
         }
@@ -570,7 +570,6 @@ public final class WorldObjectsView extends FrameLayout {
         cancelMount();
         renderedSnapshot=snapshot;
         if (!snapshot.loading()) {
-            completedQuery = snapshot.query();
             typeCatalog = snapshot.types();
             dimensionCatalog = snapshot.dimensionIds();
             if (snapshot.page().counts() != null) navigationCounts = snapshot.page().counts();
@@ -760,13 +759,6 @@ public final class WorldObjectsView extends FrameLayout {
             disposeRegistration(removed);
             rowViews.remove(key);
             rows.removeView((View) removed.button().getParent());
-        }
-        if (rowBindings.isEmpty()) {
-            rows.removeAllViews(); // Only the empty-state label can remain here.
-            if (entries.isEmpty()) {
-                TextView empty = UIUtils.createLockedTextView(getContext(), tr("empty"), 12, UiThemes.EDITOR.text().muted());
-                empty.setGravity(Gravity.CENTER); rows.addView(empty, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(96)));
-            }
         }
         Iterator<WorldObjectEntry> iterator = entries.iterator();
         rowBatch.start(new Iterator<Runnable>() {
@@ -1017,17 +1009,6 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setIndeterminate(count>0 && count<entries.size());
         selectAll.setContentDescription(tr("select_all")+" · "+tr("selected",count));
         updateInteractionState();
-        // Keep the last inspector mounted during a replacement query. Commands still resolve
-        // live state and reject loading/stale targets; scope changes must clear it immediately.
-        boolean completedRefresh = inspectorWaitingForQuery && !snapshot.loading();
-        inspectorWaitingForQuery = retainInspector() && publishedSelection != null;
-        DatabaseSelection next=presentationSelection();
-        // Actions resolve live state when invoked; their newly allocated callbacks are not content changes.
-        // A completed refresh must also reconnect passive DATA bindings whose read cache was reset.
-        if (completedRefresh || (publishedSelection==null?next!=null:!publishedSelection.hasSamePresentation(next))) {
-            publishedSelection=next;
-            selectionChanged.accept(next);
-        }
         refreshStatus();
     }
     private void updateInteractionState() {
@@ -1040,72 +1021,10 @@ public final class WorldObjectsView extends FrameLayout {
         selectAll.setEnabled(enabled && !rowBindings.isEmpty());
         List<WorldObjectEntry> entries = selectedEntries();
         focusButton.setEnabled(enabled && !entries.isEmpty());
+        editButton.setEnabled(enabled && entries.size() == 1 && canEdit(entries.getFirst()));
     }
     private List<WorldObjectEntry> selectedEntries() {
         return snapshot.entries().stream().filter(entry -> selected.contains(entry.key())).toList();
-    }
-    private boolean retainInspector() {
-        return snapshot.loading() && !awaitingScopeResponse
-                && Objects.equals(stateScope, UiStateScopes.current())
-                && snapshot.query().equals(completedQuery);
-    }
-    /** Display-only snapshot for owners reactivating this tab; commands use selection()/canSelect(). */
-    public DatabaseSelection presentationSelection() {
-        return retainInspector() ? publishedSelection : selection();
-    }
-    public DatabaseSelection selection() {
-        // Visual row mounting does not invalidate the authoritative selected objects.
-        if(awaitingScopeResponse || !Objects.equals(stateScope, UiStateScopes.current()) || snapshot.loading())return null;
-        List<WorldObjectEntry> entries = selectedEntries();
-        if (entries.isEmpty()) return null;
-        if(entries.size()>1)return new DatabaseSelection(tr("selected",entries.size()),tr(mode == Mode.ENTITIES ? "entities" : "world"),"",0,
-                List.of(new DatabaseSelection.Field(tr("selected_count"),Integer.toString(entries.size()))),
-                List.of(new DatabaseSelection.Action(tr("focus"),this::focusSelected)),List.of());
-        var entry=entries.getFirst();
-        boolean nativeEntity = isNativeEntity(entry);
-        List<DatabaseSelection.Action> actions = new ArrayList<>();
-        actions.add(new DatabaseSelection.Action(tr("focus"), this::focusSelected));
-        if (nativeEntity && isLoaded(entry) && isAlive(entry)) actions.add(new DatabaseSelection.Action(entityEditLabel(), this::editSelected));
-        var position=List.of(new DatabaseSelection.Field("X",number(entry.position().x)),
-                new DatabaseSelection.Field("Y",number(entry.position().y)),new DatabaseSelection.Field("Z",number(entry.position().z)));
-        var metadata=new ArrayList<>(List.of(new DatabaseSelection.Field(tr("type"), entry.provider().equals("native")
-                ? WorldObjectEntries.registryType(entry) : entry.type()),
-                new DatabaseSelection.Field(tr("lifetime"),lifetimeLabel(entry.lifetime())),
-                new DatabaseSelection.Field(tr("id"),entry.key())));
-        if (mode == Mode.ENTITIES) {
-            metadata.remove(1); // Loading state has its own field; an unloaded snapshot has no live lifetime.
-            metadata.add(new DatabaseSelection.Field(tr("load_status"), tr(isLoaded(entry) ? "loaded" : "unloaded")));
-            metadata.add(new DatabaseSelection.Field(tr("registration"), tr(entry.entityState() != null && entry.entityState().registered() ? "registered" : "unregistered")));
-            metadata.add(new DatabaseSelection.Field(tr("updated"), capturedAt(entry)));
-        }
-        var source=new ArrayList<DatabaseSelection.Field>();
-        source.add(new DatabaseSelection.Field(tr("source"),entry.source().isEmpty()?"—":entry.source()));
-        source.add(new DatabaseSelection.Field(tr("provider"),providerLabel(entry.provider())));
-        entry.references().entrySet().stream()
-                .filter(ref -> !ref.getKey().equals(WorldObjectTagEdits.TARGET_REFERENCE)
-                        && !Set.of(WorldObjectDataEdits.TARGET_REFERENCE, WorldObjectDataEdits.COUNT_REFERENCE,
-                        WorldObjectDataEdits.SUMMARY_REFERENCE).contains(ref.getKey()))
-                .sorted(Map.Entry.comparingByKey()).forEach(ref->
-                source.add(new DatabaseSelection.Field(ref.getKey(),ref.getValue())));
-        List<DatabaseSelection.Section> sections = new ArrayList<>(List.of(
-                new DatabaseSelection.Section(tr("spatial_position"),entry.dimension(),DatabaseSelection.Kind.POSITION,position),
-                new DatabaseSelection.Section(tr("object_information"),"",DatabaseSelection.Kind.METADATA,metadata),
-                new DatabaseSelection.Section(tr("tags"),"",DatabaseSelection.Kind.TAGS,
-                        entry.tags().stream().map(tag->new DatabaseSelection.Field("",tag)).toList(),
-                        !nativeEntity && session.canEditTags(entry) ? new DatabaseSelection.TagEditor(
-                                entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
-                                !session.isTagUpdatePending(), session.tagUpdateMessage().isEmpty() ? ""
-                                        : Component.translatable("geometry_node." + session.tagUpdateMessage()).getString(),
-                                tag -> submitTagEdit(entry, tag, true),
-                                tag -> submitTagEdit(entry, tag, false)) : null),
-                new DatabaseSelection.Section(tr("source"),"",DatabaseSelection.Kind.SOURCE,source)));
-        if (mode == Mode.ENTITIES) sections.add(new DatabaseSelection.Section(tr("graphs"), "", DatabaseSelection.Kind.REFERENCE,
-                entry.graphs().stream().map(graph -> new DatabaseSelection.Field(graph.name().isEmpty() ? graph.id() : graph.name(), graph.type())).toList()));
-        return new DatabaseSelection(displayName(entry),typeLabel(entry.provider(), entry.type())+" · "+tr(mode == Mode.ENTITIES ? "entities" : "world"),
-                "",UiThemes.EDITOR.text().muted(),List.of(), actions, sections, entityPreview(entry),
-                entry.references().containsKey(WorldObjectDataEdits.TARGET_REFERENCE)
-                        ? new DatabaseSelection.DataEditor(stateScope + ":" + entry.references().get(WorldObjectDataEdits.TARGET_REFERENCE),
-                        dataCount(entry), dataBinding(entry), !nativeEntity) : null);
     }
     private DataDictionaryBinding dataBinding(WorldObjectEntry entry) {
         var source = session;
@@ -1123,29 +1042,27 @@ public final class WorldObjectsView extends FrameLayout {
         updateSelection();
         UiDataDictionaryEditor.show(this, displayName(live) + " · " + tr(mode == Mode.ENTITIES ? "entities" : "world"), dataBinding(live));
     }
-    private void submitTagEdit(WorldObjectEntry expected, String tag, boolean add) {
-        if (!canSelect() || selected.size() != 1 || !selected.contains(expected.key()))
-            throw new IllegalStateException("Stale tag selection");
-        // Equal inspector text may hide bounds/sub-pixel motion changes. Resolve the latest DTO while
-        // retaining the original owner lease and tag precondition, rather than rejecting harmless motion.
-        WorldObjectEntry live = session.snapshot().entries().stream().filter(entry -> entry.key().equals(expected.key())
-                && Objects.equals(entry.references().get(WorldObjectTagEdits.TARGET_REFERENCE),
-                        expected.references().get(WorldObjectTagEdits.TARGET_REFERENCE))
-                && entry.tags().equals(expected.tags())).findFirst().orElseThrow(() -> new IllegalStateException("Stale tag target"));
-        if (!(add ? session.addTag(live, tag) : session.removeTag(live, tag)))
-            throw new IllegalStateException("Tag edit rejected");
-    }
     private static String entityEditLabel() {
         return Component.translatable("geometry_node.entity_editor.edit").getString();
+    }
+    private boolean canEdit(WorldObjectEntry entry) {
+        return mode == Mode.WORLD || isNativeEntity(entry) && isLoaded(entry) && isAlive(entry);
     }
     private void editSelected() {
         if (!canSelect()) return;
         List<WorldObjectEntry> entries = selectedEntries();
-        if (entries.size() == 1 && isNativeEntity(entries.getFirst()) && isLoaded(entries.getFirst()) && isAlive(entries.getFirst())) {
-            String key = entries.getFirst().key(), scope = stateScope;
-            WorkspaceEntityEditor.show(this, entries.getFirst(), () -> refreshEditedEntity(key, scope));
+        if (entries.size() != 1) return;
+        WorldObjectEntry entry = entries.getFirst();
+        if (!canEdit(entry)) return;
+        String key = entry.key(), scope = stateScope;
+        if (mode == Mode.WORLD) {
+            WorkspaceWorldObjectEditor.show(this, entry, session,
+                    () -> Objects.equals(scope, UiStateScopes.current()), () -> refreshEditedEntity(key, scope));
+        } else {
+            WorkspaceEntityEditor.show(this, entry, () -> refreshEditedEntity(key, scope));
         }
     }
+
     private void refreshEditedEntity(String key, String scope) {
         if (!shown || disposed || !Objects.equals(scope, stateScope) || !Objects.equals(scope, UiStateScopes.current())) return;
         pendingScrollAnchor = captureScrollAnchor(key, true);
@@ -1181,7 +1098,6 @@ public final class WorldObjectsView extends FrameLayout {
         awaitingScopeResponse = true;
         snapshot = new ClientWorldObjectRepository.Snapshot(WorldObjectQuery.defaults(), WorldObjectPage.empty(0, ""), true, 0);
         renderedSnapshot = null; mountedEntries = null; mountedTypes = null;
-        completedQuery = null;
         typeCatalog = List.of(); dimensionCatalog = List.of();
         navigationCounts = WorldObjectPage.Counts.empty();
         indexedTypeCatalog = null; typeLookup.clear();

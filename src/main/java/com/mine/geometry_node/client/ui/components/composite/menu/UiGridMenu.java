@@ -9,7 +9,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
-import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -55,8 +54,6 @@ public final class UiGridMenu<T> {
         UiSearchInput search = UiSearchMenuLayout.addHeader(content, title, true, theme);
         CardGrid grid = new CardGrid(context, style);
         content.addView(grid, new LinearLayout.LayoutParams(-1, -2));
-        TextView empty = label(context, Component.translatable("geometry_node.data_library.no_results").getString(), theme);
-        content.addView(empty, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(28)));
         popup = UiPopover.forContentWidth(context, content, style.contentWidthPx(), style.maxHeightDp(), theme);
         Consumer<String> filter = query -> {
             grid.removeAllViews();
@@ -82,7 +79,6 @@ public final class UiGridMenu<T> {
                 });
                 grid.addView(card, new ViewGroup.LayoutParams(-2, -2));
             }
-            empty.setVisibility(grid.getChildCount() == 0 ? View.VISIBLE : View.GONE);
             popup.refreshSize();
         };
         search.setOnQueryChanged(filter);

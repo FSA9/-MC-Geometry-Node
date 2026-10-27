@@ -13,6 +13,7 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Package-local presentation helpers and generation-guarded capability subscriptions. */
 final class MetadataViews {
@@ -113,9 +114,20 @@ final class MetadataViews {
             subscribed = true;
             DataDictionaryBinding source = binding;
             long token = ++generation;
-            listener = () -> post(() -> {
-                if (subscribed && generation == token && source == binding && isShown()) render(source.snapshot());
-            });
+            AtomicBoolean pending = new AtomicBoolean();
+            listener = () -> {
+                if (!pending.compareAndSet(false, true)) return;
+                try {
+                    if (!post(() -> {
+                        // Release before rendering: a reentrant change needs its own next pass.
+                        pending.set(false);
+                        if (subscribed && generation == token && source == binding && isShown()) render(source.snapshot());
+                    })) pending.set(false);
+                } catch (RuntimeException failure) {
+                    pending.set(false);
+                    throw failure;
+                }
+            };
             source.addChangeListener(listener);
         }
         private void unsubscribe() {

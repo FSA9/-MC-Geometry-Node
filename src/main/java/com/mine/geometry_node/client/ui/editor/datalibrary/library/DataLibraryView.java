@@ -185,11 +185,6 @@ public final class DataLibraryView extends LinearLayout {
     private boolean rootExpanded = true;
     private boolean internalDragActive;
     private boolean rebuildPending;
-    private Consumer<List<DataLibraryRepository.Entry>> selectionListener;
-    private List<DataLibraryRepository.Entry> publishedSelection;
-    private List<String> publishedPaths;
-    private List<String> publishedRegistryTypes;
-    private boolean publishingSelection;
     private static DataLibraryRepository.Entry clipboardEntry;
 
     public DataLibraryView(Context context) {
@@ -345,17 +340,6 @@ public final class DataLibraryView extends LinearLayout {
         UiStateScopes.addChangeListener(scopeChanged);
     }
 
-    /** Publishes repository entries for the shared Inspector; null disconnects it. Runs on the UI thread. */
-    public void setSelectionListener(Consumer<List<DataLibraryRepository.Entry>> listener) {
-        if (disposed || selectionListener == listener) return;
-        selectionListener = listener;
-        if (publishingSelection) return;
-        publishedSelection = null;
-        publishedPaths = null;
-        publishedRegistryTypes = null;
-        publishSelection();
-    }
-
     /** Stable selection order, resolved against the authoritative repository rather than editing drafts. */
     public List<DataLibraryRepository.Entry> selectedEntries() {
         if (disposed) return List.of();
@@ -372,34 +356,6 @@ public final class DataLibraryView extends LinearLayout {
     public String registryType(DataLibraryRepository.Entry entry) {
         if (disposed || !Objects.equals(stateScope, UiStateScopes.current())) return "";
         return entityTypes.registryType(entry);
-    }
-
-    private void publishSelection() {
-        if (disposed || selectionListener == null || publishingSelection) return;
-        List<DataLibraryRepository.Entry> entries = selectedEntries();
-        List<String> paths = entries.stream().map(entry -> repository.folderPath(entry.parentId())).toList();
-        List<String> registryTypes = entries.stream().map(this::registryType).toList();
-        if (sameSelection(entries, publishedSelection) && paths.equals(publishedPaths)
-                && registryTypes.equals(publishedRegistryTypes)) return;
-        // Store before notifying: an Inspector refresh may synchronously read or re-register the listener.
-        publishedSelection = entries;
-        publishedPaths = paths;
-        publishedRegistryTypes = registryTypes;
-        publishingSelection = true;
-        try {
-            selectionListener.accept(entries);
-        } finally {
-            publishingSelection = false;
-        }
-    }
-
-    private static boolean sameSelection(List<DataLibraryRepository.Entry> left,
-                                         List<DataLibraryRepository.Entry> right) {
-        if (right == null || left.size() != right.size()) return false;
-        for (int i = 0; i < left.size(); i++) {
-            if (!left.get(i).sameContent(right.get(i))) return false;
-        }
-        return true;
     }
 
     private void setTypeFilter(PortType type) {
@@ -468,7 +424,6 @@ public final class DataLibraryView extends LinearLayout {
                 && !(folderSnapshotReady() && activeFolder != null && !next.folders.containsKey(activeFolder))) {
             snapshot = next;
             refreshCardValues(next);
-            publishSelection();
             return;
         }
         rebuild(next);
@@ -600,12 +555,6 @@ public final class DataLibraryView extends LinearLayout {
                 mountSteps = null;
                 mountLeftAnchor = null;
                 mountRightAnchor = null;
-                if (rightHost.getChildCount() == 0) {
-                    TextView empty = label(getContext(), tr(!isFiltering()
-                            ? "geometry_node.data_library.empty" : "geometry_node.data_library.no_results"), 12, MUTED);
-                    empty.setGravity(Gravity.CENTER);
-                    rightHost.addView(empty, new LayoutParams(-1, px(90)));
-                }
                 // Only the completed epoch may prune cache or restore the captured scroll position.
                 cards.keySet().retainAll(renderedEntries);
                 updateSelectionViews();
@@ -748,7 +697,6 @@ public final class DataLibraryView extends LinearLayout {
         selectAll.setEnabled(!renderedEntries.isEmpty());
         selectionViews.forEach(Runnable::run);
         updateActions();
-        publishSelection();
     }
 
     private void updateNavigationLabels() {
@@ -1612,10 +1560,6 @@ public final class DataLibraryView extends LinearLayout {
         retryScheduled = false;
         cards.clear();
         selectionViews.clear();
-        selectionListener = null;
-        publishedSelection = null;
-        publishedPaths = null;
-        publishedRegistryTypes = null;
         cancelInternalDrag();
         unregisterDropTarget();
         repository.removeChangeListener(repositoryChanged);

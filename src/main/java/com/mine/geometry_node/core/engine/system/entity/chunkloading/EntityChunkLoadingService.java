@@ -18,8 +18,6 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -116,9 +114,7 @@ public final class EntityChunkLoadingService {
             if (level == null) {
                 continue;
             }
-            for (long chunk : coveredChunks(config)) {
-                force(level, config.entityId(), chunk, true);
-            }
+            coverage(config).forEach(chunk -> force(level, config.entityId(), chunk, true));
         }
     }
 
@@ -152,36 +148,18 @@ public final class EntityChunkLoadingService {
     private static void reconcile(MinecraftServer server,
                                   EntityChunkLoadingConfig previous,
                                   EntityChunkLoadingConfig next) {
-        Set<Long> previousChunks = previous == null ? Set.of() : coveredChunks(previous);
-        Set<Long> nextChunks = coveredChunks(next);
-
-        if (previous != null && previous.dimension().equals(next.dimension())) {
-            ServerLevel level = server.getLevel(next.dimension());
-            if (level == null) {
-                return;
-            }
-            for (long chunk : previousChunks) {
-                if (!nextChunks.contains(chunk)) {
-                    force(level, previous.entityId(), chunk, false);
-                }
-            }
-            for (long chunk : nextChunks) {
-                if (!previousChunks.contains(chunk)) {
-                    force(level, next.entityId(), chunk, true);
-                }
-            }
-            return;
-        }
-
-        if (previous != null) {
-            release(server, previous);
-        }
-        ServerLevel targetLevel = server.getLevel(next.dimension());
-        if (targetLevel != null) {
-            for (long chunk : nextChunks) {
-                force(targetLevel, next.entityId(), chunk, true);
-            }
-        }
+        ServerLevel previousLevel = previous == null ? null : server.getLevel(previous.dimension());
+        ServerLevel nextLevel = server.getLevel(next.dimension());
+        if (previousLevel == null && nextLevel == null) return;
+        ChunkLoadingCoverage.reconcile(
+                previous == null ? null : coverage(previous), coverage(next),
+                previous != null && previous.dimension().equals(next.dimension()),
+                chunk -> {
+                    if (previousLevel != null) force(previousLevel, previous.entityId(), chunk, false);
+                },
+                chunk -> {
+                    if (nextLevel != null) force(nextLevel, next.entityId(), chunk, true);
+                });
     }
 
     private static void release(MinecraftServer server, EntityChunkLoadingConfig config) {
@@ -189,24 +167,15 @@ public final class EntityChunkLoadingService {
         if (level == null) {
             return;
         }
-        for (long chunk : coveredChunks(config)) {
-            force(level, config.entityId(), chunk, false);
-        }
+        coverage(config).forEach(chunk -> force(level, config.entityId(), chunk, false));
     }
 
     private static void force(ServerLevel level, UUID entityId, long chunk, boolean add) {
         TICKET_CONTROLLER.forceChunk(level, entityId, ChunkPos.getX(chunk), ChunkPos.getZ(chunk), add, true);
     }
 
-    private static Set<Long> coveredChunks(EntityChunkLoadingConfig config) {
-        int diameter = config.radius() * 2 + 1;
-        Set<Long> chunks = new HashSet<>(diameter * diameter);
-        for (int x = config.centerChunkX() - config.radius(); x <= config.centerChunkX() + config.radius(); x++) {
-            for (int z = config.centerChunkZ() - config.radius(); z <= config.centerChunkZ() + config.radius(); z++) {
-                chunks.add(ChunkPos.pack(x, z));
-            }
-        }
-        return chunks;
+    private static ChunkLoadingCoverage coverage(EntityChunkLoadingConfig config) {
+        return ChunkLoadingCoverage.around(config.centerChunkX(), config.centerChunkZ(), config.radius());
     }
 
     private static void validatePersistedTickets(ServerLevel level, TicketHelper helper) {
@@ -219,7 +188,7 @@ public final class EntityChunkLoadingService {
                 continue;
             }
 
-            Set<Long> expected = coveredChunks(config);
+            ChunkLoadingCoverage expected = coverage(config);
             TicketSet tickets = entry.getValue();
             removeUnexpectedTickets(helper, entityId, tickets.normal(), false, expected);
             removeUnexpectedTickets(helper, entityId, tickets.naturalSpawning(), true, expected);
@@ -230,7 +199,7 @@ public final class EntityChunkLoadingService {
                                                 UUID entityId,
                                                 LongSet tickets,
                                                 boolean naturalSpawning,
-                                                Set<Long> expected) {
+                                                ChunkLoadingCoverage expected) {
         for (long chunk : tickets.toLongArray()) {
             if (!expected.contains(chunk)) {
                 helper.removeTicket(entityId, chunk, naturalSpawning);

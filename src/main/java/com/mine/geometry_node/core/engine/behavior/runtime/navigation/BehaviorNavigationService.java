@@ -23,7 +23,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.time.Duration;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -32,16 +31,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Shared server-thread entry point for behavior navigation probes and path requests. */
 public final class BehaviorNavigationService {
-    public static final BehaviorNavigationService INSTANCE = new BehaviorNavigationService();
-
     private static final int MAX_OWNERS = 1_024;
     private static final int MAX_TARGETS_PER_OWNER = 8;
     private static final long REACHABLE_TTL_TICKS = 5L;
     private static final long UNREACHABLE_TTL_TICKS = 20L;
     private static final long OWNER_IDLE_NANOS = Duration.ofMinutes(5).toNanos();
+    private static final long OWNER_SWEEP_NANOS = Duration.ofSeconds(1).toNanos();
+    private static final PathType[] PATH_TYPES = PathType.values();
     private static final String MINECRAFT_PACKAGE = "net.minecraft.";
 
-    private final Map<OwnerKey, OwnerState> owners = new OwnerCache();
+    public static final BehaviorNavigationService INSTANCE = new BehaviorNavigationService();
+
+    private final NavigationOwnerCache<OwnerKey, OwnerState> owners = new NavigationOwnerCache<>(
+            MAX_OWNERS, OWNER_IDLE_NANOS, OWNER_SWEEP_NANOS,
+            OwnerState::released, OwnerState::dispose);
     private final CopyOnWriteArrayList<NavigationProbeFactory> probeFactories =
             new CopyOnWriteArrayList<>();
 
@@ -56,9 +59,12 @@ public final class BehaviorNavigationService {
                     public CompletionStage<CacheStats> stats() {
                         return CacheExecutors.submit(() -> {
                             synchronized (BehaviorNavigationService.this) {
-                                long results = owners.values().stream().mapToLong(state -> state.entries.size()).sum();
-                                long probes = owners.values().stream().filter(state -> state.probe != null).count();
-                                return new CacheStats(results + probes, -1, 0, probes);
+                                long[] counts = new long[2];
+                                owners.forEach(state -> {
+                                    counts[0] += state.entries.size();
+                                    if (state.probe != null) counts[1]++;
+                                });
+                                return new CacheStats(counts[0] + counts[1], -1, 0, counts[1]);
                             }
                         });
                     }
@@ -69,7 +75,7 @@ public final class BehaviorNavigationService {
                         return CacheExecutors.run(() -> {
                             synchronized (BehaviorNavigationService.this) {
                                 // Keep custom probe/navigation resources on their owner lifecycle/thread.
-                                owners.values().forEach(state -> state.entries.clear());
+                                owners.forEach(state -> state.entries.clear());
                             }
                         });
                     }
@@ -78,7 +84,6 @@ public final class BehaviorNavigationService {
 
     public synchronized void registerProbeFactory(NavigationProbeFactory factory) {
         probeFactories.add(Objects.requireNonNull(factory, "factory"));
-        owners.values().forEach(OwnerState::dispose);
         owners.clear();
     }
 
@@ -100,18 +105,15 @@ public final class BehaviorNavigationService {
         Objects.requireNonNull(owner, "owner");
         Objects.requireNonNull(target, "target");
         long accessNanos = System.nanoTime();
-        pruneReleasedOwners(accessNanos);
 
         PathNavigation live = owner.getNavigation();
         Mob navigationMob = ((PathNavigationAccessor) live).geometryNode$getMob();
         OwnerKey ownerKey = new OwnerKey(owner.level().dimension(), owner.getUUID());
-        OwnerState state = owners.get(ownerKey);
+        OwnerState state = owners.get(ownerKey, accessNanos);
         if (state == null || !state.matches(owner, navigationMob, live)) {
-            if (state != null) state.dispose();
-            state = new OwnerState(owner, navigationMob, live, accessNanos);
-            owners.put(ownerKey, state);
+            state = new OwnerState(owner, navigationMob, live);
+            owners.put(ownerKey, state, accessNanos);
         }
-        state.touch(accessNanos);
 
         NavigationProbeFactory factory = findProbeFactory(navigationMob, live);
         NavigationConfiguration configuration = NavigationConfiguration.capture(
@@ -220,29 +222,8 @@ public final class BehaviorNavigationService {
         if (factory != null) factory.synchronize(navigationMob, live, probe);
     }
 
-    private void pruneReleasedOwners(long accessNanos) {
-        Iterator<OwnerState> iterator = owners.values().iterator();
-        while (iterator.hasNext()) {
-            OwnerState state = iterator.next();
-            Mob owner = state.owner.get();
-            Mob navigationMob = state.navigationMob.get();
-            if (owner == null || navigationMob == null
-                    || owner.isRemoved() || navigationMob.isRemoved()
-                    || state.idleAt(accessNanos)) {
-                state.dispose();
-                iterator.remove();
-            }
-        }
-    }
-
     private void removeOwners(java.util.function.Predicate<OwnerState> predicate) {
-        Iterator<OwnerState> iterator = owners.values().iterator();
-        while (iterator.hasNext()) {
-            OwnerState state = iterator.next();
-            if (!predicate.test(state)) continue;
-            iterator.remove();
-            state.dispose();
-        }
+        owners.removeOwners(predicate);
     }
 
     private static void disposeProbe(PathNavigation probe,
@@ -327,7 +308,7 @@ public final class BehaviorNavigationService {
             NodeEvaluator evaluator = navigation.getNodeEvaluator();
             PathNavigationAccessor tuning = (PathNavigationAccessor) navigation;
             int malusHash = 1;
-            for (PathType type : PathType.values()) {
+            for (PathType type : PATH_TYPES) {
                 malusHash = 31 * malusHash + Float.floatToIntBits(mob.getPathfindingMalus(type));
             }
             boolean pathBelowSurface = navigation instanceof GroundPathNavigation ground
@@ -362,16 +343,13 @@ public final class BehaviorNavigationService {
         private NavigationConfiguration configuration;
         @Nullable private NavigationProbeFactory factory;
         private boolean probeUnsupported;
-        private long lastAccessNanos;
 
-        private OwnerState(Mob owner, Mob navigationMob, PathNavigation live,
-                           long accessNanos) {
+        private OwnerState(Mob owner, Mob navigationMob, PathNavigation live) {
             this.owner = new WeakReference<>(owner);
             this.navigationMob = new WeakReference<>(navigationMob);
             this.live = new WeakReference<>(live);
             this.level = new WeakReference<>(owner.level());
             this.configuration = NavigationConfiguration.capture(live, navigationMob, null);
-            this.lastAccessNanos = accessNanos;
         }
 
         private boolean matches(Mob currentOwner, Mob currentNavigationMob,
@@ -434,29 +412,15 @@ public final class BehaviorNavigationService {
             entries.put(targetId, entry);
         }
 
-        private void touch(long accessNanos) {
-            lastAccessNanos = accessNanos;
-        }
-
-        private boolean idleAt(long accessNanos) {
-            return accessNanos - lastAccessNanos >= OWNER_IDLE_NANOS;
+        private boolean released() {
+            Mob currentOwner = owner.get();
+            Mob currentNavigationMob = navigationMob.get();
+            return currentOwner == null || currentNavigationMob == null
+                    || currentOwner.isRemoved() || currentNavigationMob.isRemoved();
         }
 
         private void dispose() {
             discardProbe();
-        }
-    }
-
-    private static final class OwnerCache extends LinkedHashMap<OwnerKey, OwnerState> {
-        private OwnerCache() {
-            super(64, 0.75F, true);
-        }
-
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<OwnerKey, OwnerState> eldest) {
-            boolean remove = size() > MAX_OWNERS;
-            if (remove) eldest.getValue().dispose();
-            return remove;
         }
     }
 

@@ -247,6 +247,7 @@ public final class AssetTaskController {
     private final class TaskContext implements AssetTaskContext {
         private final TaskHandle mHandle;
         private final TransferProgressDialog mProgress;
+        private ProgressUpdate mPendingProgress;
 
         private TaskContext(TaskHandle handle, TransferProgressDialog progress) {
             mHandle = handle;
@@ -259,19 +260,51 @@ public final class AssetTaskController {
         }
 
         @Override
-        public void progress(String message, int processed, int total) {
-            String safeMessage = message == null ? "" : message;
-            int safeProcessed = Math.max(0, processed);
-            int safeTotal = Math.max(0, total);
-            postIfActive(mHandle, () -> mProgress.update(safeMessage, safeProcessed, safeTotal));
+        public synchronized void progress(String message, int processed, int total) {
+            if (mPendingProgress != null) {
+                mPendingProgress.set(message, processed, total);
+                return;
+            }
+            ProgressUpdate update = new ProgressUpdate(message, processed, total);
+            mPendingProgress = update;
+            postIfActive(mHandle, () -> deliverProgress(update));
         }
 
         @Override
-        public void enterCommitPhase() throws InterruptedException {
+        public synchronized void enterCommitPhase() throws InterruptedException {
             if (!mHandle.enterCommitPhase()) {
                 throw new InterruptedException("asset task cancelled before commit");
             }
+            // Keep updates on each side of this UI transition in their original order.
+            mPendingProgress = null;
             postIfActive(mHandle, mProgress::enterCommitPhase);
+        }
+
+        private void deliverProgress(ProgressUpdate update) {
+            String message;
+            int processed, total;
+            synchronized (this) {
+                if (mPendingProgress == update) mPendingProgress = null;
+                message = update.message;
+                processed = update.processed;
+                total = update.total;
+            }
+            mProgress.update(message, processed, total);
+        }
+
+        private static final class ProgressUpdate {
+            private String message;
+            private int processed, total;
+
+            private ProgressUpdate(String message, int processed, int total) {
+                set(message, processed, total);
+            }
+
+            private void set(String message, int processed, int total) {
+                this.message = message == null ? "" : message;
+                this.processed = Math.max(0, processed);
+                this.total = Math.max(0, total);
+            }
         }
     }
 

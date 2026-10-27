@@ -42,7 +42,21 @@ public record ColumnFilters(String name, Choice types, NumberRange value, Choice
         return bytes;
     }
     public static int wireTextBytes(String text) {
-        return 5 + text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        int bytes = 5;
+        for (int i = 0; i < text.length(); i++) {
+            char value = text.charAt(i);
+            if (value < 0x80) bytes++;
+            else if (value < 0x800) bytes += 2;
+            else if (Character.isHighSurrogate(value) && i + 1 < text.length()
+                    && Character.isLowSurrogate(text.charAt(i + 1))) {
+                bytes += 4;
+                i++;
+            } else if (Character.isSurrogate(value)) {
+                // String.getBytes(UTF_8) replaces each malformed surrogate with one '?' byte.
+                bytes++;
+            } else bytes += 3;
+        }
+        return bytes;
     }
     public record Choice(boolean restricted, Set<String> selected) {
         public Choice { selected = checkedSet(selected); }

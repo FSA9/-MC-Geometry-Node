@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary.library;
 
 import com.mine.geometry_node.client.feature.datalibrary.DataLibraryRepository;
-import com.mine.geometry_node.client.feature.datalibrary.DataLibraryEntryValues;
 
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
@@ -15,12 +14,6 @@ import java.util.UUID;
 /** Read-only presentation of values already present in a Data Library snapshot. Never reads a world. */
 public final class DataLibraryValuePresentation {
     private DataLibraryValuePresentation() {}
-
-    /** Complete stored value for inspector/copy actions, independent of the browsing view. */
-    public static String valueDetails(DataLibraryRepository.Entry entry) {
-        if (entry == null) return "";
-        return entry.value() instanceof String text ? text : DataLibraryEntryValues.serialize(entry);
-    }
 
     /**
      * Returns a block, item, or entity registry ID, or empty when the value has no known registry type.

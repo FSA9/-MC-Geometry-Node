@@ -5,9 +5,9 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -17,12 +17,18 @@ public final class ClientRequestTracker {
     private static final long DEFAULT_TIMEOUT_SECONDS = 10L;
     private static final AtomicInteger REQUEST_IDS = new AtomicInteger(1);
     private static final Map<Object, PendingRequest<?>> REQUESTS = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService TIMEOUT_EXECUTOR =
-            Executors.newSingleThreadScheduledExecutor(task -> {
-                Thread thread = new Thread(task, "GeometryNode-ClientRequest-Timeout");
-                thread.setDaemon(true);
-                return thread;
-            });
+    private static final ScheduledExecutorService TIMEOUT_EXECUTOR = createTimeoutExecutor();
+
+    static ScheduledThreadPoolExecutor createTimeoutExecutor() {
+        var executor = new ScheduledThreadPoolExecutor(1, task -> {
+            Thread thread = new Thread(task, "GeometryNode-ClientRequest-Timeout");
+            thread.setDaemon(true);
+            return thread;
+        });
+        // Successful and cancelled requests must not retain deadline tasks until the timeout.
+        executor.setRemoveOnCancelPolicy(true);
+        return executor;
+    }
 
     private ClientRequestTracker() {
     }

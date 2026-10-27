@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "entitypreview.EntityAppearanceInvoker",
+    "entityindex.ServerEntityAdmissionMixin",
     "entityindex.ServerEntityTrackingMixin",
     "entityclassification.EntityTypeTraitsMixin",
     "resource.EntityResourceLifecycleMixin",

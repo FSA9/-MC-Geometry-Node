@@ -12,7 +12,6 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 
 import java.io.IOException;
-import java.lang.ref.WeakReference;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.util.*;
@@ -23,7 +22,7 @@ import java.util.function.Predicate;
 public final class ServerEntityIndexService implements ServerEngine {
     public static final ServerEntityIndexService INSTANCE = new ServerEntityIndexService();
     private static final System.Logger LOGGER = System.getLogger(ServerEntityIndexService.class.getName());
-    private static final int RECONCILE_BUDGET = 32, REFRESH_PER_SECOND = 32;
+    private static final int RECONCILE_BUDGET = 32;
     private final Map<MinecraftServer, State> servers = new IdentityHashMap<>();
     private boolean initialized;
     private ServerEntityIndexService() {}
@@ -47,20 +46,30 @@ public final class ServerEntityIndexService implements ServerEngine {
     }
 
     /** One seed per level; all later updates use UUID lookups and tracking/removal callbacks. */
-    public void bootstrap(MinecraftServer server) { seed(server, state(server)); }
+    public void bootstrap(MinecraftServer server) {
+        State state = state(server);
+        seed(server, state);
+        try { storage(server, state); }
+        catch (RuntimeException failure) { reportStorageFailure(state, failure); }
+    }
     private void seed(MinecraftServer server, State state) {
         for (ServerLevel level : server.getAllLevels()) if (!state.closedLevels.contains(level) && state.seeded.add(level))
             for (Entity entity : level.getAllEntities()) observe(state, level, entity, false);
     }
 
+    /** Last persistent observation; loaded presentations must use find/visit or the live entity. */
     public Optional<EntityIndexRecord> record(MinecraftServer server, UUID uuid) {
         return Optional.ofNullable(storage(server, state(server)).catalog().get(Objects.requireNonNull(uuid)));
     }
     public boolean isRegistered(MinecraftServer server, UUID uuid) { return record(server, uuid).isPresent(); }
     /** Alias for callers which expose the directory as a registered flag. */
     public boolean registered(MinecraftServer server, UUID uuid) { return isRegistered(server, uuid); }
+    /** On-demand original appearance; replacement specifications are provided by the preview protocol. */
     public Optional<EntityTemplateValue> preview(MinecraftServer server, UUID uuid) {
-        return record(server, uuid).map(EntityIndexRecord::appearance).filter(value -> !value.isEmpty());
+        Entity entity = findLoaded(server, uuid).orElse(null);
+        return (entity == null ? record(server, uuid).map(EntityIndexRecord::appearance)
+                : Optional.of(com.mine.geometry_node.core.engine.system.entity.appearance.EntityAppearanceCapture.template(entity)))
+                .filter(value -> !value.isEmpty());
     }
     public Optional<Entity> findLoaded(MinecraftServer server, UUID uuid) {
         State state = state(server); seed(server, state);
@@ -112,14 +121,12 @@ public final class ServerEntityIndexService implements ServerEngine {
             try { changed = catalog.register(uuid, expectedRevision, revision -> EntityIndexSnapshots.capture(entity, revision, null)); }
             catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("invalid", invalid); }
             if (changed) {
-                state.owners.put(uuid, new WeakReference<>(entity));
-                state.refreshQueue.schedule(uuid, state.ticks);
+                state.owners.admit(uuid, entity);
             }
         } else {
             changed = catalog.unregister(uuid, expectedRevision);
             if (changed) {
-                state.owners.remove(uuid); state.failedCaptures.remove(uuid);
-                state.refreshQueue.remove(uuid);
+                state.owners.forget(uuid); state.failedCaptures.remove(uuid);
             }
         }
         if (changed) data.changed();
@@ -143,19 +150,33 @@ public final class ServerEntityIndexService implements ServerEngine {
         State state = state(level.getServer()); observe(state, level, entity, false);
         if (loaded(state, entity.getUUID()) == entity) refreshEntity(level.getServer(), state, entity, true);
     }
+    /** Successful entity-manager admission, including entities in inaccessible destination sections. */
+    public void entityAdmitted(ServerLevel level, Entity entity) {
+        State state = state(level.getServer());
+        if (entity.isRemoved() || entity.level() != level || state.closedLevels.contains(level)
+                || !EntityIndexSnapshots.ordinary(entity)) return;
+        EntityIndexSavedData data;
+        try { data = storage(level.getServer(), state); }
+        catch (RuntimeException failure) { reportStorageFailure(state, failure); return; }
+        if (data.catalog().get(entity.getUUID()) == null) return;
+        state.owners.admit(entity.getUUID(), entity);
+        // Visible admission already emitted tracking-start. Hidden admission has no such callback.
+        if (loaded(state, entity.getUUID()) != entity)
+            refreshEntity(level.getServer(), state, entity, true);
+    }
     @Override public void entityLeft(ServerLevel level, Entity entity) {
         State state = state(level.getServer());
         // Tracking end is not destruction; capture while the object can still be read.
         if (!entity.isRemoved() && loaded(state, entity.getUUID()) == entity)
             refreshEntity(level.getServer(), state, entity, true);
         state.index.leave(level, entity.getUUID(), entity);
-        if (loaded(state, entity.getUUID()) == null) state.refreshQueue.remove(entity.getUUID());
     }
     /** setRemoved HEAD: metadata adapters and attachments may be unavailable after removal. */
     public void entityRemoving(ServerLevel level, Entity entity, Entity.RemovalReason reason) {
         State state = state(level.getServer());
-        Entity current = loaded(state, entity.getUUID());
-        if (current == entity) refreshEntity(level.getServer(), state, entity, true);
+        // Destruction discards the registration at TAIL; serializing a final dead snapshot is wasted.
+        if ((reason == null || !reason.shouldDestroy()) && state.owners.ownsRemoval(entity.getUUID(), entity))
+            refreshEntity(level.getServer(), state, entity, true);
     }
     /** setRemoved TAIL: actual reason, independent of tracking visibility and event cancellation. */
     public void entityRemoved(ServerLevel level, Entity entity, Entity.RemovalReason reason) {
@@ -163,15 +184,12 @@ public final class ServerEntityIndexService implements ServerEngine {
         UUID id = entity.getUUID();
         Entity successor = loaded(state, id);
         state.index.remove(level, entity.getUUID(), entity);
-        if (loaded(state, id) == null) state.refreshQueue.remove(id);
         if (reason == null || !reason.shouldDestroy()) return;
-        WeakReference<Entity> owner = state.owners.get(id);
-        boolean successorOwnsIdentity = successor != null && successor != entity
-                || owner != null && owner.get() != null && owner.get() != entity;
+        // Rejected pre-join objects never acquire the authority to delete a persisted UUID.
+        if (!state.owners.ownsRemoval(id, entity) || successor != null && successor != entity) return;
         EntityIndexSavedData data = storage(level.getServer(), state);
-        if (data.catalog().departure(id, reason, successorOwnsIdentity)) data.changed();
-        if (successorOwnsIdentity) return;
-        state.owners.remove(id);
+        if (data.catalog().departure(id, reason, false)) data.changed();
+        state.owners.forget(id, entity);
         state.failedCaptures.remove(id);
     }
     @Override public void levelUnloaded(ServerLevel level) {
@@ -180,7 +198,6 @@ public final class ServerEntityIndexService implements ServerEngine {
             Entity entity = loaded(state, id);
             if (entity != null && entity.level() == level) {
                 refreshEntity(level.getServer(), state, entity, true);
-                state.refreshQueue.remove(id);
             }
         }
         state.index.removeLevel(level);
@@ -195,19 +212,12 @@ public final class ServerEntityIndexService implements ServerEngine {
         MinecraftServer server = level.getServer();
         if (level != server.overworld()) return;
         State state = state(server);
-        ++state.ticks;
-        state.index.reconcile(RECONCILE_BUDGET, entity -> refreshEntity(server, state, entity, false));
-        // Load/seed the registration schedule once, then spread the same 32/s budget over ticks.
-        storage(server, state);
-        state.refreshRemainder += REFRESH_PER_SECOND;
-        int budget = state.refreshRemainder / 20;
-        state.refreshRemainder %= 20;
-        for (int i = 0; i < budget; i++) {
-            UUID id = state.refreshQueue.poll(state.ticks);
-            if (id == null) break;
-            Entity entity = loaded(state, id);
-            if (entity != null) refreshEntity(server, state, entity, false);
-        }
+        // Only short-lived admission/leave candidates need reconciliation, never the registrations.
+        if (state.index.candidateCount() != 0)
+            state.index.reconcile(RECONCILE_BUDGET, entity -> {
+                observe(state, (ServerLevel) entity.level(), entity, false);
+                refreshEntity(server, state, entity, false);
+            });
         if (state.failedSave) {
             state.failedSave = false;
             storage(server, state).setDirty();
@@ -216,7 +226,8 @@ public final class ServerEntityIndexService implements ServerEngine {
     /** Runs before Minecraft's final Save; retain persistent state through all shutdown callbacks. */
     @Override public void shutdown(MinecraftServer server) {
         State state = state(server); state.stopping = true;
-        refreshAll(server, state, true);
+        try { refreshAll(server, state, true); }
+        finally { state.preserveGraphDescriptions = true; }
         // SavedDataStorage logs write failures without failing its future; verify our own file.
         try { flush(server); }
         catch (RuntimeException failure) { LOGGER.log(System.Logger.Level.ERROR, "Entity directory shutdown save failed; retaining dirty data for final save", failure); }
@@ -244,12 +255,11 @@ public final class ServerEntityIndexService implements ServerEngine {
         try { data = storage(server, state); }
         catch (RuntimeException failure) { reportStorageFailure(state, failure); return false; }
         EntityIndexRecord previous = data.catalog().get(entity.getUUID());
-        if (previous == null || !EntityIndexSnapshots.ordinary(entity)) return false;
-        state.refreshQueue.schedule(entity.getUUID(), state.ticks);
-        WeakReference<Entity> owner = state.owners.get(entity.getUUID());
-        if (owner == null || owner.get() != entity) state.owners.put(entity.getUUID(), new WeakReference<>(entity));
+        if (previous == null || !EntityIndexSnapshots.ordinary(entity)
+                || !state.owners.ownsRemoval(entity.getUUID(), entity)) return false;
         try {
-            boolean changed = data.catalog().refresh(EntityIndexSnapshots.capture(entity, previous.revision(), previous), observation);
+            boolean changed = data.catalog().refresh(EntityIndexSnapshots.capture(entity, previous.revision(), previous,
+                    state.preserveGraphDescriptions), observation);
             if (changed) data.changed();
             state.failedCaptures.remove(entity.getUUID());
             return changed;
@@ -290,8 +300,10 @@ public final class ServerEntityIndexService implements ServerEngine {
     private static EntityIndexSavedData storage(MinecraftServer server, State state) {
         if (state.data == null) {
             state.data = EntityIndexSavedData.get(server);
+            // One bootstrap of admission proofs for already-visible entities, never a recurring scan.
             state.data.catalog().visit(record -> {
-                if (loaded(state, record.uuid()) != null) state.refreshQueue.schedule(record.uuid(), state.ticks);
+                Entity entity = loaded(state, record.uuid());
+                if (entity != null) state.owners.admit(record.uuid(), entity);
                 return true;
             });
         }
@@ -308,7 +320,7 @@ public final class ServerEntityIndexService implements ServerEngine {
         state.index.join(level, entity.getUUID(), entity, pending);
         if (!pending && state.data != null && state.data.catalog().get(entity.getUUID()) != null
                 && loaded(state, entity.getUUID()) == entity)
-            state.refreshQueue.schedule(entity.getUUID(), state.ticks);
+            state.owners.admit(entity.getUUID(), entity);
     }
     private static Entity loaded(State state, UUID id) {
         return state.index.current(id);
@@ -317,15 +329,12 @@ public final class ServerEntityIndexService implements ServerEngine {
         EntityIndexSavedData data;
         final EntityIndexLoadedIndex<ServerLevel, Entity> index = new EntityIndexLoadedIndex<>((level, entity) ->
                 !entity.isRemoved() && entity.level() == level && level.getEntity(entity.getUUID()) == entity);
-        final Map<UUID, WeakReference<Entity>> owners = new HashMap<>();
+        final EntityIndexOwnership<Entity> owners = new EntityIndexOwnership<>();
         final Set<ServerLevel> seeded = Collections.newSetFromMap(new IdentityHashMap<>());
         final Set<ServerLevel> closedLevels = Collections.newSetFromMap(new IdentityHashMap<>());
         final Set<UUID> failedCaptures = new HashSet<>();
-        final EntityIndexRefreshQueue refreshQueue = new EntityIndexRefreshQueue();
         CompletableFuture<?> verification = CompletableFuture.completedFuture(null);
         volatile boolean failedSave;
-        boolean stopping, storageFailureReported;
-        long ticks;
-        int refreshRemainder;
+        boolean stopping, storageFailureReported, preserveGraphDescriptions;
     }
 }

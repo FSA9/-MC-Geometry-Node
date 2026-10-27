@@ -33,7 +33,7 @@ import static com.mine.geometry_node.client.ui.components.integration.faction.Fa
 
 /** Faction-specific catalog and retained details, hosted as one global-data section. */
 final class FactionCatalogView extends LinearLayout implements GlobalDataSection {
-    private record Row(LinearLayout view, UiCheckBox check, UiActionButton name) {}
+    private record Row(FrameLayout view, UiCheckBox check, UiActionButton name) {}
     private final ClientFactionRepository repository;
     private final UiStateContext state;
     private final Consumer<Runnable> postToUi;
@@ -159,15 +159,18 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         status.setTextColor(error.isEmpty() ? theme.text().muted() : theme.status().error());
     }
     private Row createRow(UUID id) {
-        LinearLayout view = row(getContext()); view.setPadding(px(10), 0, px(10), 0);
+        FrameLayout view = new FrameLayout(getContext());
         UiCheckBox check = UiCheckBox.createThemed(getContext(), theme);
         check.setOnCheckedChangeListener((button, value) -> { if (value) checked.add(id); else checked.remove(id); savePage(); updateSelection(); });
-        view.addView(UiTableStyle.selectionCell(getContext(), check), new LayoutParams(px(26), -1));
         UiActionButton name = UiTableStyle.rowButton(getContext(), theme); name.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         UIUtils.setLockedTextSize(name, UiMetrics.TEXT_BODY);
-        name.setPadding(px(6), 0, 0, 0); name.setSingleLine(true);
+        name.setPadding(px(42), 0, px(10), 0); name.setSingleLine(true);
         name.setOnClickListener(button -> { navigationRevision++; selected = id; savePage(); showDetail(); updateSelection(); });
-        view.addView(name, new LayoutParams(0, -1, 1)); return new Row(view, check, name);
+        view.addView(name, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout.LayoutParams checkParams = new FrameLayout.LayoutParams(px(26), -1, Gravity.LEFT);
+        checkParams.leftMargin = px(10);
+        view.addView(UiTableStyle.selectionCell(getContext(), check), checkParams);
+        return new Row(view, check, name);
     }
     private void updateSelection() {
         long selectedVisible = visible().stream().filter(f -> checked.contains(f.id())).count();
@@ -176,7 +179,6 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         selectAll.setEnabled(!rows.isEmpty()); count.setText(tr("count", visible().size(), checked.size()));
         rows.forEach((id, row) -> {
             row.check().setChecked(checked.contains(id));
-            row.view().setBackground(fill(id.equals(selected) ? theme.selection().fill() : theme.surface().root()));
             row.name().setPalette(UiTableStyle.rowPalette(id.equals(selected), theme.surface().root(), theme));
         });
         remove.setEnabled(canEdit() && !checked.isEmpty());

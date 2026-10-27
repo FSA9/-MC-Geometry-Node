@@ -23,6 +23,8 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
     private record Entry<A>(Snapshot<A> snapshot, Runnable release) { }
     private final Map<String, Entry<A>> instances = new LinkedHashMap<>();
     private long revision;
+    // Mutations discard the cache immediately so idle stores do not retain retired assets.
+    private List<Snapshot<A>> snapshotCache;
 
     /** Atomic replacement publishes a complete instance before retiring its previous owner. */
     public void put(String id,A asset,int scene,ModelTransform transform,boolean visible,Runnable release) {
@@ -37,13 +39,17 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
         Entry<A> old;
         synchronized(this) {
             old=instances.put(id,new Entry<>(new Snapshot<>(id,asset,scene,transform,visible,++revision,lifetime),release));
+            snapshotCache = null;
         }
         if(old!=null)old.release.run();
     }
     public synchronized Optional<Snapshot<A>> get(String id) {
         Entry<A> entry=instances.get(id); return entry==null?Optional.empty():Optional.of(entry.snapshot);
     }
-    public synchronized List<Snapshot<A>> snapshots() { return instances.values().stream().map(Entry::snapshot).toList(); }
+    public synchronized List<Snapshot<A>> snapshots() {
+        if (snapshotCache == null) snapshotCache = instances.values().stream().map(Entry::snapshot).toList();
+        return snapshotCache;
+    }
     public synchronized boolean hasVisibleInstances() {
         for (Entry<A> entry : instances.values()) if (entry.snapshot.visible()) return true;
         return false;
@@ -58,10 +64,14 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
         Snapshot<A> old=entry.snapshot;
         instances.put(id,new Entry<>(new Snapshot<>(id,old.asset,scene==null?old.scene:scene,transform==null?old.transform:transform,
                 visible==null?old.visible:visible,++revision,old.lifetime),entry.release));
+        snapshotCache = null;
     }
     public boolean remove(String id) {
         Entry<A> old;
-        synchronized(this) { old=instances.remove(id); if(old!=null)revision++; }
+        synchronized(this) {
+            old=instances.remove(id);
+            if(old!=null) { revision++; snapshotCache = null; }
+        }
         if(old!=null)old.release.run();
         return old!=null;
     }
@@ -80,7 +90,7 @@ public final class ModelInstanceStore<A> implements AutoCloseable {
                 old=instances.values().stream().filter(entry->entry.snapshot.lifetime()==lifetime).toList();
                 old.forEach(entry->instances.remove(entry.snapshot.id(),entry));
             }
-            if (!old.isEmpty()) revision++;
+            if (!old.isEmpty()) { revision++; snapshotCache = null; }
         }
         old.forEach(entry->entry.release.run());
     }

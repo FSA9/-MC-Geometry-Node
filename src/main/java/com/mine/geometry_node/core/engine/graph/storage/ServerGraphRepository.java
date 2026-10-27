@@ -8,7 +8,6 @@ import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -126,11 +125,7 @@ public final class ServerGraphRepository implements ServerEngine {
 
     public Set<String> getGraphIds(MinecraftServer server, GraphKind runtimeKind) {
         if (runtimeKind == null || runtimeKind == GraphKind.UNKNOWN) return Set.of();
-        Set<String> result = new TreeSet<>();
-        snapshot(server).graphs().forEach((graphId, descriptor) -> {
-            if (descriptor.runtimeKind() == runtimeKind) result.add(graphId);
-        });
-        return Collections.unmodifiableSet(result);
+        return snapshot(server).graphIds(runtimeKind);
     }
 
     @Override

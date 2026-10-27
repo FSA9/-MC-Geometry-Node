@@ -56,9 +56,6 @@ public final class DatabaseViewState {
     public record Split(float extentDp) {
         public Split { extentDp = Float.isFinite(extentDp) ? Math.max(0, extentDp) : 216; }
     }
-    public record Sidebar(float extentDp, boolean visible) {
-        public Sidebar { extentDp = Float.isFinite(extentDp) ? Math.max(180, Math.min(4096, extentDp)) : 320; }
-    }
     public enum Page { WORLD, LIBRARY, GLOBAL_DATA }
     public record Tab(Page page) {
         public Tab { if (page == null) page = Page.WORLD; }
@@ -67,14 +64,8 @@ public final class DatabaseViewState {
     }
     public static final UiStateKey<Split> WORLD_SPLIT = split("database:world.navigation");
     public static final UiStateKey<Split> LIBRARY_SPLIT = split("database:library.navigation");
-    public static final UiStateKey<Sidebar> ENTITY_SIDEBAR = new UiStateKey<>("globaldata:entities.sidebar", 1,
-            UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, false), value -> value);
-    public static final UiStateKey<Sidebar> FACTION_MEMBERS_SIDEBAR = new UiStateKey<>("globaldata:factions.members.sidebar", 1,
-            UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, false), value -> value);
     public static final UiStateKey<Split> LIBRARY_TREE_SPLIT = new UiStateKey<>("database:library.tree", 1,
             UiStateLifetime.PERSISTENT, Split.class, () -> new Split(360), value -> value);
-    public static final UiStateKey<Sidebar> SIDEBAR = new UiStateKey<>("database:sidebar", 1,
-            UiStateLifetime.PERSISTENT, Sidebar.class, () -> new Sidebar(320, true), value -> value);
     public static final UiStateKey<Tab> TAB = new UiStateKey<>("database:tab", 2,
             UiStateLifetime.MEMORY, Tab.class, () -> new Tab(Page.WORLD), value -> value,
             (version, payload) -> {

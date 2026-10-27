@@ -140,21 +140,32 @@ public final class DataLibraryDocument {
     /** Removes a folder and every descendant folder and entry. */
     public boolean removeFolder(UUID folderId) {
         if (!folders.containsKey(folderId)) return false;
-        for (UUID id : subtreeIds(Set.of(folderId))) {
+        removeObjects(Set.of(folderId));
+        return true;
+    }
+
+    /** Removes selected entries and complete folder subtrees after validating every root. */
+    public void removeObjects(Set<UUID> roots) {
+        if (roots.isEmpty()) return;
+        // Plan once for the entire selection, including overlaps, before changing either index.
+        Set<UUID> removedIds = subtreeIds(roots);
+        for (UUID id : removedIds) {
             if (remove(id)) continue;
             DataLibraryFolder removed = folders.remove(id);
             folderIdsByLocation.remove(new FolderLocation(removed.parentId(), removed.name()), id);
         }
-        return true;
     }
 
     /** Shared by deletion and its fingerprint so both cover exactly the same objects. */
     Set<UUID> subtreeIds(Set<UUID> roots) {
+        boolean includesFolder = false;
         for (UUID root : roots) {
             if (!folders.containsKey(root) && !entries.containsKey(root)) {
                 throw new IllegalStateException("STALE_OBJECT: " + root);
             }
+            includesFolder |= folders.containsKey(root);
         }
+        if (!includesFolder) return new LinkedHashSet<>(roots);
         Map<UUID, List<UUID>> children = new LinkedHashMap<>();
         for (DataLibraryFolder folder : folders.values()) {
             children.computeIfAbsent(folder.parentId(), ignored -> new ArrayList<>()).add(folder.id());

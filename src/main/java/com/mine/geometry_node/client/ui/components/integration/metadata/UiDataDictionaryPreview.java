@@ -70,9 +70,6 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         }
         var matches = DataDictionaryDraft.matching(state.values(), search.getText().toString(), null);
         status.setText(status(state).isEmpty() ? tr("showing", Math.min(8, matches.size()), matches.size()) : status(state));
-        if (matches.isEmpty()) {
-            entries.addView(text(getContext(), tr("empty"), theme.text().muted()), params(-1, 36)); return;
-        }
         for (String key : matches.subList(0, Math.min(8, matches.size()))) {
             LinearLayout row = column(getContext()); row.setPadding(px(8), px(6), px(8), px(6));
             UiDisplayText name = text(getContext(), key, theme.text().normal());

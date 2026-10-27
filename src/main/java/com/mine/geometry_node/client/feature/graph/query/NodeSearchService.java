@@ -43,6 +43,11 @@ public final class NodeSearchService {
         if (definitions != null) {
             for (NodeDef definition : definitions) {
                 if (definition == null) continue;
+                // Empty searches match every definition; only the requested page needs UI text.
+                if (normalizedQuery.isEmpty() && (total < requestedOffset || total >= requestedEnd)) {
+                    total++;
+                    continue;
+                }
                 String displayName = definition.displayName().getString();
                 String englishName = englishNodeName(definition.typeId());
                 String comment = NodeCommentTextBuilder.build(definition);

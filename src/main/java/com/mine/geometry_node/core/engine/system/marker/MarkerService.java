@@ -164,11 +164,7 @@ public final class MarkerService {
             return;
         }
 
-        for (MarkerInstance marker : storage.all()) {
-            if (!(marker.anchor() instanceof MarkerAnchor.Entity)) {
-                continue;
-            }
-
+        for (MarkerInstance marker : state.entityMarkers(storage)) {
             MarkerPayload payload = resolvePayload(server, marker);
             EntityRuntimeState previous = state.entityStates.get(marker.address());
             EntityRuntimeState current = new EntityRuntimeState(payload.active(), payload.position(), payload.dimension());
@@ -319,23 +315,38 @@ public final class MarkerService {
         return value + increment;
     }
 
-    private static final class RuntimeState {
+    static final class RuntimeState {
         private final Map<UUID, Set<MarkerAddress>> entityIndex = new HashMap<>();
         private final Map<MarkerAddress, EntityRuntimeState> entityStates = new HashMap<>();
 
-        private RuntimeState(Iterable<MarkerInstance> markers) {
+        RuntimeState(Iterable<MarkerInstance> markers) {
             for (MarkerInstance marker : markers) {
                 index(marker);
             }
         }
 
-        private void index(MarkerInstance marker) {
+        /** Read current records so metadata and dimension updates never leave cached instances stale. */
+        List<MarkerInstance> entityMarkers(MarkerStorage storage) {
+            ArrayList<MarkerInstance> markers = new ArrayList<>();
+            for (Set<MarkerAddress> addresses : entityIndex.values()) {
+                for (MarkerAddress address : addresses) {
+                    MarkerInstance marker = storage.get(address).orElse(null);
+                    if (marker != null && marker.anchor() instanceof MarkerAnchor.Entity) {
+                        markers.add(marker);
+                    }
+                }
+            }
+            // Isolate publishing from subsequent lifecycle changes, as the storage snapshot did.
+            return List.copyOf(markers);
+        }
+
+        void index(MarkerInstance marker) {
             if (marker.anchor() instanceof MarkerAnchor.Entity entity) {
                 entityIndex.computeIfAbsent(entity.entityId(), ignored -> new HashSet<>()).add(marker.address());
             }
         }
 
-        private void unindex(MarkerInstance marker) {
+        void unindex(MarkerInstance marker) {
             if (!(marker.anchor() instanceof MarkerAnchor.Entity entity)) {
                 return;
             }

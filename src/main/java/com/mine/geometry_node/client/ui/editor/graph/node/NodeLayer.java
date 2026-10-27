@@ -107,7 +107,8 @@ public class NodeLayer extends FrameLayout {
 
     private void bringSelectedNodesToFront(List<NodeVisualAdapter> selectedNodes) {
         if (selectedNodes == null || selectedNodes.isEmpty()) return;
-        mNodeOrder.removeAll(selectedNodes);
+        // Keep the requested front order while avoiding a selected-list scan for every node.
+        mNodeOrder.removeAll(new HashSet<>(selectedNodes));
         mNodeOrder.addAll(selectedNodes);
         for (NodeVisualAdapter node : selectedNodes) {
             bringOverlayHostToFront(node);

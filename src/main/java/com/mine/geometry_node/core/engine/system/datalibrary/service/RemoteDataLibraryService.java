@@ -264,9 +264,8 @@ public final class RemoteDataLibraryService {
                     || !actual.equals(expectedFingerprint)) {
                 throw new IllegalStateException("STALE_OBJECT: delete selection");
             }
-            for (DataLibraryObjectKey key : keys) {
-                if (!document.remove(key.id())) document.removeFolder(key.id());
-            }
+            document.removeObjects(keys.stream().map(DataLibraryObjectKey::id)
+                    .collect(java.util.stream.Collectors.toSet()));
         });
     }
 

@@ -34,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -56,11 +57,8 @@ public final class ClientAssetTransferService implements AutoCloseable {
         thread.setDaemon(true);
         return thread;
     });
-    private final ExecutorService notifications = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "GeometryNode-AssetTransfer-Notifications");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ExecutorService notifications;
+    private final Executor observerDelivery;
     private final Map<UUID, ClientJob> jobs = new LinkedHashMap<>();
     private final Map<UUID, CompletableFuture<AssetTransferJobSnapshot>> terminalCompletions = new LinkedHashMap<>();
     private final Map<UUID, ClientFile> filesByTransferId = new LinkedHashMap<>();
@@ -73,6 +71,16 @@ public final class ClientAssetTransferService implements AutoCloseable {
     private long revision;
 
     private ClientAssetTransferService() {
+        this(Executors.newSingleThreadExecutor(task -> {
+            Thread thread = new Thread(task, "GeometryNode-AssetTransfer-Notifications");
+            thread.setDaemon(true);
+            return thread;
+        }), ClientThread.executor());
+    }
+
+    ClientAssetTransferService(ExecutorService notifications, Executor observerDelivery) {
+        this.notifications = Objects.requireNonNull(notifications, "notifications");
+        this.observerDelivery = Objects.requireNonNull(observerDelivery, "observerDelivery");
     }
 
     public synchronized UUID submit(List<ClientAssetTransferRequest> requests) {
@@ -362,6 +370,7 @@ public final class ClientAssetTransferService implements AutoCloseable {
 
     private void publish() {
         revision++;
+        if (observers.isEmpty()) return;
         publishSnapshot(snapshot());
     }
 
@@ -370,8 +379,9 @@ public final class ClientAssetTransferService implements AutoCloseable {
     }
 
     private void publishSnapshotTo(List<Consumer<AssetTransferSnapshot>> targets, AssetTransferSnapshot snapshot) {
+        if (targets.isEmpty()) return;
         try {
-            notifications.execute(() -> post(() -> {
+            notifications.execute(() -> observerDelivery.execute(() -> {
                 for (Consumer<AssetTransferSnapshot> observer : targets) {
                     if (!observers.contains(observer)) continue;
                     try {

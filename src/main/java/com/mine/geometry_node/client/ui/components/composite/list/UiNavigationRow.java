@@ -16,6 +16,7 @@ import icyllis.modernui.widget.TextView;
 public final class UiNavigationRow extends FrameLayout {
     private final UiActionButton button;
     private final TextView name;
+    private final TextView total;
     private final LinearLayout cells;
 
     public UiNavigationRow(Context context, String title, long count) {
@@ -23,15 +24,16 @@ public final class UiNavigationRow extends FrameLayout {
     }
 
     public UiNavigationRow(Context context, String title, long count, UiTheme theme) {
-        this(context, title, Long.valueOf(count), theme);
+        this(context, title, Long.toString(count), theme);
     }
 
     /** Category navigation without a quantitative badge uses the same typography and hit target. */
     public UiNavigationRow(Context context, String title, UiTheme theme) {
-        this(context, title, null, theme);
+        this(context, title, (CharSequence) null, theme);
     }
 
-    private UiNavigationRow(Context context, String title, Long count, UiTheme theme) {
+    /** Text badges also cover unknown counts and availability without introducing a second hit target. */
+    public UiNavigationRow(Context context, String title, CharSequence count, UiTheme theme) {
         super(context);
         java.util.Objects.requireNonNull(theme, "theme");
         button = new UiActionButton(context, theme, "", UiActionButton.Role.QUIET,
@@ -56,12 +58,18 @@ public final class UiNavigationRow extends FrameLayout {
         name.setEllipsize(TextUtils.TruncateAt.END);
         name.setPadding(0, 0, UIUtils.dp2pxInt(6), 0);
         cells.addView(name, new LinearLayout.LayoutParams(0, -1, 1));
-        if (count != null) {
-            TextView total = UIUtils.createLockedTextView(context, Long.toString(count), 10, theme.text().muted());
-            total.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-            cells.addView(total, new LinearLayout.LayoutParams(-2, -1));
-        }
+        total = UIUtils.createLockedTextView(context, "", 10, theme.text().muted());
+        total.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        cells.addView(total, new LinearLayout.LayoutParams(-2, -1));
+        setBadgeText(count);
         addView(cells, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    public void setBadgeText(CharSequence text) {
+        total.setText(text != null ? text : "");
+        total.setVisibility(text == null || text.length() == 0 ? GONE : VISIBLE);
+        button.setContentDescription(total.getVisibility() == GONE ? name.getText() : name.getText() + ": " + text);
+        setContentDescription(button.getContentDescription());
     }
 
     public UiActionButton button() {

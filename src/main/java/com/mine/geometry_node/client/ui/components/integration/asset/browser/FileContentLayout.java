@@ -340,7 +340,7 @@ final class FileContentLayout extends ViewGroup {
         int scrollY = Math.max(0, mViewportScrollY);
         if (mMode == AssetViewMode.LIST) {
             int rowHeight = itemHeight();
-            int firstRow = scrollY / rowHeight;
+            int firstRow = Math.min(mEntries.size() - 1, scrollY / rowHeight);
             int lastRow = Math.min(mEntries.size() - 1, (scrollY + viewportHeight) / rowHeight);
             return new IndexRange(firstRow, Math.max(firstRow, lastRow));
         }

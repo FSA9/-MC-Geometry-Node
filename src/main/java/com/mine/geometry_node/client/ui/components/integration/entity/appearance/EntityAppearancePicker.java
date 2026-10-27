@@ -233,7 +233,7 @@ public final class EntityAppearancePicker extends ModalWindowView {
         list.removeAllViews();
         count.setText(visible.size() + " / " + selection.size());
         for (AppearanceSelection.Option option : visible) addCandidate(option);
-        if (visible.isEmpty()) showListMessage(loadFailed ? "unavailable" : "empty");
+        if (visible.isEmpty() && loadFailed) showListMessage("unavailable");
         updateSelection();
         scroll.alignCurrent = alignCurrent;
         scroll.scrollTo(0, 0);
@@ -301,9 +301,10 @@ public final class EntityAppearancePicker extends ModalWindowView {
 
     private void previewStatus(EntityTemplatePreviewView.Status status) {
         if (disposed) return;
-        pane.status.setVisibility(status == EntityTemplatePreviewView.Status.READY ? GONE : VISIBLE);
+        pane.status.setVisibility(status == EntityTemplatePreviewView.Status.READY
+                || status == EntityTemplatePreviewView.Status.EMPTY ? GONE : VISIBLE);
         pane.status.setText(tr(switch (status) {
-            case EMPTY -> "empty";
+            case EMPTY -> "preview";
             case LOADING -> "loading";
             case UNAVAILABLE -> "unavailable";
             case NO_APPEARANCE -> "no_appearance";

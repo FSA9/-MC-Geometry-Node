@@ -54,12 +54,24 @@ public class ClientVisualManager {
             ACTIVE_EFFECTS.add(pendingEffect);
         }
 
-        for (int i = ACTIVE_EFFECTS.size() - 1; i >= 0; i--) {
-            AbstractVisualEffect effect = ACTIVE_EFFECTS.get(i);
-            if (effect.tick()) {
-                ACTIVE_EFFECTS.remove(i);
-                effect.close();
+        tickEffects(ACTIVE_EFFECTS);
+    }
+
+    /** Tick/close in reverse order, then compact once without reordering surviving draw inputs. */
+    static void tickEffects(List<AbstractVisualEffect> effects) {
+        boolean removed = false;
+        try {
+            for (int i = effects.size() - 1; i >= 0; i--) {
+                AbstractVisualEffect effect = effects.get(i);
+                if (effect.tick()) {
+                    effects.set(i, null);
+                    removed = true;
+                    effect.close();
+                }
             }
+        } finally {
+            // Compact even if ticking or releasing an effect fails; nulls must never reach render.
+            if (removed) effects.removeIf(java.util.Objects::isNull);
         }
     }
 
