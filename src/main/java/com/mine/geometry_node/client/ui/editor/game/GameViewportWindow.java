@@ -44,6 +44,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.composite.button.UiSplitButton;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import net.minecraft.network.chat.Component;
 
 /** Workspace visibility owns subscriptions; each window retains its own edit camera. */
@@ -109,9 +110,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         toolScroller.addView(tools, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         header.addView(toolScroller, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        transformStatus=UIUtils.createLockedTextView(context,"",11,UiThemes.EDITOR.text().secondary());
-        transformStatus.setSingleLine(true);
-        header.addView(transformStatus, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        header.addView(new View(context), new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         snapControl = new UiSplitButton(context, tr("scene.snap"), toolbarPalette(false),
                 this::toggleMoveSnap, this::openSnapSettings);
         snapButton = snapControl.primaryButton();
@@ -158,6 +157,9 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
         sidebarLayout.initialize(false);
         addView(workspace, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        transformStatus = UiTableStyle.statusBar(context, "", UiThemes.EDITOR);
+        addView(transformStatus, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                UIUtils.dp2pxInt(UiTableStyle.STATUS_BAR_HEIGHT)));
         updateTools();
         updateStatus(false);
         GameViewTiming.finish("window construction", constructionStart, true);
