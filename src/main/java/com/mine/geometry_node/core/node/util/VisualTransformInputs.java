@@ -4,7 +4,7 @@ import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.engine.spatial.SpatialTransform;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import java.util.Map;
 import net.minecraft.nbt.CompoundTag;

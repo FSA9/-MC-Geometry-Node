@@ -1,7 +1,8 @@
 package com.mine.geometry_node.core.engine.system.asset.repository;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
-import com.mine.geometry_node.core.engine.graph.storage.GraphStorageLayout;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
+import com.mine.geometry_node.core.engine.system.asset.AssetStorageLayout;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -12,7 +13,7 @@ import java.nio.file.Path;
 
 /** Canonical path policy and world-owned root for server assets. */
 public final class ServerAssetPaths {
-    public static final LevelResource ROOT = new LevelResource(GraphStorageLayout.DIRECTORY);
+    public static final LevelResource ROOT = new LevelResource(AssetStorageLayout.COMMON_DIRECTORY);
 
     private ServerAssetPaths() {
     }
@@ -20,6 +21,31 @@ public final class ServerAssetPaths {
     public static Path root(MinecraftServer server) {
         if (server == null) throw new IllegalArgumentException("server must not be null");
         return server.getWorldPath(ROOT).toAbsolutePath().normalize();
+    }
+
+    public static Path root(MinecraftServer server, AssetRepositoryPath.Root root) {
+        return root == AssetRepositoryPath.Root.COMMON ? root(server)
+                : server.getWorldPath(new LevelResource(AssetStorageLayout.PACKS_DIRECTORY)).toAbsolutePath().normalize();
+    }
+
+    public static Path resolve(MinecraftServer server, String address, boolean allowRoot) {
+        return resolve(root(server), root(server, AssetRepositoryPath.Root.WORLD_PACK), address, allowRoot);
+    }
+
+    public static Path resolve(Path commonRoot, Path packsRoot, String address, boolean allowRoot) {
+        AssetRepositoryPath path = AssetRepositoryPath.parse(address, allowRoot);
+        return resolveUnderRoot(path.isCommon() ? commonRoot : packsRoot, path.relativePath(), allowRoot);
+    }
+
+    public static String pathToId(MinecraftServer server, Path file) {
+        Path normalized = file.toAbsolutePath().normalize();
+        for (AssetRepositoryPath.Root kind : AssetRepositoryPath.Root.values()) {
+            Path root = root(server, kind);
+            if (normalized.startsWith(root)) {
+                return new AssetRepositoryPath(kind, pathToId(root, normalized)).serialize();
+            }
+        }
+        throw new IllegalArgumentException("asset path escapes repository roots: " + file);
     }
 
     public static String normalizeRelativePath(String path, boolean allowEmpty) {
@@ -36,9 +62,13 @@ public final class ServerAssetPaths {
     }
 
     private static void rejectSymbolicLinkSegments(Path root, Path resolved, String originalPath) {
-        Path current = root;
-        if (Files.exists(current, LinkOption.NOFOLLOW_LINKS) && Files.isSymbolicLink(current)) {
-            throw new IllegalArgumentException("asset root must not be a symbolic link");
+        // Check ancestors too: a symlink at geometry_nodes must not redirect either root.
+        Path current = root.getRoot();
+        for (Path segment : root) {
+            current = current.resolve(segment);
+            if (Files.isSymbolicLink(current)) {
+                throw new IllegalArgumentException("asset root ancestors must not be symbolic links");
+            }
         }
         for (Path segment : root.relativize(resolved)) {
             current = current.resolve(segment);

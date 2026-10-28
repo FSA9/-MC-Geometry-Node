@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.storage;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.system.asset.AssetStorageLayout;
 import com.mine.geometry_node.core.engine.graph.GraphKind;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.lifecycle.ServerEngine;
@@ -58,7 +59,7 @@ public final class ServerGraphRepository implements ServerEngine {
             generation = ++state.generation;
         }
         try {
-            GraphStorageLayout.migrateServer(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
+            AssetStorageLayout.prepareWorld(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
             publish(server, generation, GraphRepositoryLoader.loadAll(server), null);
         } catch (java.io.IOException | RuntimeException error) {
             GeometryNode.LOGGER.error("[ServerGraphRepository] Initial graph load failed", error);

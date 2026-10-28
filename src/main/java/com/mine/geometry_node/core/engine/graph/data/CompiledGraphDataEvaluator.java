@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.engine.graph.data;
 
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
-import com.mine.geometry_node.core.node.definition.port.PortConversionRegistry;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.engine.graph.value.PortConversionRegistry;
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 

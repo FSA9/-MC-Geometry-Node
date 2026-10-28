@@ -1,6 +1,10 @@
 package com.mine.geometry_node.client.ui.components.integration.asset.dialog;
 
 import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetReference;
+import com.mine.geometry_node.core.engine.system.asset.reference.AssetResolutionContext;
+import com.mine.geometry_node.client.platform.ClientPaths;
 import com.mine.geometry_node.client.ui.components.integration.asset.AssetPickerDialog;
 import com.mine.geometry_node.client.ui.components.integration.asset.AssetPickerOptions;
 import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
@@ -51,15 +55,23 @@ public class FilePickerDialog extends AssetPickerDialog {
     }
 
     private static AssetPickerOptions options(String initialPath) {
-        String remote = initialRemoteDirectory(initialPath);
-        AssetLocation initial = remote != null ? new AssetLocation.Remote(remote, false)
-                : new AssetLocation.Local(initialLocalDirectory(initialPath), false, List.of());
+        AssetLocation initial;
+        try {
+            String remote = initialRemoteDirectory(initialPath);
+            initial = remote != null ? new AssetLocation.Remote(remote, false)
+                    : new AssetLocation.Local(initialLocalDirectory(initialPath), false, List.of());
+        } catch (IllegalArgumentException invalidReference) {
+            initial = new AssetLocation.Local(AssetBrowserPathPolicy.getCommonDir(), false, List.of());
+        }
         return new AssetPickerOptions(AssetPickerOptions.Sources.BOTH, AssetPickerOptions.Target.FILE_OR_FOLDER,
                 entry -> entry.supports(AssetTypeAction.PICK), initial);
     }
 
     private static String toPath(AssetEntry entry) {
-        if (entry.sourceKind() == AssetSourceKind.REMOTE) return "remote:" + AssetPathUtils.formatRemotePath(entry.path());
+        if (entry.sourceKind() == AssetSourceKind.REMOTE) {
+            AssetRepositoryPath address = AssetRepositoryPath.parse(entry.path(), true);
+            return address.isCommon() ? "remote:" + address.relativePath() : address.serialize();
+        }
         File file = entry.localFile();
         try { return "local:" + file.getCanonicalPath(); }
         catch (Exception ignored) { return "local:" + file.getAbsolutePath(); }
@@ -68,22 +80,34 @@ public class FilePickerDialog extends AssetPickerDialog {
     private static File initialLocalDirectory(String currentPath) {
         String value = currentPath == null ? "" : currentPath.trim();
         if (!value.isEmpty()) {
-            File direct = AssetBrowserPathPolicy.resolveConfigPath(value);
+            File direct;
+            if (value.startsWith("local:")) {
+                direct = AssetBrowserPathPolicy.resolveConfigPath(value.substring("local:".length()));
+            } else if (value.startsWith("pack:")) {
+                try {
+                    direct = AssetReference.parse(value).resolvePath(new AssetResolutionContext(
+                            ClientPaths.getWorkspaceRoot().toPath(), null)).toFile();
+                } catch (IllegalArgumentException invalidReference) {
+                    direct = null;
+                }
+            } else {
+                direct = AssetBrowserPathPolicy.resolveConfigPath(value);
+            }
             File directDirectory = directoryOfExistingPath(direct);
             if (directDirectory != null) {
                 return directDirectory;
             }
         }
-        return AssetBrowserPathPolicy.getLocalDraftsDir();
+        return AssetBrowserPathPolicy.getCommonDir();
     }
 
     private static String initialRemoteDirectory(String currentPath) {
         String value = currentPath == null ? "" : currentPath.trim().replace('\\', '/');
         if (value.isEmpty()) return null;
-        if (AssetPathUtils.isRemotePathInput(value)) {
+        if (value.startsWith("worldpack:") || AssetPathUtils.isRemotePathInput(value)) {
             return remoteDirectoryFromPath(AssetPathUtils.remotePathFromInput(value));
         }
-        if (value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.matches("^[A-Za-z][A-Za-z0-9+.-]*:/.*")) {
+        if (value.startsWith("local:") || value.startsWith("pack:") || value.startsWith("/") || value.matches("^[A-Za-z]:.*") || value.matches("^[A-Za-z][A-Za-z0-9+.-]*:/.*")) {
             return null;
         }
         File local = AssetBrowserPathPolicy.resolveConfigPath(value);
@@ -104,8 +128,7 @@ public class FilePickerDialog extends AssetPickerDialog {
     }
 
     private static String parentRemoteDirectory(String normalized) {
-        int slash = normalized.lastIndexOf('/');
-        return slash > 0 ? normalized.substring(0, slash) : "";
+        return AssetPathUtils.parentRemoteDirectory(normalized);
     }
 
     private static File directoryOfExistingPath(File file) {

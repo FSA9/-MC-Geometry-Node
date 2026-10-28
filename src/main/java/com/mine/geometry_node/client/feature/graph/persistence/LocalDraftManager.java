@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 
 public class LocalDraftManager {
     private static Path getDraftFolder() {
-        return AssetBrowserPathPolicy.getLocalDraftsDir().toPath();
+        return AssetBrowserPathPolicy.getCommonDir().toPath();
     }
 
     public static Path resolveDraftPath(String graphId) {

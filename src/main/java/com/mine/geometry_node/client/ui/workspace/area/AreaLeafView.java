@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragOperation;
@@ -59,11 +59,11 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         header.addView(mTitle, titleParams);
 
         addHeaderDivider(header, context);
-        addActionButton(header, context, VectorIconView.Kind.SPLIT_HORIZONTAL, "左右分割区域",
+        addActionButton(header, context, SvgIconView.Icon.SPLIT_HORIZONTAL, "左右分割区域",
                 () -> mRoot.splitLeaf(mNode, AreaSplitDirection.HORIZONTAL));
-        addActionButton(header, context, VectorIconView.Kind.SPLIT_VERTICAL, "上下分割区域",
+        addActionButton(header, context, SvgIconView.Icon.SPLIT_VERTICAL, "上下分割区域",
                 () -> mRoot.splitLeaf(mNode, AreaSplitDirection.VERTICAL));
-        addActionButton(header, context, VectorIconView.Kind.CLOSE, "关闭区域",
+        addActionButton(header, context, SvgIconView.Icon.CLOSE, "关闭区域",
                 () -> mRoot.closeLeaf(mNode));
 
         addView(header, new LinearLayout.LayoutParams(
@@ -238,7 +238,7 @@ final class AreaLeafView extends LinearLayout implements AreaIconButton.HintSink
         });
     }
 
-    private void addActionButton(LinearLayout header, Context context, VectorIconView.Kind kind, String hint, Runnable action) {
+    private void addActionButton(LinearLayout header, Context context, SvgIconView.Icon kind, String hint, Runnable action) {
         AreaIconButton button = new AreaIconButton(context, kind, hint, this);
         button.setOnClickListener(v -> {
             if (action != null) {

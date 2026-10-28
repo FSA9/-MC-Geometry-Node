@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.type;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -73,7 +74,14 @@ public final class AssetTypeCatalog {
                 String graphTypeId = inspectGraphType(file);
                 return graphTypeId.isEmpty() ? null : graphTypeId;
             }
-        }, AssetPreviewKind.NONE, Optional.of(ServerGraphRepository.INSTANCE::refresh), Optional.empty()));
+        }, AssetPreviewKind.NONE, Optional.of((server, paths, directoryScope) -> {
+            var commonPaths = paths.stream().filter(path -> AssetRepositoryPath.parse(path, true).isCommon())
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!paths.isEmpty() && commonPaths.isEmpty()) {
+                return java.util.concurrent.CompletableFuture.completedFuture(null);
+            }
+            return ServerGraphRepository.INSTANCE.refresh(server, commonPaths, directoryScope);
+        }), Optional.empty()));
     }
 
     private AssetTypeCatalog() {

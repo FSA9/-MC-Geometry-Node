@@ -48,25 +48,24 @@ public final class ServerAssetPreviewAssociations {
     }
 
     public static Migration capture(MinecraftServer server, Path source, Path target) throws IOException {
-        Path root = ServerAssetPaths.root(server);
         List<Entry> entries = new ArrayList<>();
         if (Files.isRegularFile(source) && !Files.isSymbolicLink(source)) {
-            captureFile(root, source, target, entries);
+            captureFile(server, source, target, entries);
         } else if (Files.isDirectory(source) && !Files.isSymbolicLink(source)) {
             try (var paths = Files.walk(source)) {
                 for (Path file : paths.filter(Files::isRegularFile).filter(path -> !Files.isSymbolicLink(path)).toList()) {
-                    captureFile(root, file, target.resolve(source.relativize(file)), entries);
+                    captureFile(server, file, target.resolve(source.relativize(file)), entries);
                 }
             }
         }
         return new Migration(server, List.copyOf(entries));
     }
 
-    private static void captureFile(Path root, Path source, Path target, List<Entry> entries) throws IOException {
+    private static void captureFile(MinecraftServer server, Path source, Path target, List<Entry> entries) throws IOException {
         AssetPreviewKind kind = AssetTypeCatalog.previewKind(AssetTypeCatalog.inspect(source).typeId());
         if (!kind.isConcrete()) return;
         BasicFileAttributes attributes = Files.readAttributes(source, BasicFileAttributes.class);
-        String relative = root.relativize(source.toAbsolutePath().normalize()).toString().replace('\\', '/');
+        String relative = ServerAssetPaths.pathToId(server, source);
         AssetPreviewRevision revision = AssetPreviewRevision.current(
                 new AssetPreviewIdentity(relative, kind), attributes.size(), attributes.lastModifiedTime().toMillis());
         entries.add(new Entry(revision, target.toAbsolutePath().normalize(), kind));
@@ -78,8 +77,7 @@ public final class ServerAssetPreviewAssociations {
                 try {
                     if (!Files.isRegularFile(entry.target) || Files.isSymbolicLink(entry.target)) continue;
                     BasicFileAttributes attributes = Files.readAttributes(entry.target, BasicFileAttributes.class);
-                    Path root = ServerAssetPaths.root(server);
-                    String relative = root.relativize(entry.target).toString().replace('\\', '/');
+                    String relative = ServerAssetPaths.pathToId(server, entry.target);
                     AssetPreviewRevision targetRevision = AssetPreviewRevision.current(
                             new AssetPreviewIdentity(relative, entry.kind), attributes.size(),
                             attributes.lastModifiedTime().toMillis());

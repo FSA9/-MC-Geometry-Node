@@ -1,5 +1,6 @@
-package com.mine.geometry_node.core.node.definition.port;
+package com.mine.geometry_node.core.engine.graph.value;
 
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;

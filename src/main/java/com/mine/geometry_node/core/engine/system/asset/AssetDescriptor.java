@@ -4,12 +4,17 @@ import java.util.Objects;
 
 /** Lightweight asset description shared by local repositories, remote repositories and the wire protocol. */
 public record AssetDescriptor(String path, String name, boolean directory, long size,
-                              long lastModified, AssetMetadata metadata) {
+                              long lastModified, AssetMetadata metadata, AssetDocumentInfo documentInfo) {
+    public AssetDescriptor(String path, String name, boolean directory, long size,
+                           long lastModified, AssetMetadata metadata) {
+        this(path, name, directory, size, lastModified, metadata, AssetDocumentInfo.EMPTY);
+    }
     public AssetDescriptor {
         path = Objects.requireNonNullElse(path, "");
         name = Objects.requireNonNullElse(name, "");
         size = Math.max(0L, size);
         lastModified = Math.max(0L, lastModified);
         metadata = metadata == null ? AssetMetadata.UNKNOWN : metadata;
+        documentInfo = documentInfo == null ? AssetDocumentInfo.EMPTY : documentInfo;
     }
 }

@@ -5,7 +5,7 @@ import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
 import com.mine.geometry_node.client.runtime.dialogue.ClientDialogueState;
 import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.integration.overlay.InventoryItemPickerOverlay;
 import com.mine.geometry_node.client.ui.components.integration.overlay.ItemStackTooltipOverlay;
@@ -434,7 +434,7 @@ public class ShopMenuFragment extends Fragment {
         button.setOnClickListener(v -> ClientDialogueState.close());
         bindButtonFeedback(button, 0, COLOR_BUTTON_HOVER, COLOR_BUTTON_PRESSED);
 
-        VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, COLOR_MUTED);
+        SvgIconView icon = new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, COLOR_MUTED);
         FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(18), dp(18));
         iconLp.gravity = Gravity.CENTER;
         button.addView(icon, iconLp);

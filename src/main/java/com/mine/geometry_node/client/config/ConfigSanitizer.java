@@ -5,11 +5,15 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 
 /** Reads registered settings through their declared editor type and validation contract. */
 final class ConfigSanitizer {
@@ -33,12 +37,20 @@ final class ConfigSanitizer {
 
         // The old default occupied the new editor chord. Preserve deliberate custom navigation bindings.
         JsonObject gameKeys = readObject(readObject(root, "keyBindings"), "gameView");
-        if (!gameKeys.has("edit") && "CTRL+RIGHT_CLICK".equals(config.keyBindings.gameView.entityMove))
+        if ((gameKeys == null || !gameKeys.has("edit"))
+                && "CTRL+RIGHT_CLICK".equals(config.keyBindings.gameView.entityMove))
             config.keyBindings.gameView.entityMove = "SHIFT+RIGHT_CLICK";
 
         JsonObject assets = readObject(root, "assetBrowser");
         ReadList favorites = readStringList(assets, "favoriteAssetPaths");
         if (favorites.valid) config.assetBrowser.favoriteAssetPaths = favorites.value;
+        JsonObject remoteShortcuts = readObject(assets, "remoteQuickAccessPaths");
+        if (remoteShortcuts != null) {
+            for (String server : remoteShortcuts.keySet()) {
+                ReadList paths = readStringList(remoteShortcuts, server);
+                if (paths.valid) config.assetBrowser.remoteQuickAccessPaths.put(server, paths.value);
+            }
+        }
         ReadBoolean assetVisible = readBoolean(assets, "rightSidebarVisible");
         if (assetVisible.valid) config.assetBrowser.rightSidebarVisible = assetVisible.value;
         ReadFloat assetWeight = readFloat(assets, "rightSidebarWeight");
@@ -94,7 +106,9 @@ final class ConfigSanitizer {
                 yield read.valid ? read.value : null;
             }
         };
-        entry.set(config, (T) value);
+        // The candidate already contains defaults. Missing or mistyped JSON must not
+        // be passed as null to entry normalizers that only accept concrete values.
+        if (value != null) entry.set(config, (T) value);
     }
 
     private static boolean useLegacyShortcut(JsonObject parent, String key, ConfigEntry<?> entry) {
@@ -163,6 +177,9 @@ final class ConfigSanitizer {
             config.assetBrowser.favoriteAssetPaths = favorites.value;
             changed |= favorites.changed;
         }
+        Map<String, List<String>> remoteShortcuts = normalizeRemoteQuickAccess(config.assetBrowser.remoteQuickAccessPaths);
+        changed |= !Objects.equals(remoteShortcuts, config.assetBrowser.remoteQuickAccessPaths);
+        config.assetBrowser.remoteQuickAccessPaths = remoteShortcuts;
         if (!validSidebarWeight(config.assetBrowser.rightSidebarWeight)) {
             config.assetBrowser.rightSidebarWeight = defaults.assetBrowser.rightSidebarWeight;
             changed = true;
@@ -185,6 +202,25 @@ final class ConfigSanitizer {
 
     private static boolean validSidebarWeight(float weight) {
         return Float.isFinite(weight) && weight >= RIGHT_SIDEBAR_WEIGHT_MIN && weight <= RIGHT_SIDEBAR_WEIGHT_MAX;
+    }
+
+    private static Map<String, List<String>> normalizeRemoteQuickAccess(Map<String, List<String>> source) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        if (source == null) return result;
+        source.forEach((server, paths) -> {
+            if (server == null || server.isBlank() || paths == null) return;
+            LinkedHashSet<String> normalized = new LinkedHashSet<>();
+            for (String path : paths) {
+                try {
+                    AssetRepositoryPath address = AssetRepositoryPath.parse(path, false);
+                    normalized.add(address.serialize());
+                } catch (IllegalArgumentException | NullPointerException invalid) {
+                    // Invalid user configuration must not affect other server namespaces.
+                }
+            }
+            if (!normalized.isEmpty()) result.put(server, new ArrayList<>(normalized));
+        });
+        return result;
     }
 
     private static JsonObject readObject(JsonObject parent, String key) {

@@ -56,10 +56,11 @@ public final class AssetTypeRegistry {
                         AssetTypeAction.MOVE, AssetTypeAction.DELETE, AssetTypeAction.RENAME,
                         AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
         register(new AssetType(
-                FILE_ID, 0xFF88CCFF, false, false, AssetPreviewKind.NONE,
+                FILE_ID, 0xFF88CCFF, false, true, AssetPreviewKind.NONE,
                 EnumSet.allOf(AssetSourceKind.class),
                 EnumSet.of(AssetTypeAction.PICK, AssetTypeAction.COPY, AssetTypeAction.MOVE,
-                        AssetTypeAction.DELETE, AssetTypeAction.RENAME)));
+                        AssetTypeAction.DELETE, AssetTypeAction.RENAME,
+                        AssetTypeAction.UPLOAD, AssetTypeAction.DOWNLOAD)));
     }
 
     public synchronized void register(AssetType type) {

@@ -19,6 +19,7 @@ import com.mine.geometry_node.client.feature.asset.model.AssetTypeAction;
 import com.mine.geometry_node.client.feature.asset.repository.AssetRepositoryOperation;
 import com.mine.geometry_node.client.feature.asset.repository.LocalAssetRepository;
 import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.client.platform.DesktopFileBrowser;
 import com.mine.geometry_node.client.ui.components.integration.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.feature.asset.file.LocalAssetService;
@@ -819,12 +820,11 @@ final class AssetBrowserActionController {
     }
 
     private static String remoteParent(String path) {
-        int separator = path == null ? -1 : path.lastIndexOf('/');
-        return separator < 0 ? "" : path.substring(0, separator);
+        return AssetRepositoryPath.parse(path == null ? "" : path, true).parent().serialize();
     }
 
     private static String joinRemotePath(String directory, String name) {
-        return directory == null || directory.isBlank() ? name : directory + "/" + name;
+        return AssetRepositoryPath.parse(directory == null ? "" : directory, true).resolve(name).serialize();
     }
 
     void clearClipboard() {

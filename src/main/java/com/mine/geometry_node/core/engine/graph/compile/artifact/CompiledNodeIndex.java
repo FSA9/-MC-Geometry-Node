@@ -2,7 +2,7 @@ package com.mine.geometry_node.core.engine.graph.compile.artifact;
 
 import com.mine.geometry_node.core.engine.graph.value.GraphValueSnapshot;
 import com.mine.geometry_node.core.engine.graph.compile.ExplicitNullInput;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import org.jetbrains.annotations.Nullable;
 

@@ -1,5 +1,6 @@
 package com.mine.geometry_node.core.node.nodes.data.world;
 
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueNbtConverter;

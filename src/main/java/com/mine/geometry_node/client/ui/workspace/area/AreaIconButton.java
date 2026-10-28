@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.workspace.area;
 
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.UiIconColors;
 import icyllis.modernui.core.Context;
@@ -22,10 +21,6 @@ final class AreaIconButton extends UiIconButton {
 
     AreaIconButton(Context context, SvgIconView.Icon icon, String hint, HintSink hintSink) {
         this(context, new SvgIconView(context, icon, AreaStyle.COLOR_ICON), hint, hintSink);
-    }
-
-    AreaIconButton(Context context, VectorIconView.Kind kind, String hint, HintSink hintSink) {
-        this(context, new VectorIconView(context, kind, AreaStyle.COLOR_ICON), hint, hintSink);
     }
 
     private AreaIconButton(Context context, View iconView, String hint, HintSink hintSink) {

@@ -3,9 +3,7 @@ package com.mine.geometry_node.client.ui.components.integration.asset;
 import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
 import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
-import com.mine.geometry_node.client.ui.components.base.layout.ResizableDivider;
-import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
-import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
+import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.integration.asset.browser.AssetFileBrowserPanel;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
 import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
@@ -22,6 +20,7 @@ import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
@@ -112,13 +111,9 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
         LinearLayout browserArea = new LinearLayout(context);
         browserArea.setOrientation(LinearLayout.HORIZONTAL);
         browserArea.setBackground(rect(theme.surface().root(), UiMetrics.RADIUS_INPUT));
-        // The existing sidebar contains local roots/favorites; single-source remote pickers omit it.
-        mSidebar = options.sources() == AssetPickerOptions.Sources.REMOTE
-                ? null : new AssetNavigationPanel(context, this);
-        if (mSidebar != null) {
-            browserArea.addView(mSidebar, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .22f));
-            browserArea.addView(ResizableDivider.weighted(context, ResizableDivider.Orientation.HORIZONTAL));
-        }
+        mSidebar = new AssetNavigationPanel(context, this);
+        browserArea.addView(mSidebar, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .22f));
+        browserArea.addView(ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL));
         browserArea.addView(mBrowser, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .78f));
         mPanel.addView(browserArea, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(430)));
 
@@ -126,10 +121,12 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
         mPanel.addView(mStatus, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(22)));
 
         LinearLayout actions = new LinearLayout(context);
-        actions.setGravity(Gravity.RIGHT);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
         if (options.target().allowsFolders()) {
             addAction(actions, tr("create_folder"), UiActionButton.Role.QUIET, this::createFolder, 108);
         }
+        actions.addView(new View(context), new LinearLayout.LayoutParams(0, 1, 1));
         addAction(actions, tr("cancel"), UiActionButton.Role.SECONDARY, this::requestClose, 92);
         if (options.target().allowsFolders()) {
             addAction(actions, tr("select_current_folder"), UiActionButton.Role.QUIET, this::chooseCurrentDirectory, 150);
@@ -137,17 +134,29 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
         addAction(actions, tr(options.target() == AssetPickerOptions.Target.FOLDER ? "select_folder" : "select_file"),
                 UiActionButton.Role.PRIMARY, this::chooseSelectedEntry, 108);
         setActions(actions);
+        ViewGroup.LayoutParams actionParams = actions.getLayoutParams();
+        actionParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        actions.setLayoutParams(actionParams);
 
         navigateInitial(options.initialDirectory());
-        mBrowser.setLocationChangedListener(() -> mPendingRemoteDirectory = null);
+        mSidebar.setLocation(mBrowser.locationSnapshot());
+        mBrowser.setLocationChangedListener(() -> {
+            if (mDestroyed) return;
+            mPendingRemoteDirectory = null;
+            mSidebar.setLocation(mBrowser.locationSnapshot());
+        });
         if (options.sources().allows(AssetSourceKind.REMOTE)) requestRemoteCapabilities();
     }
 
     private void addAction(LinearLayout actions, String text, UiActionButton.Role role, Runnable action, int width) {
         UiActionButton button = new UiActionButton(getContext(), mTheme, text, role, UiActionButton.Density.NORMAL,
                 UiActionButton.Style.forTheme(mTheme));
+        UIUtils.setLockedTextSize(button, 14);
+        button.setSingleLine(true);
+        button.setPadding(UIUtils.dp2pxInt(14), 0, UIUtils.dp2pxInt(14), 0);
+        button.setMinimumWidth(UIUtils.dp2pxInt(width));
         button.setOnClickListener(view -> action.run());
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(UIUtils.dp2pxInt(width), UIUtils.dp2pxInt(32));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(32));
         if (actions.getChildCount() > 0) params.leftMargin = UIUtils.dp2pxInt(8);
         actions.addView(button, params);
     }
@@ -187,7 +196,8 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
                 return;
             }
             String path = mBrowser.getRemoteDirectory();
-            String name = path.isEmpty() ? AssetPathUtils.formatRemotePath("") : path.substring(path.lastIndexOf('/') + 1);
+            AssetRepositoryPath address = AssetRepositoryPath.parse(path, true);
+            String name = address.isRoot() ? address.isCommon() ? "Common" : "Packs" : address.name();
             entry = AssetEntry.remote(new AssetDescriptor(path, name, true, 0, 0, AssetMetadata.UNKNOWN));
         } else {
             File directory = mBrowser.getCurrentDirectory();
@@ -218,7 +228,7 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
         if (mOptions.sources() == AssetPickerOptions.Sources.REMOTE) {
             mBrowser.navigateToRemoteRoot();
         } else {
-            File drafts = AssetBrowserPathPolicy.getLocalDraftsDir();
+            File drafts = AssetBrowserPathPolicy.getCommonDir();
             if (!drafts.exists()) drafts.mkdirs();
             mBrowser.navigateTo(drafts);
         }
@@ -279,7 +289,15 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
     }
 
     @Override public void dispatchNavigateToRemoteRoot() {
-        if (!mDestroyed && canBrowseRemote()) mBrowser.navigateToRemoteRoot();
+        dispatchNavigateToRemote("");
+    }
+
+    @Override public void dispatchNavigateToRemote(String directory) {
+        if (!mDestroyed && canBrowseRemote()) mBrowser.navigateToRemote(directory);
+    }
+
+    @Override public boolean allowsSource(AssetSourceKind source) {
+        return mOptions.sources().allows(source);
     }
 
     @Override public boolean canBrowseRemote() {

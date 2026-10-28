@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.feature.asset.repository;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryFiles;
 import com.mine.geometry_node.client.platform.ClientThread;
 import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
 import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
@@ -120,7 +121,7 @@ public final class LocalAssetRepository implements AssetRepository {
         for (File file : files) {
             if (Thread.currentThread().isInterrupted()) return;
             try {
-                if (Files.isSymbolicLink(file.toPath())) continue;
+                if (Files.isSymbolicLink(file.toPath()) || AssetRepositoryFiles.isInternal(file.toPath())) continue;
             } catch (Exception ignored) {
                 continue;
             }
@@ -157,7 +158,7 @@ public final class LocalAssetRepository implements AssetRepository {
         Map<String, List<String>> tagsByKey = includeTags ? new HashMap<>() : Collections.emptyMap();
         for (File file : files) {
             AssetEntry entry = AssetEntry.local(file, pathKey(file),
-                    relativeLabel(file, location.directory(), location.favorites()));
+                    relativeLabel(file, location.directory(), location.favorites()), includeTags);
             entries.add(entry);
             if (!AssetTypeRegistry.GRAPH_ID.equals(entry.type().id())) continue;
             if (includeTags) tagsByKey.put(entry.key(), readTags(file, tagCache));
@@ -174,7 +175,9 @@ public final class LocalAssetRepository implements AssetRepository {
     }
 
     private static boolean isDisplayable(File file) {
-        if (file == null) return false;
+        if (file == null || Files.isSymbolicLink(file.toPath())
+                || AssetRepositoryFiles.isInternal(file.toPath())
+                || !(file.isDirectory() || file.isFile())) return false;
         AssetType type = resolveType(file);
         return type != null && type.displayInBrowser();
     }

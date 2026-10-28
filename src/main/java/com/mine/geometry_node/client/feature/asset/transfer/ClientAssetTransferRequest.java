@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.feature.asset.transfer;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferConflictPolicy;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferDirection;
 import com.mine.geometry_node.core.engine.system.asset.transfer.model.AssetTransferPurpose;
@@ -21,6 +22,9 @@ public record ClientAssetTransferRequest(
         conflictPolicy = Objects.requireNonNull(conflictPolicy, "conflictPolicy");
         purpose = Objects.requireNonNull(purpose, "purpose");
         if (remotePath.isEmpty()) throw new IllegalArgumentException("Remote asset path cannot be blank");
+        if (purpose == AssetTransferPurpose.ASSET_REPOSITORY) {
+            remotePath = AssetRepositoryPath.parse(remotePath, false).serialize();
+        }
     }
 
     public ClientAssetTransferRequest(AssetTransferDirection direction, Path localPath, String remotePath,

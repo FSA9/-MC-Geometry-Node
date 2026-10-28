@@ -1,11 +1,12 @@
 package com.mine.geometry_node.client.feature.asset.path;
 
 import com.mine.geometry_node.client.platform.ClientPaths;
-import com.mine.geometry_node.core.engine.graph.storage.GraphStorageLayout;
+import com.mine.geometry_node.core.engine.system.asset.AssetStorageLayout;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class AssetBrowserPathPolicy {
@@ -13,11 +14,21 @@ public final class AssetBrowserPathPolicy {
     private AssetBrowserPathPolicy() {
     }
 
-    public static File getLocalDraftsDir() {
+    public static File getCommonDir() {
         try {
-            return GraphStorageLayout.prepareLocal(ClientPaths.getWorkspaceRoot().toPath()).toFile();
+            return AssetStorageLayout.prepareLocal(ClientPaths.getWorkspaceRoot().toPath()).toFile();
         } catch (IOException error) {
-            throw new UncheckedIOException("Failed to migrate the local graph directory", error);
+            throw new UncheckedIOException("Failed to migrate the local common asset directory", error);
+        }
+    }
+
+    public static File getPacksDir() {
+        try {
+            Path workspace = ClientPaths.getWorkspaceRoot().toPath();
+            AssetStorageLayout.prepareLocal(workspace);
+            return Files.createDirectories(AssetStorageLayout.packsRoot(workspace)).toFile();
+        } catch (IOException error) {
+            throw new UncheckedIOException("Failed to prepare the local packs directory", error);
         }
     }
 
@@ -28,8 +39,8 @@ public final class AssetBrowserPathPolicy {
 
     public static File resolveConfigPath(String path) {
         if (path == null || path.isBlank()) return null;
-        String normalizedPath = GraphStorageLayout.migrateLocalReference(path.trim());
-        if (!normalizedPath.equals(path.trim())) getLocalDraftsDir();
+        String normalizedPath = AssetStorageLayout.migrateLocalReference(path.trim());
+        if (!normalizedPath.equals(path.trim())) getCommonDir();
         File file = new File(normalizedPath);
         return file.isAbsolute() ? file : ClientPaths.resolveWorkspacePath(normalizedPath);
     }
@@ -62,13 +73,19 @@ public final class AssetBrowserPathPolicy {
         return file != null
                 && file.exists()
                 && file.isDirectory()
-                && !isLocalDraftsPath(path)
+                && !isCommonPath(path)
+                && !isPacksPath(path)
                 && !isRootPath(path);
     }
 
-    public static boolean isLocalDraftsPath(String path) {
+    public static boolean isCommonPath(String path) {
         File file = resolveConfigPath(path);
-        return file != null && ClientPaths.sameFile(file, getLocalDraftsDir());
+        return file != null && ClientPaths.sameFile(file, getCommonDir());
+    }
+
+    public static boolean isPacksPath(String path) {
+        File file = resolveConfigPath(path);
+        return file != null && ClientPaths.sameFile(file, getPacksDir());
     }
 
     public static boolean isRootPath(String path) {

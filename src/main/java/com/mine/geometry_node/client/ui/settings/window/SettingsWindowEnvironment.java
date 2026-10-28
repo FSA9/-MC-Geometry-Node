@@ -82,7 +82,7 @@ final class SettingsWindowEnvironment implements SettingsEditorEnvironment, Auto
         }
         closeTransient();
         var initial = AssetBrowserPathPolicy.resolveConfigPath(initialDirectory);
-        if (initial == null || !initial.isDirectory()) initial = AssetBrowserPathPolicy.getLocalDraftsDir();
+        if (initial == null || !initial.isDirectory()) initial = AssetBrowserPathPolicy.getCommonDir();
         FolderPickerDialog dialog = FolderPickerDialog.local(
                 context,
                 tr("geometry_node.settings.directory.title"),

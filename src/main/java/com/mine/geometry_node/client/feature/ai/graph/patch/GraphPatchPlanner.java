@@ -20,7 +20,6 @@ import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.node.NodeRegistry;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
-import com.mine.geometry_node.core.node.definition.port.PortOptionContext;
 import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortType;
@@ -188,7 +187,7 @@ public final class GraphPatchPlanner {
                 boolean newAlias = isNewReference(set.port());
                 if ((!newAlias && set.optionContextToken() == null)
                         || (set.optionContextToken() != null
-                        && !PortOptionContext.token(options).equals(set.optionContextToken()))) {
+                        && !options.contextToken().equals(set.optionContextToken()))) {
                     throw fail("OPTION_CONTEXT_CONFLICT",
                             "下拉选项上下文已变化，请重新调用 get_node_type_port_options 或 get_port_options");
                 }

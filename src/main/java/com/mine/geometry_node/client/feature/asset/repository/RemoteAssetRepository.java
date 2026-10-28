@@ -66,7 +66,6 @@ public final class RemoteAssetRepository implements AssetRepository {
 
     private static AssetListing toListing(AssetLocation.Remote location, List<AssetDescriptor> source,
                                           AssetQuery query) {
-        if (!query.tag().isEmpty()) return AssetListing.empty(location);
         String nameQuery = query.normalizedName();
         List<AssetEntry> entries = new ArrayList<>();
         for (AssetDescriptor remote : source == null ? List.<AssetDescriptor>of() : source) {
@@ -74,6 +73,8 @@ public final class RemoteAssetRepository implements AssetRepository {
             AssetEntry entry = AssetEntry.remote(remote);
             if (entry.type() == null || !entry.type().displayInBrowser()
                     || !entry.type().supportsSource(AssetSourceKind.REMOTE)) continue;
+            if (!query.tagTerms().stream().allMatch(term -> remote.documentInfo().tags().stream()
+                    .anyMatch(tag -> tag.contains(term)))) continue;
             entries.add(entry);
         }
         return new AssetListing(true, location, entries, Map.of());

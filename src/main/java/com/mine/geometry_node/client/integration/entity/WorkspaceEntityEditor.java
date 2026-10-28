@@ -17,6 +17,7 @@ import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceType;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.binding.GraphBindingKey;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import icyllis.modernui.view.View;
@@ -40,7 +41,9 @@ public final class WorkspaceEntityEditor {
         GraphType type = GraphTypeRegistry.INSTANCE.get(entry.metadata().variantId());
         if (type == null) return null;
         try {
-            return new EntityGraphActions.Selection(new GraphBindingKey(type.runtimeKind(), entry.path()),
+            AssetRepositoryPath path = AssetRepositoryPath.parse(entry.path(), false);
+            if (!path.isCommon()) return null;
+            return new EntityGraphActions.Selection(new GraphBindingKey(type.runtimeKind(), path.serialize()),
                     entry.name(), type.id(), List.of());
         } catch (IllegalArgumentException invalid) {
             return null;

@@ -15,7 +15,7 @@ import icyllis.modernui.view.Gravity;
 /** Shared icon-only action control with bounded visual and hit areas. */
 public class UiIconButton extends FrameLayout {
     /** Placement controls chrome; the owning page supplies the action and its meaning. */
-    public enum Preset { TOOLBAR, INLINE }
+    public enum Preset { TOOLBAR, INLINE, GLYPH }
 
     private final Style style;
     private final View icon;
@@ -155,6 +155,12 @@ public class UiIconButton extends FrameLayout {
         }
 
         public static Style forPreset(UiTheme theme, Preset preset) {
+            if (preset == Preset.GLYPH) {
+                // Only the caller-owned SVG changes state; never paint a button rectangle.
+                return new Style(0, 0, 0, 0, 0, 0, 0, 0, 0, theme.text().disabled(),
+                        UiMetrics.ICON_BUTTON_SIZE, UiMetrics.ICON_BUTTON_SIZE, UiMetrics.ICON_SIZE,
+                        UiMetrics.DISABLED_ALPHA, 0);
+            }
             if (preset == Preset.INLINE) {
                 // Inline actions keep their supplied tint, including status and selection colors.
                 return new Style(1.0f, 0, 0, theme.control().iconHover(), theme.control().iconPressed(),

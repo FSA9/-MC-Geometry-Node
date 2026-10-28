@@ -1,7 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.graph.properties.common;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi;
@@ -46,7 +46,7 @@ public final class GraphTypeSelector extends FrameLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        UiIconButton menuButton = GraphPropertiesUi.actionIcon(context, VectorIconView.Kind.CHEVRON_DOWN,
+        UiIconButton menuButton = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.CHEVRON_DOWN,
                 "geometry_node.graph_properties.type");
         menuButton.setOnClickListener(v -> toggleMenu());
         FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(

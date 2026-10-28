@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.value.dynamic.DynamicData;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
 import com.mine.geometry_node.core.node.document.NodeData;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;

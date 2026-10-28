@@ -161,6 +161,10 @@
   "geometry_node.terminal.action.start": "Start",
   "geometry_node.terminal.action.stop": "Stop",
   "geometry_node.terminal.action.cancel": "Cancel",
+  "geometry_node.asset_library.column.description": "Description",
+  "geometry_node.asset_library.column.favorite": "Favorite",
+  "geometry_node.asset_library.filter.favorited": "Favorited",
+  "geometry_node.asset_library.filter.not_favorite": "Not favorited",
   "geometry_node.asset_library.action.favorite_toggle": "Toggle favorite",
   "geometry_node.asset_library.action.remove_quick_access": "Remove quick access",
   "geometry_node.model.lighting.command.local": "Local light [%s]: %s; %s; placed-light samples %s; resolution %s; %s. Session only.",
@@ -2785,5 +2789,14 @@
   "geometry_node.node.create_area.comment.world_offset": "Moves the placement origin along world axes, independently of entity orientation and rotation parameters.",
   "geometry_node.node.create_area.comment.world_rotation": "Rotates around the placement origin on world axes, including the local offset. X=pitch, Y=yaw, Z=roll, in degrees.",
   "geometry_node.node.create_area.comment.local_offset": "Moves in the frame formed by anchor orientation and world rotation. Local rotation does not move this offset.",
-  "geometry_node.node.create_area.comment.local_rotation": "Rotates the content in its local frame without moving the local offset. X=pitch, Y=yaw, Z=roll, in degrees."
+  "geometry_node.node.create_area.comment.local_rotation": "Rotates the content in its local frame without moving the local offset. X=pitch, Y=yaw, Z=roll, in degrees.",
+  "geometry_node.asset_library.filter.all_types": "All types",
+  "geometry_node.asset_library.status.summary": "%s objects · %s selected",
+  "geometry_node.asset_library.filter.type.graph": "Graphs",
+  "geometry_node.asset_library.filter.type.schematic": "Structures",
+  "geometry_node.asset_library.filter.type.image": "Images",
+  "geometry_node.asset_library.filter.type.video": "Videos",
+  "geometry_node.asset_library.filter.type.file": "Other files",
+  "geometry_node.asset_library.status.loading": "Loading…",
+  "geometry_node.asset_library.status.failed": "Cannot read directory"
 }

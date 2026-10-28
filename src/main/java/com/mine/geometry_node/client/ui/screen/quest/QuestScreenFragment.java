@@ -7,7 +7,7 @@ import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
 import com.mine.geometry_node.client.runtime.quest.ClientQuestScreenState;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
@@ -700,7 +700,7 @@ public final class QuestScreenFragment extends Fragment {
         button.setTooltipText(tr("geometry_node.common.cancel"));
         button.setOnClickListener(v -> ClientQuestScreenState.close());
         bindHover(button, 0x00000000, QuestScreenStyle.BUTTON_HOVER, 0, 0);
-        VectorIconView icon = new VectorIconView(getContext(), VectorIconView.Kind.CLOSE, UiThemes.HUD.text().muted());
+        SvgIconView icon = new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, UiThemes.HUD.text().muted());
         FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(17), dp(17));
         iconLp.gravity = Gravity.CENTER;
         button.addView(icon, iconLp);

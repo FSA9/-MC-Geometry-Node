@@ -9,7 +9,7 @@ import com.mine.geometry_node.core.cache.ManagedCache;
 import java.util.concurrent.CompletionStage;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
-import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetFileOperationRequest;
 import com.mine.geometry_node.core.network.packet.asset.repository.PacketRemoteAssetListResponse;
@@ -66,6 +66,7 @@ public final class RemoteGraphPathIndex {
         if (response == null || !response.success()) return;
         String directory;
         try {
+            if (!AssetRepositoryPath.parse(response.directory(), true).isCommon()) return;
             directory = normalizeDirectory(response.directory());
         } catch (IllegalArgumentException ignored) {
             return;
@@ -76,7 +77,9 @@ public final class RemoteGraphPathIndex {
         for (AssetDescriptor entry : response.entries()) {
             String path;
             try {
-                path = AssetRelativePath.normalize(entry.path(), false);
+                AssetRepositoryPath address = AssetRepositoryPath.parse(entry.path(), false);
+                if (!address.isCommon()) continue;
+                path = address.serialize();
             } catch (IllegalArgumentException ignored) {
                 continue;
             }
@@ -117,7 +120,9 @@ public final class RemoteGraphPathIndex {
 
     private static void addAffectedRoots(Set<String> roots, String path) {
         try {
-            String normalized = AssetRelativePath.normalize(path, false);
+            AssetRepositoryPath address = AssetRepositoryPath.parse(path, false);
+            if (!address.isCommon()) return;
+            String normalized = address.serialize();
             roots.add(normalized);
             roots.add(parent(normalized));
         } catch (IllegalArgumentException ignored) {
@@ -148,7 +153,7 @@ public final class RemoteGraphPathIndex {
     }
 
     private static String normalizeDirectory(String path) {
-        return path == null || path.isBlank() ? "" : AssetRelativePath.normalize(path, false);
+        return AssetRepositoryPath.parse(path == null ? "" : path, true).serialize();
     }
 
     private static String parent(String path) {

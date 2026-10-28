@@ -1,8 +1,8 @@
-package com.mine.geometry_node.core.node.definition.port;
+package com.mine.geometry_node.core.engine.graph.value;
 
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.graph.data.GraphDataContext;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
-import com.mine.geometry_node.core.engine.graph.value.GraphEntityReferenceResolver;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.color.ColorValue;

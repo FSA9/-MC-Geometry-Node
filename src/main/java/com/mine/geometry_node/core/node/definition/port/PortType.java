@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.node.definition.port;
 
+import com.mine.geometry_node.core.engine.graph.value.PortConversionRegistry;
+import com.mine.geometry_node.core.engine.graph.value.PortValueTypeRegistry;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import com.mine.geometry_node.core.node.value.geometry.GeometryValue;

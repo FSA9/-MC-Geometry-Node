@@ -1,5 +1,6 @@
 package com.mine.geometry_node.client.integration.asset;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.client.ui.components.integration.asset.dialog.FolderPickerDialog;
 import com.mine.geometry_node.client.ui.components.integration.asset.dialog.OverwriteConfirmDialog;
 import com.mine.geometry_node.client.feature.asset.transfer.ClientAssetTransferPlanState;
@@ -75,7 +76,7 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
         FolderPickerDialog dialog = FolderPickerDialog.local(
                 mOwner.getContext(),
                 "下载到本地",
-                AssetBrowserPathPolicy.getLocalDraftsDir(),
+                AssetBrowserPathPolicy.getCommonDir(),
                 targetDirectory -> startDownload(remoteEntries, targetDirectory)
         );
         dialog.show(mOwner);
@@ -282,11 +283,13 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
         if (!mRemoteActive || files.isEmpty()) return;
         long generation = mRemoteGeneration;
         Path root = targetDirectory.toPath().toAbsolutePath().normalize();
+        AssetRepositoryPath.requireSameRoot(
+                files.stream().map(AssetDescriptor::path).toList(), null, false);
         Set<String> overwriteSet = new HashSet<>(overwritePaths);
         List<ClientAssetTransferRequest> requests = new ArrayList<>();
         for (AssetDescriptor file : files) {
             String remotePath = AssetPathUtils.normalizeRemoteFilePath(file.path());
-            Path target = root.resolve(remotePath).normalize();
+            Path target = AssetPathUtils.resolveDownloadTarget(root, remotePath);
             if (!target.startsWith(root)) continue;
             requests.add(ClientAssetTransferRequest.download(remotePath, target,
                     overwrite || overwriteSet.contains(remotePath)
@@ -310,8 +313,8 @@ public final class AssetBrowserTransferController implements AssetBrowserAreaBin
         for (AssetDescriptor file : files) {
             String path = AssetPathUtils.normalizeRemoteFilePath(file.path());
             if (!seen.add(path)) continue;
-            File target = new File(targetDirectory, path);
-            if (target.exists()) {
+            Path target = AssetPathUtils.resolveDownloadTarget(targetDirectory.toPath(), path);
+            if (Files.exists(target)) {
                 conflicts.add(path);
             }
         }

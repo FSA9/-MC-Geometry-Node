@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network.packet.asset;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.AssetDocumentInfo;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 
@@ -41,6 +42,9 @@ public final class AssetPacketCodecs {
         buffer.writeLong(entry.lastModified());
         buffer.writeUtf(entry.metadata().typeId(), AssetPacketLimits.MAX_PATH_LENGTH);
         buffer.writeUtf(entry.metadata().variantId(), AssetPacketLimits.MAX_PATH_LENGTH);
+        buffer.writeUtf(entry.documentInfo().description(), AssetDocumentInfo.MAX_DESCRIPTION_LENGTH);
+        writeBoundedCount(buffer, entry.documentInfo().tags().size(), AssetDocumentInfo.MAX_TAGS, "asset tag");
+        for (String tag : entry.documentInfo().tags()) buffer.writeUtf(tag, AssetDocumentInfo.MAX_TAG_LENGTH);
     }
 
     public static AssetDescriptor readAssetDescriptor(RegistryFriendlyByteBuf buffer) {
@@ -52,8 +56,17 @@ public final class AssetPacketCodecs {
                 buffer.readLong(),
                 new AssetMetadata(
                         buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH),
-                        buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH))
+                        buffer.readUtf(AssetPacketLimits.MAX_PATH_LENGTH)),
+                readDocumentInfo(buffer)
         );
+    }
+
+    private static AssetDocumentInfo readDocumentInfo(RegistryFriendlyByteBuf buffer) {
+        String description = buffer.readUtf(AssetDocumentInfo.MAX_DESCRIPTION_LENGTH);
+        int count = readBoundedCount(buffer, AssetDocumentInfo.MAX_TAGS, "asset tag");
+        List<String> tags = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) tags.add(buffer.readUtf(AssetDocumentInfo.MAX_TAG_LENGTH));
+        return new AssetDocumentInfo(description, tags);
     }
 
     public static void writeBoundedCount(

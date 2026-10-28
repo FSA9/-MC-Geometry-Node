@@ -21,7 +21,7 @@ public record AssetListing(boolean success, AssetLocation location, List<AssetEn
     }
 
     public List<String> tagsFor(AssetEntry entry) {
-        return entry == null ? List.of() : tagsByKey.getOrDefault(entry.key(), List.of());
+        return entry == null ? List.of() : tagsByKey.getOrDefault(entry.key(), entry.descriptor().documentInfo().tags());
     }
 
     public String graphTypeIdFor(AssetEntry entry) {

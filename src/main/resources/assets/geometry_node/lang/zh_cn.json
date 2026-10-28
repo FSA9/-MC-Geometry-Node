@@ -161,6 +161,10 @@
   "geometry_node.terminal.action.start": "启动",
   "geometry_node.terminal.action.stop": "停止",
   "geometry_node.terminal.action.cancel": "取消",
+  "geometry_node.asset_library.column.description": "描述",
+  "geometry_node.asset_library.column.favorite": "收藏",
+  "geometry_node.asset_library.filter.favorited": "已收藏",
+  "geometry_node.asset_library.filter.not_favorite": "未收藏",
   "geometry_node.asset_library.action.favorite_toggle": "切换收藏",
   "geometry_node.asset_library.action.remove_quick_access": "移除快捷访问",
   "geometry_node.model.lighting.command.local": "局部光 [%s]：%s；%s；放置光采样 %s；分辨率 %s；%s。仅本次会话有效。",
@@ -2785,5 +2789,14 @@
   "geometry_node.node.create_area.comment.world_offset": "沿世界坐标轴移动放置原点，不受实体朝向和旋转参数影响。",
   "geometry_node.node.create_area.comment.world_rotation": "围绕放置原点沿世界坐标轴旋转；同时影响局部偏移。X=俯仰、Y=偏航、Z=翻滚，单位为度。",
   "geometry_node.node.create_area.comment.local_offset": "沿锚点朝向和世界旋转组成的坐标轴偏移；局部旋转不会改变此偏移。",
-  "geometry_node.node.create_area.comment.local_rotation": "在局部偏移后调整内容自身朝向，不移动局部偏移。X=俯仰、Y=偏航、Z=翻滚，单位为度。"
+  "geometry_node.node.create_area.comment.local_rotation": "在局部偏移后调整内容自身朝向，不移动局部偏移。X=俯仰、Y=偏航、Z=翻滚，单位为度。",
+  "geometry_node.asset_library.filter.all_types": "全部类型",
+  "geometry_node.asset_library.status.summary": "%s 个对象 · 已选择 %s",
+  "geometry_node.asset_library.filter.type.graph": "图",
+  "geometry_node.asset_library.filter.type.schematic": "结构",
+  "geometry_node.asset_library.filter.type.image": "图片",
+  "geometry_node.asset_library.filter.type.video": "视频",
+  "geometry_node.asset_library.filter.type.file": "其他文件",
+  "geometry_node.asset_library.status.loading": "正在读取…",
+  "geometry_node.asset_library.status.failed": "无法读取目录"
 }

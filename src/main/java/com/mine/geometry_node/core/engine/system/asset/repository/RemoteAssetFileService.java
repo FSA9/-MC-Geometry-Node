@@ -1,6 +1,10 @@
 package com.mine.geometry_node.core.engine.system.asset.repository;
 
+import java.nio.file.LinkOption;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryFiles;
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.AssetDocumentInfo;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
@@ -26,7 +30,7 @@ public final class RemoteAssetFileService {
 
     public static List<AssetDescriptor> list(MinecraftServer server, String directoryPath) throws IOException {
         Path directory = resolveDirectory(server, directoryPath);
-        Path root = root(server);
+        Path root = ServerAssetPaths.root(server, AssetRepositoryPath.parse(directoryPath, true).root());
         if (!Files.exists(directory) && directory.equals(root)) {
             Files.createDirectories(directory);
         }
@@ -38,8 +42,8 @@ public final class RemoteAssetFileService {
         try (var stream = Files.list(directory)) {
             for (Path path : stream.toList()) {
                 if (Files.isSymbolicLink(path) || isTransactionArtifact(path)) continue;
-                AssetDescriptor entry = toEntry(server, root, path);
-                if (entry.directory() || entry.metadata().isKnown()) entries.add(entry);
+                AssetDescriptor entry = toEntry(server, path, true);
+                if (entry.directory() || Files.isRegularFile(path)) entries.add(entry);
             }
         }
         entries.sort(Comparator.comparing(AssetDescriptor::directory).reversed()
@@ -48,13 +52,13 @@ public final class RemoteAssetFileService {
     }
 
     public static List<RemoteAssetConflict> findUploadConflicts(MinecraftServer server, List<String> targetPaths) {
-        Path root = root(server);
+        AssetRepositoryPath.requireSameRoot(targetPaths, null, false);
         List<RemoteAssetConflict> conflicts = new ArrayList<>();
         for (String targetPath : targetPaths) {
             Path resolved = resolveFile(server, targetPath);
             validateAssetCandidatePath(resolved);
             if (Files.exists(resolved)) {
-                conflicts.add(new RemoteAssetConflict("", ServerAssetPaths.pathToId(root, resolved), Files.isDirectory(resolved)));
+                conflicts.add(new RemoteAssetConflict("", ServerAssetPaths.pathToId(server, resolved), Files.isDirectory(resolved)));
             }
         }
         return conflicts;
@@ -66,18 +70,17 @@ public final class RemoteAssetFileService {
         if (!Files.isRegularFile(file) || Files.isSymbolicLink(file)) {
             throw new IOException("Remote asset file does not exist: " + assetPath);
         }
-        if (!ServerAssetMetadataCache.INSTANCE.inspect(server, file, assetPath).isKnown()) {
-            throw new IOException("Remote file is not a recognized asset: " + assetPath);
-        }
         return file;
     }
 
     public static Path transferTemporaryDirectory(MinecraftServer server) {
-        return root(server).resolveSibling(".geometrynode-transfer").normalize();
+        Path directory = root(server).resolveSibling(".geometrynode-transfer").normalize();
+        return ServerAssetPaths.resolveUnderRoot(directory, "", true);
     }
 
     public static Path previewCacheRoot(MinecraftServer server) {
-        return root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
+        Path directory = root(server).resolveSibling(".geometrynode-nativepreview-cache").toAbsolutePath().normalize();
+        return ServerAssetPaths.resolveUnderRoot(directory, "", true);
     }
 
     static UploadCommitResult commitUpload(
@@ -90,9 +93,6 @@ public final class RemoteAssetFileService {
         validateAssetCandidatePath(target);
         AssetMetadata oldMetadata = AssetTypeCatalog.inspect(target, targetPath);
         AssetMetadata newMetadata = AssetTypeCatalog.inspect(stagingFile, targetPath);
-        if (!newMetadata.isKnown()) {
-            throw new IOException("Uploaded file is not a recognized asset: " + targetPath);
-        }
         long sourceSize = Files.size(stagingFile);
         long sourceLastModified = Files.getLastModifiedTime(stagingFile).toMillis();
         AtomicAssetCommitter.CommitResult commit =
@@ -110,13 +110,13 @@ public final class RemoteAssetFileService {
                     commit, null, sourceSize, sourceLastModified, Set.of(), Set.of(), false);
         }
 
-        String committedPath = ServerAssetPaths.pathToId(root(server), target);
+        String committedPath = ServerAssetPaths.pathToId(server, target);
         return new UploadCommitResult(commit, null, sourceSize, sourceLastModified,
                 affectedTypeIds, Set.of(committedPath), false);
     }
 
     public static List<AssetDescriptor> flattenSelection(MinecraftServer server, List<String> selectedPaths) throws IOException {
-        Path root = root(server);
+        AssetRepositoryPath.requireSameRoot(selectedPaths, null, true);
         List<AssetDescriptor> files = new ArrayList<>();
         Set<Path> seen = new HashSet<>();
         for (String selectedPath : selectedPaths) {
@@ -128,15 +128,14 @@ public final class RemoteAssetFileService {
                                     && !isInsideTransactionArtifact(p))
                             .map(p -> p.toAbsolutePath().normalize())
                             .filter(seen::add)
-                            .map(file -> toEntry(server, root, file))
-                            .filter(entry -> entry.metadata().isKnown())
+                            .map(file -> toEntry(server, file))
                             .forEach(files::add);
                 }
             } else if (Files.isRegularFile(path) && !Files.isSymbolicLink(path)) {
                 Path normalized = path.toAbsolutePath().normalize();
                 if (seen.add(normalized)) {
-                    AssetDescriptor entry = toEntry(server, root, normalized);
-                    if (entry.metadata().isKnown()) files.add(entry);
+                    AssetDescriptor entry = toEntry(server, normalized);
+                    files.add(entry);
                 }
             }
         }
@@ -153,7 +152,7 @@ public final class RemoteAssetFileService {
             for (Path path : resolveSelectionRoots(server, selectedPaths)) {
                 boolean directory = Files.isDirectory(path);
                 directoryScope |= directory;
-                if (!directory) affectedPaths.add(ServerAssetPaths.pathToId(root(server), path));
+                affectedPaths.add(ServerAssetPaths.pathToId(server, path));
                 collectAssetTypes(path, affectedTypes);
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.DELETE, path, null);
@@ -189,6 +188,7 @@ public final class RemoteAssetFileService {
 
     static RemoteAssetOperationResult copySelection(MinecraftServer server, List<String> sourcePaths,
                                                     String targetDirectoryPath) throws IOException {
+        AssetRepositoryPath.requireSameRoot(sourcePaths, targetDirectoryPath, false);
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -209,7 +209,7 @@ public final class RemoteAssetFileService {
                         && target.toAbsolutePath().normalize().startsWith(source.toAbsolutePath().normalize())) {
                     continue;
                 }
-                if (!directory) affectedPaths.add(ServerAssetPaths.pathToId(root(server), target));
+                affectedPaths.add(ServerAssetPaths.pathToId(server, target));
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.COPY, source, target);
                 int index = pending.size();
@@ -233,6 +233,7 @@ public final class RemoteAssetFileService {
 
     static RemoteAssetOperationResult moveSelection(MinecraftServer server, List<String> sourcePaths,
                                                     String targetDirectoryPath) throws IOException {
+        AssetRepositoryPath.requireSameRoot(sourcePaths, targetDirectoryPath, false);
         Path targetDirectory = resolveDirectory(server, targetDirectoryPath);
         Files.createDirectories(targetDirectory);
         if (!Files.isDirectory(targetDirectory)) {
@@ -259,10 +260,8 @@ public final class RemoteAssetFileService {
                 if (directory && target.toAbsolutePath().normalize().startsWith(normalizedSource)) {
                     continue;
                 }
-                if (!directory) {
-                    affectedPaths.add(ServerAssetPaths.pathToId(root(server), source));
-                    affectedPaths.add(ServerAssetPaths.pathToId(root(server), target));
-                }
+                affectedPaths.add(ServerAssetPaths.pathToId(server, source));
+                affectedPaths.add(ServerAssetPaths.pathToId(server, target));
                 RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                         server, RemoteAssetMutationRegistry.Operation.MOVE, source, target);
                 int index = pending.size();
@@ -286,8 +285,9 @@ public final class RemoteAssetFileService {
 
     static RemoteAssetOperationResult createDirectory(MinecraftServer server, String directoryPath)
             throws IOException {
-        String normalized = ServerAssetPaths.normalizeRelativePath(directoryPath, false);
-        Path directory = ServerAssetPaths.resolveUnderRoot(root(server), normalized, false);
+        String normalized = AssetRepositoryPath.parse(directoryPath, false).serialize();
+        Path directory = ServerAssetPaths.resolve(server, normalized, false);
+        validateAssetCandidatePath(directory);
         Path parent = directory.getParent();
         if (parent == null || !Files.isDirectory(parent)) {
             throw new IOException("Remote parent directory does not exist: " + normalized);
@@ -301,10 +301,12 @@ public final class RemoteAssetFileService {
             String sourcePath,
             String destinationPath
     ) throws IOException {
-        String normalizedSource = ServerAssetPaths.normalizeRelativePath(sourcePath, false);
-        String normalizedDestination = ServerAssetPaths.normalizeRelativePath(destinationPath, false);
-        Path source = ServerAssetPaths.resolveUnderRoot(root(server), normalizedSource, false);
-        Path destination = ServerAssetPaths.resolveUnderRoot(root(server), normalizedDestination, false);
+        AssetRepositoryPath.requireSameRoot(List.of(sourcePath, destinationPath), null, false);
+        String normalizedSource = AssetRepositoryPath.parse(sourcePath, false).serialize();
+        String normalizedDestination = AssetRepositoryPath.parse(destinationPath, false).serialize();
+        Path source = ServerAssetPaths.resolve(server, normalizedSource, false);
+        Path destination = ServerAssetPaths.resolve(server, normalizedDestination, false);
+        validateAssetCandidatePath(destination);
         if (!Files.exists(source) || Files.isSymbolicLink(source) || isInsideTransactionArtifact(source)) {
             throw new IOException("Remote asset does not exist: " + normalizedSource);
         }
@@ -318,14 +320,11 @@ public final class RemoteAssetFileService {
         validateSourceName(destination.getFileName().toString());
         if (!Files.isDirectory(source)) {
             validateAssetCandidatePath(destination);
-            if (!AssetTypeCatalog.inspect(source, normalizedDestination).isKnown()) {
-                throw new IOException("Renamed file would not be a recognized asset: " + normalizedDestination);
-            }
         }
 
         Set<String> affectedTypes = new HashSet<>();
         boolean directoryScope = Files.isDirectory(source);
-        Set<String> affectedPaths = directoryScope ? Set.of() : Set.of(normalizedSource, normalizedDestination);
+        Set<String> affectedPaths = Set.of(normalizedSource, normalizedDestination);
         collectAssetTypes(source, affectedTypes);
         RemoteAssetMutationRegistry.PreparedMutation mutation = prepareMutation(
                 server, RemoteAssetMutationRegistry.Operation.RENAME, source, destination);
@@ -360,21 +359,22 @@ public final class RemoteAssetFileService {
     }
 
     public static Path resolveFile(MinecraftServer server, String filePath) {
-        return resolvePath(server, filePath);
+        return ServerAssetPaths.resolve(server, filePath, false);
     }
 
     public static String normalizeDirectoryPath(String path) {
-        return ServerAssetPaths.normalizeRelativePath(path == null ? "" : path, true);
+        return AssetRepositoryPath.parse(path == null ? "" : path, true).serialize();
     }
 
     private static Path resolvePath(MinecraftServer server, String relativePath) {
-        return ServerAssetPaths.resolveUnderRoot(
-                root(server), relativePath == null ? "" : relativePath, true);
+        Path resolved = ServerAssetPaths.resolve(server, relativePath == null ? "" : relativePath, true);
+        validateAssetCandidatePath(resolved);
+        return resolved;
     }
 
     private static void validateAssetCandidatePath(Path path) {
-        if (!AssetTypeCatalog.isCandidatePath(path.toString())) {
-            throw new IllegalArgumentException("Unsupported remote asset type: " + path.getFileName());
+        if (isInsideTransactionArtifact(path)) {
+            throw new IllegalArgumentException("internal asset paths are not accessible");
         }
     }
 
@@ -397,7 +397,7 @@ public final class RemoteAssetFileService {
     }
 
     private static int copyRecursively(Path source, Path target) throws IOException {
-        if (Files.isSymbolicLink(source)) {
+        if (Files.isSymbolicLink(source) || isTransactionArtifact(source)) {
             return 0;
         }
         if (Files.isDirectory(source)) {
@@ -405,7 +405,7 @@ public final class RemoteAssetFileService {
             int copied = 0;
             try (var stream = Files.list(source)) {
                 for (Path child : stream.toList()) {
-                    if (Files.isSymbolicLink(child)) continue;
+                    if (Files.isSymbolicLink(child) || isTransactionArtifact(child)) continue;
                     Path childTarget = target.resolve(child.getFileName().toString());
                     if (Files.isDirectory(child)) {
                         copied += copyRecursively(child, childTarget);
@@ -506,13 +506,12 @@ public final class RemoteAssetFileService {
     }
 
     private static boolean isTransactionArtifact(Path path) {
-        Path name = path.getFileName();
-        return name != null && name.toString().startsWith(".geometrynode-tx-");
+        return AssetRepositoryFiles.isInternal(path);
     }
 
     private static boolean isInsideTransactionArtifact(Path path) {
         for (Path segment : path) {
-            if (segment.toString().startsWith(".geometrynode-tx-")) return true;
+            if (isTransactionArtifact(segment)) return true;
         }
         return false;
     }
@@ -542,11 +541,10 @@ public final class RemoteAssetFileService {
     }
 
     private static List<Path> resolveSelectionRoots(MinecraftServer server, List<String> selectedPaths) {
-        Path repositoryRoot = root(server);
+        AssetRepositoryPath.requireSameRoot(selectedPaths, null, false);
         List<Path> candidates = selectedPaths.stream()
                 .map(path -> resolvePath(server, path).toAbsolutePath().normalize())
-                .filter(path -> Files.exists(path) && !path.equals(repositoryRoot)
-                        && !isInsideTransactionArtifact(path))
+                .filter(path -> Files.exists(path) && !isInsideTransactionArtifact(path))
                 .distinct()
                 .sorted(Comparator.comparingInt(Path::getNameCount))
                 .toList();
@@ -610,7 +608,7 @@ public final class RemoteAssetFileService {
     }
 
     private static int countRecursively(Path path) throws IOException {
-        if (Files.isSymbolicLink(path) || !Files.exists(path)) {
+        if (Files.isSymbolicLink(path) || isTransactionArtifact(path) || !Files.exists(path)) {
             return 0;
         }
         if (!Files.isDirectory(path)) {
@@ -630,7 +628,7 @@ public final class RemoteAssetFileService {
         validateSourceName(sourceName);
         Path candidate = directory.resolve(sourceName).normalize();
         ensureInsideRoot(directory, candidate);
-        if (!Files.exists(candidate)) {
+        if (!Files.exists(candidate, LinkOption.NOFOLLOW_LINKS)) {
             return candidate;
         }
 
@@ -650,7 +648,7 @@ public final class RemoteAssetFileService {
             resolved = directory.resolve(baseName + "_" + counter + extension).normalize();
             ensureInsideRoot(directory, resolved);
             counter++;
-        } while (Files.exists(resolved));
+        } while (Files.exists(resolved, LinkOption.NOFOLLOW_LINKS));
         return resolved;
     }
 
@@ -668,7 +666,11 @@ public final class RemoteAssetFileService {
         }
     }
 
-    private static AssetDescriptor toEntry(MinecraftServer server, Path root, Path path) {
+    private static AssetDescriptor toEntry(MinecraftServer server, Path path) {
+        return toEntry(server, path, false);
+    }
+
+    private static AssetDescriptor toEntry(MinecraftServer server, Path path, boolean includeDocumentInfo) {
         boolean directory = Files.isDirectory(path);
         long size = 0L;
         long lastModified = 0L;
@@ -679,12 +681,14 @@ public final class RemoteAssetFileService {
                 lastModified = 0L;
             }
         }
-        String assetPath = ServerAssetPaths.pathToId(root, path);
+        String assetPath = ServerAssetPaths.pathToId(server, path);
         AssetMetadata metadata = AssetMetadata.UNKNOWN;
+        AssetDocumentInfo documentInfo = AssetDocumentInfo.EMPTY;
         if (!directory) {
             ServerAssetMetadataCache.Inspection inspection =
                     ServerAssetMetadataCache.INSTANCE.describe(server, path, assetPath);
             metadata = inspection.metadata();
+            if (includeDocumentInfo) documentInfo = inspection.documentInfo();
             size = inspection.size();
             lastModified = inspection.lastModifiedMillis();
         }
@@ -694,7 +698,7 @@ public final class RemoteAssetFileService {
                 directory,
                 size,
                 lastModified,
-                metadata
+                metadata, documentInfo
         );
     }
 

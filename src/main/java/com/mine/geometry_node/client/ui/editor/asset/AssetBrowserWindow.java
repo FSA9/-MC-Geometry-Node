@@ -143,7 +143,9 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         mPropertiesSidebar.setOnSelectedPanelChanged(id -> persistSidebarState());
         mBrowserPanel.setSelectionChangedListener(this::bindPropertiesSelection);
         mBrowserPanel.setLocationChangedListener(() -> {
-            if (mRestoringLocation || mDisposed) return;
+            if (mDisposed) return;
+            mNavigationPanel.setLocation(mBrowserPanel.locationSnapshot());
+            if (mRestoringLocation) return;
             mPendingRemoteRestore = null;
             captureLocationState();
         });
@@ -181,9 +183,14 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
 
     @Override
     public void dispatchNavigateToRemoteRoot() {
+        dispatchNavigateToRemote("");
+    }
+
+    @Override
+    public void dispatchNavigateToRemote(String directory) {
         if (mBrowserPanel != null
                 && mBrowserPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.BROWSE)) {
-            mBrowserPanel.navigateToRemoteRoot();
+            mBrowserPanel.navigateToRemote(directory);
         }
     }
 
@@ -209,7 +216,6 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
         if (mNavigationPanel != null) {
             mNavigationPanel.buildSidebar();
         }
-        requestRemoteCapabilities();
     }
 
     @Override
@@ -338,16 +344,17 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             }
             if ("REMOTE".equals(location)) {
                 mPendingRemoteRestore = mSessionState.remotePath == null ? "" : mSessionState.remotePath;
-                dispatchNavigateTo(AssetBrowserPathPolicy.getLocalDraftsDir());
+                dispatchNavigateTo(AssetBrowserPathPolicy.getCommonDir());
                 return;
             }
 
             File restored = AssetBrowserPathPolicy.resolveConfigPath(mSessionState.localPath);
             dispatchNavigateTo(restored != null && restored.isDirectory()
                     ? restored
-                    : AssetBrowserPathPolicy.getLocalDraftsDir());
+                    : AssetBrowserPathPolicy.getCommonDir());
         } finally {
             mRestoringLocation = false;
+            mNavigationPanel.setLocation(mBrowserPanel.locationSnapshot());
             if (mPendingRemoteRestore == null) captureLocationState();
         }
     }
@@ -365,6 +372,7 @@ public class AssetBrowserWindow extends FrameLayout implements AreaEditorWindow,
             }
         } finally {
             mRestoringLocation = false;
+            mNavigationPanel.setLocation(mBrowserPanel.locationSnapshot());
             captureLocationState();
         }
     }

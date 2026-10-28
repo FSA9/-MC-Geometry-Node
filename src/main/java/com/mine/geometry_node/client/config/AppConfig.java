@@ -2,6 +2,8 @@ package com.mine.geometry_node.client.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class AppConfig {
     public AssetBrowserConfig assetBrowser = new AssetBrowserConfig();
@@ -26,6 +28,7 @@ public class AppConfig {
 
     public static class AssetBrowserConfig {
         public List<String> quickAccessPaths = new ArrayList<>();
+        public Map<String, List<String>> remoteQuickAccessPaths = new LinkedHashMap<>();
         public List<String> favoriteAssetPaths = new ArrayList<>();
         public String viewMode = "LIST";
         public boolean rightSidebarVisible = true;
@@ -35,6 +38,9 @@ public class AppConfig {
         AssetBrowserConfig copy() {
             AssetBrowserConfig copy = new AssetBrowserConfig();
             copy.quickAccessPaths = quickAccessPaths != null ? new ArrayList<>(quickAccessPaths) : null;
+            copy.remoteQuickAccessPaths = new LinkedHashMap<>();
+            if (remoteQuickAccessPaths != null) remoteQuickAccessPaths.forEach((server, paths) ->
+                    copy.remoteQuickAccessPaths.put(server, paths == null ? new ArrayList<>() : new ArrayList<>(paths)));
             copy.favoriteAssetPaths = favoriteAssetPaths != null ? new ArrayList<>(favoriteAssetPaths) : null;
             copy.viewMode = viewMode;
             copy.rightSidebarVisible = rightSidebarVisible;

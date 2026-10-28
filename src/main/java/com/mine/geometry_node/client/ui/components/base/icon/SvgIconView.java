@@ -34,6 +34,8 @@ public class SvgIconView extends View {
     public enum Icon {
         SCENE_EYE("scene/eye.svg"),
         SCENE_CURSOR("scene/cursor.svg"),
+        SNAP("scene/snap.svg"),
+        GRID("scene/grid.svg"),
         GRAPH_EDITOR("editors/graph_editor.svg"),
         GAME("editors/game.svg"),
         PROPERTIES("panels/sliders.svg"),
@@ -42,11 +44,36 @@ public class SvgIconView extends View {
         DATA_LIBRARY("editors/data_library.svg"),
         TERMINAL("editors/console.svg"),
         PERFORMANCE("editors/analysis.svg"),
+        FOLDER("navigation/folder.svg"),
+        CLOUD("navigation/cloud.svg"),
+        STAR("navigation/star.svg"),
+        FILE("assets/file.svg"),
+        PACK("assets/pack.svg"),
+        SCHEMATIC("assets/schematic.svg"),
+        MODEL("assets/model.svg"),
+        IMAGE("assets/image.svg"),
+        ARROW_UP("navigation/arrow-up.svg"),
+        ARROW_DOWN("navigation/arrow-down.svg"),
+        CHEVRON_UP("navigation/chevron-up.svg"),
+        CHEVRON_DOWN("navigation/chevron-down.svg"),
+        CHEVRON_LEFT("navigation/chevron-left.svg"),
+        CHEVRON_RIGHT("navigation/chevron-right.svg"),
+        GRID_VIEW("navigation/grid-view.svg"),
+        LIST_VIEW("navigation/list-view.svg"),
+        SPLIT_HORIZONTAL("panels/split-horizontal.svg"),
+        SPLIT_VERTICAL("panels/split-vertical.svg"),
+        WINDOW("panels/window.svg"),
         COPY("actions/copy.svg"),
         SEARCH("actions/search.svg"),
         PLUS("actions/plus.svg"),
         MORE_HORIZONTAL("actions/more_h.svg"),
+        MORE_VERTICAL("actions/more_v.svg"),
+        UPLOAD("actions/upload.svg"),
+        DOWNLOAD("actions/download.svg"),
+        CHECK("actions/check.svg"),
+        DRAG_HANDLE("actions/drag-handle.svg"),
         CLEAR("actions/clear.svg"),
+        TRASH("actions/clear.svg"),
         RESET("actions/refresh.svg"),
         SHUFFLE("actions/shuffle.svg"),
         CLOSE("actions/close.svg"),
@@ -55,6 +82,8 @@ public class SvgIconView extends View {
         SIDEBAR_COLLAPSE("navigation/sidebar-collapse.svg"),
         SQUARE_CHECK("actions/square-check-64px.svg"),
         SQUARE_PLUS("actions/square-plus-64px.svg"),
+        SQUARE_MINUS("actions/square-minus-64px.svg"),
+        DATABASE("database/library.svg"),
         BLUEPRINT("editors/graph_editor.svg", "blueprint"),
         QUEST("graph_types/quest.svg", "quest"),
         BEHAVIOR_TREE("graph_types/behavior_tree.svg", "behavior_tree");
@@ -71,7 +100,7 @@ public class SvgIconView extends View {
             mGraphTypeId = graphTypeId;
         }
 
-        String resourcePath() {
+        public String resourcePath() {
             return "/assets/geometry_node/icons/ui/" + mFileName;
         }
 
@@ -167,9 +196,16 @@ public class SvgIconView extends View {
             return;
         }
 
-        Image image = getImage(mResourcePath, size, mColor);
         float left = (getWidth() - size) * 0.5f;
         float top = (getHeight() - size) * 0.5f;
+        drawIcon(canvas, left, top, size);
+    }
+
+    /** Draws this resource inside a custom control without defining a second icon renderer. */
+    public void drawIcon(Canvas canvas, float left, float top, int size) {
+        if (size <= 0) return;
+        Image image = getImage(mResourcePath, size, mColor);
+        if (image == null) return;
         try {
             canvas.drawImage(image, left, top, mPaint);
         } finally {
@@ -216,6 +252,9 @@ public class SvgIconView extends View {
 
             Element root = factory.newDocumentBuilder().parse(input).getDocumentElement();
             float[] viewBox = numbers(root.getAttribute("viewBox"), 4);
+            if (viewBox[2] <= 0 || viewBox[3] <= 0) {
+                throw new IllegalArgumentException("SVG viewBox must have positive dimensions: " + resourcePath);
+            }
             List<SvgLayer> layers = new ArrayList<>();
             collectLayers(root, SvgStyle.DEFAULT, layers);
             if (layers.isEmpty()) {
@@ -237,6 +276,13 @@ public class SvgIconView extends View {
                 float cx = number(element.getAttribute("cx"), 0.0f);
                 float cy = number(element.getAttribute("cy"), 0.0f);
                 yield new Ellipse2D.Float(cx - radius, cy - radius, radius * 2, radius * 2);
+            }
+            case "ellipse" -> {
+                float rx = number(element.getAttribute("rx"), 0.0f);
+                float ry = number(element.getAttribute("ry"), 0.0f);
+                float cx = number(element.getAttribute("cx"), 0.0f);
+                float cy = number(element.getAttribute("cy"), 0.0f);
+                yield new Ellipse2D.Float(cx - rx, cy - ry, rx * 2, ry * 2);
             }
             default -> null;
         };
@@ -269,6 +315,16 @@ public class SvgIconView extends View {
     }
 
     private static Image rasterize(SvgDocument document, int size, int color) {
+        BufferedImage bufferedImage = rasterizeDocument(document, size, color);
+        int[] pixels = bufferedImage.getRGB(0, 0, size, size, null, 0, size);
+        try (Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Format.RGBA_8888)) {
+            bitmap.setPixels(pixels, 0, size, 0, 0, size, size);
+            bitmap.setImmutable();
+            return Image.createTextureFromBitmap(bitmap);
+        }
+    }
+
+    private static BufferedImage rasterizeDocument(SvgDocument document, int size, int color) {
         BufferedImage bufferedImage = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB_PRE);
         Graphics2D graphics = bufferedImage.createGraphics();
         try {
@@ -294,12 +350,7 @@ public class SvgIconView extends View {
             graphics.dispose();
         }
 
-        int[] pixels = bufferedImage.getRGB(0, 0, size, size, null, 0, size);
-        try (Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Format.RGBA_8888)) {
-            bitmap.setPixels(pixels, 0, size, 0, 0, size, size);
-            bitmap.setImmutable();
-            return Image.createTextureFromBitmap(bitmap);
-        }
+        return bufferedImage;
     }
 
     private static Path2D.Float parsePath(String data, boolean evenOdd) {
@@ -401,10 +452,20 @@ public class SvgIconView extends View {
 
         SvgPathParser(String data, boolean evenOdd) {
             Matcher matcher = TOKEN_PATTERN.matcher(data);
+            int end = 0;
             while (matcher.find()) {
+                requireSeparator(data.substring(end, matcher.start()));
                 mTokens.add(matcher.group());
+                end = matcher.end();
             }
+            requireSeparator(data.substring(end));
             mPath = new Path2D.Float(evenOdd ? Path2D.WIND_EVEN_ODD : Path2D.WIND_NON_ZERO);
+        }
+
+        private static void requireSeparator(String text) {
+            if (!text.matches("[\\s,]*")) {
+                throw new IllegalArgumentException("Unsupported SVG path syntax: " + text);
+            }
         }
 
         Path2D.Float parse() {

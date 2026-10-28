@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.components.integration.graph.properties
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi;
@@ -49,7 +49,7 @@ final class QuestHintSelector extends FrameLayout {
         value.setDuplicateParentStateEnabled(true);
         value.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(32), 0);
         addView(value, new LayoutParams(-1, -1));
-        arrow = GraphPropertiesUi.actionIcon(context, VectorIconView.Kind.CHEVRON_DOWN,
+        arrow = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.CHEVRON_DOWN,
                 "geometry_node.graph_properties.quest.objective_display");
         LayoutParams arrowLp = new LayoutParams(UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP),
                 UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP), Gravity.RIGHT | Gravity.CENTER_VERTICAL);

@@ -1,10 +1,10 @@
 package com.mine.geometry_node.client.feature.asset.file;
 
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryFiles;
 import com.mine.geometry_node.client.feature.asset.file.AssetFileOperations;
 import com.mine.geometry_node.client.feature.asset.file.AssetFileTransactionManager;
 import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
 import com.mine.geometry_node.client.feature.asset.task.AssetTaskContext;
-import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
 import java.io.File;
 import java.io.IOException;
@@ -336,7 +336,7 @@ public final class LocalAssetService {
             throws InterruptedException {
         context.checkCancelled();
         try {
-            if (Files.isSymbolicLink(path)) return;
+            if (Files.isSymbolicLink(path) || AssetRepositoryFiles.isInternal(path)) return;
             if (Files.isDirectory(path)) {
                 try (var stream = Files.list(path)) {
                     for (Path child : stream.toList()) {
@@ -345,9 +345,9 @@ public final class LocalAssetService {
                 }
                 return;
             }
-            if (!AssetTypeCatalog.isRecognizedAsset(path)) return;
+            if (!Files.isRegularFile(path)) return;
             String relative = base.relativize(path).toString().replace('\\', '/');
-            String targetPath = targetPrefix.isEmpty() ? relative : targetPrefix + "/" + relative;
+            String targetPath = AssetPathUtils.resolveRemoteChild(targetPrefix, relative);
             targetPath = AssetPathUtils.normalizeRemoteFilePath(targetPath);
             out.add(new UploadSource(path, targetPath));
         } catch (InterruptedException e) {

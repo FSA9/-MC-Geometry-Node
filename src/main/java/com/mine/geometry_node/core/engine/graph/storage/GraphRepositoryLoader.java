@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.compile.GraphCompilationService;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.system.asset.repository.ServerAssetPaths;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
@@ -55,7 +56,9 @@ final class GraphRepositoryLoader {
         Set<String> affectedGraphIds = new HashSet<>();
         Path root = ServerAssetPaths.root(server);
         for (String affectedPath : affectedPaths) {
-            String normalized = ServerAssetPaths.normalizeRelativePath(affectedPath, false);
+            AssetRepositoryPath address = AssetRepositoryPath.parse(affectedPath, false);
+            if (!address.isCommon()) continue;
+            String normalized = address.relativePath();
             if (!GraphPathMapper.isGraphJsonPath(normalized)) continue;
             String graphId = GraphPathMapper.normalizeId(normalized);
             affectedGraphIds.add(graphId);

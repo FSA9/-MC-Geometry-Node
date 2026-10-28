@@ -8,7 +8,10 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
+import com.mine.geometry_node.client.feature.asset.navigation.AssetQuickAccessStore;
+import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
 import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
@@ -47,7 +50,6 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.ScrollView;
-import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 import java.io.File;
 import java.nio.file.Path;
@@ -68,10 +70,12 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final AssetBrowserCoordinator mCoordinator;
     private final EditText mPathInput;
     private final EditText mSearchInput;
-    private final EditText mTagSearchInput;
     private final FrameLayout mBodyFrame;
     private final ScrollView mScrollView;
     private final FileContentLayout mFileContent;
+    private final AssetListTable mListTable;
+    private final LinearLayout mTableLayout;
+    private final UiTableViewport mTableViewport;
     private final Map<String, AssetFileItemView> mItemViews = new HashMap<>();
     private final Set<String> mSelectedPaths = new LinkedHashSet<>();
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
@@ -82,6 +86,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final AssetBrowserActionController mActionController;
     private UiContextMenu mActiveMenu;
     private UiSearchableMenu mViewModeMenu;
+    private AssetBrowserStatusBar mStatusBar;
+    private final AssetQuickAccessStore mQuickAccessStore = new AssetQuickAccessStore();
 
     private File mCurrentDirectory;
     private String mRemoteDirectory = "";
@@ -89,9 +95,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private boolean mFavoritesMode = false;
     private AssetViewMode mViewMode;
     private String mSearchQuery = "";
-    private String mTagSearchQuery = "";
     private String mPendingSearchQuery = "";
-    private String mPendingTagSearchQuery = "";
     private String mLastClickedPath = null;
     private long mLastClickTime = 0L;
     private long mBrowseGeneration;
@@ -113,6 +117,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private boolean mAllowCreateFolders = true;
     private boolean mAllowCreateFiles = true;
     private boolean mVerifiedCurrentDirectory;
+    private boolean mLoading;
 
     private static final float NAV_BAR_HEIGHT = 76.0f;
     private static final float NAV_ROW_HEIGHT = 32.0f;
@@ -134,7 +139,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public static AssetFileBrowserPanel picker(Context context, AssetBrowserCoordinator coordinator) {
-        AssetFileBrowserPanel panel = new AssetFileBrowserPanel(context, coordinator, false, false, false, false, true,
+        AssetFileBrowserPanel panel = new AssetFileBrowserPanel(context, coordinator, true, false, false, false, true,
                 ignored -> AssetBrowserDocumentActions.NONE);
         panel.setCreationAllowed(false, false);
         return panel;
@@ -192,19 +197,26 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.15f);
         searchRow.addView(mSearchInput, searchLp);
 
-        mTagSearchInput = createSearchInput(context, tr("geometry_node.asset_library.toolbar.search_tag"),
-                value -> mPendingTagSearchQuery = value);
-        LinearLayout.LayoutParams tagSearchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.85f);
-        tagSearchLp.setMargins(dp2pxInt(4), 0, dp2pxInt(4), 0);
-        searchRow.addView(mTagSearchInput, tagSearchLp);
-
         addSearchButton(searchRow, context);
         addClearSearchButton(searchRow, context);
 
         mBodyFrame = new FrameLayout(context);
         mScrollView = new UiScrollView(context);
         mFileContent = new FileContentLayout(context, this);
+        mListTable = new AssetListTable(context, this, () -> renderEntries(mCurrentListing), checked -> {
+            mSelectedPaths.clear();
+            if (checked) for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
+            syncSelectionViews();
+            notifySelectionChanged();
+        });
+        mTableLayout = new LinearLayout(context);
+        mTableLayout.setOrientation(LinearLayout.VERTICAL);
+        mTableLayout.addView(mListTable.header, new LinearLayout.LayoutParams(-1, dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
+        mTableViewport = new UiTableViewport(context, mListTable.columns, mTableLayout);
         configureBody();
+        mStatusBar = new AssetBrowserStatusBar(context, this::setViewMode);
+        addView(mStatusBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(30)));
+        updateStatus();
     }
 
     private AssetBrowserActionController createActionController(AssetBrowserDocumentActions documents) {
@@ -259,7 +271,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void addUpButton(LinearLayout navBar, Context context) {
         UiIconButton btnUp = createIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiThemes.EDITOR.text().normal()),
+                new SvgIconView(context, SvgIconView.Icon.ARROW_UP, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.up"));
         btnUp.setOnClickListener(v -> navigateUp());
         navBar.addView(btnUp, new LinearLayout.LayoutParams(
@@ -277,16 +289,23 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                     return true;
                 }
                 String path = input.getText().toString().trim();
-                if (mSourceKind == AssetSourceKind.REMOTE || AssetPathUtils.isRemotePathInput(path)) {
-                    navigateToRemote(AssetPathUtils.remotePathFromInput(path));
-                } else if (mCurrentDirectory != null) {
-                    File dir = new File(path);
-                    if (dir.exists() && dir.isDirectory()) {
-                        navigateTo(dir);
-                    } else {
-                        input.setText(mCurrentDirectory.getAbsolutePath());
+                try {
+                    File local = new File(path);
+                    if (AssetPathUtils.isRemotePathInput(path)) {
+                        navigateToRemote(AssetPathUtils.remotePathFromInput(path));
+                    } else if (local.isAbsolute() && local.isDirectory()) {
+                        navigateTo(local);
+                    } else if (mSourceKind == AssetSourceKind.REMOTE) {
+                        navigateToRemote(AssetPathUtils.remotePathFromInput(path));
+                    } else if (local.isDirectory()) {
+                        navigateTo(local);
                     }
+                } catch (IllegalArgumentException invalidAddress) {
+                    // Invalid input never replaces the last verified navigation state.
                 }
+                input.setText(mSourceKind == AssetSourceKind.REMOTE
+                        ? AssetPathUtils.formatRemotePath(mRemoteDirectory)
+                        : mCurrentDirectory != null ? mCurrentDirectory.getAbsolutePath() : "");
                 input.clearFocus();
                 return true;
             }
@@ -301,14 +320,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                 tr("geometry_node.asset_library.toolbar.add_quick_access"));
         btnAdd.setOnClickListener(v -> {
             if (!mEnableQuickAccessAdd || mCoordinator == null) return;
-            String path = mPathInput.getText().toString().trim();
-            File directory = AssetBrowserPathPolicy.resolveConfigPath(path);
-            if (AssetBrowserPathPolicy.canPersistQuickAccessPath(path)) {
-                String configPath = AssetBrowserPathPolicy.toConfigPath(directory);
-                if (!ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths.contains(configPath)) {
-                    ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.add(configPath));
-                    mCoordinator.notifySidebarChanged();
-                }
+            if (hasVerifiedCurrentDirectory() && mQuickAccessStore.add(locationSnapshot())) {
+                mCoordinator.notifySidebarChanged();
             }
         });
         navBar.addView(btnAdd, new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT));
@@ -322,11 +335,20 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         return input;
     }
 
+    private FrameLayout menuHost() {
+        View current = this;
+        while (current.getParent() instanceof ViewGroup parent) {
+            if (parent instanceof FrameLayout frame) return frame;
+            current = parent;
+        }
+        return null;
+    }
+
     private void addSearchButton(LinearLayout navBar, Context context) {
         UiIconButton btnSearch = createIconButton(context,
                 new SvgIconView(context, SvgIconView.Icon.SEARCH, UiThemes.EDITOR.text().normal()),
                 tr("geometry_node.asset_library.toolbar.search"));
-        UiSearchSubmit.bind(btnSearch, this::applySearch, mSearchInput, mTagSearchInput);
+        UiSearchSubmit.bind(btnSearch, this::applySearch, mSearchInput);
         LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
         navBar.addView(btnSearch, searchButtonLp);
     }
@@ -342,8 +364,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void addOptionsButton(LinearLayout navBar, Context context) {
-        TextView optionsIcon = UIUtils.createLockedTextView(context, "⋮", 18, UiThemes.EDITOR.text().normal());
-        optionsIcon.setGravity(Gravity.CENTER);
+        SvgIconView optionsIcon = new SvgIconView(context, SvgIconView.Icon.MORE_VERTICAL,
+                UiThemes.EDITOR.text().normal());
         UiIconButton btnOptions = createIconButton(context, optionsIcon,
                 tr("geometry_node.asset_library.toolbar.more_options"));
         btnOptions.setOnClickListener(v -> showOptionsMenu(btnOptions));
@@ -358,10 +380,22 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mScrollView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateVirtualViewport());
         mScrollView.addView(mFileContent, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        mBodyFrame.addView(mScrollView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mBodyFrame.addView(mTableViewport, new FrameLayout.LayoutParams(-1, -1));
+        updateBodyMode();
         addView(mBodyFrame, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
+    }
+
+    private void updateBodyMode() {
+        boolean list = mViewMode == AssetViewMode.LIST;
+        ViewGroup target = list ? mTableLayout : mBodyFrame;
+        if (mScrollView.getParent() != target) {
+            if (mScrollView.getParent() instanceof ViewGroup previous) previous.removeView(mScrollView);
+            if (list) mTableLayout.addView(mScrollView, new LinearLayout.LayoutParams(-1, 0, 1));
+            else mBodyFrame.addView(mScrollView, new FrameLayout.LayoutParams(-1, -1));
+        }
+        mTableViewport.setVisibility(list ? View.VISIBLE : View.GONE);
+        if (!list) mListTable.dismiss();
     }
 
     @Override
@@ -386,6 +420,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     public void deactivatePanel() {
         mVerifiedCurrentDirectory = false;
+        mLoading = false;
         mIoTasks.deactivate();
         dismissTransientUi();
         mKeyManager.dispose();
@@ -433,17 +468,15 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void applySearch() {
         mSearchQuery = mPendingSearchQuery;
-        mTagSearchQuery = mPendingTagSearchQuery;
         refreshFileList();
         mSearchInput.clearFocus();
-        mTagSearchInput.clearFocus();
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (mFileContent != null) {
-            mFileContent.setMinimumContentHeight(Math.max(0, h - dp2pxInt(NAV_BAR_HEIGHT)));
+            mFileContent.setMinimumContentHeight(mScrollView.getHeight());
             updateVirtualViewport();
         }
     }
@@ -486,7 +519,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         if (!mAllowedSources.contains(AssetSourceKind.LOCAL)) return;
         mFavoritesMode = true;
         mSourceKind = AssetSourceKind.LOCAL;
-        mPathInput.setText("我的收藏");
+        mPathInput.setText(tr("geometry_node.asset_library.toolbar.favorites"));
         clearSelection();
         refreshFileList();
         notifyLocationChanged();
@@ -598,13 +631,14 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             return;
         }
         if (mSourceKind == AssetSourceKind.REMOTE) {
-            if (!mRemoteDirectory.isEmpty()) {
-                int idx = mRemoteDirectory.lastIndexOf('/');
-                navigateToRemote(idx > 0 ? mRemoteDirectory.substring(0, idx) : "");
+            if (!AssetRepositoryPath.parse(mRemoteDirectory, true).isRoot()) {
+                navigateToRemote(AssetPathUtils.parentRemoteDirectory(mRemoteDirectory));
             }
             return;
         }
-        if (mCurrentDirectory != null && mCurrentDirectory.getParentFile() != null) {
+        if (mCurrentDirectory != null && mCurrentDirectory.getParentFile() != null
+                && !com.mine.geometry_node.client.platform.ClientPaths.sameFile(mCurrentDirectory, AssetBrowserPathPolicy.getCommonDir())
+                && !com.mine.geometry_node.client.platform.ClientPaths.sameFile(mCurrentDirectory, AssetBrowserPathPolicy.getPacksDir())) {
             navigateTo(mCurrentDirectory.getParentFile());
         }
     }
@@ -632,27 +666,35 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private void refreshFileList(boolean createIfMissing, Runnable afterRender) {
         cancelBrowseRequest();
         mVerifiedCurrentDirectory = false;
+        mLoading = true;
         mFileContent.setEntries(List.of());
         mItemViews.clear();
         mVisibleEntries.clear();
         mCurrentListing = AssetListing.empty(currentLocation(createIfMissing));
+        updateStatus();
 
         if (!mAllowedSources.contains(mSourceKind)
-                || mSourceKind == AssetSourceKind.LOCAL && !mFavoritesMode && mCurrentDirectory == null) return;
+                || mSourceKind == AssetSourceKind.LOCAL && !mFavoritesMode && mCurrentDirectory == null) {
+            mLoading = false;
+            updateStatus();
+            return;
+        }
         AssetLocation location = currentLocation(createIfMissing);
         AssetRepository repository = AssetRepositoryRegistry.INSTANCE.get(location.sourceKind());
         if (repository == null
                 || !repository.supports(AssetRepositoryOperation.BROWSE)
                 || (createIfMissing && !repository.supports(AssetRepositoryOperation.CREATE))) {
+            mLoading = false;
             renderEntries(AssetListing.failure(location));
             return;
         }
         long generation = ++mBrowseGeneration;
         AssetBrowseRequest request = new AssetBrowseRequest(location,
-                new AssetQuery(mSearchQuery, mTagSearchQuery, mViewMode == AssetViewMode.LIST));
+                new AssetQuery(mSearchQuery, "", mViewMode == AssetViewMode.LIST));
         mActiveBrowseRequest = repository.browse(request, result -> post(() -> {
             if (generation != mBrowseGeneration || result == null || !matchesCurrentLocation(result.location())) return;
             mActiveBrowseRequest = AssetRequest.NONE;
+            mLoading = false;
             mVerifiedCurrentDirectory = result.success() && !mFavoritesMode;
             if (result.location() instanceof AssetLocation.Remote remote && result.success()) {
                 mRemoteDirectory = remote.directory();
@@ -662,6 +704,10 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             renderEntries(result);
             if (afterRender != null) afterRender.run();
         }));
+    }
+
+    public AssetLocation locationSnapshot() {
+        return currentLocation(false);
     }
 
     private AssetLocation currentLocation(boolean createIfMissing) {
@@ -693,10 +739,15 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mItemViews.clear();
         mVisibleEntries.clear();
         List<AssetEntry> entries = mCurrentListing.entries();
+        mListTable.setEntries(entries);
+        Set<String> favoriteKeys = new java.util.HashSet<>(mFavoriteStore.pathsSnapshot());
+        Predicate<AssetEntry> favorite = entry -> entry.sourceKind() == AssetSourceKind.LOCAL
+                && entry.supports(AssetTypeAction.FAVORITE) && favoriteKeys.contains(entry.key());
         Set<String> visibleKeys = new LinkedHashSet<>();
 
         for (AssetEntry entry : entries) {
             if (!mAllowedSources.contains(entry.sourceKind())) continue;
+            if (mViewMode == AssetViewMode.LIST && !mListTable.query().matches(entry, mCurrentListing, favorite.test(entry))) continue;
             if (mEntryFilter != null && !mEntryFilter.test(entry)) {
                 continue;
             }
@@ -705,32 +756,31 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             visibleKeys.add(key);
         }
 
+        mVisibleEntries.sort(mListTable.query().comparator(mCurrentListing, favorite));
         boolean selectionChanged = mSelectedPaths.retainAll(visibleKeys);
+        updateBodyMode();
         mFileContent.setViewMode(mViewMode);
         mScrollView.scrollTo(0, 0);
         mFileContent.setEntries(mVisibleEntries);
         updateVirtualViewport();
         mFileContent.requestLayout();
         mFileContent.invalidate();
+        updateStatus();
         if (selectionChanged || !mSelectedPaths.isEmpty()) notifySelectionChanged();
     }
 
     private void setViewMode(AssetViewMode mode) {
         if (mViewMode == mode) return;
         mViewMode = mode;
+        updateBodyMode();
+        updateStatus();
         ConfigManager.INSTANCE.update(config -> config.assetBrowser.viewMode = mode.configValue);
         refreshFileList();
     }
 
     private void showOptionsMenu(View anchor) {
         dismissActiveMenu();
-        // Mount over the whole containing area so the toolbar anchor remains in the host.
-        View current = this;
-        FrameLayout host = null;
-        while (current.getParent() instanceof ViewGroup parent) {
-            if (parent instanceof FrameLayout frame) { host = frame; break; }
-            current = parent;
-        }
+        FrameLayout host = menuHost();
         if (host == null) return;
         List<String> options = new ArrayList<>();
         Map<String, String> labels = new HashMap<>();
@@ -758,6 +808,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void dismissTransientUi() {
+        if (mListTable != null) mListTable.dismiss();
         dismissActiveMenu();
     }
 
@@ -837,6 +888,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         WorkspaceDragState.clear();
     }
 
+    @Override
+    public void onItemSelectionToggled(AssetEntry entry) { toggleSelection(entry); }
+
     private void toggleSelection(AssetEntry entry) {
         String key = entry.key();
         if (!mSelectedPaths.remove(key)) {
@@ -871,13 +925,21 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     private void syncSelectionViews() {
+        updateStatus();
         for (Map.Entry<String, AssetFileItemView> entry : mItemViews.entrySet()) {
             entry.getValue().setSelected(mSelectedPaths.contains(entry.getKey()));
         }
         mFileContent.invalidate();
     }
 
+    private void updateStatus() {
+        if (mListTable != null) mListTable.updateSelection(mSelectedPaths.size(), mVisibleEntries.size());
+        if (mStatusBar != null) mStatusBar.update(mVisibleEntries.size(), mSelectedPaths.size(), mViewMode,
+                mLoading, mCurrentListing.success());
+    }
+
     void notifySelectionChanged() {
+        updateStatus();
         if (mSelectionChangedListener != null) {
             mSelectionChangedListener.accept(getSelectedEntriesSnapshot());
         }
@@ -916,11 +978,11 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     @Override
     public AssetFileItemView createItemView(AssetEntry entry) {
-        String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty() || !mTagSearchQuery.isEmpty()) ? parentLabel(entry) : "";
+        String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty()) ? parentLabel(entry) : "";
         List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentListing.tagsFor(entry) : List.of();
         String graphTypeId = mCurrentListing.graphTypeIdFor(entry);
         AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel,
-                tags, graphTypeId, isFavorite(entry), this);
+                tags, graphTypeId, isFavorite(entry), this, mListTable.columns);
         item.setSelected(mSelectedPaths.contains(entry.key()));
         return item;
     }
@@ -1030,16 +1092,11 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     void clearSearch() {
-        boolean hadSearch = !mSearchQuery.isEmpty()
-                || !mTagSearchQuery.isEmpty()
-                || !mPendingSearchQuery.isEmpty()
-                || !mPendingTagSearchQuery.isEmpty();
+        boolean hadSearch = !mSearchQuery.isEmpty() || !mPendingSearchQuery.isEmpty() || mListTable.query().active();
         mSearchInput.setText("");
-        mTagSearchInput.setText("");
         mPendingSearchQuery = "";
-        mPendingTagSearchQuery = "";
         mSearchQuery = "";
-        mTagSearchQuery = "";
+        mListTable.clear();
         if (hadSearch) {
             refreshFileList();
         }
@@ -1106,6 +1163,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     void updateVirtualViewport() {
         if (mFileContent == null || mScrollView == null) return;
+        mFileContent.setMinimumContentHeight(mScrollView.getHeight());
         mFileContent.updateViewport(mScrollView.getScrollY(), mScrollView.getHeight());
     }
 

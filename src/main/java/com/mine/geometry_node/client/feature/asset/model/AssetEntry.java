@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.feature.asset.model;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
+import com.mine.geometry_node.core.engine.system.asset.AssetDocumentInfo;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import com.mine.geometry_node.core.engine.system.asset.type.AssetTypeCatalog;
 
@@ -23,11 +24,16 @@ public final class AssetEntry {
     }
 
     public static AssetEntry local(File file, String key, String displayPath) {
+        return local(file, key, displayPath, false);
+    }
+
+    public static AssetEntry local(File file, String key, String displayPath, boolean includeDocumentInfo) {
         String name = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
         boolean directory = file.isDirectory();
         AssetMetadata metadata = directory ? AssetMetadata.UNKNOWN : AssetTypeCatalog.inspect(file.toPath());
         AssetDescriptor descriptor = new AssetDescriptor(displayPath, name, directory,
-                file.length(), file.lastModified(), metadata);
+                file.length(), file.lastModified(), metadata, includeDocumentInfo
+                        ? AssetDocumentInfo.inspect(file.toPath(), metadata) : AssetDocumentInfo.EMPTY);
         AssetType type = AssetTypeRegistry.INSTANCE.resolve(metadata.typeId(), AssetSourceKind.LOCAL, directory);
         return new AssetEntry(AssetSourceKind.LOCAL, key, descriptor, file, type);
     }
@@ -36,7 +42,7 @@ public final class AssetEntry {
         String normalizedPath = descriptor.path().replace('\\', '/');
         String key = "remote:" + normalizedPath;
         AssetDescriptor normalized = new AssetDescriptor(normalizedPath, descriptor.name(), descriptor.directory(),
-                descriptor.size(), descriptor.lastModified(), descriptor.metadata());
+                descriptor.size(), descriptor.lastModified(), descriptor.metadata(), descriptor.documentInfo());
         AssetType type = AssetTypeRegistry.INSTANCE.resolve(
                 descriptor.metadata().typeId(), AssetSourceKind.REMOTE, descriptor.directory());
         return new AssetEntry(AssetSourceKind.REMOTE, key, normalized, null, type);

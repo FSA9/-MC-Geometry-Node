@@ -1,15 +1,18 @@
 package com.mine.geometry_node.client.ui.components.integration.asset.navigation;
 
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
-import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
-import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import net.minecraft.network.chat.Component;
-import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
-import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
-import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.config.AppConfig;
+import com.mine.geometry_node.client.config.ConfigChangeListener;
 import com.mine.geometry_node.client.config.ConfigManager;
+import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
+import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
+import com.mine.geometry_node.client.feature.asset.navigation.AssetQuickAccessStore;
+import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
+import com.mine.geometry_node.client.feature.asset.repository.AssetLocation;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.integration.asset.AssetBrowserCoordinator;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.R;
 import icyllis.modernui.core.Context;
@@ -22,409 +25,450 @@ import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewConfiguration;
 import icyllis.modernui.view.ViewGroup;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
+import net.minecraft.network.chat.Component;
+
 import java.io.File;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
+/** Source groups own their fold state; the feature store owns shortcut identity and persistence. */
 public class AssetNavigationPanel extends UiScrollView {
+    private static final int ROW_HEIGHT = 40;
+    private static final int ICON_SLOT = 24;
+    private static final int ICON_SIZE = 16;
+    private static final int FOLDER_COLOR = AssetTypeRegistry.INSTANCE
+            .get(AssetTypeRegistry.DIRECTORY_ID).defaultColor();
 
     private final AssetBrowserCoordinator mCoordinator;
-    private final QuickAccessListLayout mLeftSidebar;
+    private final AssetQuickAccessStore mQuickAccess = new AssetQuickAccessStore();
+    private final LinearLayout mSidebar;
     private final float mTouchSlop;
+    private final Map<AssetSourceKind, Boolean> mExpanded = new EnumMap<>(AssetSourceKind.class);
+    private final List<SelectionRow> mSelectionRows = new ArrayList<>();
+    private final List<QuickAccessListLayout> mQuickLists = new ArrayList<>();
     private String mSelectedKey = "";
-
-    private static final float TITLE_BAR_HEIGHT = 40.0f;
-    private static final float ROW_HEIGHT = 40.0f;
-    private static final float DRAG_HANDLE_WIDTH = 24.0f;
-    private static final float TEXT_SIZE_TITLE = 14.0f;
-    private static final float TEXT_SIZE_PATH = 14.0f;
-    private static final float TEXT_SIZE_HANDLE = 12.0f;
-    private static final float TEXT_SIZE_NAV = 14.0f;
-    private static final int COLOR_LOCAL_NORMAL = UiThemes.EDITOR.surface().panel();
-    private static final int COLOR_LOCAL_HOVER = UiThemes.EDITOR.selection().subtleHover();
-    private static final int COLOR_LOCAL_PRESSED = UiThemes.EDITOR.selection().subtlePressed();
-    private static final int COLOR_LOCAL_SELECTED = UiThemes.EDITOR.selection().subtle();
-    private static final int COLOR_REMOTE_NORMAL = UiThemes.EDITOR.decoration().remoteSurface();
-    private static final int COLOR_REMOTE_HOVER = UiThemes.EDITOR.decoration().remoteHover();
-    private static final int COLOR_REMOTE_PRESSED = UiThemes.EDITOR.decoration().remotePressed();
-    private static final int COLOR_REMOTE_SELECTED = UiThemes.EDITOR.decoration().remoteSelected();
+    private ConfigChangeListener mConfigListener;
+    private QuickAccessSnapshot mConfigSnapshot;
+    private volatile int mAttachmentGeneration;
 
     public AssetNavigationPanel(Context context, AssetBrowserCoordinator coordinator) {
         super(context);
         mCoordinator = coordinator;
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-
-        mLeftSidebar = new QuickAccessListLayout(context);
-        mLeftSidebar.setOrientation(LinearLayout.VERTICAL);
-        mLeftSidebar.setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
-
-        addView(mLeftSidebar, new ViewGroup.LayoutParams(
+        mExpanded.put(AssetSourceKind.REMOTE, true);
+        mExpanded.put(AssetSourceKind.LOCAL, true);
+        mSidebar = verticalLayout();
+        mSidebar.setBackground(colorDrawable(UiThemes.EDITOR.surface().root()));
+        addView(mSidebar, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
         buildSidebar();
     }
 
+    /** Called by browser/path navigation as well as by sidebar actions. Does not change fold state. */
+    public void setLocation(AssetLocation location) {
+        mSelectedKey = selectionKey(location);
+        for (SelectionRow row : mSelectionRows) {
+            row.view().setSelected(row.key().equals(mSelectedKey));
+        }
+    }
+
     public void buildSidebar() {
-        Context context = getContext();
-        mLeftSidebar.removeAllViews();
-
-        // 快速访问
-        TextView title = UIUtils.createLockedTextView(context, "快速访问", TEXT_SIZE_TITLE, UiThemes.EDITOR.text().muted());
-        title.setPadding(dp2pxInt(10), 0, dp2pxInt(10), 0);
-        title.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(TITLE_BAR_HEIGHT));
-        mLeftSidebar.addView(title, titleParams);
-
-        mLeftSidebar.addView(createFavoritesRow(context));
-
-        if (mCoordinator.canBrowseRemote()) {
-            mLeftSidebar.addView(createRemoteServerRow(context));
+        for (QuickAccessListLayout list : mQuickLists) list.cancelDrag();
+        mQuickLists.clear();
+        mSelectionRows.clear();
+        mSidebar.removeAllViews();
+        TextView heading = UIUtils.createLockedTextView(getContext(), "快速访问", 12,
+                UiThemes.EDITOR.text().muted());
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.setPadding(dp2pxInt(10), 0, dp2pxInt(10), 0);
+        mSidebar.addView(heading, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(32)));
+        // Favorites is independent of either source group's expansion.
+        if (mCoordinator.allowsSource(AssetSourceKind.LOCAL)) {
+            addDestination(mSidebar, "我的收藏", new AssetLocation.Local(null, true, List.of()),
+                    SvgIconView.Icon.STAR, UiThemes.EDITOR.decoration().favorite(), true);
         }
-
-        mLeftSidebar.addView(createSystemQuickAccessRow(context, "本地草稿", AssetBrowserPathPolicy.getLocalDraftsDir()));
-        for (File root : AssetBrowserPathPolicy.listRootDirectories()) {
-            mLeftSidebar.addView(createSystemQuickAccessRow(context, displayRoot(root), root));
+        for (AssetSourceKind source : List.of(AssetSourceKind.REMOTE, AssetSourceKind.LOCAL)) {
+            if (mCoordinator.allowsSource(source)) addSourceGroup(source);
         }
-
-        for (String pathStr : ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths) {
-            mLeftSidebar.addView(createQuickAccessRow(context, pathStr));
-        }
+        if (mCoordinator.allowsSource(AssetSourceKind.LOCAL)) addLocalLocations();
     }
 
-    private LinearLayout createFavoritesRow(Context context) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        bindRowFeedback(row, "favorites", COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
-                () -> {
-                    mSelectedKey = "favorites";
-                    mCoordinator.dispatchNavigateToFavorites();
-                    buildSidebar();
-                });
-
-        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
-        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
-        row.setLayoutParams(rowParams);
-
-        TextView icon = UIUtils.createLockedTextView(context, " ★ ", TEXT_SIZE_HANDLE, UiThemes.EDITOR.decoration().favorite());
-        icon.setGravity(Gravity.CENTER);
-        row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
-
-        TextView label = UIUtils.createLockedTextView(context, "我的收藏", TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
-        label.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
-        label.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-
-        return row;
-    }
-
-    private LinearLayout createRemoteServerRow(Context context) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        bindRowFeedback(row, "remote", COLOR_REMOTE_NORMAL, COLOR_REMOTE_HOVER, COLOR_REMOTE_PRESSED, COLOR_REMOTE_SELECTED,
-                () -> {
-                    mSelectedKey = "remote";
-                    mCoordinator.dispatchNavigateToRemoteRoot();
-                    buildSidebar();
-                });
-
-        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
-        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
-        row.setLayoutParams(rowParams);
-
-        VectorIconView icon = new VectorIconView(context, VectorIconView.Kind.CLOUD, UiThemes.EDITOR.decoration().remote());
-        row.addView(icon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
-
-        TextView btnPath = UIUtils.createLockedTextView(context, "远程服务器", TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
-        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
-        btnPath.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-
-        return row;
-    }
-
-    private LinearLayout createSystemQuickAccessRow(Context context, String label, File file) {
-        String key = "local:" + pathKey(file);
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        bindRowFeedback(row, key, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
-                () -> {
-                    mSelectedKey = key;
-                    mCoordinator.dispatchNavigateTo(file);
-                    buildSidebar();
-                });
-
-        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
-        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
-        row.setLayoutParams(rowParams);
-
-        // The registry owns directory identity colors; navigation reuses the asset browser palette.
-        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER,
-                AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.DIRECTORY_ID).defaultColor());
-        row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
-
-        TextView btnPath = UIUtils.createLockedTextView(context, label, TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
-        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
-        btnPath.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-
-        return row;
-    }
-
-    private LinearLayout createQuickAccessRow(Context context, String pathStr) {
-        File file = AssetBrowserPathPolicy.resolveConfigPath(pathStr);
-        if (file == null) {
-            file = new File(pathStr);
-        }
-        String key = "local:" + pathKey(file);
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        File targetFile = file;
-        bindRowFeedback(row, key, COLOR_LOCAL_NORMAL, COLOR_LOCAL_HOVER, COLOR_LOCAL_PRESSED, COLOR_LOCAL_SELECTED,
-                () -> {
-                    mSelectedKey = key;
-                    mCoordinator.dispatchNavigateTo(targetFile);
-                    buildSidebar();
-                });
-
-        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT));
-        rowParams.setMargins(0, 0, 0, dp2pxInt(2));
-        row.setLayoutParams(rowParams);
-
-        TextView dragHandle = UIUtils.createLockedTextView(context, " ⋮⋮ ", TEXT_SIZE_HANDLE, UiThemes.EDITOR.text().hint());
-        dragHandle.setGravity(Gravity.CENTER);
-        row.addView(dragHandle, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
-
-        final float[] startY = {0};
-        final boolean[] isDragging = {false};
-
-        dragHandle.setOnTouchListener((v, event) -> {
-            int action = event.getActionMasked();
-            switch (action) {
-                case MotionEvent.ACTION_DOWN:
-                    startY[0] = event.getRawY();
-                    isDragging[0] = false;
-                    this.requestDisallowInterceptTouchEvent(true);
-                    return true;
-
-                case MotionEvent.ACTION_MOVE:
-                    float dy = event.getRawY() - startY[0];
-                    if (!isDragging[0] && Math.abs(dy) > mTouchSlop) {
-                        isDragging[0] = true;
-                        row.setAlpha(0.4f);
-                    }
-                    if (isDragging[0]) {
-                        int[] loc = new int[2];
-                        mLeftSidebar.getLocationOnScreen(loc);
-                        float dropY = event.getRawY() - loc[1];
-
-                        int indicatorY = mLeftSidebar.getHeight();
-                        if (mLeftSidebar.getChildCount() > 1) {
-                            View lastChild = mLeftSidebar.getChildAt(mLeftSidebar.getChildCount() - 1);
-                            indicatorY = lastChild.getBottom();
-                        }
-
-                        int firstQuickAccessChild = firstUserQuickAccessChild();
-                        for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
-                            View child = mLeftSidebar.getChildAt(i);
-                            float centerY = child.getTop() + child.getHeight() / 2f;
-                            if (dropY < centerY) {
-                                indicatorY = child.getTop();
-                                break;
-                            }
-                        }
-                        mLeftSidebar.updateIndicator(indicatorY);
-                    }
-                    break;
-
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    if (isDragging[0]) {
-                        int[] loc = new int[2];
-                        mLeftSidebar.getLocationOnScreen(loc);
-                        float dropY = event.getRawY() - loc[1];
-
-                        int firstQuickAccessChild = firstUserQuickAccessChild();
-                        List<String> currentPaths = ConfigManager.INSTANCE.getConfig().assetBrowser.quickAccessPaths;
-                        int targetIdx = currentPaths.size() - 1;
-                        for (int i = firstQuickAccessChild; i < mLeftSidebar.getChildCount(); i++) {
-                            View child = mLeftSidebar.getChildAt(i);
-                            if (dropY < child.getTop() + child.getHeight() / 2f) {
-                                targetIdx = i - firstQuickAccessChild;
-                                break;
-                            }
-                        }
-
-                        int currentIndex = currentPaths.indexOf(pathStr);
-
-                        if (targetIdx > currentIndex) {
-                            targetIdx--;
-                        }
-
-                        if (targetIdx != currentIndex && targetIdx >= 0) {
-                            int finalTargetIdx = targetIdx;
-                            ConfigManager.INSTANCE.update(config -> {
-                                List<String> list = config.assetBrowser.quickAccessPaths;
-                                int index = list.indexOf(pathStr);
-                                if (index < 0 || finalTargetIdx < 0 || finalTargetIdx >= list.size()) return;
-                                String item = list.remove(index);
-                                list.add(finalTargetIdx, item);
-                            });
-                            row.post(this::buildSidebar);
-                        }
-                    }
-                    row.setAlpha(1.0f);
-                    mLeftSidebar.hideIndicator();
-                    this.requestDisallowInterceptTouchEvent(false);
-                    break;
-            }
-            return true;
-        });
-
-        // The registry owns directory identity colors; navigation reuses the asset browser palette.
-        VectorIconView folderIcon = new VectorIconView(context, VectorIconView.Kind.FOLDER,
-                AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.DIRECTORY_ID).defaultColor());
-        row.addView(folderIcon, new LinearLayout.LayoutParams(dp2pxInt(DRAG_HANDLE_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
-
-        String displayName = file.getName().isEmpty() ? file.getAbsolutePath() : file.getName();
-        TextView btnPath = UIUtils.createLockedTextView(context, displayName, TEXT_SIZE_PATH, UiThemes.EDITOR.text().normal());
-        btnPath.setPadding(dp2pxInt(6), 0, dp2pxInt(15), 0);
-        btnPath.setGravity(Gravity.CENTER_VERTICAL);
-
-        row.addView(btnPath, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
-
-        UiIconButton btnDel = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CLOSE, UiThemes.EDITOR.status().error()),
-                new UiIconButton.Style(UiMetrics.RADIUS_SMALL, 0,
-                        UiThemes.EDITOR.control().icon(), UiThemes.EDITOR.buttons().danger().hover(), UiThemes.EDITOR.buttons().danger().pressed(),
-                        UiThemes.EDITOR.surface().panel(), 0, 14, UiMetrics.DISABLED_ALPHA))
-                .tooltip(Component.translatable("geometry_node.asset_library.action.remove_quick_access").getString());
-        btnDel.setOnClickListener(view -> {
-            ConfigManager.INSTANCE.update(config -> config.assetBrowser.quickAccessPaths.remove(pathStr));
+    private void addSourceGroup(AssetSourceKind source) {
+        boolean remote = source == AssetSourceKind.REMOTE;
+        boolean expanded = mExpanded.get(source);
+        LinearLayout header = createRow(true, () -> {
+            mExpanded.put(source, !mExpanded.get(source));
             buildSidebar();
         });
+        addIcon(header, expanded ? SvgIconView.Icon.CHEVRON_DOWN : SvgIconView.Icon.CHEVRON_RIGHT,
+                UiThemes.EDITOR.text().muted());
+        addIcon(header, remote ? SvgIconView.Icon.CLOUD : SvgIconView.Icon.FOLDER,
+                remote ? UiThemes.EDITOR.decoration().remote() : FOLDER_COLOR);
+        addLabel(header, remote ? "远程服务器" : "本地", true);
+        mSidebar.addView(header);
+        if (!expanded) return;
 
-        row.addView(btnDel, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT), ViewGroup.LayoutParams.MATCH_PARENT));
+        boolean available = !remote || mCoordinator.canBrowseRemote();
+        LinearLayout content = verticalLayout();
+        mSidebar.addView(content, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        AssetLocation common = remote ? new AssetLocation.Remote("", false)
+                : local(AssetBrowserPathPolicy.getCommonDir());
+        AssetLocation packs = remote ? new AssetLocation.Remote("worldpack:", false)
+                : local(AssetBrowserPathPolicy.getPacksDir());
+        // Common/Packs are deliberately text-only children of their source.
+        addDestination(content, "Common", common, null, 0, available);
+        addDestination(content, "Packs", packs, null, 0, available);
+        if (remote) addShortcuts(content, source, available);
+    }
 
+    /** Disks and local shortcuts remain visible independently of the Common/Packs group. */
+    private void addLocalLocations() {
+        View separator = new View(getContext());
+        separator.setBackground(colorDrawable(UiThemes.EDITOR.border().divider()));
+        LinearLayout.LayoutParams separatorParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(1));
+        separatorParams.setMargins(dp2pxInt(14), dp2pxInt(13), dp2pxInt(14), dp2pxInt(7));
+        mSidebar.addView(separator, separatorParams);
+        for (File root : AssetBrowserPathPolicy.listRootDirectories()) {
+            addDestination(mSidebar, root.getPath(), local(root), SvgIconView.Icon.FOLDER,
+                    FOLDER_COLOR, true);
+        }
+        addShortcuts(mSidebar, AssetSourceKind.LOCAL, true);
+    }
+
+    private void addShortcuts(LinearLayout parent, AssetSourceKind source, boolean available) {
+        QuickAccessListLayout shortcuts = new QuickAccessListLayout(getContext(), source);
+        mQuickLists.add(shortcuts);
+        parent.addView(shortcuts, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        for (AssetQuickAccessStore.Entry entry : mQuickAccess.entries(source)) {
+            shortcuts.addView(createQuickAccessRow(shortcuts, entry, available));
+        }
+    }
+
+    private void addDestination(LinearLayout parent, String label, AssetLocation location,
+                                SvgIconView.Icon icon, int tint, boolean enabled) {
+        LinearLayout row = destinationRow(location, enabled);
+        if (icon == null) {
+            row.setPadding(dp2pxInt(ICON_SLOT * 2 + 12), 0, 0, 0);
+        } else {
+            // Reserve the chevron column: disk icons share the source icon's left edge.
+            row.addView(new View(getContext()), new LinearLayout.LayoutParams(dp2pxInt(ICON_SLOT), 1));
+            addIcon(row, icon, tint);
+        }
+        addLabel(row, label, enabled);
+        parent.addView(row);
+    }
+
+    private LinearLayout createQuickAccessRow(QuickAccessListLayout list,
+                                              AssetQuickAccessStore.Entry entry, boolean enabled) {
+        LinearLayout row = destinationRow(entry.location(), enabled);
+        FrameLayout handle = new FrameLayout(getContext());
+        FrameLayout.LayoutParams handleIcon = new FrameLayout.LayoutParams(dp2pxInt(ICON_SIZE), dp2pxInt(ICON_SIZE));
+        handleIcon.gravity = Gravity.CENTER;
+        handle.addView(new SvgIconView(getContext(), SvgIconView.Icon.DRAG_HANDLE,
+                UiThemes.EDITOR.text().hint()), handleIcon);
+        row.addView(handle, new LinearLayout.LayoutParams(dp2pxInt(ICON_SLOT), ViewGroup.LayoutParams.MATCH_PARENT));
+        handle.setContentDescription("拖动以排序");
+        handle.setEnabled(enabled);
+        handle.setOnTouchListener(new ShortcutDrag(list, row, entry.key()));
+        boolean remote = list.source == AssetSourceKind.REMOTE;
+        addIcon(row, remote ? SvgIconView.Icon.CLOUD : SvgIconView.Icon.FOLDER,
+                remote ? UiThemes.EDITOR.decoration().remote() : FOLDER_COLOR);
+        addLabel(row, entry.label(), enabled);
+        UiIconButton remove = UiIconButton.createThemed(getContext(), UiThemes.EDITOR,
+                new SvgIconView(getContext(), SvgIconView.Icon.CLOSE, UiThemes.EDITOR.status().error()),
+                UiIconButton.Preset.INLINE).tooltip(Component.translatable(
+                        "geometry_node.asset_library.action.remove_quick_access").getString());
+        remove.setEnabled(enabled);
+        remove.setOnClickListener(view -> {
+            mQuickAccess.remove(list.source, entry.key());
+            buildSidebar();
+        });
+        row.addView(remove, new LinearLayout.LayoutParams(dp2pxInt(ROW_HEIGHT),
+                ViewGroup.LayoutParams.MATCH_PARENT));
         return row;
     }
 
-    private String displayRoot(File root) {
-        if (root == null) return "";
-        String path = root.getPath();
-        return path == null || path.isEmpty() ? root.getAbsolutePath() : path;
+    private LinearLayout destinationRow(AssetLocation location, boolean enabled) {
+        LinearLayout row = createRow(enabled, () -> navigate(location));
+        String key = selectionKey(location);
+        mSelectionRows.add(new SelectionRow(row, key));
+        row.setSelected(key.equals(mSelectedKey));
+        return row;
     }
 
-    private String pathKey(File file) {
-        if (file == null) return "";
-        try {
-            return file.getCanonicalPath();
-        } catch (Exception ignored) {
-            return file.getAbsolutePath();
+    private void navigate(AssetLocation location) {
+        if (!mCoordinator.allowsSource(location.sourceKind())) return;
+        if (location instanceof AssetLocation.Remote remote) {
+            if (!mCoordinator.canBrowseRemote()) return;
+            setLocation(location);
+            mCoordinator.dispatchNavigateToRemote(remote.directory());
+        } else if (location instanceof AssetLocation.Local local) {
+            setLocation(location);
+            if (local.favorites()) mCoordinator.dispatchNavigateToFavorites();
+            else mCoordinator.dispatchNavigateTo(local.directory());
         }
     }
 
-    private int firstUserQuickAccessChild() {
-        int fixedRows = 2; // title + favorites
-        if (mCoordinator.canBrowseRemote()) {
-            fixedRows++;
-        }
-        return fixedRows + 1 + AssetBrowserPathPolicy.listRootDirectories().length;
-    }
-
-    private void bindRowFeedback(LinearLayout row, String key, int normalColor, int hoverColor, int pressedColor, int selectedColor, Runnable action) {
-        // Keep the remote decoration palette and selection-over-hover priority of these rows.
-        ShapeDrawable background = createColorDrawable(normalColor);
+    private LinearLayout createRow(boolean enabled, Runnable action) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(ROW_HEIGHT)));
+        int normal = UiThemes.EDITOR.surface().panel();
+        int hover = UiThemes.EDITOR.selection().subtleHover();
+        int pressed = UiThemes.EDITOR.selection().subtlePressed();
+        int selected = UiThemes.EDITOR.selection().subtle();
+        ShapeDrawable background = colorDrawable(normal);
         background.setColor(new ColorStateList(new int[][]{
                 {-R.attr.state_enabled, R.attr.state_selected}, {-R.attr.state_enabled},
                 {R.attr.state_pressed}, {R.attr.state_selected}, {R.attr.state_hovered}, {}
-        }, new int[]{selectedColor, normalColor, pressedColor, selectedColor, hoverColor, normalColor}));
+        }, new int[]{selected, normal, pressed, selected, hover, normal}));
         row.setBackground(background);
-        row.setSelected(key.equals(mSelectedKey));
-        row.setOnClickListener(v -> {
+        row.setEnabled(enabled);
+        row.setOnClickListener(view -> {
             if (row.isEnabled()) action.run();
         });
+        bindTapSlop(row);
+        return row;
+    }
 
-        final boolean[] moved = {false};
-        final float[] downX = {0};
-        final float[] downY = {0};
-        row.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    downX[0] = event.getRawX();
-                    downY[0] = event.getRawY();
-                    moved[0] = false;
-                    return false;
-                case MotionEvent.ACTION_MOVE:
-                    if (!moved[0] && (Math.abs(event.getRawX() - downX[0]) > mTouchSlop
-                            || Math.abs(event.getRawY() - downY[0]) > mTouchSlop)) {
-                        moved[0] = true;
-                        // Cancel both the native press and any delayed tap in the scrolling parent.
-                        MotionEvent cancel = event.copy();
-                        cancel.setAction(MotionEvent.ACTION_CANCEL);
-                        try {
-                            row.onTouchEvent(cancel);
-                        } finally {
-                            cancel.recycle();
-                        }
+    private void bindTapSlop(View row) {
+        row.setOnTouchListener(new View.OnTouchListener() {
+            private float downX;
+            private float downY;
+            private boolean moved;
+
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN -> {
+                        downX = event.getRawX();
+                        downY = event.getRawY();
+                        moved = false;
                     }
-                    return moved[0];
-                case MotionEvent.ACTION_UP:
-                    return moved[0];
-                case MotionEvent.ACTION_CANCEL:
-                    moved[0] = false;
-                    return false;
-                default:
-                    return false;
+                    case MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                        if (!moved && Math.hypot(event.getRawX() - downX, event.getRawY() - downY) > mTouchSlop) {
+                            moved = true;
+                            MotionEvent cancel = event.copy();
+                            cancel.setAction(MotionEvent.ACTION_CANCEL);
+                            try { row.onTouchEvent(cancel); }
+                            finally { cancel.recycle(); }
+                        }
+                        return moved;
+                    }
+                    case MotionEvent.ACTION_CANCEL -> moved = false;
+                }
+                return false;
             }
         });
     }
 
-    private ShapeDrawable createColorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        return drawable;
+    private SvgIconView addIcon(LinearLayout row, SvgIconView.Icon kind, int tint) {
+        SvgIconView icon = new SvgIconView(getContext(), kind, tint);
+        int inset = dp2pxInt((ICON_SLOT - ICON_SIZE) / 2);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp2pxInt(ICON_SIZE), dp2pxInt(ICON_SIZE));
+        params.setMargins(inset, 0, inset, 0);
+        row.addView(icon, params);
+        return icon;
     }
 
-    private static class QuickAccessListLayout extends LinearLayout {
-        private int mIndicatorY = -1;
-        private final Paint mIndicatorPaint;
+    private void addLabel(LinearLayout row, String text, boolean enabled) {
+        TextView label = UIUtils.createLockedTextView(getContext(), text, 14,
+                enabled ? UiThemes.EDITOR.text().normal() : UiThemes.EDITOR.text().disabled());
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(dp2pxInt(6), 0, dp2pxInt(10), 0);
+        row.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+    }
 
-        public QuickAccessListLayout(Context context) {
+    private LinearLayout verticalLayout() {
+        LinearLayout layout = new LinearLayout(getContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        return layout;
+    }
+
+    private static AssetLocation.Local local(File directory) {
+        return new AssetLocation.Local(directory, false, List.of());
+    }
+
+    private static String selectionKey(AssetLocation location) {
+        if (location instanceof AssetLocation.Remote remote) return "remote:" + remote.directory();
+        if (location instanceof AssetLocation.Local local) {
+            if (local.favorites()) return "favorites";
+            if (local.directory() != null) {
+                try { return "local:" + local.directory().getCanonicalPath(); }
+                catch (Exception ignored) { return "local:" + local.directory().getAbsolutePath(); }
+            }
+        }
+        return "";
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        int generation = ++mAttachmentGeneration;
+        mConfigListener = config -> post(() -> {
+            if (!isAttachedToWindow() || generation != mAttachmentGeneration) return;
+            QuickAccessSnapshot snapshot = QuickAccessSnapshot.of(config);
+            if (!Objects.equals(mConfigSnapshot, snapshot)) {
+                mConfigSnapshot = snapshot;
+                buildSidebar();
+            }
+        });
+        ConfigManager.INSTANCE.addChangeListener(mConfigListener);
+        // Reading a baseline belongs to listener setup; all mutations go through the store.
+        mConfigSnapshot = QuickAccessSnapshot.of(ConfigManager.INSTANCE.getConfig());
+        buildSidebar();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        ++mAttachmentGeneration;
+        ConfigManager.INSTANCE.removeChangeListener(mConfigListener);
+        mConfigListener = null;
+        for (QuickAccessListLayout list : mQuickLists) list.cancelDrag();
+        super.onDetachedFromWindow();
+    }
+
+    private record QuickAccessSnapshot(List<String> local, Map<String, List<String>> remote) {
+        static QuickAccessSnapshot of(AppConfig config) {
+            Map<String, List<String>> remote = new LinkedHashMap<>();
+            config.assetBrowser.remoteQuickAccessPaths.forEach((server, paths) -> remote.put(server, List.copyOf(paths)));
+            return new QuickAccessSnapshot(List.copyOf(config.assetBrowser.quickAccessPaths), Map.copyOf(remote));
+        }
+    }
+
+    private record SelectionRow(View view, String key) {}
+
+    /** Coordinates only this source's custom rows; fixed rows can never enter reorder indices. */
+    private final class ShortcutDrag implements View.OnTouchListener {
+        private final QuickAccessListLayout list;
+        private final View row;
+        private final String key;
+        private float downX;
+        private float downY;
+        private boolean tracking;
+        private boolean dragging;
+
+        ShortcutDrag(QuickAccessListLayout list, View row, String key) {
+            this.list = list;
+            this.row = row;
+            this.key = key;
+        }
+
+        @Override
+        public boolean onTouch(View view, MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN -> {
+                    if (!row.isEnabled()) return false;
+                    list.cancelDrag();
+                    list.activeDrag = this;
+                    downX = event.getRawX();
+                    downY = event.getRawY();
+                    tracking = true;
+                    requestDisallowInterceptTouchEvent(true);
+                }
+                case MotionEvent.ACTION_MOVE -> {
+                    if (!tracking) return true;
+                    float dy = Math.abs(event.getRawY() - downY);
+                    if (!dragging && dy > mTouchSlop) {
+                        dragging = true;
+                        row.setAlpha(0.4f);
+                    } else if (!dragging && Math.abs(event.getRawX() - downX) > mTouchSlop) {
+                        list.cancelDrag();
+                        return true;
+                    }
+                    if (dragging) list.showDrop(event.getRawX(), event.getRawY());
+                }
+                case MotionEvent.ACTION_UP -> {
+                    int insertion = tracking && dragging ? list.insertionAt(event.getRawX(), event.getRawY()) : -1;
+                    list.cancelDrag();
+                    if (insertion >= 0) {
+                        mQuickAccess.move(list.source, key, insertion);
+                        buildSidebar();
+                    }
+                }
+                case MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> list.cancelDrag();
+            }
+            return true;
+        }
+
+        void cancel() {
+            tracking = false;
+            dragging = false;
+            row.setAlpha(1);
+            requestDisallowInterceptTouchEvent(false);
+        }
+    }
+
+    private final class QuickAccessListLayout extends LinearLayout {
+        private final AssetSourceKind source;
+        private final Paint indicatorPaint = new Paint();
+        private final int[] screenLocation = new int[2];
+        private int indicatorY = -1;
+        private ShortcutDrag activeDrag;
+
+        QuickAccessListLayout(Context context, AssetSourceKind source) {
             super(context);
+            this.source = source;
+            setOrientation(VERTICAL);
             setWillNotDraw(false);
-            mIndicatorPaint = new Paint();
-            mIndicatorPaint.setColor(UiThemes.EDITOR.selection().outline());
+            indicatorPaint.setColor(UiThemes.EDITOR.selection().outline());
         }
 
-        public void updateIndicator(int y) {
-            if (mIndicatorY != y) {
-                mIndicatorY = y;
-                invalidate();
+        int insertionAt(float rawX, float rawY) {
+            getLocationOnScreen(screenLocation);
+            float x = rawX - screenLocation[0];
+            float y = rawY - screenLocation[1];
+            if (x < 0 || x > getWidth() || y < 0 || y > getHeight()) return -1;
+            for (int i = 0; i < getChildCount(); i++) {
+                View child = getChildAt(i);
+                if (y < (child.getTop() + child.getBottom()) / 2f) return i;
             }
+            return getChildCount();
         }
 
-        public void hideIndicator() {
-            if (mIndicatorY != -1) {
-                mIndicatorY = -1;
-                invalidate();
-            }
+        void showDrop(float rawX, float rawY) {
+            int insertion = insertionAt(rawX, rawY);
+            indicatorY = insertion < 0 ? -1 : insertion == getChildCount()
+                    ? getChildAt(insertion - 1).getBottom() : getChildAt(insertion).getTop();
+            invalidate();
+        }
+
+        void cancelDrag() {
+            if (activeDrag != null) activeDrag.cancel();
+            activeDrag = null;
+            indicatorY = -1;
+            invalidate();
         }
 
         @Override
         protected void dispatchDraw(Canvas canvas) {
             super.dispatchDraw(canvas);
-            if (mIndicatorY >= 0) {
-                int indicatorHalfHeight = dp2pxInt(2);
-                int drawY = Math.max(indicatorHalfHeight, Math.min(getHeight() - indicatorHalfHeight, mIndicatorY));
-                canvas.drawRect(0, drawY - indicatorHalfHeight, getWidth(), drawY + indicatorHalfHeight, mIndicatorPaint);
+            if (indicatorY >= 0) {
+                int halfHeight = dp2pxInt(2);
+                int y = Math.max(halfHeight, Math.min(getHeight() - halfHeight, indicatorY));
+                canvas.drawRect(0, y - halfHeight, getWidth(), y + halfHeight, indicatorPaint);
             }
         }
+    }
+
+    private static ShapeDrawable colorDrawable(int color) {
+        ShapeDrawable drawable = new ShapeDrawable();
+        drawable.setColor(color);
+        return drawable;
     }
 }

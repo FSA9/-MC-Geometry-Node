@@ -21,7 +21,6 @@ import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
 import com.mine.geometry_node.core.node.definition.port.PortOptionResolver;
-import com.mine.geometry_node.core.node.definition.port.PortOptionContext;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.core.RegistryAccess;
@@ -199,7 +198,7 @@ public final class GraphQueryService {
         data.addProperty("source", resolution.source().name().toLowerCase(Locale.ROOT));
         data.addProperty("registry_id", resolution.registryId());
         data.addProperty("available", resolution.available());
-        data.addProperty("option_context_token", PortOptionContext.token(resolution));
+        data.addProperty("option_context_token", resolution.contextToken());
         data.add("items", items);
         data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
         return CommandResult.success("NODE_TYPE_PORT_OPTIONS", "已读取节点类型端口选项", data);
@@ -433,7 +432,7 @@ public final class GraphQueryService {
         data.addProperty("registry_id", resolution.registryId());
         data.addProperty("available", resolution.available());
         data.addProperty("selected_value", selected);
-        data.addProperty("option_context_token", PortOptionContext.token(resolution));
+        data.addProperty("option_context_token", resolution.contextToken());
         data.add("items", items);
         data.add("page", pageJson(page.offset(), page.limit(), page.total(), page.items().size()));
         return CommandResult.success("PORT_OPTIONS", "已读取端口选项", data);

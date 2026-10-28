@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.components.integration.graph.properties
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.base.icon.VectorIconView;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
@@ -32,11 +31,6 @@ public final class GraphPropertiesUi {
 
     public static UiIconButton actionIcon(Context context, SvgIconView.Icon icon, String tooltipKey) {
         return new UiIconButton(context, new SvgIconView(context, icon, UiThemes.EDITOR.text().normal()), actionStyle(14))
-                .tooltip(tr(tooltipKey));
-    }
-
-    public static UiIconButton actionIcon(Context context, VectorIconView.Kind icon, String tooltipKey) {
-        return new UiIconButton(context, new VectorIconView(context, icon, UiThemes.EDITOR.text().normal()), actionStyle(14))
                 .tooltip(tr(tooltipKey));
     }
 
@@ -105,7 +99,7 @@ public final class GraphPropertiesUi {
         LinearLayout order = new LinearLayout(context);
         order.setOrientation(LinearLayout.VERTICAL);
         UiIconButton up = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_UP, UiThemes.EDITOR.text().normal()), actionStyle(8))
+                new SvgIconView(context, SvgIconView.Icon.CHEVRON_UP, UiThemes.EDITOR.text().normal()), actionStyle(8))
                 .tooltip(tr(upTooltipKey));
         up.setOnClickListener(v -> moveUp.run());
         order.addView(up, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -114,7 +108,7 @@ public final class GraphPropertiesUi {
         order.addView(divider, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, UIUtils.dp2pxInt(1))));
         UiIconButton down = new UiIconButton(context,
-                new VectorIconView(context, VectorIconView.Kind.CHEVRON_DOWN, UiThemes.EDITOR.text().normal()), actionStyle(8))
+                new SvgIconView(context, SvgIconView.Icon.CHEVRON_DOWN, UiThemes.EDITOR.text().normal()), actionStyle(8))
                 .tooltip(tr(downTooltipKey));
         down.setOnClickListener(v -> moveDown.run());
         order.addView(down, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));

@@ -1,6 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.asset.schematic;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnail;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
@@ -15,6 +17,7 @@ public final class SchematicThumbnailView extends View {
     private static final short[] QUAD_INDICES = {0, 1, 2, 0, 2, 3};
 
     private final File mFile;
+    private final SvgIconView mFallbackIcon;
     private final Paint mPaint = new Paint();
     private final RectF mRect = new RectF();
     private final float[] mQuadVertices = new float[8];
@@ -25,6 +28,8 @@ public final class SchematicThumbnailView extends View {
     public SchematicThumbnailView(Context context, File file) {
         super(context);
         mFile = file;
+        mFallbackIcon = new SvgIconView(context, SvgIconView.Icon.SCHEMATIC,
+                AssetTypeRegistry.INSTANCE.get(AssetTypeRegistry.SCHEMATIC_ID).defaultColor());
         mPaint.setAntiAlias(true);
         setWillNotDraw(false);
     }
@@ -132,30 +137,8 @@ public final class SchematicThumbnailView extends View {
     }
 
     private void drawFallback(Canvas canvas) {
-        float w = getWidth();
-        float h = getHeight();
-        float cx = w * 0.5f;
-        float cy = h * 0.5f;
-        float half = Math.min(w, h) * 0.28f;
-
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(Math.max(1.0f, half * 0.11f));
-        // Schematic-type identity fallback; material and block colors remain content-owned.
-        mPaint.setColor(0xFF86B8FF);
-
-        float left = cx - half;
-        float right = cx + half;
-        float top = cy - half * 0.6f;
-        float bottom = cy + half * 0.6f;
-        canvas.drawLine(cx, top - half * 0.32f, right, top + half * 0.18f, mPaint);
-        canvas.drawLine(cx, top - half * 0.32f, left, top + half * 0.18f, mPaint);
-        canvas.drawLine(left, top + half * 0.18f, cx, top + half * 0.72f, mPaint);
-        canvas.drawLine(right, top + half * 0.18f, cx, top + half * 0.72f, mPaint);
-        canvas.drawLine(left, bottom - half * 0.18f, cx, bottom + half * 0.32f, mPaint);
-        canvas.drawLine(right, bottom - half * 0.18f, cx, bottom + half * 0.32f, mPaint);
-        canvas.drawLine(left, top + half * 0.18f, left, bottom - half * 0.18f, mPaint);
-        canvas.drawLine(right, top + half * 0.18f, right, bottom - half * 0.18f, mPaint);
-        canvas.drawLine(cx, top + half * 0.72f, cx, bottom + half * 0.32f, mPaint);
+        int size = Math.round(Math.min(getWidth(), getHeight()) * 0.72f);
+        mFallbackIcon.drawIcon(canvas, (getWidth() - size) * 0.5f, (getHeight() - size) * 0.5f, size);
     }
 
     public static void invalidate(File file) {

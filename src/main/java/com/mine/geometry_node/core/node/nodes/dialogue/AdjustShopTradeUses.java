@@ -8,7 +8,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
-import com.mine.geometry_node.core.node.definition.port.TypeConverter;
+import com.mine.geometry_node.core.engine.graph.value.TypeConverter;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
 
