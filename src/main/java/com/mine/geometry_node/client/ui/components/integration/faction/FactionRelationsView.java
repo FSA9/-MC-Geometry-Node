@@ -1,10 +1,8 @@
 package com.mine.geometry_node.client.ui.components.integration.faction;
 
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
-import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
@@ -14,7 +12,7 @@ import com.mine.geometry_node.core.engine.system.faction.model.*;
 import com.mine.geometry_node.core.utils.ColumnFilters;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.widget.FrameLayout;
+import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.*;
 import java.util.function.*;
@@ -43,12 +41,12 @@ public final class FactionRelationsView extends LinearLayout {
             new UiTableColumns.Column("name", 590, 180, true),
             new UiTableColumns.Column("score", 200, 160, true)));
     private final UiColumnFilterPopover filters;
-    private final UiTableFilterHeader nameHeader, scoreHeader;
+    private final UiTable table;
     private final UiDisplayText count;
-    private final LinearLayout body;
+    private final UiTableItems<UUID, Target> items;
     private final Map<UUID, Row> rows = new LinkedHashMap<>();
     private record Row(UiTableRow view, UiDisplayText name, FactionIntegerInput score, UiIconButton clear) {}
-    private record Target(UUID id, RichTextValue name, boolean missing) {}
+    private record Target(UUID id, RichTextValue name, int score, boolean missing) {}
     private BooleanSupplier editable = () -> true;
     private UiStateContext state;
     private String scope, query = "", sort = "name";
@@ -64,17 +62,13 @@ public final class FactionRelationsView extends LinearLayout {
         count.setGravity(icyllis.modernui.view.Gravity.CENTER_VERTICAL);
         addView(count, new LayoutParams(-1, px(32)));
         filters = new UiColumnFilterPopover(context, this, theme);
-        LinearLayout table = new LinearLayout(context); table.setOrientation(VERTICAL);
-        UiTableRow header = UiTableStyle.header(context, columns, theme);
-        nameHeader = new UiTableFilterHeader(context, tr("target"), () -> sort("name"), this::filterName, theme);
-        scoreHeader = new UiTableFilterHeader(context, tr("score"), () -> sort("score"), this::filterScore, theme);
-        header.addView(nameHeader); header.addView(scoreHeader);
-        table.addView(header, new LayoutParams(-1, px(UiTableStyle.DETAILED_HEADER_HEIGHT)));
-        body = new LinearLayout(context); body.setOrientation(VERTICAL);
-        UiScrollView scroll = new UiScrollView(context, theme.scroll());
-        scroll.addView(body, new FrameLayout.LayoutParams(-1, -2));
-        table.addView(scroll, new LayoutParams(-1, 0, 1));
-        addView(new UiTableViewport(context, columns, table, theme), new LayoutParams(-1, 0, 1));
+        table = new UiTable(context, theme, columns, List.of(
+                UiTableColumn.interactive("name", tr("target"), () -> sort("name"), this::filterName),
+                UiTableColumn.interactive("score", tr("score"), () -> sort("score"), this::filterScore)), UiTableItems.body(context));
+        items = new UiTableItems<>(table, Target::id, this::createItemRow);
+        items.setReorderBlocked(() -> rows.values().stream().anyMatch(row -> row.score().isFocused()));
+        table.onDismiss(filters::dismiss);
+        addView(table, new LayoutParams(-1, 0, 1));
         columns.addUserStateListener(this::save);
     }
 
@@ -86,70 +80,66 @@ public final class FactionRelationsView extends LinearLayout {
         columns.restoreCustomWidths(saved.widths()); refresh();
     }
     public void setEditable(BooleanSupplier value) { editable = Objects.requireNonNull(value); refreshEditable(); }
-    public void suspend() { filters.dismiss(); save(); }
+    public void suspend() { table.dismiss(); save(); }
     public boolean hasPendingChanges() { return rows.values().stream().anyMatch(row -> row.score().hasPendingChanges()); }
     public void dispose() {
         if (disposed) return;
-        save(); disposed = true; rows.values().forEach(row -> row.score().dispose());
-        filters.dismiss(); rows.clear();
+        save(); disposed = true; items.dispose(); table.dispose();
     }
 
     public void refresh() {
         if (disposed) return;
         FactionCatalog snapshot = catalog.get(); Map<UUID, Integer> scores = relations.get();
         Map<UUID, Target> targets = new LinkedHashMap<>();
-        snapshot.factions().forEach(f -> targets.put(f.id(), new Target(f.id(), f.name(), false)));
-        scores.keySet().forEach(id -> targets.putIfAbsent(id, new Target(id, RichTextValue.plain(tr("missing_faction")), true)));
-        List<Target> visible = targets.values().stream().filter(f -> {
+        snapshot.factions().forEach(f -> targets.put(f.id(), new Target(f.id(), f.name(), scores.getOrDefault(f.id(), 0), false)));
+        scores.forEach((id, score) -> targets.putIfAbsent(id,
+                new Target(id, RichTextValue.plain(tr("missing_faction")), score, true)));
+        Predicate<Target> visible = f -> {
             String name = f.name().plain().toLowerCase(Locale.ROOT);
-            int score = scores.getOrDefault(f.id(), 0);
+            int score = f.score();
             return name.contains(query.toLowerCase(Locale.ROOT))
                     && (range.minimum() == null || score >= range.minimum())
                     && (range.maximum() == null || score <= range.maximum());
-        }).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        count.setText(tr("visible_count", visible.size(), targets.size()));
+        };
+        List<Target> ordered = new ArrayList<>(targets.values());
+        count.setText(tr("visible_count", ordered.stream().filter(visible).count(), targets.size()));
         if (direction != 0) {
             Comparator<Target> order = "score".equals(sort)
-                    ? Comparator.comparingInt(f -> scores.getOrDefault(f.id(), 0))
+                    ? Comparator.comparingInt(Target::score)
                     : Comparator.comparing(f -> f.name().plain(), String.CASE_INSENSITIVE_ORDER);
             if (direction == 2) order = order.reversed();
-            visible.sort(order.thenComparing(f -> f.id().toString()));
+            ordered.sort(order.thenComparing(f -> f.id().toString()));
         }
-        Set<UUID> live = targets.keySet();
-        for (UUID id : List.copyOf(rows.keySet())) if (!live.contains(id)) {
-            Row old = rows.remove(id); old.score().dispose(); body.removeView(old.view());
-        }
-        Set<UUID> displayed = new HashSet<>(); visible.forEach(faction -> displayed.add(faction.id()));
-        rows.forEach((id, row) -> {
-            if (!displayed.contains(id)) { row.score().setEditable(false); row.view().setVisibility(GONE); }
-        });
-        boolean focused = rows.values().stream().anyMatch(row -> row.score().isFocused());
-        int index = 0;
-        for (Target faction : visible) {
-            Row row = rows.computeIfAbsent(faction.id(), this::createRow);
-            row.name().setText(FactionTextViews.display(faction.name()));
-            row.name().setTooltipText(faction.name().plain());
-            row.score().refresh(scores.getOrDefault(faction.id(), 0));
-            row.clear().setVisibility(faction.missing() ? VISIBLE : GONE);
-            row.view().setDataStyle(index % 2 != 0);
-            row.view().setVisibility(VISIBLE);
-            if (row.view().getParent() == null) body.addView(row.view(), new LayoutParams(-1, px(UiTableStyle.DETAILED_ROW_HEIGHT)));
-            if (!focused && (index >= body.getChildCount() || body.getChildAt(index) != row.view())) {
-                if (row.view().getParent() == body) body.removeView(row.view());
-                body.addView(row.view(), index, new LayoutParams(-1, px(UiTableStyle.DETAILED_ROW_HEIGHT)));
+        items.replace(ordered, visible);
+        table.setFilterActive("name", !query.isEmpty());
+        table.setFilterActive("score", range.minimum() != null || range.maximum() != null);
+        table.setSort(sort, direction);
+    }
+
+    private UiTableItems.Row<Target> createItemRow(Target item) {
+        UUID id = item.id();
+        Row row = createRow(id);
+        rows.put(id, row);
+        return new UiTableItems.Row<>() {
+            @Override public View view() { return row.view(); }
+            @Override public void bind(Target current, int index) {
+                boolean enabled = !disposed && editable.getAsBoolean() && index >= 0;
+                // Disable before UiTableItems hides a filtered row and before any focus loss.
+                row.score().setEditable(enabled && !current.missing());
+                row.clear().setEnabled(enabled && current.missing());
+                row.name().setText(FactionTextViews.display(current.name()));
+                row.name().setTooltipText(current.name().plain());
+                row.score().refresh(current.score());
+                row.clear().setVisibility(current.missing() ? VISIBLE : GONE);
             }
-            index++;
-        }
-        nameHeader.setFilterActive(!query.isEmpty()); scoreHeader.setFilterActive(range.minimum() != null || range.maximum() != null);
-        title(nameHeader, "target", "name"); title(scoreHeader, "score", "score");
-        refreshEditable();
+            @Override public void dispose() {
+                row.score().dispose(); row.clear().setEnabled(false); rows.remove(id, row);
+            }
+        };
     }
 
     private Row createRow(UUID id) {
-        UiTableRow row = new UiTableRow(getContext(), columns, theme);
         UiDisplayText name = UiTableStyle.cell(getContext(), "", theme);
-        UIUtils.setLockedTextSize(name, UiMetrics.TEXT_BODY);
-        name.setPadding(px(12), 0, px(12), 0);
         FactionIntegerInput score = new FactionIntegerInput(getContext(), theme, relations.get().getOrDefault(id, 0),
                 -100, 100, value -> {
                     if (disposed || !editable.getAsBoolean() || catalog.get().find(id).isEmpty())
@@ -157,9 +147,9 @@ public final class FactionRelationsView extends LinearLayout {
                     change.accept(id, value);
                 });
         score.setContentDescription(tr("score"));
-        UIUtils.setLockedTextSize(score, UiMetrics.TEXT_BODY);
+        UIUtils.setLockedTextSize(score, UiTableStyle.CELL_TEXT_SIZE_DP);
         LinearLayout cell = new LinearLayout(getContext()); cell.setGravity(icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-        cell.setPadding(px(12), 0, px(12), 0); cell.setBaselineAligned(false);
+        cell.setBaselineAligned(false);
         cell.addView(score, new LayoutParams(0, px(34), 1));
         UiIconButton clear = UiIconButton.createThemed(getContext(), theme, SvgIconView.Icon.CLEAR,
                 tr("remove_relation"), UiIconButton.Preset.INLINE);
@@ -168,7 +158,8 @@ public final class FactionRelationsView extends LinearLayout {
                     && relations.get().containsKey(id)) change.accept(id, 0);
         });
         cell.addView(clear, new LayoutParams(px(28), px(28)));
-        row.addView(name); row.addView(cell); return new Row(row, name, score, clear);
+        UiTableRow row = table.createRow(Map.of("name", name, "score", cell));
+        return new Row(row, name, score, clear);
     }
     private void refreshEditable() {
         boolean enabled = !disposed && editable.getAsBoolean();
@@ -179,18 +170,15 @@ public final class FactionRelationsView extends LinearLayout {
             row.clear().setEnabled(enabled && visible && missing);
         });
     }
-    private void title(UiTableFilterHeader header, String key, String column) {
-        if (header.getChildAt(0) instanceof UiActionButton label)
-            label.setText(tr(key) + (!sort.equals(column) || direction == 0 ? "" : direction == 1 ? " ↑" : " ↓"));
-    }
     private void sort(String key) {
-        direction = sort.equals(key) ? (direction + 1) % 3 : 1; sort = key; save(); refresh();
+        UiTable.Sort next = table.cycleSort(key);
+        sort = next.column(); direction = next.direction(); save(); refresh();
     }
-    private void filterName() {
-        filters.showText(nameHeader.filterButton(), tr("target"), query, value -> { query = value; save(); refresh(); });
+    private void filterName(View anchor) {
+        filters.showText(anchor, tr("target"), query, value -> { query = value; save(); refresh(); });
     }
-    private void filterScore() {
-        filters.showNumber(scoreHeader.filterButton(), tr("score"), range, value -> {
+    private void filterScore(View anchor) {
+        filters.showNumber(anchor, tr("score"), range, value -> {
             if (!validBound(value.minimum()) || !validBound(value.maximum())) throw new IllegalArgumentException("Integer score range required");
             range = value; save(); refresh();
         });

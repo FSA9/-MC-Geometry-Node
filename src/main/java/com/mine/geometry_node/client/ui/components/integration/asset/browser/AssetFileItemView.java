@@ -2,7 +2,7 @@ package com.mine.geometry_node.client.ui.components.integration.asset.browser;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTable;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
@@ -19,7 +19,6 @@ import com.mine.geometry_node.client.ui.workspace.drag.WorkspaceDragGesture;
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.resources.TypedValue;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -28,7 +27,6 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import java.util.List;
-import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 final class AssetFileItemView extends LinearLayout {
@@ -41,7 +39,7 @@ final class AssetFileItemView extends LinearLayout {
         void onItemSelectionToggled(AssetEntry entry);
     }
 
-    private static final float TEXT_SIZE_LIST_SUBTITLE = 11.0f;
+    private static final float TEXT_SIZE_GRID_SUBTITLE = 11.0f;
     private static final int COLOR_ITEM_SELECTED = UiThemes.EDITOR.selection().subtle();
     // Unselected items expose the parent surface; this is structural transparency.
     private static final int COLOR_ITEM_TRANSPARENT = 0x00000000;
@@ -62,20 +60,23 @@ final class AssetFileItemView extends LinearLayout {
     private final Listener mListener;
     private boolean mIsSelected;
     private UiCheckBox mSelectionCheck;
-    private final UiTableColumns mColumns;
+    private final UiTable mTable;
+    private final int mRowIndex;
+    private UiTableRow mRow;
 
     AssetFileItemView(Context context, AssetEntry entry, AssetViewMode mode, String displayName, String parentLabel,
-                      List<String> tags, String graphTypeId, boolean favorite, Listener listener, UiTableColumns columns) {
+                      List<String> tags, String graphTypeId, boolean favorite, Listener listener, UiTable table, int rowIndex) {
         super(context);
         mEntry = entry;
-        mColumns = columns;
+        mTable = table;
+        mRowIndex = rowIndex;
         mTags = tags != null ? tags : List.of();
         mGraphTypeId = graphTypeId != null ? graphTypeId : "";
         mFavorite = favorite;
         mListener = listener;
         setGravity(Gravity.CENTER_VERTICAL);
         if (mode != AssetViewMode.LIST) setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
-        setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
+        if (mode != AssetViewMode.LIST) setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
 
         mIconView = new SvgIconView(context, iconKind(), iconColor());
         SvgIconView.Icon graphIcon = AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
@@ -85,11 +86,13 @@ final class AssetFileItemView extends LinearLayout {
                 && entry.type().previewKind().isConcrete()
                 ? new AssetPreviewView(context, entry, mIconView)
                 : null;
-        mNameView = UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
-        mNameView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
+        mNameView = mode == AssetViewMode.LIST ? UiTableStyle.cell(context, displayName, COLOR_TEXT)
+                : UIUtils.createLockedTextView(context, displayName, mode.nameTextSizeDp, COLOR_TEXT);
+        if (mode != AssetViewMode.LIST) mNameView.setGravity(Gravity.CENTER);
         mNameView.setSingleLine(true);
-        mSubtitleView = UIUtils.createLockedTextView(context, parentLabel, TEXT_SIZE_LIST_SUBTITLE, COLOR_SUBTEXT);
-        mSubtitleView.setGravity(mode == AssetViewMode.LIST ? Gravity.CENTER_VERTICAL : Gravity.CENTER);
+        mSubtitleView = mode == AssetViewMode.LIST ? UiTableStyle.cell(context, parentLabel, COLOR_SUBTEXT)
+                : UIUtils.createLockedTextView(context, parentLabel, TEXT_SIZE_GRID_SUBTITLE, COLOR_SUBTEXT);
+        if (mode != AssetViewMode.LIST) mSubtitleView.setGravity(Gravity.CENTER);
         mSubtitleView.setSingleLine(true);
 
         buildLayoutForMode(mode, displayName, parentLabel);
@@ -120,7 +123,8 @@ final class AssetFileItemView extends LinearLayout {
         if (mIsSelected == selected) return;
         mIsSelected = selected;
         super.setSelected(selected);
-        setBackground(AssetFileBrowserPanel.createRectDrawable(selected ? COLOR_ITEM_SELECTED : COLOR_ITEM_TRANSPARENT, mSelectionCheck == null ? 4 : 0));
+        if (mRow != null) mRow.setSelected(selected);
+        else setBackground(AssetFileBrowserPanel.createRectDrawable(selected ? COLOR_ITEM_SELECTED : COLOR_ITEM_TRANSPARENT, 4));
     }
 
     private void buildLayoutForMode(AssetViewMode mode, String displayName, String parentLabel) {
@@ -130,44 +134,15 @@ final class AssetFileItemView extends LinearLayout {
         if (mGraphIconView != null) mGraphIconView.setIconColor(iconColor());
         View iconView = iconView();
         mNameView.setText(displayName);
-        mNameView.setTextSize(TypedValue.COMPLEX_UNIT_PX, dp2px(mode == AssetViewMode.LIST ? UiTableStyle.CELL_TEXT_SIZE_DP : mode.nameTextSizeDp));
         mSubtitleView.setText(parentLabel);
         mSubtitleView.setVisibility(parentLabel.isEmpty() ? View.GONE : View.VISIBLE);
 
         if (mode == AssetViewMode.LIST) {
             setOrientation(LinearLayout.VERTICAL);
-            UiTableRow row = new UiTableRow(getContext(), mColumns);
-            mSelectionCheck = new UiCheckBox(getContext());
-            mSelectionCheck.setContentDescription(displayName);
-            mSelectionCheck.setOnCheckedChangeListener((view, checked) -> mListener.onItemSelectionToggled(mEntry));
-            row.addView(UiTableStyle.selectionCell(getContext(), mSelectionCheck));
-            FrameLayout typeCell = new FrameLayout(getContext());
-            typeCell.addView(iconView, new FrameLayout.LayoutParams(dp2pxInt(22), dp2pxInt(22), Gravity.CENTER));
-            row.addView(typeCell);
-            LinearLayout name = new LinearLayout(getContext());
-            name.setOrientation(LinearLayout.VERTICAL);
-            name.setGravity(Gravity.CENTER_VERTICAL);
-            name.setPadding(dp2pxInt(9), 0, dp2pxInt(6), 0);
-            mNameView.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-            name.addView(mNameView, new LinearLayout.LayoutParams(-1, -2));
-            name.addView(mSubtitleView, new LinearLayout.LayoutParams(-1, -2));
-            row.addView(name);
-            String description = mEntry.descriptor().documentInfo().description();
-            View descriptionCell = UiTableStyle.cell(getContext(), description, COLOR_SUBTEXT);
-            descriptionCell.setTooltipText(description);
-            row.addView(descriptionCell);
-            UiTagStrip tags = new UiTagStrip(getContext());
-            tags.setPadding(dp2pxInt(9), 0, dp2pxInt(6), 0);
-            tags.setTags(mTags);
-            row.addView(tags);
-            FrameLayout favorite = new FrameLayout(getContext());
-            if (canFavorite()) favorite.addView(createFavoriteButton(),
-                    new FrameLayout.LayoutParams(dp2pxInt(24), dp2pxInt(24), Gravity.CENTER));
-            row.addView(favorite);
-            addView(row, new LinearLayout.LayoutParams(-1, 0, 1));
-            View divider = new View(getContext());
-            divider.setBackground(AssetFileBrowserPanel.createColorDrawable(UiThemes.EDITOR.border().divider()));
-            addView(divider, new LinearLayout.LayoutParams(-1, Math.max(1, dp2pxInt(1))));
+            mRow = mTable.createRow(id -> createListCell(id, iconView, displayName));
+            mRow.setSurfaceOwner(this);
+            mTable.styleRow(mRow, mRowIndex, mIsSelected);
+            addView(mRow, new LinearLayout.LayoutParams(-1, -2));
             return;
         }
 
@@ -183,6 +158,51 @@ final class AssetFileItemView extends LinearLayout {
         addView(iconFrame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(mode.iconTextSizeDp + 10)));
         addView(mNameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(mSubtitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private View createListCell(String id, View iconView, String displayName) {
+        return switch (id) {
+            case "selection" -> {
+                mSelectionCheck = new UiCheckBox(getContext());
+                mSelectionCheck.setContentDescription(displayName);
+                mSelectionCheck.setOnCheckedChangeListener((view, checked) -> mListener.onItemSelectionToggled(mEntry));
+                yield UiTableStyle.selectionCell(getContext(), mSelectionCheck);
+            }
+            case "type" -> {
+                FrameLayout type = new FrameLayout(getContext());
+                type.addView(iconView, new FrameLayout.LayoutParams(dp2pxInt(22), dp2pxInt(22), Gravity.CENTER));
+                yield type;
+            }
+            case "name" -> {
+                LinearLayout name = new LinearLayout(getContext());
+                name.setOrientation(LinearLayout.VERTICAL);
+                name.setGravity(Gravity.CENTER_VERTICAL);
+                name.addView(mNameView, new LinearLayout.LayoutParams(-1, -2));
+                name.addView(mSubtitleView, new LinearLayout.LayoutParams(-1, -2));
+                yield name;
+            }
+            case "description" -> {
+                String description = mEntry.descriptor().documentInfo().description();
+                View cell = UiTableStyle.cell(getContext(), description, COLOR_SUBTEXT);
+                cell.setTooltipText(description);
+                yield cell;
+            }
+            case "tags" -> {
+                UiTagStrip tags = new UiTagStrip(getContext(), mTable.theme(), UiTableStyle.CELL_TEXT_SIZE_DP);
+                // Match the shared text cell insets without duplicating table spacing values.
+                tags.setPadding(mNameView.getPaddingLeft(), mNameView.getPaddingTop(),
+                        mNameView.getPaddingRight(), mNameView.getPaddingBottom());
+                tags.setTags(mTags);
+                yield tags;
+            }
+            case "favorite" -> {
+                FrameLayout favorite = new FrameLayout(getContext());
+                if (canFavorite()) favorite.addView(createFavoriteButton(),
+                        new FrameLayout.LayoutParams(dp2pxInt(24), dp2pxInt(24), Gravity.CENTER));
+                yield favorite;
+            }
+            default -> throw new IllegalArgumentException("Unknown asset column: " + id);
+        };
     }
 
     private boolean canFavorite() {

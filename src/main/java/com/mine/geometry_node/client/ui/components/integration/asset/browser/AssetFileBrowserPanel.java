@@ -8,8 +8,6 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.feature.asset.navigation.AssetQuickAccessStore;
 import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.client.feature.asset.path.AssetPathUtils;
@@ -71,11 +69,10 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private final EditText mPathInput;
     private final EditText mSearchInput;
     private final FrameLayout mBodyFrame;
-    private final ScrollView mScrollView;
+    private ScrollView mScrollView;
+    private final UiScrollView mGridScrollView;
     private final FileContentLayout mFileContent;
     private final AssetListTable mListTable;
-    private final LinearLayout mTableLayout;
-    private final UiTableViewport mTableViewport;
     private final Map<String, AssetFileItemView> mItemViews = new HashMap<>();
     private final Set<String> mSelectedPaths = new LinkedHashSet<>();
     private final List<AssetEntry> mVisibleEntries = new ArrayList<>();
@@ -201,18 +198,15 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         addClearSearchButton(searchRow, context);
 
         mBodyFrame = new FrameLayout(context);
-        mScrollView = new UiScrollView(context);
+        mGridScrollView = new UiScrollView(context);
         mFileContent = new FileContentLayout(context, this);
-        mListTable = new AssetListTable(context, this, () -> renderEntries(mCurrentListing), checked -> {
+        mListTable = new AssetListTable(context, this, mFileContent, () -> renderEntries(mCurrentListing), checked -> {
             mSelectedPaths.clear();
             if (checked) for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
             syncSelectionViews();
             notifySelectionChanged();
         });
-        mTableLayout = new LinearLayout(context);
-        mTableLayout.setOrientation(LinearLayout.VERTICAL);
-        mTableLayout.addView(mListTable.header, new LinearLayout.LayoutParams(-1, dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
-        mTableViewport = new UiTableViewport(context, mListTable.columns, mTableLayout);
+        mScrollView = mListTable.table.scroll();
         configureBody();
         mStatusBar = new AssetBrowserStatusBar(context, this::setViewMode);
         addView(mStatusBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(30)));
@@ -376,11 +370,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void configureBody() {
         mFileContent.setViewMode(mViewMode);
-        mScrollView.setOnScrollChangeListener((view, scrollX, scrollY, oldScrollX, oldScrollY) -> updateVirtualViewport());
-        mScrollView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateVirtualViewport());
-        mScrollView.addView(mFileContent, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        mBodyFrame.addView(mTableViewport, new FrameLayout.LayoutParams(-1, -1));
+        mListTable.table.setOnScrollChanged(this::updateVirtualViewport);
+        mGridScrollView.setOnScrollChangeListener((view, scrollX, scrollY, oldScrollX, oldScrollY) -> updateVirtualViewport());
+        for (ScrollView scroll : List.of(mListTable.table.scroll(), mGridScrollView)) {
+            scroll.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateVirtualViewport());
+        }
+        mBodyFrame.addView(mGridScrollView, new FrameLayout.LayoutParams(-1, -1));
+        mBodyFrame.addView(mListTable.table, new FrameLayout.LayoutParams(-1, -1));
         updateBodyMode();
         addView(mBodyFrame, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f));
@@ -388,13 +384,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private void updateBodyMode() {
         boolean list = mViewMode == AssetViewMode.LIST;
-        ViewGroup target = list ? mTableLayout : mBodyFrame;
-        if (mScrollView.getParent() != target) {
-            if (mScrollView.getParent() instanceof ViewGroup previous) previous.removeView(mScrollView);
-            if (list) mTableLayout.addView(mScrollView, new LinearLayout.LayoutParams(-1, 0, 1));
-            else mBodyFrame.addView(mScrollView, new FrameLayout.LayoutParams(-1, -1));
+        mScrollView = list ? mListTable.table.scroll() : mGridScrollView;
+        if (mFileContent.getParent() != mScrollView) {
+            if (mFileContent.getParent() instanceof ViewGroup previous) previous.removeView(mFileContent);
+            mScrollView.addView(mFileContent, new ScrollView.LayoutParams(-1, -2));
         }
-        mTableViewport.setVisibility(list ? View.VISIBLE : View.GONE);
+        mListTable.table.setVisibility(list ? View.VISIBLE : View.GONE);
+        mGridScrollView.setVisibility(list ? View.GONE : View.VISIBLE);
         if (!list) mListTable.dismiss();
     }
 
@@ -977,12 +973,22 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     @Override
-    public AssetFileItemView createItemView(AssetEntry entry) {
+    public void restoreScrollAnchor(int expectedScrollY, int scrollY) {
+        int clampedExpected = Math.min(expectedScrollY,
+                Math.max(0, mFileContent.getHeight() - mScrollView.getHeight()));
+        int current = mScrollView.getScrollY();
+        // Preserve an intervening user scroll; accept ScrollView's automatic content-size clamp.
+        if (current == expectedScrollY || current == clampedExpected) mScrollView.scrollTo(0, scrollY);
+        updateVirtualViewport();
+    }
+
+    @Override
+    public AssetFileItemView createItemView(AssetEntry entry, int index) {
         String parentLabel = (mFavoritesMode || !mSearchQuery.isEmpty()) ? parentLabel(entry) : "";
         List<String> tags = mViewMode == AssetViewMode.LIST ? mCurrentListing.tagsFor(entry) : List.of();
         String graphTypeId = mCurrentListing.graphTypeIdFor(entry);
         AssetFileItemView item = new AssetFileItemView(getContext(), entry, mViewMode, displayName(entry), parentLabel,
-                tags, graphTypeId, isFavorite(entry), this, mListTable.columns);
+                tags, graphTypeId, isFavorite(entry), this, mListTable.table, index);
         item.setSelected(mSelectedPaths.contains(entry.key()));
         return item;
     }

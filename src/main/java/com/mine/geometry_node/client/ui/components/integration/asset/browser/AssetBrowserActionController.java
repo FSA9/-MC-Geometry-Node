@@ -44,8 +44,6 @@ import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 final class AssetBrowserActionController {
-    private static final float TEXT_SIZE_LIST_ITEM = 14.0f;
-
     private final AssetFileBrowserPanel mPanel;
     private final AssetBrowserCoordinator mCoordinator;
     private final LocalAssetService mLocalAssetService;
@@ -526,8 +524,10 @@ final class AssetBrowserActionController {
         originalTextView.setVisibility(View.GONE);
 
         EditText editInput = new UiTextInput(mPanel.getContext(), new UiTextInput.Style(
-                TEXT_SIZE_LIST_ITEM, 6, UiMetrics.RADIUS_SMALL, UiMetrics.BORDER,
+                originalTextView.getTextSize() / UIUtils.dp2px(1), 0, UiMetrics.RADIUS_SMALL, UiMetrics.BORDER,
                 UiThemes.EDITOR.text().strong(), UiThemes.EDITOR.text().hint(), UiThemes.EDITOR.control().input(), UiThemes.EDITOR.control().inputBorder()));
+        editInput.setPadding(originalTextView.getPaddingLeft(), originalTextView.getPaddingTop(),
+                originalTextView.getPaddingRight(), originalTextView.getPaddingBottom());
         editInput.setSingleLine(true);
         editInput.setText(targetEntry.name());
 

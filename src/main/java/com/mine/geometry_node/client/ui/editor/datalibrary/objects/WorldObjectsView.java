@@ -32,9 +32,9 @@ import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableRowFrame;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTable;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumn;
 import com.mine.geometry_node.client.integration.entity.WorkspaceEntityEditor;
 import com.mine.geometry_node.client.integration.game.WorkspaceWorldObjectEditor;
 import com.mine.geometry_node.client.ui.editor.datalibrary.state.DatabaseViewState;
@@ -112,14 +112,14 @@ public final class WorldObjectsView extends FrameLayout {
     private WorldObjectGraphFilter graphFilter = WorldObjectGraphFilter.empty();
     private String registryTypeFilter = "";
     private final Map<String, UiTableFilterHeader> filterHeaders = new LinkedHashMap<>();
+    private final Set<String> sortableColumns = new HashSet<>();
     private final UiStateContext uiState;
     private String stateScope;
     private boolean restoringState;
     private final Set<String> selected = new LinkedHashSet<>();
-    private final Map<String, UiActionButton> rowViews = new LinkedHashMap<>();
+    private final Map<String, UiTableRow> rowViews = new LinkedHashMap<>();
     private final Map<String, RowBinding> rowBindings = new LinkedHashMap<>();
-    private record RowBinding(UiActionButton button, UiCheckBox checkbox, View stripe,
-                              UiTableRow cells, int baseColor, WorldObjectEntry entry) {}
+    private record RowBinding(UiTableRow cells, UiCheckBox checkbox, int index, WorldObjectEntry entry) {}
     private final UiTableColumns columns;
     private static UiTableColumns createColumns(Mode mode) {
         List<UiTableColumns.Column> values = new ArrayList<>(List.of(
@@ -153,7 +153,7 @@ public final class WorldObjectsView extends FrameLayout {
     }
     private String typeColumnId() { return mode == Mode.ENTITIES ? "registered" : "type"; }
     private String lifetimeColumnId() { return mode == Mode.ENTITIES ? "loaded" : "lifetime"; }
-    private final LinearLayout table;
+    private final UiTable table;
     private final UiCheckBox selectAll;
     private ClientWorldObjectRepository.Snapshot snapshot, renderedSnapshot;
     private List<WorldObjectEntry> mountedEntries;
@@ -178,7 +178,6 @@ public final class WorldObjectsView extends FrameLayout {
     private UiColumnFilterPopover filterPopover;
     private final LinearLayout navigation, categoryRows;
     private final ThinResizableDivider navigationDivider;
-    private final UiTableRow tableHeader;
     private final TextView resultTitle;
     private final Map<String, UiActionButton> categoryButtons = new LinkedHashMap<>();
     private WorldObjectCategories.Category category;
@@ -296,32 +295,22 @@ public final class WorldObjectsView extends FrameLayout {
             resultBar.addView(action, params);
         }
         column.addView(resultBar,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.RESULT_BAR_HEIGHT)));
-        tableHeader=UiTableStyle.header(context, columns);
-        tableHeader.addView(UiTableStyle.rowNumberCell(context, 0),new ViewGroup.LayoutParams(-1,-1));
         selectAll=new UiCheckBox(context);
         selectAll.setContentDescription(tr("select_all"));
         selectAll.setOnCheckedChangeListener((checkbox, checked)->toggleAll());
-        tableHeader.addView(UiTableStyle.selectionCell(context, selectAll),new ViewGroup.LayoutParams(-1,-1));
-        for (int index = 2; index < columns.size(); index++) {
-            String key = columns.column(index).id();
-            String caption = key.equals("data") ? "data.title" : key.equals("updated") ? "updated"
-                    : mode == Mode.ENTITIES && key.equals("value") ? "entity_preview" : null;
-            if (key.equals("factions"))
-                tableHeader.addView(UiTableStyle.cell(context, FactionUi.tr("factions"), UiThemes.EDITOR.text().normal()), new ViewGroup.LayoutParams(-1, -1));
-            else if (caption != null)
-                tableHeader.addView(UiTableStyle.cell(context, tr(caption), UiThemes.EDITOR.text().normal()), new ViewGroup.LayoutParams(-1, -1));
-            else addHeader(key);
-        }
-        table=new LinearLayout(context); table.setOrientation(LinearLayout.VERTICAL);
-        table.addView(tableHeader,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
-        scroll=new UiScrollView(context); scroll.setFillViewport(true);
-        // Reserve the scrollbar outside the rows without changing their column widths.
-        scroll.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
         rows=new LinearLayout(context); rows.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(rows,new LayoutParams(-1,-2));
-        table.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        UiTableViewport tableViewport=new UiTableViewport(context, columns, table);
-        column.addView(tableViewport,new LinearLayout.LayoutParams(-1,0,1));
+        List<UiTableColumn> definitions = new ArrayList<>();
+        for (int index = 0; index < columns.size(); index++)
+            definitions.add(columnDefinition(columns.column(index).id()));
+        table = new UiTable(context, UiThemes.EDITOR, columns, definitions, rows);
+        scroll = table.scroll();
+        for (UiTableColumn definition : definitions) {
+            if (definition.sort() != null) sortableColumns.add(definition.id());
+            if (definition.sort() != null || definition.filter() != null)
+                filterHeaders.put(definition.id(), table.header(definition.id()));
+        }
+        table.onDismiss(filterPopover::dismiss);
+        column.addView(table,new LinearLayout.LayoutParams(-1,0,1));
         status=UiTableStyle.statusBar(context,"",UiThemes.EDITOR);
         column.addView(status,new LinearLayout.LayoutParams(-1,UIUtils.dp2pxInt(UiTableStyle.STATUS_BAR_HEIGHT)));
         selectAll.setEnabled(false);
@@ -367,21 +356,24 @@ public final class WorldObjectsView extends FrameLayout {
         navigationDivider.setVisibility(navigation.getVisibility());
         super.onMeasure(widthSpec,heightSpec);
     }
-    @Override protected void onSizeChanged(int w,int h,int oldW,int oldH) {
-        super.onSizeChanged(w,h,oldW,oldH);
-        dismissMenu();
-    }
-
-    private void addHeader(String key) {
+    private UiTableColumn columnDefinition(String key) {
+        if (key.equals("row_number"))
+            return UiTableColumn.custom(key, () -> UiTableStyle.rowNumberCell(getContext(), 0));
+        if (key.equals("selection"))
+            return UiTableColumn.custom(key, () -> UiTableStyle.selectionCell(getContext(), selectAll));
+        if (key.equals("factions")) return UiTableColumn.label(key, FactionUi.tr("factions"));
+        if (key.equals("data") || key.equals("updated") || mode == Mode.ENTITIES && key.equals("value"))
+            return UiTableColumn.label(key, tr(key.equals("data") ? "data.title"
+                    : key.equals("value") ? "entity_preview" : key));
         String title = key.equals("value") ? Component.translatable("geometry_node.data_library.column_value").getString()
                 : tr(key.equals("registered") ? "registration" : key.equals("loaded") ? "load_status" : key);
-        UiTableFilterHeader header = new UiTableFilterHeader(getContext(), title, key.equals("value") ? null : () -> {
+        return UiTableColumn.interactive(key, title, key.equals("value") ? null : () -> {
             if (!shown || disposed) return;
-            sortAscending = !sort.equals(key) || !sortAscending; sort = key; saveState(); resetDoubleClick();
+            UiTable.Sort next = table.toggleSort(key);
+            sort = next.column(); sortAscending = next.direction() == 1;
+            saveState(); resetDoubleClick();
             if (!snapshot.loading()) rebuildRows();
-        }, () -> openColumnFilter(key));
-        filterHeaders.put(key, header);
-        tableHeader.addView(header, new ViewGroup.LayoutParams(-1, -1));
+        }, anchor -> openColumnFilter(key, anchor));
     }
 
     private void applyColumns(ColumnFilters next) { applyColumns(next, range); }
@@ -432,10 +424,9 @@ public final class WorldObjectsView extends FrameLayout {
         return WorldObjectCategories.all().stream().filter(c -> c.accepts().test(provider, type))
                 .map(c -> "category:" + c.id()).findFirst().orElseGet(() -> WorldObjectEntry.key(provider, "", type));
     }
-    private void openColumnFilter(String key) {
+    private void openColumnFilter(String key, View anchor) {
         if (!shown || disposed || !Objects.equals(stateScope, UiStateScopes.current())) return;
         if (faction != null && key.equals("registered")) return;
-        View anchor = filterHeaders.get(key).filterButton();
         switch (key) {
             case "registered", "loaded" -> {
                 LinkedHashMap<String, String> choices = new LinkedHashMap<>();
@@ -624,7 +615,8 @@ public final class WorldObjectsView extends FrameLayout {
         if (faction != null) filterHeaders.get("registered").filterButton().setEnabled(false);
         if (entitySearch != null && !entitySearch.input().getText().toString().equals(columnFilters.name()))
             entitySearch.input().setText(columnFilters.name());
-        filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
+        table.setSort(sort, sortAscending ? 1 : 2);
+        filterHeaders.forEach((key, header) -> table.setFilterActive(key, switch (key) {
             case "registered" -> entityFilter.registration() != Registration.ANY;
             case "loaded" -> entityFilter.load() != Load.ANY;
             case "name" -> !columnFilters.name().isEmpty();
@@ -653,7 +645,10 @@ public final class WorldObjectsView extends FrameLayout {
         String text = Component.translatable(key).getString();
         return text.equals(key) ? id : text;
     }
-    private void dismissMenu() { if (filterPopover != null) filterPopover.dismiss(); }
+    private void dismissMenu() {
+        if (filterPopover != null) filterPopover.dismiss();
+        if (table != null) table.dismiss();
+    }
     private List<WorldObjectEntry> sortedEntries() {
         if (rowOrder != null && rowOrder.source() == snapshot.entries() && rowOrder.types() == typeCatalog
                 && rowOrder.entities().equals(entityFilter) && rowOrder.category() == category
@@ -697,9 +692,9 @@ public final class WorldObjectsView extends FrameLayout {
     private ScrollAnchor captureScrollAnchor(String preferredKey, boolean reveal) {
         int y = scroll.getScrollY();
         int height = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
-        UiActionButton preferred = rowViews.get(preferredKey);
+        UiTableRow preferred = rowViews.get(preferredKey);
         if (preferred != null) {
-            View host = (View) preferred.getParent();
+            View host = preferred;
             int offset = rows.getTop() + host.getTop() - y;
             if (reveal || offset < height && offset + host.getHeight() > 0)
                 return new ScrollAnchor(preferredKey, reveal
@@ -709,7 +704,7 @@ public final class WorldObjectsView extends FrameLayout {
             View host = rows.getChildAt(i);
             if (rows.getTop() + host.getBottom() <= y) continue;
             for (var row : rowViews.entrySet())
-                if (row.getValue().getParent() == host)
+                if (row.getValue() == host)
                     return new ScrollAnchor(row.getKey(), rows.getTop() + host.getTop() - y, y);
         }
         return new ScrollAnchor(null, 0, y);
@@ -719,9 +714,9 @@ public final class WorldObjectsView extends FrameLayout {
         if (pendingScrollAnchor == null || rowBatch.isRunning() || snapshot.loading() || !shown || disposed) return;
         ScrollAnchor anchor = pendingScrollAnchor;
         pendingScrollAnchor = null;
-        UiActionButton row = rowViews.get(anchor.key());
+        UiTableRow row = rowViews.get(anchor.key());
         int y = row == null ? anchor.fallbackY()
-                : rows.getTop() + ((View) row.getParent()).getTop() - anchor.offset();
+                : rows.getTop() + row.getTop() - anchor.offset();
         scroll.scrollTo(scroll.getScrollX(), Math.max(0, y));
     }
     private void rebuildRows() {
@@ -741,9 +736,9 @@ public final class WorldObjectsView extends FrameLayout {
             // exposes intermediate permutations to layout, focus scrolling and user input.
             boolean reorder = false;
             for (int i = 0; !reorder && i < entries.size(); i++)
-                reorder = rowBindings.get(entries.get(i).key()).button().getParent() != rows.getChildAt(i);
+                reorder = rowBindings.get(entries.get(i).key()).cells() != rows.getChildAt(i);
             if (reorder) for (var entry : entries)
-                rows.bringChildToFront((View) rowBindings.get(entry.key()).button().getParent());
+                rows.bringChildToFront(rowBindings.get(entry.key()).cells());
             mountedEntries = entries;
             mountedTypes = mountingTypes;
             updateSelection();
@@ -758,7 +753,7 @@ public final class WorldObjectsView extends FrameLayout {
             RowBinding removed = rowBindings.remove(key);
             disposeRegistration(removed);
             rowViews.remove(key);
-            rows.removeView((View) removed.button().getParent());
+            rows.removeView(removed.cells());
         }
         Iterator<WorldObjectEntry> iterator = entries.iterator();
         rowBatch.start(new Iterator<Runnable>() {
@@ -809,11 +804,10 @@ public final class WorldObjectsView extends FrameLayout {
         if (dataCount(previous) != dataCount(entry) || !previous.references().equals(entry.references())
                 || isNativeEntity(previous) != isNativeEntity(entry) || isLoaded(previous) != isLoaded(entry))
             bindDataSummary((UiDataSummaryCell) cells.getChildAt(columnIndex("data")), entry);
-        int baseColor = UiTableStyle.rowColor(index % 2 != 0);
-        binding.button().setPalette(UiTableStyle.rowPalette(selected.contains(key), baseColor));
-        rowBindings.put(key, new RowBinding(binding.button(), binding.checkbox(), binding.stripe(), cells, baseColor, entry));
+        table.styleRow(cells, index, selected.contains(key));
+        rowBindings.put(key, new RowBinding(cells, binding.checkbox(), index, entry));
         rowViews.remove(key);
-        rowViews.put(key, binding.button());
+        rowViews.put(key, binding.cells());
     }
     private static void updateText(UiTableRow row, int column, String value) {
         TextView cell = (TextView) row.getChildAt(column);
@@ -833,7 +827,7 @@ public final class WorldObjectsView extends FrameLayout {
     private View createValueCell(WorldObjectEntry entry, UiTableRow row) {
         if (!hasEntityPreview(entry)) return UiTableStyle.cell(getContext(), "", UiThemes.EDITOR.text().normal());
         EntityPreviewCell preview = new EntityPreviewCell(getContext());
-        preview.setVisibilityRow(row);
+        if (row != null) preview.setVisibilityRow(row);
         bindPreview(preview, entry);
         return preview;
     }
@@ -864,66 +858,23 @@ public final class WorldObjectsView extends FrameLayout {
         rowBatch.cancel();
     }
     private void mountRow(WorldObjectEntry entry, int index) {
-        UiActionButton row = UiTableStyle.rowButton(getContext());
-        row.setPadding(0, 0, 0, 0);
-        int baseColor=UiTableStyle.rowColor(index%2!=0);
-        UiTableRow line = new UiTableRow(getContext(), columns);
-        line.setMinimumHeight(UIUtils.dp2pxInt(UiTableStyle.ROW_HEIGHT));
-        line.addView(UiTableStyle.rowNumberCell(getContext(), index + 1),new ViewGroup.LayoutParams(-1,-1));
         UiCheckBox checkbox=new UiCheckBox(getContext());
         checkbox.setContentDescription(displayName(entry));
         checkbox.setOnCheckedChangeListener((view,checked)-> {
             RowBinding live = rowBindings.get(entry.key());
             if (live != null && live.checkbox() == checkbox) toggleCheckbox(live.entry(), checked);
         });
-        line.addView(UiTableStyle.selectionCell(getContext(), checkbox),new ViewGroup.LayoutParams(-1,-1));
-        // Build cells from the same schema as headers so each mode has a single column order.
-        for (int column = 2; column < columns.size(); column++) {
-            String id = columns.column(column).id();
-            switch (id) {
-                case "registered" -> {
-                    EntityRegistrationView registration = new EntityRegistrationView(getContext(), UiThemes.EDITOR, entityId(entry), entry.dimension(), true,
-                            () -> canSelect() && rowBindings.containsKey(entry.key()) && isAlive(rowBindings.get(entry.key()).entry()), this::queryNow);
-                    bindRegistration(registration, entry); line.addView(registration, new ViewGroup.LayoutParams(-1, -1));
-                }
-                case "value" -> line.addView(createValueCell(entry, line), new ViewGroup.LayoutParams(-1, -1));
-                case "tags", "graphs", "factions" -> {
-                    UiTagStrip tags = new UiTagStrip(getContext());
-                    tags.setTags(switch (id) {
-                        case "tags" -> entry.tags();
-                        case "graphs" -> graphNames(entry);
-                        default -> factionNames(entry);
-                    });
-                    line.addView(tags, new ViewGroup.LayoutParams(-1, -1));
-                }
-                case "data" -> {
-                    UiDataSummaryCell data = new UiDataSummaryCell(getContext()); bindDataSummary(data, entry);
-                    line.addView(data, new ViewGroup.LayoutParams(-1, -1));
-                }
-                default -> cell(line, switch (id) {
-                    case "name" -> displayName(entry);
-                    case "type" -> displayType(entry);
-                    case "registry_type" -> WorldObjectEntries.registryType(entry);
-                    case "dimension" -> entry.dimension();
-                    case "position" -> position(entry);
-                    case "loaded" -> tr(isLoaded(entry) ? "loaded" : "unloaded");
-                    case "lifetime" -> lifetimeLabel(entry.lifetime());
-                    case "updated" -> capturedAt(entry);
-                    default -> throw new IllegalArgumentException("Unknown world-query column: " + id);
-                });
-            }
-        }
+        UiTableRow line = table.createRow(id -> createCell(id, entry, index, checkbox));
+        line.setClickable(true);
+        line.setFocusable(true);
+        line.setFocusableInTouchMode(true);
+        table.styleRow(line, index, selected.contains(entry.key()));
+        // Preview visibility is tied to the actual measured row, including scrolling/clipping.
+        if (line.getChildAt(columnIndex("value")) instanceof EntityPreviewCell preview)
+            preview.setVisibilityRow(line);
 
-        // Cells determine height; background and selection overlays follow without stretching the row.
-        FrameLayout host = new UiTableRowFrame(getContext(), line, row);
-        View stripe=new View(getContext());ShapeDrawable stripeBackground = new ShapeDrawable(); stripeBackground.setColor(UiThemes.EDITOR.selection().outline());
-        stripe.setBackground(stripeBackground);
-        host.addView(stripe,new LayoutParams(Math.max(1,UIUtils.dp2pxInt(2)),-1));
-        View border=new View(getContext());ShapeDrawable borderBackground = new ShapeDrawable(); borderBackground.setColor(UiTableStyle.dividerColor(UiThemes.EDITOR));
-        border.setBackground(borderBackground);
-        host.addView(border,new LayoutParams(-1,Math.max(1,UIUtils.dp2pxInt(1)),Gravity.BOTTOM));
         boolean[] modifiers = new boolean[2];
-        row.setOnTouchListener((view, event) -> {
+        line.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
                 modifiers[0] = event.isCtrlPressed(); modifiers[1] = event.isShiftPressed();
             } else if (event.getActionMasked() == icyllis.modernui.view.MotionEvent.ACTION_CANCEL) {
@@ -932,25 +883,61 @@ public final class WorldObjectsView extends FrameLayout {
             }
             return false;
         });
-        row.setOnClickListener(view -> {
+        line.setOnClickListener(view -> {
             boolean toggle=modifiers[0], extend=modifiers[1];
             modifiers[0] = modifiers[1] = false;
             if (!canSelect()) return;
             RowBinding live = rowBindings.get(entry.key());
-            if (live == null || live.button() != row) return;
+            if (live == null || live.cells() != line) return;
             select(live.entry(), toggle, extend);
-            row.requestFocus();
+            line.requestFocus();
             rowClicked(entry.key(),toggle||extend,System.nanoTime());
         });
-        rowViews.put(entry.key(), row);
-        rowBindings.put(entry.key(),new RowBinding(row,checkbox,stripe,line,baseColor,entry));
-        row.setEnabled(false);
+        rowViews.put(entry.key(), line);
+        rowBindings.put(entry.key(),new RowBinding(line,checkbox,index,entry));
+        line.setEnabled(false);
         checkbox.setEnabled(false);
-        rows.addView(host, new LinearLayout.LayoutParams(-1, -2));
+        rows.addView(line, new LinearLayout.LayoutParams(-1, -2));
     }
-    private void cell(UiTableRow row, String text) {
-        TextView cell = UiTableStyle.cell(getContext(), text, UiThemes.EDITOR.text().normal());
-        row.addView(cell, new ViewGroup.LayoutParams(-1, -1));
+    private View createCell(String id, WorldObjectEntry entry, int index, UiCheckBox checkbox) {
+        return switch (id) {
+            case "row_number" -> UiTableStyle.rowNumberCell(getContext(), index + 1);
+            case "selection" -> UiTableStyle.selectionCell(getContext(), checkbox);
+            case "registered" -> {
+                EntityRegistrationView registration = new EntityRegistrationView(getContext(), UiThemes.EDITOR,
+                        entityId(entry), entry.dimension(), true,
+                        () -> canSelect() && rowBindings.containsKey(entry.key())
+                                && isAlive(rowBindings.get(entry.key()).entry()), this::queryNow);
+                bindRegistration(registration, entry);
+                yield registration;
+            }
+            case "value" -> createValueCell(entry, null);
+            case "tags", "graphs", "factions" -> {
+                UiTagStrip tags = new UiTagStrip(getContext());
+                tags.setTags(switch (id) {
+                    case "tags" -> entry.tags();
+                    case "graphs" -> graphNames(entry);
+                    default -> factionNames(entry);
+                });
+                yield tags;
+            }
+            case "data" -> {
+                UiDataSummaryCell data = new UiDataSummaryCell(getContext());
+                bindDataSummary(data, entry);
+                yield data;
+            }
+            default -> UiTableStyle.cell(getContext(), switch (id) {
+                case "name" -> displayName(entry);
+                case "type" -> displayType(entry);
+                case "registry_type" -> WorldObjectEntries.registryType(entry);
+                case "dimension" -> entry.dimension();
+                case "position" -> position(entry);
+                case "loaded" -> tr(isLoaded(entry) ? "loaded" : "unloaded");
+                case "lifetime" -> lifetimeLabel(entry.lifetime());
+                case "updated" -> capturedAt(entry);
+                default -> throw new IllegalArgumentException("Unknown world-query column: " + id);
+            }, UiThemes.EDITOR.text().normal());
+        };
     }
     private boolean canSelect() { return !rowBatch.isRunning() && shown && !disposed && !awaitingScopeResponse && Objects.equals(stateScope, UiStateScopes.current()) && !snapshot.loading(); }
     private void toggleCheckbox(WorldObjectEntry entry, boolean checked) {
@@ -999,9 +986,8 @@ public final class WorldObjectsView extends FrameLayout {
     private void updateSelection() {
         rowBindings.forEach((key,binding)->{
             boolean checked=selected.contains(key);
-            binding.button().setPalette(UiTableStyle.rowPalette(checked,binding.baseColor()));
+            table.styleRow(binding.cells(), binding.index(), checked);
             binding.checkbox().setChecked(checked);
-            binding.stripe().setVisibility(checked?VISIBLE:INVISIBLE);
         });
         List<WorldObjectEntry> entries=sortedEntries();
         long count=entries.stream().filter(entry->selected.contains(entry.key())).count();
@@ -1014,7 +1000,7 @@ public final class WorldObjectsView extends FrameLayout {
     private void updateInteractionState() {
         boolean enabled=canSelect();
         rowBindings.values().forEach(binding->{
-            binding.button().setEnabled(enabled);
+            binding.cells().setEnabled(enabled);
             binding.checkbox().setEnabled(enabled);
             if (binding.cells().getChildAt(columnIndex(typeColumnId())) instanceof EntityRegistrationView control) control.refreshInputState();
         });
@@ -1139,6 +1125,9 @@ public final class WorldObjectsView extends FrameLayout {
             if (mode == Mode.ENTITIES) { provider = extraProvider = ""; range = WorldObjectQuery.Range.GLOBAL; }
             sort = mode == Mode.ENTITIES && value.sort().equals("name") ? "registry_type" : value.sort();
             if (mode == Mode.WORLD && sort.equals("registry_type")) sort = "name";
+            // Older cached scopes can name columns that this mode no longer exposes.
+            // Restore a valid query order before the Table validates its sort indicator.
+            if (!sortableColumns.contains(sort)) sort = mode == Mode.ENTITIES ? "registry_type" : "name";
             sortAscending = value.ascending();
         } finally { restoringState = false; }
     }
@@ -1168,6 +1157,7 @@ public final class WorldObjectsView extends FrameLayout {
         UiStateScopes.removeChangeListener(scopeChanged); removeCallbacks(scopeTask);
         session.removeChangeListener(changed); session.close();
         rowBindings.values().forEach(this::disposeRegistration);
+        table.dispose();
     }
     private UiStateKey<DatabaseViewState.Widths> widthsKey() {
         return mode == Mode.ENTITIES ? DatabaseViewState.ENTITY_WIDTHS : DatabaseViewState.WORLD_WIDTHS;

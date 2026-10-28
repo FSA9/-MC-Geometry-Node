@@ -4,7 +4,6 @@ import com.mine.geometry_node.client.feature.datalibrary.DataLibraryEntryValues;
 
 import com.mine.geometry_node.client.ui.workspace.drag.payload.DataLibraryDragPayload;
 
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.feature.datalibrary.DataLibraryRepository;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
@@ -17,9 +16,9 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTable;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumn;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableBatchWork;
 import com.mine.geometry_node.client.ui.editor.datalibrary.state.DatabaseViewState;
 import com.mine.geometry_node.client.ui.workspace.state.*;
@@ -106,6 +105,7 @@ public final class DataLibraryView extends LinearLayout {
     private final ScrollView scrollHost;
     private final ScrollView typeScroll;
     private final ScrollView rightScroll;
+    private final UiTable table;
     private final DataLibraryValueEditors valueEditors;
     private final DataLibraryEntityTypes entityTypes;
     /** Shared by the header and every cached card; width changes only remeasure views. */
@@ -247,10 +247,6 @@ public final class DataLibraryView extends LinearLayout {
         rightHost = new DataLibraryTreeLayout(context);
         rightHost.setOrientation(VERTICAL);
         rightHost.setPadding(0, 0, 0, px(8));
-        rightScroll = new UiScrollView(context);
-        rightScroll.setFillViewport(true);
-        rightScroll.addView(rightHost, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout leftPanel = new LinearLayout(context);
         leftPanel.setOrientation(VERTICAL);
@@ -315,11 +311,16 @@ public final class DataLibraryView extends LinearLayout {
         results.addView(toolbar.newEntryButton, createParams);
         results.addView(deleteButton, fixed(26, 26));
         rightPanel.addView(results, new LayoutParams(-1, px(UiTableStyle.RESULT_BAR_HEIGHT)));
-        LinearLayout table = new LinearLayout(context);
-        table.setOrientation(VERTICAL);
-        table.addView(createColumnHeader(), new LayoutParams(-1, px(UiTableStyle.HEADER_HEIGHT)));
-        table.addView(rightScroll, new LayoutParams(-1, 0, 1));
-        rightPanel.addView(new UiTableViewport(context, columns, table), new LayoutParams(-1, 0, 1));
+        table = new UiTable(context, UiThemes.EDITOR, columns, columnDefinitions(), rightHost);
+        rightScroll = table.scroll();
+        table.onDismiss(() -> {
+            if (filterPopover != null) filterPopover.dismiss();
+            dismissMenus();
+        });
+        for (String id : List.of("name", "type", "registry_type", "value", "tags"))
+            filterHeaders.put(id, table.header(id));
+        updateFilterIndicator();
+        rightPanel.addView(table, new LayoutParams(-1, 0, 1));
         statusView.setBackground(solid(UiThemes.EDITOR.surface().panel(), 0));
         rightPanel.addView(statusView, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(UiTableStyle.STATUS_BAR_HEIGHT)));
         groupsHost.setOnClickListener(v -> clearSelection());
@@ -776,34 +777,27 @@ public final class DataLibraryView extends LinearLayout {
         breadcrumbTrail.addView(segment, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, px(24)));
     }
 
-    private View createColumnHeader() {
-        UiTableRow header = UiTableStyle.header(getContext(), columns);
-        header.addView(UiTableStyle.rowNumberCell(getContext(), 0), new ViewGroup.LayoutParams(-1, -1));
+    private List<UiTableColumn> columnDefinitions() {
         selectAll.setContentDescription(tr("geometry_node.database.select_all"));
         selectAll.setOnCheckedChangeListener((button, checked) -> {
             if (disposed || suspended) return;
             selection.selectRendered(checked);
             updateSelectionViews();
         });
-        header.addView(UiTableStyle.selectionCell(getContext(), selectAll), new ViewGroup.LayoutParams(-1, -1));
-        header.addView(new View(getContext()), new ViewGroup.LayoutParams(-1, -1));
-        addColumnLabel(header, "name", "geometry_node.data_library.column_name");
-        addColumnLabel(header, "type", "geometry_node.database.type");
-        addColumnLabel(header, "registry_type", "geometry_node.database.registry_type");
-        addColumnLabel(header, "value", "geometry_node.data_library.column_value");
-        addColumnLabel(header, "tags", "geometry_node.data_library.column_tags");
-        header.addView(UiTableStyle.cell(getContext(), tr("geometry_node.database.data.title"), TEXT),
-                new ViewGroup.LayoutParams(-1, -1));
-        return header;
+        return List.of(
+                UiTableColumn.custom("row_number", () -> UiTableStyle.rowNumberCell(getContext(), 0)),
+                UiTableColumn.custom("selection", () -> UiTableStyle.selectionCell(getContext(), selectAll)),
+                UiTableColumn.custom("disclosure", () -> new View(getContext())),
+                filterColumn("name", "geometry_node.data_library.column_name"),
+                filterColumn("type", "geometry_node.database.type"),
+                filterColumn("registry_type", "geometry_node.database.registry_type"),
+                filterColumn("value", "geometry_node.data_library.column_value"),
+                filterColumn("tags", "geometry_node.data_library.column_tags"),
+                UiTableColumn.label("data", tr("geometry_node.database.data.title")));
     }
 
-    private void addColumnLabel(UiTableRow header, String column, String key) {
-        UiTableFilterHeader cell = new UiTableFilterHeader(getContext(), tr(key), null,
-                () -> showColumnFilter(column, filterHeaders.get(column).filterButton()));
-        filterHeaders.put(column, cell);
-        updateFilterIndicator();
-        header.addView(cell,
-                new ViewGroup.LayoutParams(-1, -1));
+    private UiTableColumn filterColumn(String id, String titleKey) {
+        return UiTableColumn.interactive(id, tr(titleKey), null, anchor -> showColumnFilter(id, anchor));
     }
 
     private void collectAncestors(UUID folderId, Map<UUID, DataLibraryRepository.Folder> foldersById,
@@ -851,8 +845,7 @@ public final class DataLibraryView extends LinearLayout {
     private void addEntryRow(LinearLayout rows, DataLibraryRepository.Entry entry, int rowIndex) {
         renderedEntries.add(entry.id());
         View card = createCard(entry);
-        cards.get(entry.id()).presentation.setAlternate((rowIndex & 1) != 0);
-        cards.get(entry.id()).presentation.setRowNumber(rowIndex + 1);
+        cards.get(entry.id()).presentation.setRowIndex(rowIndex);
         if (card.getParent() instanceof ViewGroup parent) parent.removeView(card);
         rows.addView(card, new LayoutParams(-1, -2));
     }
@@ -1010,7 +1003,7 @@ public final class DataLibraryView extends LinearLayout {
     }
 
     private void updateFilterIndicator() {
-        filterHeaders.forEach((key, header) -> header.setFilterActive(switch (key) {
+        filterHeaders.forEach((key, header) -> table.setFilterActive(key, switch (key) {
             case "name" -> !columnFilters.name().isEmpty();
             case "type" -> columnFilters.types().active();
             case "registry_type" -> !registryTypeFilter.isEmpty();
@@ -1045,18 +1038,15 @@ public final class DataLibraryView extends LinearLayout {
         }
     }
 
-    private void dismissFilters() { if (filterPopover != null) filterPopover.dismiss(); }
+    private void dismissFilters() {
+        if (filterPopover != null) filterPopover.dismiss();
+        if (table != null) table.dismiss();
+    }
 
     private void dismissMenus() {
         renameGeneration++;
         if (activeMenu != null) { activeMenu.dismiss(); activeMenu = null; }
         if (renameMenu != null) { renameMenu.dismiss(); renameMenu = null; }
-    }
-
-    @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-        super.onSizeChanged(width, height, oldWidth, oldHeight);
-        dismissFilters();
-        dismissMenus();
     }
 
     private EditText styledNameEditor(String value) {
@@ -1106,7 +1096,7 @@ public final class DataLibraryView extends LinearLayout {
             selection.selectEntry(entry.id(), card.shiftPressed, card.ctrlPressed);
             updateSelectionViews();
         });
-        DataLibraryEntryCard presentation = new DataLibraryEntryCard(card, columns, entry.key(),
+        DataLibraryEntryCard presentation = new DataLibraryEntryCard(card, table, entry.key(),
                 displayTypeName(entry.type()), entry.type(),
                 selected.contains(key(entry)), () -> toggleEntry(entry.id()), checked -> {
             if (checked) selected.add(key(entry)); else selected.remove(key(entry));
@@ -1563,6 +1553,7 @@ public final class DataLibraryView extends LinearLayout {
         cancelInternalDrag();
         unregisterDropTarget();
         repository.removeChangeListener(repositoryChanged);
+        table.dispose();
     }
     public void onHide() {
         saveState();

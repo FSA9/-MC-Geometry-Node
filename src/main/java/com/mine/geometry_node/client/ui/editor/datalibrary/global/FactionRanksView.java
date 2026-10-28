@@ -2,15 +2,14 @@ package com.mine.geometry_node.client.ui.editor.datalibrary.global;
 
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
 import com.mine.geometry_node.client.ui.components.integration.faction.*;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
-import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.faction.model.FactionDefinition;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
+import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.*;
@@ -31,7 +30,8 @@ final class FactionRanksView extends LinearLayout {
             new UiTableColumns.Column("level", 120, 90, true),
             new UiTableColumns.Column("name", 300, 160, true),
             new UiTableColumns.Column("remove", 42, 42, false)));
-    private final LinearLayout body;
+    private final UiTable table;
+    private final UiTableItems<Integer, Map.Entry<Integer, RichTextValue>> items;
     private final UiIconButton add;
     private final Map<Integer, Row> rows = new TreeMap<>();
     private FactionDefinition faction;
@@ -48,57 +48,63 @@ final class FactionRanksView extends LinearLayout {
             int next = 1; while (faction.ranks().containsKey(next)) next++;
             actions.put(null, next, RichTextValue.plain(tr("new_rank")));
         });
-        LinearLayout table = new LinearLayout(context); table.setOrientation(VERTICAL);
-        UiTableRow header = UiTableStyle.header(context, columns, theme);
-        header.addView(UiTableStyle.cell(context, tr("level"), theme));
-        header.addView(UiTableStyle.cell(context, tr("rank_name"), theme)); header.addView(new FrameLayout(context));
-        table.addView(header, new LayoutParams(-1, px(UiTableStyle.DETAILED_HEADER_HEIGHT)));
-        body = new LinearLayout(context); body.setOrientation(VERTICAL);
-        UiScrollView scroll = new UiScrollView(context, theme.scroll()); scroll.addView(body, new FrameLayout.LayoutParams(-1, -2));
-        table.addView(scroll, new LayoutParams(-1, 0, 1));
-        addView(new UiTableViewport(context, columns, table, theme), new LayoutParams(-1, 0, 1));
+        table = new UiTable(context, theme, columns, List.of(
+                UiTableColumn.label("level", tr("level")),
+                UiTableColumn.label("name", tr("rank_name")),
+                UiTableColumn.label("remove", "")), UiTableItems.body(context));
+        items = new UiTableItems<>(table, Map.Entry::getKey, this::createItemRow);
+        items.setReorderBlocked(() -> rows.values().stream().anyMatch(row -> row.number().isFocused()));
+        addView(table, new LayoutParams(-1, 0, 1));
     }
     void refresh(FactionDefinition value) {
         faction = value;
-        for (int level : List.copyOf(rows.keySet())) if (!value.ranks().containsKey(level)) {
-            Row row = rows.remove(level); row.number().setEditable(false); row.name().setEditable(false); body.removeView(row.view());
-        }
-        int index = 0;
-        for (var rank : new TreeMap<>(value.ranks()).entrySet()) {
-            Row row = rows.computeIfAbsent(rank.getKey(), this::createRow);
-            row.number().refresh(rank.getKey()); row.name().refresh(rank.getValue());
-            row.view().setDataStyle(index % 2 != 0);
-            if (row.view().getParent() == null) body.addView(row.view(), index, new LayoutParams(-1, px(UiTableStyle.DETAILED_ROW_HEIGHT)));
-            row.number().setEditable(canEdit()); row.name().setEditable(canEdit()); row.remove().setEnabled(canEdit()); index++;
-        }
+        items.replace(new ArrayList<>(new TreeMap<>(value.ranks()).entrySet()));
         add.setEnabled(canEdit());
     }
     void setActive(boolean value) {
         active = value;
         rows.values().forEach(row -> { row.number().setEditable(canEdit()); row.name().setEditable(canEdit()); row.remove().setEnabled(canEdit()); });
         add.setEnabled(canEdit());
+        if (!value) table.dismiss();
     }
     private boolean canEdit() { return active && editable.getAsBoolean(); }
+    private UiTableItems.Row<Map.Entry<Integer, RichTextValue>> createItemRow(Map.Entry<Integer, RichTextValue> item) {
+        int level = item.getKey();
+        Row row = createRow(level);
+        rows.put(level, row);
+        return new UiTableItems.Row<>() {
+            @Override public View view() { return row.view(); }
+            @Override public void bind(Map.Entry<Integer, RichTextValue> current, int index) {
+                row.number().refresh(current.getKey()); row.name().refresh(current.getValue());
+                row.number().setEditable(canEdit()); row.name().setEditable(canEdit()); row.remove().setEnabled(canEdit());
+            }
+            @Override public void dispose() {
+                // UiTableItems must invoke this before detaching a deleted row.
+                row.number().dispose(); row.name().setEditable(false); row.remove().setEnabled(false);
+                rows.remove(level, row);
+            }
+        };
+    }
     private Row createRow(int level) {
-        Context context = getContext(); UiTableRow cells = new UiTableRow(context, columns, theme);
+        Context context = getContext();
         FactionIntegerInput number = new FactionIntegerInput(context, theme, level, Integer.MIN_VALUE, Integer.MAX_VALUE, next -> {
             if (!canEdit() || faction == null || !faction.ranks().containsKey(level) || faction.ranks().containsKey(next))
                 throw new IllegalArgumentException("Duplicate or stale faction rank");
             actions.put(level, next, faction.ranks().get(level));
         });
-        UIUtils.setLockedTextSize(number, UiMetrics.TEXT_BODY);
+        UIUtils.setLockedTextSize(number, UiTableStyle.CELL_TEXT_SIZE_DP);
         FrameLayout numberCell = new FrameLayout(context);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, px(34), icyllis.modernui.view.Gravity.CENTER_VERTICAL);
-        params.leftMargin = px(12); params.rightMargin = px(12); numberCell.addView(number, params);
+        numberCell.addView(number, params);
         FactionRichField name = new FactionRichField(context, theme, tr("edit_rank"), false, FactionRichField.Appearance.INLINE, next -> {
             if (canEdit() && faction.ranks().containsKey(level)) actions.put(level, level, next);
-        }); name.setPadding(px(9), 0, px(6), 0);
+        });
         UiIconButton remove = UiIconButton.createThemed(context, theme, SvgIconView.Icon.CLEAR,
                 tr("remove_rank"), UiIconButton.Preset.INLINE);
         remove.setOnClickListener(view -> { if (canEdit()) actions.remove(level); });
         FrameLayout action = new FrameLayout(context);
         action.addView(remove, new FrameLayout.LayoutParams(px(28), px(28), icyllis.modernui.view.Gravity.CENTER));
-        cells.addView(numberCell); cells.addView(name); cells.addView(action);
+        UiTableRow cells = table.createRow(Map.of("level", numberCell, "name", name, "remove", action));
         return new Row(cells, number, name, remove);
     }
 }

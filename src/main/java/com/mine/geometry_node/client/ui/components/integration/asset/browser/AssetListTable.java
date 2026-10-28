@@ -4,15 +4,16 @@ import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
 import com.mine.geometry_node.client.feature.asset.query.AssetListQuery;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
+import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.View;
 import net.minecraft.network.chat.Component;
 
-import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /** Asset-specific table columns and filter editors; shared table components own layout and interaction. */
@@ -24,31 +25,32 @@ final class AssetListTable {
             new UiTableColumns.Column("description", 260, 140, true),
             new UiTableColumns.Column("tags", 180, 100, true),
             new UiTableColumns.Column("favorite", 72, 64, true))); }
-    final UiTableRow header;
+    final UiTable table;
     private final UiColumnFilterPopover filters;
     private final UiCheckBox selectAll;
-    private final Map<AssetListQuery.Column, UiTableFilterHeader> headers = new EnumMap<>(AssetListQuery.Column.class);
     private final Map<String, String> typeOptions = new LinkedHashMap<>();
     private final Runnable changed;
     private AssetListQuery query = AssetListQuery.empty();
 
-    AssetListTable(Context context, View owner, Runnable changed, Consumer<Boolean> select) {
+    AssetListTable(Context context, View owner, View content, Runnable changed, Consumer<Boolean> select) {
         this.changed = changed;
         filters = new UiColumnFilterPopover(context, owner);
-        header = UiTableStyle.header(context, columns);
         selectAll = new UiCheckBox(context);
         selectAll.setContentDescription(tr("geometry_node.database.select_all"));
         selectAll.setOnCheckedChangeListener((view, checked) -> select.accept(checked));
-        header.addView(UiTableStyle.selectionCell(context, selectAll));
-        addColumn(context, AssetListQuery.Column.TYPE, tr("geometry_node.database.type"));
-        addColumn(context, AssetListQuery.Column.NAME, tr("geometry_node.data_library.column_name"));
-        addColumn(context, AssetListQuery.Column.DESCRIPTION, tr("geometry_node.asset_library.column.description"));
-        addColumn(context, AssetListQuery.Column.TAGS, tr("geometry_node.data_library.column_tags"));
-        addColumn(context, AssetListQuery.Column.FAVORITE, tr("geometry_node.asset_library.column.favorite"));
+        table = new UiTable(context, UiThemes.EDITOR, columns, List.of(
+                UiTableColumn.custom("selection", () -> UiTableStyle.selectionCell(context, selectAll)),
+                column(AssetListQuery.Column.TYPE, tr("geometry_node.database.type")),
+                column(AssetListQuery.Column.NAME, tr("geometry_node.data_library.column_name")),
+                column(AssetListQuery.Column.DESCRIPTION, tr("geometry_node.asset_library.column.description")),
+                column(AssetListQuery.Column.TAGS, tr("geometry_node.data_library.column_tags")),
+                column(AssetListQuery.Column.FAVORITE, tr("geometry_node.asset_library.column.favorite"))), content);
+        table.onDismiss(filters::dismiss);
+        updateIndicators();
     }
 
     AssetListQuery query() { return query; }
-    void dismiss() { filters.dismiss(); }
+    void dismiss() { table.dismiss(); }
     void clear() { query = query.withoutFilters(); updateIndicators(); }
     void setEntries(List<AssetEntry> entries) {
         typeOptions.clear();
@@ -65,14 +67,16 @@ final class AssetListTable {
         selectAll.setIndeterminate(selected > 0 && selected < total);
         selectAll.setEnabled(total > 0);
     }
-    private void addColumn(Context context, AssetListQuery.Column column, String label) {
-        UiTableFilterHeader cell = new UiTableFilterHeader(context, label, () -> apply(query.sortBy(column)),
-                () -> showFilter(column, label));
-        headers.put(column, cell);
-        header.addView(cell);
+    private UiTableColumn column(AssetListQuery.Column column, String label) {
+        return UiTableColumn.interactive(id(column), label, () -> sortBy(column),
+                anchor -> showFilter(column, label, anchor));
     }
-    private void showFilter(AssetListQuery.Column column, String title) {
-        View anchor = headers.get(column).filterButton();
+    private void sortBy(AssetListQuery.Column column) {
+        UiTable.Sort sort = table.toggleSort(id(column));
+        apply(new AssetListQuery(query.name(), query.description(), query.types(), query.includedTags(),
+                query.excludedTags(), query.favorites(), column, sort.direction() == 2));
+    }
+    private void showFilter(AssetListQuery.Column column, String title, View anchor) {
         switch (column) {
             case NAME -> filters.showText(anchor, title, query.name(), text -> apply(query.withName(text)));
             case DESCRIPTION -> filters.showText(anchor, title, query.description(), text -> apply(query.withDescription(text)));
@@ -86,13 +90,15 @@ final class AssetListTable {
     }
     private void apply(AssetListQuery value) { query = value; updateIndicators(); changed.run(); }
     private void updateIndicators() {
-        headers.forEach((column, header) -> header.setFilterActive(switch (column) {
+        for (AssetListQuery.Column column : AssetListQuery.Column.values()) table.setFilterActive(id(column), switch (column) {
             case NAME -> !query.name().isEmpty();
             case DESCRIPTION -> !query.description().isEmpty();
             case TYPE -> query.types().active();
             case TAGS -> !query.includedTags().isEmpty() || !query.excludedTags().isEmpty();
             case FAVORITE -> query.favorites().active();
-        }));
+        });
+        table.setSort(id(query.sort()), query.descending() ? 2 : 1);
     }
+    private static String id(AssetListQuery.Column column) { return column.name().toLowerCase(Locale.ROOT); }
     private static String tr(String key) { return Component.translatable(key).getString(); }
 }

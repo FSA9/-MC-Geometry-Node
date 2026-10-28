@@ -67,7 +67,8 @@ public class AssetNavigationPanel extends UiScrollView {
         mExpanded.put(AssetSourceKind.REMOTE, true);
         mExpanded.put(AssetSourceKind.LOCAL, true);
         mSidebar = verticalLayout();
-        mSidebar.setBackground(colorDrawable(UiThemes.EDITOR.surface().root()));
+        setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
+        mSidebar.setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
         addView(mSidebar, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         buildSidebar();

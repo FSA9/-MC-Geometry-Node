@@ -15,7 +15,7 @@ import icyllis.modernui.widget.FrameLayout;
 
 /** Shared table presentation, independent of the rows' domain and interaction model. */
 public final class UiTableStyle {
-    public static final int HEADER_HEIGHT = 30;
+    public static final int HEADER_HEIGHT = 36;
     public static final int CELL_TEXT_SIZE_DP = 12;
     public static final int RESULT_BAR_HEIGHT = 38;
     public static final int STATUS_BAR_HEIGHT = 28;
@@ -23,7 +23,7 @@ public final class UiTableStyle {
     public static final int CHECKBOX_SIZE = 16;
     public static final int SELECTION_COLUMN_WIDTH = 32;
     public static final int ROW_HEIGHT = 44;
-    public static final int DETAILED_HEADER_HEIGHT = 36;
+    public static final int DETAILED_HEADER_HEIGHT = HEADER_HEIGHT;
     public static final int DETAILED_ROW_HEIGHT = 66;
     public static final int MIN_COLUMN_WIDTH = 24;
     public static final int ROW_NUMBER_WIDTH = 36;

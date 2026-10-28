@@ -11,12 +11,11 @@ import com.mine.geometry_node.client.ui.components.integration.valuepreview.Enti
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ItemPreviewCell;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTable;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
@@ -29,6 +28,8 @@ import java.util.function.Consumer;
 /** Compact result row; the existing drag surface also hosts the full inline value editor. */
 final class DataLibraryEntryCard {
     private final DataLibraryDragSurface surface;
+    private final UiTable table;
+    private final UiTableRow cells;
     private final TextView name;
     private final TextView value;
     private final TextView registryType;
@@ -42,51 +43,53 @@ final class DataLibraryEntryCard {
     private final SvgIconView disclosure;
     private boolean selected;
     private boolean expanded;
-    private boolean alternate;
+    private int rowIndex;
 
     static final int DISCLOSURE_WIDTH = 24;
 
-    DataLibraryEntryCard(DataLibraryDragSurface surface, UiTableColumns columns,
+    DataLibraryEntryCard(DataLibraryDragSurface surface, UiTable table,
                          String title, String typeName, PortType type,
                          boolean selected, Runnable toggleExpanded, Consumer<Boolean> selectionChanged) {
         this.surface = surface;
+        this.table = table;
         Context context = surface.getContext();
         surface.setOrientation(LinearLayout.VERTICAL);
         surface.setPadding(0, 0, 0, 0);
-        surface.setResultRow();
-        UiTableRow header = new UiTableRow(context, columns);
-        header.setMinimumHeight(px(UiTableStyle.ROW_HEIGHT));
         rowNumber = UiTableStyle.rowNumberCell(context, 1);
-        header.addView(rowNumber, new ViewGroup.LayoutParams(-1, -1));
         check = new UiCheckBox(context);
         check.setContentDescription(tr("geometry_node.data_library.select_entry"));
         check.setOnCheckedChangeListener((button, checked) -> selectionChanged.accept(checked));
-        header.addView(UiTableStyle.selectionCell(context, check), new ViewGroup.LayoutParams(-1, -1));
         disclosure = new SvgIconView(context, SvgIconView.Icon.forExpandedState(false), UiThemes.EDITOR.text().secondary());
         UiIconButton toggle = UiIconButton.createThemed(context, UiThemes.EDITOR,
                 disclosure, UiIconButton.Preset.INLINE);
         toggle.setContentDescription(tr("geometry_node.data_library.expand_entry"));
         toggle.setOnClickListener(view -> toggleExpanded.run());
-        header.addView(toggle, new ViewGroup.LayoutParams(-1, px(24)));
+        toggle.setLayoutParams(new ViewGroup.LayoutParams(-1, px(24)));
         name = UiTableStyle.cell(context, title, UiThemes.EDITOR.text().normal());
-        header.addView(name, new ViewGroup.LayoutParams(-1, -1));
-        header.addView(UiTableStyle.cell(context, typeName, UiThemes.EDITOR.text().normal()),
-                new ViewGroup.LayoutParams(-1, -1));
         registryType = UiTableStyle.cell(context, "", UiThemes.EDITOR.text().normal());
-        header.addView(registryType, new ViewGroup.LayoutParams(-1, -1));
         boolean entity = type == PortType.ENTITY || type == PortType.ENTITY_TEMPLATE;
         boolean item = type == PortType.ITEM_STACK;
         entityPreview = entity ? new EntityPreviewCell(context) : null;
-        if (entityPreview != null) entityPreview.setVisibilityRow(header);
         itemPreview = item ? new ItemPreviewCell(context) : null;
-        if (itemPreview != null) itemPreview.setVisibilityRow(header);
         value = entity || item ? null : UiTableStyle.cell(context, "", UiThemes.EDITOR.text().secondary());
-        header.addView(entity ? entityPreview : item ? itemPreview : value, new ViewGroup.LayoutParams(-1, -1));
         tags = new UiTagStrip(context);
-        header.addView(tags, new ViewGroup.LayoutParams(-1, -1));
         data = new UiDataSummaryCell(context);
-        header.addView(data, new ViewGroup.LayoutParams(-1, -1));
-        surface.addView(header, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
+        cells = table.createRow(id -> switch (id) {
+            case "row_number" -> rowNumber;
+            case "selection" -> UiTableStyle.selectionCell(context, check);
+            case "disclosure" -> toggle;
+            case "name" -> name;
+            case "type" -> UiTableStyle.cell(context, typeName, UiThemes.EDITOR.text().normal());
+            case "registry_type" -> registryType;
+            case "value" -> entity ? entityPreview : item ? itemPreview : value;
+            case "tags" -> tags;
+            case "data" -> data;
+            default -> throw new IllegalArgumentException("Unknown data-library column: " + id);
+        });
+        cells.setSurfaceOwner(surface);
+        if (entityPreview != null) entityPreview.setVisibilityRow(cells);
+        if (itemPreview != null) itemPreview.setVisibilityRow(cells);
+        surface.addView(cells, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
         this.selected = selected;
         check.setChecked(selected);
         applySelectionBackground();
@@ -94,14 +97,13 @@ final class DataLibraryEntryCard {
 
     DataLibraryDragSurface surface() { return surface; }
     TextView nameView() { return name; }
-    void setRowNumber(int number) { rowNumber.setText(Integer.toString(number)); }
-    boolean isExpanded() { return expanded; }
-    void setManageDataAction(Runnable action) { manageData = action; }
-
-    void setAlternate(boolean alternate) {
-        this.alternate = alternate;
+    void setRowIndex(int index) {
+        rowIndex = index;
+        rowNumber.setText(Integer.toString(index + 1));
         applySelectionBackground();
     }
+    boolean isExpanded() { return expanded; }
+    void setManageDataAction(Runnable action) { manageData = action; }
 
     void setName(String value) {
         if (!Objects.equals(name.getText().toString(), value)) name.setText(value);
@@ -146,9 +148,6 @@ final class DataLibraryEntryCard {
     void setExpandedContent(boolean value, View editor) {
         while (surface.getChildCount() > 1) surface.removeViewAt(1);
         if (value) {
-            View divider = new View(surface.getContext());
-            divider.setBackground(background(UiTableStyle.dividerColor(UiThemes.EDITOR)));
-            surface.addView(divider, new LinearLayout.LayoutParams(-1, px(1)));
             surface.addView(Objects.requireNonNull(editor),
                     new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
@@ -159,13 +158,7 @@ final class DataLibraryEntryCard {
     }
 
     private void applySelectionBackground() {
-        surface.setResultRowPalette(UiTableStyle.rowPalette(selected, UiTableStyle.rowColor(alternate)));
-    }
-
-    private static ShapeDrawable background(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        return drawable;
+        table.styleRow(cells, rowIndex, selected);
     }
 
     private static int px(float value) { return UIUtils.dp2pxInt(value); }

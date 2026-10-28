@@ -18,7 +18,7 @@ public final class UiTableRow extends ViewGroup {
     private final UiTableColumns columns;
     private boolean header;
     private boolean dataStyle, alternate, pointerInside;
-    private final icyllis.modernui.graphics.drawable.ShapeDrawable dataBackground = new icyllis.modernui.graphics.drawable.ShapeDrawable();
+    private View surfaceOwner = this;
     private int dragging = -1;
     private int hovered = -1;
     private float lastRawX, lastRawY;
@@ -45,13 +45,25 @@ public final class UiTableRow extends ViewGroup {
     public void setDataStyle(boolean alternate) {
         this.dataStyle = true;
         this.alternate = alternate;
-        if (getBackground() != dataBackground) setBackground(dataBackground);
         updateDataBackground();
     }
 
     private void updateDataBackground() {
-        if (dataStyle) dataBackground.setColor(pointerInside ? theme.surface().header()
-                : alternate ? theme.control().input() : theme.surface().panel());
+        if (dataStyle) UiTableRowAppearance.apply(surfaceOwner, alternate ? 1 : 0, isSelected(), theme);
+    }
+
+    /** Gesture/expansion hosts can own the one row surface; cells remain transparent. */
+    public void setSurfaceOwner(View owner) {
+        java.util.Objects.requireNonNull(owner);
+        if (surfaceOwner == this && owner != this) setBackground(null);
+        surfaceOwner = owner;
+        updateDataBackground();
+    }
+
+    @Override public void setSelected(boolean selected) {
+        boolean changed = selected != isSelected();
+        super.setSelected(selected);
+        if (changed) updateDataBackground();
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {
@@ -64,7 +76,12 @@ public final class UiTableRow extends ViewGroup {
             // MATCH_PARENT must not consume the parent's available height before the row has a height.
             if (!exactHeight && requestedHeight == LayoutParams.MATCH_PARENT)
                 requestedHeight = LayoutParams.WRAP_CONTENT;
-            int childHeightSpec = getChildMeasureSpec(heightSpec, 0, requestedHeight);
+            // A passive View's default AT_MOST measurement consumes all available space.
+            // Discover intrinsic cell height first; MATCH_PARENT is resolved against the row
+            // in the second pass, never against the entire table viewport.
+            int childHeightSpec = !exactHeight && requestedHeight == LayoutParams.WRAP_CONTENT
+                    ? MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                    : getChildMeasureSpec(heightSpec, 0, requestedHeight);
             child.measure(MeasureSpec.makeMeasureSpec(columns.width(i), MeasureSpec.EXACTLY), childHeightSpec);
             maxHeight = Math.max(maxHeight, child.getMeasuredHeight());
         }
@@ -164,6 +181,8 @@ public final class UiTableRow extends ViewGroup {
 
     @Override public void onWindowFocusChanged(boolean focused) {
         if (!focused) {
+            pointerInside = false;
+            if (dataStyle) surfaceOwner.setHovered(false);
             hovered = -1;
             finishDrag();
             invalidate();
@@ -178,6 +197,8 @@ public final class UiTableRow extends ViewGroup {
         int next = event.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? -1 : boundary(event.getX());
         if (hovered != next) { hovered = next; invalidate(); }
         boolean handled = super.dispatchHoverEvent(event);
+        // Child inputs may consume hover; the whole row must still share its hover surface.
+        if (dataStyle) surfaceOwner.setHovered(pointerInside);
         updateDataBackground();
         return handled;
     }
@@ -186,10 +207,6 @@ public final class UiTableRow extends ViewGroup {
         super.dispatchDraw(canvas);
         if (!header && !dataStyle) return;
         Paint paint = Paint.obtain();
-        if (dataStyle) {
-            paint.setColor(UiTableStyle.dividerColor(theme));
-            canvas.drawRect(0, getHeight() - Math.max(1, UIUtils.dp2px(1)), getWidth(), getHeight(), paint);
-        }
         if (!header) { paint.recycle(); return; }
         int x = 0;
         for (int i = 0; i < columns.size(); i++) {
@@ -206,6 +223,7 @@ public final class UiTableRow extends ViewGroup {
         finishDrag();
         hovered = -1;
         pointerInside = false;
+        if (dataStyle) surfaceOwner.setHovered(false);
         updateDataBackground();
         super.onDetachedFromWindow();
     }

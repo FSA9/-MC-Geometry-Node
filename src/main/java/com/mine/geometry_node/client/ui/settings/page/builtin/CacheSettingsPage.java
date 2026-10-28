@@ -7,7 +7,9 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumns;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableRow;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
-import com.mine.geometry_node.client.ui.components.composite.table.UiTableViewport;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTable;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableColumn;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableItems;
 import com.mine.geometry_node.client.platform.ClientServerIdentity;
 import com.mine.geometry_node.core.cache.CacheClearRequest;
 import com.mine.geometry_node.core.cache.CacheClearResult;
@@ -64,11 +66,11 @@ public final class CacheSettingsPage implements SettingsPage {
     private final CacheOperations cache;
     private final Executor uiExecutor;
     private final SettingsPageContext context;
-    private final LinearLayout registryHost;
     private final TextView totalsValue;
     private final UiActionButton refreshButton;
     private final LinearLayout detailsGroup;
-    private final UiTableViewport detailsBody;
+    private final UiTable detailsBody;
+    private final UiTableItems<String, CacheReport> reportItems;
     private final SvgIconView detailsDisclosure;
     private final UiTableColumns columns = new UiTableColumns(List.of(
             new UiTableColumns.Column("name", 260, 150, true),
@@ -76,7 +78,6 @@ public final class CacheSettingsPage implements SettingsPage {
             new UiTableColumns.Column("size", 160, 120, true),
             new UiTableColumns.Column("clear", 40, 40, false)));
     private final List<UiIconButton> rowClearButtons = new ArrayList<>();
-    private final UiActionButton sizeHeader;
     private boolean detailsExpanded;
     private boolean detailsSearchExpanded;
     private boolean sizeDescending = true;
@@ -152,8 +153,6 @@ public final class CacheSettingsPage implements SettingsPage {
         totalsValue = text(context, tr(KEY + "loading"), 10.0f, COLOR_TEXT);
         statusValue = text(context, "", 9.5f, COLOR_MUTED);
         statusValue.setSingleLine(false);
-        registryHost = new LinearLayout(context.uiContext());
-        registryHost.setOrientation(LinearLayout.VERTICAL);
         content.addView(actions, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(34)));
         content.addView(totalsValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
         content.addView(statusValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -178,23 +177,14 @@ public final class CacheSettingsPage implements SettingsPage {
             updateDetailsExpansion();
         });
         detailsGroup.addView(detailsHeader, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(30)));
-        LinearLayout table = new LinearLayout(context.uiContext());
-        table.setOrientation(LinearLayout.VERTICAL);
-        UiTableRow tableHeader = UiTableStyle.header(context.uiContext(), columns);
-        tableHeader.addView(UiTableStyle.cell(context.uiContext(), tr(KEY + "name"), COLOR_TEXT));
-        tableHeader.addView(UiTableStyle.cell(context.uiContext(), tr(KEY + "type"), COLOR_TEXT));
-        sizeHeader = UiTableStyle.headerCell(context.uiContext(), tr(KEY + "size") + " ↓", () -> {
-            sizeDescending = !sizeDescending;
-            rebuildReports();
-            applySearch(searchQuery);
-        });
-        sizeHeader.setContentDescription(tr(KEY + "sort_ascending"));
-        tableHeader.addView(sizeHeader);
-        tableHeader.addView(UiTableStyle.cell(context.uiContext(), "", COLOR_TEXT));
-        table.addView(tableHeader, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(UiTableStyle.HEADER_HEIGHT)));
-        table.addView(registryHost, new LinearLayout.LayoutParams(-1, -2));
-        detailsBody = new UiTableViewport(context.uiContext(), columns, table);
-        table.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+        LinearLayout body = UiTableItems.body(context.uiContext());
+        detailsBody = new UiTable(context.uiContext(), UiThemes.EDITOR, columns, List.of(
+                UiTableColumn.label("name", tr(KEY + "name")),
+                UiTableColumn.label("domain", tr(KEY + "type")),
+                UiTableColumn.interactive("size", tr(KEY + "size"), this::toggleSizeOrder, null),
+                UiTableColumn.label("clear", "")), body, UiTable.Layout.CONTENT);
+        detailsBody.setSort("size", 2);
+        reportItems = new UiTableItems<>(detailsBody, report -> report.descriptor().id(), report -> new ReportRow());
         detailsGroup.addView(detailsBody, new LinearLayout.LayoutParams(-1, -2));
         updateDetailsExpansion();
         LinearLayout.LayoutParams detailsParams = new LinearLayout.LayoutParams(-1, -2);
@@ -272,11 +262,8 @@ public final class CacheSettingsPage implements SettingsPage {
     }
 
     private void rebuildReports() {
-        registryHost.removeAllViews();
-        rowClearButtons.clear();
         reports = reports.stream().sorted(usageOrder(sizeDescending)).toList();
-        sizeHeader.setText(tr(KEY + "size") + (sizeDescending ? " ↓" : " ↑"));
-        sizeHeader.setContentDescription(tr(KEY + (sizeDescending ? "sort_ascending" : "sort_descending")));
+        detailsBody.setSort("size", sizeDescending ? 2 : 1);
         long memory = 0, disk = 0;
         boolean memoryUnknown = false, diskUnknown = false;
         for (CacheReport report : reports) {
@@ -285,34 +272,67 @@ public final class CacheSettingsPage implements SettingsPage {
             else memory = saturatedAdd(memory, stats.memoryBytes());
             if (stats.diskBytes() < 0) diskUnknown = true;
             else disk = saturatedAdd(disk, stats.diskBytes());
-            UiTableRow row = new UiTableRow(context.uiContext(), columns);
-            row.setBackground(rect(UiTableStyle.rowColor(registryHost.getChildCount() % 2 != 0), 0));
-            row.addView(UiTableStyle.cell(context.uiContext(), cacheName(report.descriptor()), COLOR_TEXT));
-            row.addView(UiTableStyle.cell(context.uiContext(),
-                    tr(KEY + "domain." + report.descriptor().domain().name().toLowerCase(Locale.ROOT)), COLOR_MUTED));
-            TextView size = UiTableStyle.cell(context.uiContext(), displaySize(report), COLOR_TEXT);
-            size.setTooltipText(report.error() != null && !report.error().isBlank()
-                    ? tr(KEY + "inspect_failed") + ": " + report.error()
-                    : Component.translatable(KEY + "size_breakdown", formatBytes(stats.memoryBytes()),
-                            formatBytes(stats.diskBytes())).getString());
-            row.addView(size);
-            UiIconButton clear = UiIconButton.createThemed(context.uiContext(), UiThemes.EDITOR,
-                    SvgIconView.Icon.CLEAR, tr(KEY + "clear"), UiIconButton.Preset.INLINE);
-            clear.setTag(report.clearable());
-            clear.setEnabled(!clearing && report.clearable());
-            clear.setOnClickListener(view -> runClear(() ->
-                    cache.clear(report.descriptor().id(), CacheClearRequest.user())));
-            rowClearButtons.add(clear);
-            FrameLayout action = new FrameLayout(context.uiContext());
-            FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
-                    UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24));
-            buttonParams.gravity = Gravity.CENTER;
-            action.addView(clear, buttonParams);
-            row.addView(action);
-            registryHost.addView(row, new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(32)));
         }
         totalsValue.setText(Component.translatable(KEY + "total", reports.size(), partialBytes(memory, memoryUnknown),
                 partialBytes(disk, diskUnknown)).getString());
+    }
+
+    private void toggleSizeOrder() {
+        sizeDescending = detailsBody.toggleSort("size").direction() == 2;
+        rebuildReports();
+        applySearch(searchQuery);
+    }
+
+    /** Reused by cache ID; actions always read the report from the latest bind. */
+    private final class ReportRow implements UiTableItems.Row<CacheReport> {
+        private final TextView name = UiTableStyle.cell(context.uiContext(), "", COLOR_TEXT);
+        private final TextView domain = UiTableStyle.cell(context.uiContext(), "", COLOR_MUTED);
+        private final TextView size = UiTableStyle.cell(context.uiContext(), "", COLOR_TEXT);
+        private final UiIconButton clear = UiIconButton.createThemed(context.uiContext(), UiThemes.EDITOR,
+                SvgIconView.Icon.CLEAR, tr(KEY + "clear"), UiIconButton.Preset.INLINE);
+        private final UiTableRow row;
+        private CacheReport report;
+
+        private ReportRow() {
+            FrameLayout action = new FrameLayout(context.uiContext());
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                    UIUtils.dp2pxInt(24), UIUtils.dp2pxInt(24), Gravity.CENTER);
+            action.addView(clear, params);
+            row = detailsBody.createRow(id -> switch (id) {
+                case "name" -> name;
+                case "domain" -> domain;
+                case "size" -> size;
+                case "clear" -> action;
+                default -> throw new IllegalArgumentException("Unknown cache column: " + id);
+            });
+            clear.setOnClickListener(view -> {
+                CacheReport current = report;
+                if (current != null && current.clearable()) runClear(() ->
+                        cache.clear(current.descriptor().id(), CacheClearRequest.user()));
+            });
+            rowClearButtons.add(clear);
+        }
+
+        @Override public View view() { return row; }
+
+        @Override public void bind(CacheReport item, int index) {
+            report = item;
+            name.setText(cacheName(item.descriptor()));
+            domain.setText(tr(KEY + "domain." + item.descriptor().domain().name().toLowerCase(Locale.ROOT)));
+            size.setText(displaySize(item));
+            CacheStats stats = item.stats();
+            size.setTooltipText(hasError(item) ? tr(KEY + "inspect_failed") + ": " + item.error()
+                    : Component.translatable(KEY + "size_breakdown", formatBytes(stats.memoryBytes()),
+                            formatBytes(stats.diskBytes())).getString());
+            boolean actionable = index >= 0 && item.clearable();
+            clear.setTag(actionable);
+            clear.setEnabled(!clearing && actionable);
+        }
+
+        @Override public void dispose() {
+            report = null;
+            rowClearButtons.remove(clear);
+        }
     }
 
     /** Incomplete/failed measurements remain last in both directions; ties have a stable identity order. */
@@ -382,15 +402,14 @@ public final class CacheSettingsPage implements SettingsPage {
         searchQuery = value;
         boolean registryMatches = value.isEmpty() || (tr("geometry_node.settings.page.cache") + " " + tr(KEY + "details"))
                 .toLowerCase(Locale.ROOT).contains(value);
-        boolean anyRowMatches = false;
-        for (int i = 0; i < reports.size(); i++) {
-            CacheDescriptor descriptor = reports.get(i).descriptor();
-            boolean rowMatches = registryMatches || (cacheName(descriptor) + " " + descriptor.id()
+        Predicate<CacheReport> visible = report -> {
+            CacheDescriptor descriptor = report.descriptor();
+            return registryMatches || (cacheName(descriptor) + " " + descriptor.id()
                     + " " + tr(KEY + "domain." + descriptor.domain().name().toLowerCase(Locale.ROOT)))
                     .toLowerCase(Locale.ROOT).contains(value);
-            anyRowMatches |= rowMatches;
-            registryHost.getChildAt(i).setVisibility(rowMatches ? View.VISIBLE : View.GONE);
-        }
+        };
+        reportItems.replace(reports, visible);
+        boolean anyRowMatches = reports.stream().anyMatch(visible);
         detailsGroup.setVisibility(registryMatches || anyRowMatches ? View.VISIBLE : View.GONE);
         detailsSearchExpanded = !value.isEmpty() && (registryMatches || anyRowMatches);
         updateDetailsExpansion();
@@ -403,6 +422,8 @@ public final class CacheSettingsPage implements SettingsPage {
         disposed = true;
         ++usageRequest;
         reports = List.of();
+        reportItems.dispose();
+        detailsBody.dispose();
         rowClearButtons.clear();
         root.removeAllViews();
     }

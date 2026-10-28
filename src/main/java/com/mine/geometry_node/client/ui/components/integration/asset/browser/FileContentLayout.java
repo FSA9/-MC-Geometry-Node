@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.components.integration.asset.browser;
 
-import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
+import com.mine.geometry_node.client.ui.components.composite.table.UiTableRowHeights;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 
@@ -28,7 +29,8 @@ final class FileContentLayout extends ViewGroup {
         void requestContentFocus();
         Set<String> selectedPathsSnapshot();
         void disallowScrollIntercept(boolean disallow);
-        AssetFileItemView createItemView(AssetEntry entry);
+        void restoreScrollAnchor(int expectedScrollY, int scrollY);
+        AssetFileItemView createItemView(AssetEntry entry, int index);
         void onMountedItemViewsChanged(Map<String, AssetFileItemView> mountedItems);
     }
 
@@ -39,12 +41,20 @@ final class FileContentLayout extends ViewGroup {
     private final Set<String> mSelectionBase = new LinkedHashSet<>();
     private final Map<Integer, AssetFileItemView> mMountedByIndex = new HashMap<>();
     private final Map<String, AssetFileItemView> mMountedByKey = new HashMap<>();
+    private UiTableRowHeights mListRows = new UiTableRowHeights(0, 1);
+    private ListReflow mListReflow;
+    private final Runnable mApplyListReflow = this::applyListReflow;
+    private int mListMeasuredWidth = -1;
+    private int mListMinimumHeight;
     private List<AssetEntry> mEntries = List.of();
     private AssetViewMode mMode = AssetViewMode.LIST;
     private boolean mSelecting = false;
     private boolean mSelectionAdditive = false;
     private float mSelectionStartX;
     private float mSelectionStartY;
+    private float mSelectionPointerX;
+    private float mSelectionPointerViewportY;
+    private int mSelectionGesture;
     private float mDownX;
     private float mDownY;
     private int mMinimumContentHeight = 0;
@@ -67,6 +77,7 @@ final class FileContentLayout extends ViewGroup {
 
     void setViewMode(AssetViewMode mode) {
         if (mMode == mode) return;
+        cancelListReflow();
         mMode = mode;
         clearMountedItems();
         requestLayout();
@@ -74,7 +85,9 @@ final class FileContentLayout extends ViewGroup {
     }
 
     void setEntries(List<AssetEntry> entries) {
+        cancelListReflow();
         mEntries = entries == null ? List.of() : List.copyOf(entries);
+        mListMeasuredWidth = -1;
         mViewportScrollY = 0;
         clearMountedItems();
         requestLayout();
@@ -100,9 +113,10 @@ final class FileContentLayout extends ViewGroup {
         if (selectionRect.bottom <= 0.0f || selectionRect.top >= contentHeight) return;
 
         if (mMode == AssetViewMode.LIST) {
-            int rowHeight = itemHeight();
-            int first = clampIndex((int) Math.floor(selectionRect.top / rowHeight));
-            int last = clampIndex((int) Math.floor((selectionRect.bottom - 1.0f) / rowHeight));
+            ensureListRows(getWidth());
+            if (selectionRect.right <= 0 || selectionRect.left >= getWidth()) return;
+            int first = mListRows.indexAt(selectionRect.top);
+            int last = mListRows.indexAt(Math.nextDown(selectionRect.bottom));
             for (int i = first; i <= last; i++) {
                 out.add(mEntries.get(i).key());
             }
@@ -159,13 +173,25 @@ final class FileContentLayout extends ViewGroup {
         int height;
 
         if (mMode == AssetViewMode.LIST) {
-            int rowHeight = itemHeight();
+            ListReflow reflow = mListReflow != null ? mListReflow : captureListReflow();
+            boolean geometryChanged = mListMeasuredWidth != width || mListMinimumHeight != itemHeight();
+            ensureListRows(width);
             int childWidthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY);
-            int childHeightSpec = MeasureSpec.makeMeasureSpec(rowHeight, MeasureSpec.EXACTLY);
-            for (int i = 0; i < getChildCount(); i++) {
-                getChildAt(i).measure(childWidthSpec, childHeightSpec);
+            int childHeightSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+            boolean heightsChanged = false;
+            for (var entry : mMountedByIndex.entrySet()) {
+                View child = entry.getValue();
+                child.measure(childWidthSpec, childHeightSpec);
+                heightsChanged |= mListRows.setHeight(entry.getKey(), child.getMeasuredHeight());
             }
-            height = rowHeight * mEntries.size();
+            height = mListRows.totalHeight();
+            if (geometryChanged || heightsChanged) {
+                if (reflow != null) {
+                    mListReflow = reflow;
+                    removeCallbacks(mApplyListReflow);
+                    post(mApplyListReflow);
+                } else post(this::refreshMountedItems);
+            }
         } else {
             int padding = gridPadding();
             int gap = gridGap();
@@ -191,11 +217,10 @@ final class FileContentLayout extends ViewGroup {
             post(this::refreshMountedItems);
         }
         if (mMode == AssetViewMode.LIST) {
-            int rowHeight = itemHeight();
             for (Map.Entry<Integer, AssetFileItemView> entry : mMountedByIndex.entrySet()) {
                 View child = entry.getValue();
-                int y = entry.getKey() * rowHeight;
-                child.layout(0, y, r - l, y + rowHeight);
+                int y = mListRows.top(entry.getKey());
+                child.layout(0, y, r - l, y + mListRows.height(entry.getKey()));
             }
             return;
         }
@@ -226,6 +251,7 @@ final class FileContentLayout extends ViewGroup {
                 }
                 mDownX = event.getX();
                 mDownY = event.getY();
+                ++mSelectionGesture;
                 mSelectionStartX = mDownX;
                 mSelectionStartY = mDownY;
                 mSelectionAdditive = event.isCtrlPressed();
@@ -247,6 +273,7 @@ final class FileContentLayout extends ViewGroup {
                     updateSelectionRect(event.getX(), event.getY());
                 }
                 mSelecting = false;
+                ++mSelectionGesture;
                 mSelectionRect.setEmpty();
                 mHost.disallowScrollIntercept(false);
                 invalidate();
@@ -257,6 +284,8 @@ final class FileContentLayout extends ViewGroup {
     }
 
     private void updateSelectionRect(float currentX, float currentY) {
+        mSelectionPointerX = currentX;
+        mSelectionPointerViewportY = currentY - mViewportScrollY;
         if (!mSelecting) {
             if (Math.abs(currentX - mDownX) <= mTouchSlop && Math.abs(currentY - mDownY) <= mTouchSlop) {
                 return;
@@ -314,7 +343,7 @@ final class FileContentLayout extends ViewGroup {
         for (int index = range.first; index <= range.last; index++) {
             if (mMountedByIndex.containsKey(index)) continue;
             AssetEntry entry = mEntries.get(index);
-            AssetFileItemView view = mHost.createItemView(entry);
+            AssetFileItemView view = mHost.createItemView(entry, index);
             mMountedByIndex.put(index, view);
             mMountedByKey.put(entry.key(), view);
             addView(view);
@@ -339,9 +368,9 @@ final class FileContentLayout extends ViewGroup {
         int viewportHeight = viewportHeight();
         int scrollY = Math.max(0, mViewportScrollY);
         if (mMode == AssetViewMode.LIST) {
-            int rowHeight = itemHeight();
-            int firstRow = Math.min(mEntries.size() - 1, scrollY / rowHeight);
-            int lastRow = Math.min(mEntries.size() - 1, (scrollY + viewportHeight) / rowHeight);
+            ensureListRows(getWidth());
+            int firstRow = mListRows.indexAt(scrollY);
+            int lastRow = mListRows.indexAt((float) scrollY + viewportHeight);
             return new IndexRange(firstRow, Math.max(firstRow, lastRow));
         }
 
@@ -360,8 +389,9 @@ final class FileContentLayout extends ViewGroup {
         if (mEntries.isEmpty() || localX < 0.0f || localY < 0.0f) return null;
         if (localX >= getWidth()) return null;
         if (mMode == AssetViewMode.LIST) {
-            int index = (int) (localY / itemHeight());
-            return index >= 0 && index < mEntries.size() ? mEntries.get(index) : null;
+            ensureListRows(getWidth());
+            if (localY >= mListRows.totalHeight()) return null;
+            return mEntries.get(mListRows.indexAt(localY));
         }
 
         int padding = gridPadding();
@@ -382,7 +412,8 @@ final class FileContentLayout extends ViewGroup {
     private int topForIndex(int index) {
         if (index < 0 || index >= mEntries.size()) return -1;
         if (mMode == AssetViewMode.LIST) {
-            return index * itemHeight();
+            ensureListRows(getWidth());
+            return mListRows.top(index);
         }
         int columns = columnsForWidth(getWidth());
         return gridPadding() + (index / columns) * (itemHeight() + gridGap());
@@ -400,17 +431,69 @@ final class FileContentLayout extends ViewGroup {
     private int entriesContentHeight() {
         if (mEntries.isEmpty()) return 0;
         if (mMode == AssetViewMode.LIST) {
-            return itemHeight() * mEntries.size();
+            ensureListRows(getWidth());
+            return mListRows.totalHeight();
         }
         int columns = columnsForWidth(getWidth());
         int rows = (mEntries.size() + columns - 1) / columns;
         return gridPadding() * 2 + rows * itemHeight() + Math.max(0, rows - 1) * gridGap();
     }
 
-    private int clampIndex(int index) {
-        if (mEntries.isEmpty()) return 0;
-        return Math.max(0, Math.min(mEntries.size() - 1, index));
+    private void ensureListRows(int width) {
+        int minimum = dp2pxInt(UiTableStyle.ROW_HEIGHT);
+        if (mListMeasuredWidth == width && mListRows.size() == mEntries.size()
+                && mListMinimumHeight == minimum) return;
+        mListRows = new UiTableRowHeights(mEntries.size(), minimum);
+        mListMeasuredWidth = width;
+        mListMinimumHeight = minimum;
     }
+
+    private ListReflow captureListReflow() {
+        if (mListMeasuredWidth < 0 || mEntries.isEmpty() || mListRows.size() != mEntries.size()) return null;
+        return new ListReflow(rowAnchor(mViewportScrollY), mViewportScrollY,
+                mSelecting ? rowAnchor(mSelectionStartY) : null, mSelectionGesture);
+    }
+
+    private RowAnchor rowAnchor(float y) {
+        int index = mListRows.indexAt(y);
+        return new RowAnchor(index, y - mListRows.top(index));
+    }
+
+    private float anchorPosition(RowAnchor anchor) {
+        return mListRows.top(anchor.index())
+                + Math.max(0, Math.min(anchor.offset(), mListRows.height(anchor.index()) - 1));
+    }
+
+    private void applyListReflow() {
+        ListReflow reflow = mListReflow;
+        mListReflow = null;
+        if (reflow == null || mMode != AssetViewMode.LIST) return;
+        // Restore after layout so ScrollView clamps against the new content height.
+        mHost.restoreScrollAnchor(reflow.scrollY(), (int) anchorPosition(reflow.viewport()));
+        if (mSelecting && reflow.selectionStart() != null && reflow.gesture() == mSelectionGesture) {
+            mSelectionStartY = anchorPosition(reflow.selectionStart());
+            updateSelectionRect(mSelectionPointerX, mSelectionPointerViewportY + mViewportScrollY);
+        }
+        refreshMountedItems();
+    }
+
+    private void cancelListReflow() {
+        removeCallbacks(mApplyListReflow);
+        mListReflow = null;
+        ++mSelectionGesture;
+        mSelecting = false;
+        mSelectionRect.setEmpty();
+        mHost.disallowScrollIntercept(false);
+        invalidate();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        cancelListReflow();
+        super.onDetachedFromWindow();
+    }
+
+    private record RowAnchor(int index, float offset) {}
+    private record ListReflow(RowAnchor viewport, int scrollY, RowAnchor selectionStart, int gesture) {}
 
     private int columnsForWidth(int width) {
         int padding = gridPadding();
@@ -425,7 +508,7 @@ final class FileContentLayout extends ViewGroup {
     }
 
     private int itemHeight() {
-        return dp2pxInt(mMode.itemHeightDp);
+        return dp2pxInt(mMode == AssetViewMode.LIST ? UiTableStyle.ROW_HEIGHT : mMode.itemHeightDp);
     }
 
     private int gridPadding() {
