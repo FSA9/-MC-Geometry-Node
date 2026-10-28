@@ -16,6 +16,8 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Interaction;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import java.util.WeakHashMap;
 import java.lang.ref.WeakReference;
@@ -319,16 +322,29 @@ public final class EditViewportRuntime {
         });
     }
 
-    public static void resetToPlayer(Object owner) {
+    /** Resolve live entities on the client thread; UI passes only immutable identities. */
+    public static void alignToEntity(Object owner, long worldGeneration, String dimension, UUID entityId) {
         if (Boolean.getBoolean("gn.standalone")) return;
+        final Request expected;
+        synchronized (EditViewportRuntime.class) { expected = VISIBLE.get(owner); }
+        if (expected == null) return;
         Minecraft.getInstance().execute(() -> {
             synchronized (EditViewportRuntime.class) {
                 Request request = VISIBLE.get(owner);
                 Minecraft mc = Minecraft.getInstance();
-                if (request != null && mc.level != null && mc.player != null) {
-                    Camera player = mc.gameRenderer.getMainCamera();
-                    request.camera.reset(player.position().x, player.position().y, player.position().z, player.yRot(), player.xRot());
-                }
+                var snapshot = ClientSceneService.INSTANCE.snapshot();
+                if (request != expected || mc.level == null || mc.player == null
+                        || snapshot.worldGeneration() != worldGeneration || !snapshot.dimension().equals(dimension)
+                        || !mc.level.dimension().identifier().toString().equals(dimension)) return;
+                var entity = mc.level.getEntity(entityId);
+                if (entity == null || entity.isRemoved() || !entity.isAlive() || entity.isSpectator()
+                        || entity instanceof Interaction || entity instanceof ItemEntity) return;
+                float partialTick = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+                if (mc.level.tickRateManager().isEntityFrozen(entity)) partialTick = 1;
+                Vec3 eye = entity.getEyePosition(partialTick);
+                request.camera.reset(eye.x, eye.y, eye.z,
+                        entity.getViewYRot(partialTick), entity.getViewXRot(partialTick));
+                CAMERA_LEVELS.put(request.camera, new WeakReference<>(mc.level));
             }
         });
     }

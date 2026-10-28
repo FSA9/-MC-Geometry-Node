@@ -12,6 +12,7 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.*;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
@@ -56,8 +57,12 @@ public final class SetLightPropertyNode extends BaseNode {
             case COLOR -> b.addPassthroughInput(StandardPorts.COLOR.toInput(ColorValue.WHITE), UIHint.INPUT);
             case SOURCE_VISIBLE -> LightConfigurationNode.add(b, "source_visible", PortType.BOOLEAN, false, UIHint.CHECKBOX);
             case INTENSITY -> LightConfigurationNode.add(b, "intensity", PortType.FLOAT, 1f, UIHint.INPUT);
-            case POSITION -> LightConfigurationNode.add(b, "position", PortType.XYZ, Vec3.ZERO, UIHint.VECTOR);
-            case ROTATION -> LightConfigurationNode.add(b, "rotation", PortType.XYZ, Vec3.ZERO, UIHint.VECTOR);
+            case POSITION -> b.addPassthroughInput(LightNodeSchema.transformPort(AnchorNodeSupport.WORLD_OFFSET), UIHint.VECTOR);
+            case ROTATION -> b.addPassthroughInput(LightNodeSchema.transformPort(AnchorNodeSupport.WORLD_ROTATION), UIHint.VECTOR);
+            case TRANSFORM -> {
+                b.addRow(AnchorNodeSupport.row(StandardPorts.SPATIAL_ANCHOR));
+                LightNodeSchema.addTransformInputs(b);
+            }
             case SPOT -> {
                 LightConfigurationNode.add(b, "range", PortType.FLOAT, 16f, UIHint.INPUT);
                 LightConfigurationNode.add(b, "cone_angle", PortType.FLOAT, 45f, UIHint.INPUT);
@@ -110,8 +115,17 @@ public final class SetLightPropertyNode extends BaseNode {
                 color = new Vec3(value.r(), value.g(), value.b());
             }
             case INTENSITY -> intensity = value(context, "intensity", Float.class, 1f);
-            case POSITION -> position = value(context, "position", Vec3.class, Vec3.ZERO);
-            case ROTATION -> rotation = value(context, "rotation", Vec3.class, Vec3.ZERO);
+            case POSITION -> position = AnchorNodeSupport.vector(context,AnchorNodeSupport.WORLD_OFFSET);
+            case ROTATION -> rotation = AnchorNodeSupport.vector(context,AnchorNodeSupport.WORLD_ROTATION);
+            case TRANSFORM -> {
+                var config=new LightConfigurationNode(LightConfigurationNode.Group.TRANSFORM).apply(context,current.config());
+                var anchor=AnchorNodeSupport.capture(context,StandardPorts.SPATIAL_ANCHOR);
+                if(anchor==null)throw new IllegalArgumentException("Light spatial anchor is unavailable");
+                config=config.withTransform(new com.mine.geometry_node.core.node.value.light.LightConfig.Transform(anchor,config.transform().position(),config.transform().rotation()));
+                return new LightDefinition(current.type(),color,intensity,range,cone,edge,
+                    AnchorNodeSupport.vector(context,AnchorNodeSupport.WORLD_OFFSET),
+                    AnchorNodeSupport.vector(context,AnchorNodeSupport.WORLD_ROTATION),config);
+            }
             case SPOT -> {
                 range = value(context, "range", Float.class, 16f);
                 cone = value(context, "cone_angle", Float.class, 45f);

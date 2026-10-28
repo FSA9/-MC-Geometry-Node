@@ -183,6 +183,11 @@ public enum StandardPorts {
     // Geometry
     GEOMETRY("geometry", PortType.GEOMETRY),
 
+    // Positional references
+    SPATIAL_ANCHOR("spatial_anchor", PortType.SPATIAL_ANCHOR),
+    START_ANCHOR("start_anchor", PortType.SPATIAL_ANCHOR),
+    END_ANCHOR("end_anchor", PortType.SPATIAL_ANCHOR),
+
     // Runtime Area reference
     AREA("area", PortType.AREA),
 

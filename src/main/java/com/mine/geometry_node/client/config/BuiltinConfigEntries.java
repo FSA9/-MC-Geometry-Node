@@ -130,6 +130,8 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.gameView.add, (config, value) -> config.keyBindings.gameView.add = value);
     public static final ConfigEntry<String> GAME_VIEW_FOCUS = key("keyBindings.gameView.focus", SHORTCUT_GAME_VIEW_EDIT, 410, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.focus, (config, value) -> config.keyBindings.gameView.focus = value);
+    public static final ConfigEntry<String> GAME_VIEW_ALIGN_ENTITY = key("keyBindings.gameView.alignToEntity", SHORTCUT_GAME_VIEW_EDIT, 411, KeyScope.GAME_VIEW,
+            config -> config.keyBindings.gameView.alignToEntity, (config, value) -> config.keyBindings.gameView.alignToEntity = value);
     public static final ConfigEntry<String> GAME_VIEW_ENTITY_MOVE = ConfigEntry.builder(
             "keyBindings.gameView.entityMove", SHORTCUT_GAME_VIEW_EDIT, ConfigEntry.EditorType.SHORTCUT,
             (AppConfig config) -> config.keyBindings.gameView.entityMove, (config, value) -> config.keyBindings.gameView.entityMove = value)
@@ -172,7 +174,7 @@ public final class BuiltinConfigEntries {
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
             GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
             GAME_VIEW_SNAP, GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
-            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_CANCEL,
+            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ALIGN_ENTITY, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_CANCEL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}

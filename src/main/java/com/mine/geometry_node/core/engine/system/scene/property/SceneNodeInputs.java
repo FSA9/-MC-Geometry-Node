@@ -85,15 +85,21 @@ public final class SceneNodeInputs {
         } else if (SceneObject.POINT_LIGHT.equals(typeId)) {
             NodeData data = data("create_light", "type", "point");
             NodeDef def = new LightActionNode(LightActionNode.Operation.CREATE).getDefinition(data);
-            b.consume(def, Map.of(
-                    StandardPorts.KEY.getId(), row -> b.context(row, o -> "scene:" + o.id(), "Scene object UUID supplies resource ownership"),
-                    "type", row -> b.context(row, o -> "point", "Fixed point-light preset"),
-                    "color", b::color,
-                    "position", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition),
-                    "source_visible", row -> b.scalar(row, "source_visible", 0, 1),
-                    "intensity", row -> b.scalar(row, "intensity", 0, 1024),
-                    "range", row -> b.scalar(row, "range", .01, 32),
-                    "source_size", row -> b.scalar(row, "source_size", 0, 4)));
+            Map<String, Consumer<PortRow>> lightBindings = new HashMap<>();
+            lightBindings.put(StandardPorts.KEY.getId(), row -> b.context(row, o -> "scene:" + o.id(), "Scene object UUID supplies resource ownership"));
+            lightBindings.put("type", row -> b.context(row, o -> "point", "Fixed point-light preset"));
+            lightBindings.put(StandardPorts.SPATIAL_ANCHOR.getId(), row -> b.provided(row, "World anchor supplied by the enclosing scene"));
+            lightBindings.put("color", b::color);
+            lightBindings.put("world_offset", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition));
+            lightBindings.put("world_rotation", row -> b.nodeRotation(row, false));
+            lightBindings.put("local_offset", row -> b.provided(row, "Scene objects use their world transform; local offset is zero"));
+            lightBindings.put("local_rotation", row -> b.provided(row, "Scene objects use their world transform; local rotation is zero"));
+            lightBindings.put("config", row -> b.provided(row, "The scene preset supplies default light configuration"));
+            lightBindings.put("source_visible", row -> b.scalar(row, "source_visible", 0, 1));
+            lightBindings.put("intensity", row -> b.scalar(row, "intensity", 0, 1024));
+            lightBindings.put("range", row -> b.scalar(row, "range", .01, 32));
+            lightBindings.put("source_size", row -> b.scalar(row, "source_size", 0, 4));
+            b.consume(def, lightBindings);
             b.consume(new SetLightPropertyNode(SetLightPropertyNode.Property.LIFECYCLE).getDefinition(data), Map.of(
                     "resource_id", row -> b.provided(row, "Scene object UUID identifies the existing light"),
                     "duration_ticks", row -> b.unsupported(row, "Persisted scene objects have no timed destruction lifecycle"),
@@ -132,11 +138,12 @@ public final class SceneNodeInputs {
             if (collision) b.consume(new CreateGeometryCollision().getDefinition(new NodeData()), Map.of(
                     StandardPorts.KEY.getId(), row -> b.context(row, o -> "scene:" + o.id(), "Scene object UUID supplies resource ownership"),
                     "geometry", row -> b.context(row, SceneObject::typeId, "Provided by the selected CreateMesh primitive"),
-                    "world_position", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition),
+                    StandardPorts.SPATIAL_ANCHOR.getId(), row -> b.provided(row, "World anchor supplied by the enclosing scene"),
+                    "world_offset", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition),
                     "world_rotation", row -> b.nodeRotation(row, true),
                     "pivot", row -> b.parameterVector(row, "pivot", -256, 256),
-                    "translation", row -> b.parameterVector(row, "translation", -256, 256),
-                    "rotation", row -> b.parameterVector(row, "local_rotation", -36000, 36000),
+                    "local_offset", row -> b.parameterVector(row, "translation", -256, 256),
+                    "local_rotation", row -> b.parameterVector(row, "local_rotation", -36000, 36000),
                     "size_3", row -> b.envelopeVector(row, "scale", SceneObject::scale,
                             (o, value) -> o.withTransform(o.position(), o.rotation(), value))));
         } else if (typeId.startsWith("area/")) {
@@ -147,15 +154,16 @@ public final class SceneNodeInputs {
                 default -> throw new IllegalArgumentException("Unsupported area preset: " + typeId);
             };
             NodeData data = data(CreateArea.TYPE_ID, CreateArea.SHAPE_PORT, shape);
-            data.inputs.put(CreateArea.ANCHOR_PORT, "world");
             NodeDef def = new CreateArea().getDefinition(data);
             Map<String, Consumer<PortRow>> bindings = new HashMap<>();
             bindings.put(StandardPorts.AREA_ID.getId(), row -> b.context(row, o -> "scene/" + o.id(), "Scene object UUID supplies the area ID"));
-            bindings.put(CreateArea.ANCHOR_PORT, row -> b.context(row, o -> "world", "World-anchored authored area; no entity owner"));
+            bindings.put(StandardPorts.SPATIAL_ANCHOR.getId(), row -> b.provided(row, "World anchor supplied by the enclosing scene"));
             bindings.put("dimension", row -> b.provided(row, "Provided by the enclosing scene document; not stored on the object"));
             bindings.put(CreateArea.SHAPE_PORT, row -> b.context(row, o -> shape, "Fixed area shape preset"));
-            bindings.put("center", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition));
-            bindings.put("rotation", row -> b.nodeRotation(row, false));
+            bindings.put("world_offset", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition));
+            bindings.put("world_rotation", row -> b.nodeRotation(row, false));
+            bindings.put("local_offset", row -> b.provided(row, "The scene object has zero local offset"));
+            bindings.put("local_rotation", row -> b.provided(row, "The scene object has zero local rotation"));
             bindings.put("size_3", row -> b.parameterVector(row, new String[]{"width", "height", "depth"}, .01, 256));
             bindings.put("radius", row -> b.scalar(row, "radius", .01, 256));
             bindings.put("height", row -> b.scalar(row, "height", .01, 256));

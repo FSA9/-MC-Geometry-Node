@@ -11,7 +11,7 @@ import java.util.EnumMap;
 /** Separate from the player's command-driven diagnostic subscription. */
 public record PacketViewportDebugSnapshot(Identifier dimension, Map<ViewportDebugLayer, PacketGeometryDebugSnapshot> layers) implements CustomPacketPayload {
     public PacketViewportDebugSnapshot { layers = Map.copyOf(layers); }
-    public static final Type<PacketViewportDebugSnapshot> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "viewport_debug_snapshot"));
+    public static final Type<PacketViewportDebugSnapshot> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "viewport_debug_snapshot_v3"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketViewportDebugSnapshot> STREAM_CODEC = StreamCodec.of(
         (buf,p) -> {
             buf.writeIdentifier(p.dimension); buf.writeVarInt(p.layers.size());

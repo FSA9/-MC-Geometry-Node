@@ -1,5 +1,10 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec;
+import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement;
+import net.minecraft.world.phys.Vec3;
+
 import com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -16,7 +21,7 @@ public record PacketGeometryDebugSnapshot(
         List<Mesh> meshes
 ) implements CustomPacketPayload {
     public static final Type<PacketGeometryDebugSnapshot> TYPE =
-            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "geometry_debug_snapshot"));
+            new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "geometry_debug_snapshot_v3"));
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketGeometryDebugSnapshot> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),
@@ -85,15 +90,25 @@ public record PacketGeometryDebugSnapshot(
             float[] vertices,
             int[] edges,
             int[] faces,
-            UUID anchorUuid,
+            GeometryDebugPlacement placement,
             int anchorEntityId
     ) {
         public Mesh(String id, String graphId, GeometryDebugType geometryType, int color, boolean showPoints,
                     double centerX, double centerY, double centerZ, double sizeX, double sizeY, double sizeZ,
                     double rotationX, double rotationY, double rotationZ, float[] vertices, int[] edges, int[] faces) {
             this(id, graphId, geometryType, color, showPoints, centerX, centerY, centerZ,
-                    sizeX, sizeY, sizeZ, rotationX, rotationY, rotationZ, vertices, edges, faces, null, -1);
+                    sizeX, sizeY, sizeZ, rotationX, rotationY, rotationZ, vertices, edges, faces, (GeometryDebugPlacement) null, -1);
         }
+        public Mesh(String id, String graphId, GeometryDebugType geometryType, int color, boolean showPoints,
+                    double centerX, double centerY, double centerZ, double sizeX, double sizeY, double sizeZ,
+                    double rotationX, double rotationY, double rotationZ, float[] vertices, int[] edges, int[] faces,
+                    UUID anchorUuid, int anchorEntityId) {
+            this(id, graphId, geometryType, color, showPoints, centerX, centerY, centerZ, sizeX, sizeY, sizeZ,
+                    rotationX, rotationY, rotationZ, vertices, edges, faces,
+                    anchorUuid == null ? null : new GeometryDebugPlacement(SpatialAnchor.entity(null, anchorUuid, SpatialAnchor.Origin.BASE), Vec3.ZERO, Vec3.ZERO), anchorEntityId);
+        }
+        public UUID anchorUuid() { return placement != null && placement.anchor().requiresEntity() ? placement.anchor().entityId() : null; }
+        public SpatialAnchor.Origin anchorOrigin() { return placement == null ? SpatialAnchor.Origin.BASE : placement.anchor().origin(); }
         public Mesh {
             geometryType = geometryType != null ? geometryType : GeometryDebugType.MESH;
             vertices = vertices != null ? vertices : new float[0];
@@ -120,7 +135,7 @@ public record PacketGeometryDebugSnapshot(
                     readFloatArray(buf, MAX_VERTICES, 3, "vertex"),
                     readIntArray(buf, MAX_EDGES, 2, "edge"),
                     readIntArray(buf, MAX_FACES, 4, "face"),
-                    buf.readBoolean() ? buf.readUUID() : null,
+                    readPlacement(buf),
                     buf.readVarInt()
             );
         }
@@ -143,9 +158,24 @@ public record PacketGeometryDebugSnapshot(
             writeFloatArray(buf, vertices, 3);
             writeIntArray(buf, edges, 2);
             writeIntArray(buf, faces, 4);
-            buf.writeBoolean(anchorUuid != null);
-            if (anchorUuid != null) buf.writeUUID(anchorUuid);
+            buf.writeBoolean(placement != null);
+            if (placement != null) {
+                buf.writeNbt(new SpatialAnchorCodec().serialize(placement.anchor()));
+                writeVector(buf, placement.worldOffset());
+                writeVector(buf, placement.worldRotation());
+            }
             buf.writeVarInt(anchorEntityId);
+        }
+
+        private static GeometryDebugPlacement readPlacement(RegistryFriendlyByteBuf buf) {
+            return !buf.readBoolean() ? null : new GeometryDebugPlacement(
+                    new SpatialAnchorCodec().deserialize(buf.readNbt()), readVector(buf), readVector(buf));
+        }
+        private static Vec3 readVector(RegistryFriendlyByteBuf buf) {
+            return new Vec3(buf.readDouble(), buf.readDouble(), buf.readDouble());
+        }
+        private static void writeVector(RegistryFriendlyByteBuf buf, Vec3 value) {
+            buf.writeDouble(value.x); buf.writeDouble(value.y); buf.writeDouble(value.z);
         }
 
         public int vertexCount() {

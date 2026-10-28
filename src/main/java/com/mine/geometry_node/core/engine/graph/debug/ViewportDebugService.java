@@ -126,7 +126,7 @@ public final class ViewportDebugService {
             for(var mesh:data.meshes()) {
                 result=31*result+Objects.hash(mesh.id(),mesh.graphId(),mesh.geometryType(),mesh.color(),mesh.showPoints(),
                     mesh.centerX(),mesh.centerY(),mesh.centerZ(),mesh.sizeX(),mesh.sizeY(),mesh.sizeZ(),
-                    mesh.rotationX(),mesh.rotationY(),mesh.rotationZ(),mesh.anchorUuid(),mesh.anchorEntityId());
+                    mesh.rotationX(),mesh.rotationY(),mesh.rotationZ(),mesh.placement(),mesh.anchorEntityId());
                 result=31*result+Arrays.hashCode(mesh.vertices());
                 result=31*result+Arrays.hashCode(mesh.edges()); result=31*result+Arrays.hashCode(mesh.faces());
             }

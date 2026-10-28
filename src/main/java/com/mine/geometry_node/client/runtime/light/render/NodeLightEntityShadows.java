@@ -118,7 +118,7 @@ public final class NodeLightEntityShadows {
                 double d = bounds.distanceToSqr(light.position());
                 double reach = light.definition().range() + light.definition().emitterRadius();
                 if (d <= reach * reach && intersectsBeam(light,bounds)) distance = Math.min(distance, d);
-                var owner = light.definition().config().transform().entityId();
+                var owner = light.definition().config().transform().anchor().entityId();
                 if (entity.getUUID().equals(owner) && interpolatedBounds.inflate(0.15).contains(light.position())) excluded |= 1 << i;
             }
             if (Double.isFinite(distance)) candidates.add(new Candidate(entity, distance, excluded, entityPartialTick));

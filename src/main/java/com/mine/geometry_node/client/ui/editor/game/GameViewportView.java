@@ -454,6 +454,9 @@ final class GameViewportView extends View {
                             scene.creationPosition(valid ? inputPoint[0] : Float.NaN, valid ? inputPoint[1] : Float.NaN));
                 }
                 case FOCUS -> scene.focus(editCamera);
+                case ALIGN_ENTITY -> {
+                    if (scene.alignToSelectedEntity(inputOwner)) onInteraction.run();
+                }
                 case ENTITY_MOVE -> {
                     if(UIUtils.rootToLocal(this,pointerRootX,pointerRootY,inputMatrix,inputPoint))
                         scene.contextAction(inputPoint[0],inputPoint[1]);

@@ -53,6 +53,7 @@ final class DebugSourceStore {
                 sourceId.channel() == DebugRenderChannel.GEOMETRY
                         ? meshes.stream().map(mesh -> WorldObjectEntries.geometry(level, sourceId, mesh)).toList()
                         : List.of(), current == null ? Map.of() : current.lastAnchorPositions);
+        if (current != null) next.lastPoses.putAll(current.lastPoses);
         refreshAnchors(level, next);
         levelSources.sources.put(sourceId, next);
         levelSources.publish();
@@ -112,15 +113,22 @@ final class DebugSourceStore {
             for (int i = 0; i < source.metadata.size(); i++) {
                 var entry = source.metadata.get(i);
                 if (entry == null) throw new IllegalStateException("Geometry metadata is unavailable");
-                UUID anchor = source.meshes.get(i).anchorUuid();
+                var mesh = source.meshes.get(i);
+                UUID anchor = mesh.anchorUuid();
                 Vec3 offset = anchor == null ? Vec3.ZERO : source.lastAnchorPositions.get(anchor);
-                // A never-observed anchor has no valid world pose yet. Dormant known poses remain queryable.
-                if (offset == null) continue;
+                var placement = mesh.placement();
+                var pose = resolvePlacement(level, source, mesh);
+                if (pose != null) source.lastPoses.put(mesh.id(), pose);
+                else if (placement != null) pose = source.lastPoses.get(mesh.id());
+                if (placement != null && pose == null) continue;
+                if (placement == null && offset == null) continue;
+                Vec3 worldPosition = pose == null ? entry.position().add(offset) : pose.apply(entry.position());
+                AABB worldBounds = pose == null ? entry.bounds().move(offset) : pose.apply(entry.bounds());
                 var references = new HashMap<>(entry.references());
                 references.put("coordinateSpace", "world");
                 references.put("anchorPose", "resolved");
                 if (!visitor.test(new WorldObjectEntry(entry.key(), entry.provider(), entry.type(), entry.name(),
-                        entry.dimension(), entry.position().add(offset), entry.bounds().move(offset),
+                        entry.dimension(), worldPosition, worldBounds,
                         source.customMetadata.tagSnapshot(), entry.source(), entry.lifetime(),
                         entry.sceneObjectId(), entry.entityId(), references, entry.graphs()))) return;
             }
@@ -137,6 +145,24 @@ final class DebugSourceStore {
             Vec3 position = anchorPositions.apply(level, uuid);
             return position == null ? lastPosition : position;
         });
+        for (GeometryDebugElement mesh : source.meshes) {
+            var pose = resolvePlacement(level, source, mesh);
+            if (pose != null) source.lastPoses.put(mesh.id(), pose);
+        }
+    }
+
+    private static com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement.Pose resolvePlacement(
+            ServerLevel level, Source source, GeometryDebugElement mesh) {
+        var placement = mesh.placement();
+        if (placement == null) return null;
+        if (level != null) return placement.resolve(level);
+        // The injected position lookup also supports headless residency/query verification.
+        if (placement.anchor().followOrientation()) return null;
+        Vec3 position = placement.anchor().followPosition()
+                ? source.lastAnchorPositions.get(mesh.anchorUuid()) : placement.anchor().position();
+        return position == null ? null : new com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement.Pose(
+                position.add(placement.worldOffset()),
+                com.mine.geometry_node.core.engine.spatial.SpatialTransform.rotation(placement.worldRotation()));
     }
 
     MetadataCapabilities.Access metadata(ServerLevel level, DebugSourceId id) {
@@ -213,6 +239,7 @@ final class DebugSourceStore {
         private final long expiresAt;
         private final List<WorldObjectEntry> metadata;
         private final Map<UUID, Vec3> lastAnchorPositions = new HashMap<>();
+        private final Map<String, com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement.Pose> lastPoses = new HashMap<>();
 
         private Source(RuntimeMetadata customMetadata, List<GeometryDebugElement> meshes, long lastSeenTick, long signature, long expiresAt,
                        List<WorldObjectEntry> metadata, Map<UUID, Vec3> previousAnchorPositions) {

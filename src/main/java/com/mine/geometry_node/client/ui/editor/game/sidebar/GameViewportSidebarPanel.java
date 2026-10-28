@@ -34,7 +34,6 @@ public final class GameViewportSidebarPanel extends UiScrollView implements Side
 
     private final GameViewportWindow owner;
     private final TextView projection;
-    private final TextView reset;
     private final TextView help;
     private String lastHelp;
     private String lastProjection;
@@ -50,12 +49,9 @@ public final class GameViewportSidebarPanel extends UiScrollView implements Side
         column.setPadding(padding, padding, padding, padding);
         addView(column, new ViewGroup.LayoutParams(-1, -2));
         projection = button(context, "toggle_projection", owner::toggleProjection);
-        reset = button(context, "reset_camera", owner::resetCamera);
-        for (TextView button : new TextView[]{projection, reset}) {
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(30));
-            params.bottomMargin = UIUtils.dp2pxInt(8);
-            column.addView(button, params);
-        }
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, UIUtils.dp2pxInt(30));
+        params.bottomMargin = UIUtils.dp2pxInt(8);
+        column.addView(projection, params);
         help = UIUtils.createLockedTextView(context, "", 11, UiThemes.EDITOR.text().secondary());
         column.addView(help, new LinearLayout.LayoutParams(-1, -2));
         refresh();
@@ -67,7 +63,6 @@ public final class GameViewportSidebarPanel extends UiScrollView implements Side
     public void refresh() {
         boolean editing = owner.mode() == ViewportMode.EDIT;
         projection.setVisibility(editing ? View.VISIBLE : View.GONE);
-        reset.setVisibility(owner.mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         String projectionName = tr(owner.isOrthographic() ? "projection.orthographic" : "projection.perspective");
         if (!projectionName.equals(lastProjection)) {
             lastProjection = projectionName;

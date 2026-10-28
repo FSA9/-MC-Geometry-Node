@@ -21,11 +21,10 @@ import org.joml.Quaternionf;
 public final class ImageVisualEffect extends AbstractVisualEffect {
     private static final int FULL_BRIGHT_LIGHT = 15728880;
 
+    private final VisualTransform transform;
     private final String imageSource;
     private final String imageReference;
     private final String sizeMode;
-    private final LiveValue.State<Vec3> position;
-    private final LiveValue.State<Vec3> rotation;
     private final LiveValue.State<Float> width;
     private final LiveValue.State<Float> height;
     private final LiveValue.State<Float> alpha;
@@ -37,22 +36,13 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
     public ImageVisualEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
         CompoundTag data = packet.extraData() != null ? packet.extraData() : new CompoundTag();
+        this.transform = VisualTransform.capture(this,data);
         this.imageSource = data.getStringOr("imageSource", "");
         this.imageReference = data.getStringOr("imageRef", "");
-        Vec3 basePosition = new Vec3(
-                data.getDoubleOr("posX", 0.0),
-                data.getDoubleOr("posY", 0.0),
-                data.getDoubleOr("posZ", 0.0));
-        Vec3 baseRotation = new Vec3(
-                data.getDoubleOr("rotX", 0.0),
-                data.getDoubleOr("rotY", 0.0),
-                data.getDoubleOr("rotZ", 0.0));
         this.sizeMode = data.getStringOr("sizeMode", "stretch");
         float baseWidth = Math.max(0.01F, data.getFloatOr("width", 1.0F));
         float baseHeight = Math.max(0.01F, data.getFloatOr("height", 1.0F));
         float baseAlpha = Math.clamp(data.getFloatOr("alpha", 1.0F), 0.0F, 1.0F);
-        this.position = captureXyz(DrawImageVisual.POSITION_PORT, "position", basePosition);
-        this.rotation = captureXyz(DrawImageVisual.ROTATION_PORT, "rotation", baseRotation);
         this.width = captureFloat(DrawImageVisual.WIDTH_PORT, "width", baseWidth);
         this.height = captureFloat(DrawImageVisual.HEIGHT_PORT, "height", baseHeight);
         this.alpha = captureFloat(DrawImageVisual.ALPHA_PORT, "alpha", baseAlpha);
@@ -69,8 +59,9 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
         if (texture == null) return;
 
         ExpressionEvaluationContext context = expressionContext(partialTick);
-        Vec3 evaluatedPosition = position.evaluate(context);
-        Vec3 evaluatedRotation = rotation.evaluate(context);
+        VisualTransform.Frame frame=transform.resolve(Minecraft.getInstance().level,partialTick,context);
+        if(frame==null)return;
+        Vec3 evaluatedPosition=frame.position();
         float evaluatedWidth = Math.max(0.01F, Math.abs(width.evaluate(context)));
         float evaluatedHeight = Math.max(0.01F, Math.abs(height.evaluate(context)));
         int evaluatedAlpha = Math.clamp(Math.round(alpha.evaluate(context) * 255.0F), 0, 255);
@@ -80,10 +71,7 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
         Vec3 renderPosition = evaluatedPosition.subtract(camPos);
         poseStack.pushPose();
         poseStack.translate(renderPosition.x, renderPosition.y, renderPosition.z);
-        poseStack.mulPose(new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(-evaluatedRotation.y),
-                (float) Math.toRadians(evaluatedRotation.x),
-                (float) Math.toRadians(evaluatedRotation.z)));
+        poseStack.mulPose(new Quaternionf(frame.orientation()));
 
         float halfWidth = displaySize.width() * 0.5F;
         float halfHeight = displaySize.height() * 0.5F;

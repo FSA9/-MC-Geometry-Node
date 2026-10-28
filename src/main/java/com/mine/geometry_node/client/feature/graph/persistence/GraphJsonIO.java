@@ -18,6 +18,9 @@ import java.util.Map;
 
 public final class GraphJsonIO {
     private static final Gson GSON = new GsonBuilder()
+            .registerTypeAdapter(com.mine.geometry_node.core.engine.spatial.SpatialAnchor.class,
+                    (JsonSerializer<com.mine.geometry_node.core.engine.spatial.SpatialAnchor>) (value, type, context) ->
+                            new com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec().encode(value, null))
             .registerTypeAdapter(Vec3.class, (JsonSerializer<Vec3>) (value, type, context) -> {
                 JsonArray array = new JsonArray();
                 array.add(value.x);
@@ -30,6 +33,11 @@ public final class GraphJsonIO {
             .create();
 
     private GraphJsonIO() {}
+
+    /** Encodes an input value using the same representations as graph documents. */
+    public static JsonElement toJsonValue(Object value) {
+        return GSON.toJsonTree(value);
+    }
 
     public static String toJson(NodeGraph g) {
         JsonObject root = new JsonObject();

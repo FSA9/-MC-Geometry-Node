@@ -5,17 +5,15 @@ import com.mine.geometry_node.core.engine.metadata.state.OwnerMetadata;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
-import com.mine.geometry_node.core.engine.system.marker.model.MarkerAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAudience;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerInstance;
 import com.mojang.serialization.Codec;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.phys.Vec3;
@@ -34,7 +32,9 @@ import java.util.function.UnaryOperator;
  * Persistent server-wide marker storage.
  */
 public final class MarkerStorage extends SavedData {
-    private static final int VERSION = 2;
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    private static final int VERSION = 4;
+    private static final SpatialAnchorCodec ANCHOR_CODEC = new SpatialAnchorCodec();
     private static final String TAG_VERSION = "Version";
     private static final String TAG_MARKERS = "Markers";
 
@@ -160,17 +160,13 @@ public final class MarkerStorage extends SavedData {
         tag.putString("Incarnation", marker.incarnation().toString());
         tag.putLong("MetadataRevision", marker.metadataRevision());
 
-        MarkerAnchor anchor = marker.anchor();
-        tag.putString("Dimension", anchor.dimension().identifier().toString());
-        if (anchor instanceof MarkerAnchor.Coordinate coordinate) {
-            tag.putString("Anchor", "coordinate");
-            tag.putDouble("X", coordinate.position().x);
-            tag.putDouble("Y", coordinate.position().y);
-            tag.putDouble("Z", coordinate.position().z);
-        } else if (anchor instanceof MarkerAnchor.Entity entity) {
-            tag.putString("Anchor", "entity");
-            tag.putString("Entity", entity.entityId().toString());
-        }
+        tag.put("Anchor", ANCHOR_CODEC.serialize(marker.anchor()));
+        tag.putDouble("WorldOffsetX", marker.worldOffset().x);
+        tag.putDouble("WorldOffsetY", marker.worldOffset().y);
+        tag.putDouble("WorldOffsetZ", marker.worldOffset().z);
+        tag.putDouble("LocalOffsetX", marker.localOffset().x);
+        tag.putDouble("LocalOffsetY", marker.localOffset().y);
+        tag.putDouble("LocalOffsetZ", marker.localOffset().z);
         return tag;
     }
 
@@ -181,32 +177,16 @@ public final class MarkerStorage extends SavedData {
                     ? UUID.fromString(tag.getStringOr("Viewer", ""))
                     : null;
             MarkerAddress address = new MarkerAddress(audience, viewer, tag.getStringOr("Key", ""));
-            ResourceKey<Level> dimension = ResourceKey.create(
-                    Registries.DIMENSION,
-                    Identifier.parse(tag.getStringOr("Dimension", ""))
-            );
-
-            MarkerAnchor anchor;
-            if ("entity".equals(tag.getStringOr("Anchor", ""))) {
-                anchor = new MarkerAnchor.Entity(
-                        dimension,
-                        UUID.fromString(tag.getStringOr("Entity", ""))
-                );
-            } else {
-                anchor = new MarkerAnchor.Coordinate(
-                        dimension,
-                        new Vec3(
-                                tag.getDoubleOr("X", 0.0D),
-                                tag.getDoubleOr("Y", 0.0D),
-                                tag.getDoubleOr("Z", 0.0D)
-                        )
-                );
-            }
+            SpatialAnchor anchor = ANCHOR_CODEC.deserialize(tag.get("Anchor"));
+            Vec3 worldOffset = new Vec3(tag.getDoubleOr("WorldOffsetX", 0), tag.getDoubleOr("WorldOffsetY", 0), tag.getDoubleOr("WorldOffsetZ", 0));
+            Vec3 localOffset = new Vec3(tag.getDoubleOr("LocalOffsetX", 0), tag.getDoubleOr("LocalOffsetY", 0), tag.getDoubleOr("LocalOffsetZ", 0));
 
             return Optional.of(new MarkerInstance(
                     address,
                     tag.getStringOr("Type", MarkerTypeRegistry.DEFAULT_TYPE_ID),
                     anchor,
+                    worldOffset,
+                    localOffset,
                     tag.getStringOr("Text", ""),
                     tag.getBooleanOr("ShowDistance", true),
                     tag.getLongOr("CreatedGameTime", 0L),
@@ -216,7 +196,7 @@ public final class MarkerStorage extends SavedData {
                     tag.getLongOr("MetadataRevision", 0)
             ));
         } catch (IllegalArgumentException exception) {
-            GeometryNode.LOGGER.warn("Skipping invalid persisted marker: {}", exception.getMessage());
+            LOGGER.warn("Skipping invalid persisted marker: {}", exception.getMessage());
             return Optional.empty();
         }
     }

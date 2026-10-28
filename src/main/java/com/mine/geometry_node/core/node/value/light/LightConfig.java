@@ -1,8 +1,8 @@
 package com.mine.geometry_node.core.node.value.light;
 
 import net.minecraft.world.phys.Vec3;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
 import java.util.Objects;
-import java.util.UUID;
 
 /** Immutable, independently composable light settings. Distances are in blocks. */
 public record LightConfig(Transform transform, Shadow shadow, Volume volume, Projection projection,
@@ -37,9 +37,9 @@ public record LightConfig(Transform transform, Shadow shadow, Volume volume, Pro
         public Area { Checks.range(width, 0.01f, 8, "area width"); Checks.range(height, 0.01f, 8, "area height"); }
     }
 
-    public record Transform(UUID entityId, Vec3 position, Vec3 rotation, boolean followView, boolean eyeAnchor) {
-        public static final Transform DEFAULT = new Transform(null, Vec3.ZERO, Vec3.ZERO, true, true);
-        public Transform { Checks.vector(position); Checks.vector(rotation); }
+    public record Transform(SpatialAnchor anchor, Vec3 position, Vec3 rotation) {
+        public static final Transform DEFAULT = new Transform(SpatialAnchor.world(Vec3.ZERO), Vec3.ZERO, Vec3.ZERO);
+        public Transform { Objects.requireNonNull(anchor); Checks.vector(position); Checks.vector(rotation); }
     }
     public record Shadow(boolean enabled, float sourceSize) {
         public static final Shadow DEFAULT = new Shadow(true, 0.02f);

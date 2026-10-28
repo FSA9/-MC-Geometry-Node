@@ -36,6 +36,7 @@ public enum PortType {
     LIGHT_CONFIG(0xFFFFC45C, com.mine.geometry_node.core.node.value.light.LightConfig.DEFAULT),
     AREA(0xFF29B6A8, null),
     XYZ(0xFF00BCD4, Vec3.ZERO),
+    SPATIAL_ANCHOR(0xFF42B8A2, null),
     COLOR(0xFFFFD54F, ColorValue.WHITE),
     LIST(0xFFFF9800, List.of()),
     DIALOGUE_CHOICE(0xFFFF80AB, null),

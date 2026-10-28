@@ -15,6 +15,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.nbt.CompoundTag;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.VisualSpatialAnchors;
+import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 
 import java.util.Map;
 
@@ -42,6 +46,12 @@ public abstract class AbstractVisualEffect {
 
     /** Releases resources owned for this effect instance. */
     public void close() {
+    }
+
+    protected final VisualAnchor captureAnchor(CompoundTag data, String key) {
+        SpatialAnchor anchor = VisualSpatialAnchors.read(data, key);
+        return new VisualAnchor(anchor,
+                captureXyz(StandardPorts.XYZ.toInput(Vec3.ZERO).liveExpression(), key, anchor.position()));
     }
 
     protected final LiveValue.State<Float> captureFloat(PortDef port, String key, float snapshot) {

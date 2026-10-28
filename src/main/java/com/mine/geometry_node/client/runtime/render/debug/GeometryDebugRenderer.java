@@ -101,15 +101,20 @@ public final class GeometryDebugRenderer {
         Vec3 cameraPosition = camera.position();
         float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(true);
         Vec3[] relativeCameras = new Vec3[meshes.size()];
+        Matrix4f[] placementMatrices = new Matrix4f[meshes.size()];
         for (int i = 0; i < meshes.size(); i++) {
             var mesh = meshes.get(i);
-            if (mesh.anchorUuid() == null) {
+            if (mesh.placement() == null) {
                 relativeCameras[i] = cameraPosition;
+                placementMatrices[i] = new Matrix4f(poseStack.last().pose());
             } else {
-                var anchor = minecraft.level.getEntity(mesh.anchorEntityId());
-                if (anchor != null && anchor.isAlive() && mesh.anchorUuid().equals(anchor.getUUID())) {
-                    relativeCameras[i] = cameraPosition.subtract(anchor.getPosition(partialTick));
-                }
+                var placement = mesh.placement().resolve(minecraft.level, partialTick);
+                if (placement == null) continue;
+                relativeCameras[i] = Vec3.ZERO;
+                Vec3 relative = placement.position().subtract(cameraPosition);
+                placementMatrices[i] = new Matrix4f(poseStack.last().pose())
+                        .translate((float) relative.x, (float) relative.y, (float) relative.z)
+                        .rotate(new org.joml.Quaternionf(placement.rotation()));
             }
         }
 
@@ -120,6 +125,7 @@ public final class GeometryDebugRenderer {
             PacketGeometryDebugSnapshot.Mesh mesh = meshes.get(i);
             Vec3 camPos = relativeCameras[i];
             if (camPos == null) continue;
+            matrix = placementMatrices[i];
             switch (mesh.geometryType()) {
                 case MESH -> drawFaces(mesh, faces, matrix, camPos);
                 case PERFECT_CYLINDER -> drawPerfectCylinderFaces(mesh, faces, matrix, camPos);
@@ -134,11 +140,19 @@ public final class GeometryDebugRenderer {
             PacketGeometryDebugSnapshot.Mesh mesh = meshes.get(i);
             Vec3 camPos = relativeCameras[i];
             if (camPos == null) continue;
+            matrix = placementMatrices[i];
+            poseStack.pushPose();
+            if (mesh.placement() != null) {
+                var placement = mesh.placement().resolve(minecraft.level, partialTick);
+                poseStack.mulPose(new org.joml.Quaternionf(placement.rotation()));
+            }
+            pose = poseStack.last();
             switch (mesh.geometryType()) {
                 case MESH -> drawEdges(mesh, lines, pose, matrix, camPos);
                 case PERFECT_CYLINDER -> drawPerfectCylinderLines(mesh, lines, pose, matrix, camPos);
                 case PERFECT_SPHERE -> drawPerfectSphereGuides(mesh, lines, pose, matrix, camPos);
             }
+            poseStack.popPose();
         }
         bufferSource.endBatch(GeometryDebugRenderTypes.GEOMETRY_LINE);
 
@@ -148,7 +162,7 @@ public final class GeometryDebugRenderer {
             Vec3 camPos = relativeCameras[i];
             if (camPos == null) continue;
             if (mesh.geometryType() == GeometryDebugType.MESH && mesh.showPoints()) {
-                drawPoints(mesh, points, matrix, camPos);
+                drawPoints(mesh, points, placementMatrices[i], camPos);
             }
         }
         poseStack.popPose();

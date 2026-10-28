@@ -876,7 +876,7 @@ public final class GraphQueryService {
         if (value == null) return "null";
         String encoded;
         try {
-            encoded = GSON.toJson(value);
+            encoded = GraphJsonIO.toJsonValue(value).toString();
         } catch (RuntimeException exception) {
             encoded = GSON.toJson(String.valueOf(value));
         }

@@ -22,7 +22,7 @@ final class DebugSnapshotAssembler {
         this(ResourceResidency::isResident, (level, uuid) -> {
             if (!ResourceResidency.isEntityResident(level, uuid)) return null;
             var entity = level.getEntity(uuid);
-            return entity == null ? null : new Anchor(entity.position(), entity.getId());
+            return entity == null ? null : new Anchor(entity.position(), entity.getId(), entity.getEyePosition());
         });
     }
 
@@ -123,13 +123,27 @@ final class DebugSnapshotAssembler {
 
     private void addBoundedCandidate(ServerLevel level, Vec3 origin, double radiusSqr,
                                     GeometryDebugElement mesh, AABB bounds, List<Candidate> candidates) {
-        // An explicit anchor strictly overrides spatial residency, including when it is absent.
+        if (mesh.placement() != null) {
+            var placement = mesh.placement();
+            com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement.Pose pose;
+            if (placement.anchor().followPosition() && !placement.anchor().followOrientation()) {
+                Anchor entity = anchors.apply(level, mesh.anchorUuid());
+                if (entity == null) return;
+                Vec3 position = placement.anchor().origin() == com.mine.geometry_node.core.engine.spatial.SpatialAnchor.Origin.EYE
+                        ? entity.eyePosition() : entity.position();
+                pose = new com.mine.geometry_node.core.engine.graph.debug.geometry.GeometryDebugPlacement.Pose(
+                        position.add(placement.worldOffset()),
+                        com.mine.geometry_node.core.engine.spatial.SpatialTransform.rotation(placement.worldRotation()));
+            } else {
+                pose = placement.resolve(level);
+                if (pose == null) return;
+            }
+            bounds = pose.apply(bounds);
+        }
         if (!residency.isResident(level, bounds, mesh.anchorUuid())) return;
         if (mesh.anchorUuid() != null) {
             Anchor anchor = anchors.apply(level, mesh.anchorUuid());
             if (anchor == null) return;
-            bounds = bounds.move(anchor.position());
-            // UUIDs survive unloading, but client entity IDs do not.
             mesh = mesh.withAnchor(mesh.anchorUuid(), anchor.entityId());
         }
         double x = Math.max(0, Math.max(bounds.minX - origin.x, origin.x - bounds.maxX));
@@ -159,7 +173,8 @@ final class DebugSnapshotAssembler {
         boolean isResident(ServerLevel level, AABB bounds, UUID anchor);
     }
 
-    record Anchor(Vec3 position, int entityId) {
+    record Anchor(Vec3 position, int entityId, Vec3 eyePosition) {
+        Anchor(Vec3 position, int entityId) { this(position, entityId, position); }
     }
 
     private static PacketGeometryDebugSnapshot.Mesh toPacketMesh(GeometryDebugElement mesh) {
@@ -169,7 +184,7 @@ final class DebugSnapshotAssembler {
                 center.x, center.y, center.z,
                 mesh.size().x, mesh.size().y, mesh.size().z,
                 mesh.rotation().x, mesh.rotation().y, mesh.rotation().z,
-                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.anchorUuid(), mesh.anchorEntityId()
+                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.placement(), mesh.anchorEntityId()
         );
     }
 
@@ -181,6 +196,7 @@ final class DebugSnapshotAssembler {
         signature = mix(signature, mesh.showPoints() ? 1L : 0L);
         signature = mix(signature, mesh.anchorUuid() == null ? 0 : mesh.anchorUuid().hashCode());
         signature = mix(signature, mesh.anchorEntityId());
+        signature = mix(signature, mesh.placement() == null ? 0 : mesh.placement().hashCode());
         signature = mix(signature, Double.doubleToLongBits(mesh.centerX()));
         signature = mix(signature, Double.doubleToLongBits(mesh.centerY()));
         signature = mix(signature, Double.doubleToLongBits(mesh.centerZ()));

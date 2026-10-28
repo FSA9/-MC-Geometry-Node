@@ -1,22 +1,24 @@
 package com.mine.geometry_node.client.feature.asset.path;
 
 import com.mine.geometry_node.client.platform.ClientPaths;
+import com.mine.geometry_node.core.engine.graph.storage.GraphStorageLayout;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import java.io.File;
 import java.nio.file.Path;
 
 public final class AssetBrowserPathPolicy {
-    private static final String LOCAL_DRAFTS_RELATIVE_PATH = "geometry_nodes/local_drafts";
 
     private AssetBrowserPathPolicy() {
     }
 
     public static File getLocalDraftsDir() {
-        File dir = ClientPaths.resolveWorkspacePath(LOCAL_DRAFTS_RELATIVE_PATH);
-        if (!dir.exists()) {
-            dir.mkdirs();
+        try {
+            return GraphStorageLayout.prepareLocal(ClientPaths.getWorkspaceRoot().toPath()).toFile();
+        } catch (IOException error) {
+            throw new UncheckedIOException("Failed to migrate the local graph directory", error);
         }
-        return dir;
     }
 
     public static File[] listRootDirectories() {
@@ -26,7 +28,8 @@ public final class AssetBrowserPathPolicy {
 
     public static File resolveConfigPath(String path) {
         if (path == null || path.isBlank()) return null;
-        String normalizedPath = path.trim();
+        String normalizedPath = GraphStorageLayout.migrateLocalReference(path.trim());
+        if (!normalizedPath.equals(path.trim())) getLocalDraftsDir();
         File file = new File(normalizedPath);
         return file.isAbsolute() ? file : ClientPaths.resolveWorkspacePath(normalizedPath);
     }

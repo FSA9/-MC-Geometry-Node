@@ -276,6 +276,29 @@ public final class ViewportSceneInteraction {
         if(current(frame))for(var target:frame.targets())if(selectable(target)&&worldSelection.contains(target.key()))box=box==null?target.bounds():box.minmax(target.bounds());
         if(box!=null){cancel();camera.focus(box,frame==null?1:frame.aspect(),1.2);changed.run();}
     }
+    /** Resolve both diagnostic and editable identities against the displayed selection. */
+    UUID singleSelectedEntity() {
+        var snapshot = service.snapshot();
+        if (!current(frame) || selectionGeneration != snapshot.worldGeneration()
+                || !snapshot.selected().equals(expectedSceneSelection)) return null;
+        var selected = combinedSelection();
+        if (selected.size() != 1) return null;
+        for (var target : frame.targets()) {
+            if (target.key().source().equals(ViewportEntitySource.ID) && selectable(target)
+                    && selected.contains(selectionKey(target.key()))) {
+                return ViewportSelectionSources.editableObject(target.key());
+            }
+        }
+        return null;
+    }
+    public boolean alignToSelectedEntity(Object owner) {
+        UUID entity = singleSelectedEntity();
+        if (entity == null) return false;
+        cancel();
+        com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime.alignToEntity(
+                owner, frame.scene().worldGeneration(), frame.scene().dimension(), entity);
+        return true;
+    }
     public com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.Request creationPosition(float x, float y) {
         if (!current(frame)) return null;
         boolean inside = bounds != null && bounds.contains(x, y);

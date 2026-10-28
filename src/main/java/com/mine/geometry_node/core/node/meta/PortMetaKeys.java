@@ -1,6 +1,8 @@
 package com.mine.geometry_node.core.node.meta;
 
 public class PortMetaKeys {
+    /** Allows a SELECT value to come from a connection, with a dropdown fallback when unconnected. */
+    public static final MetaKey<Boolean> CONNECTABLE_SELECT = new MetaKey<>("connectable_select");
     /**
      * 标记该端口行是否为动态端口
      */
@@ -31,6 +33,9 @@ public class PortMetaKeys {
      * [UI 指令] 动态注册表 ID (用于按需拉取数据，如 "minecraft:dimension")
      */
     public static final MetaKey<String> DYNAMIC_REGISTRY_ID = new MetaKey<>("dynamic_registry");
+
+    /** Optional translation key for an empty selection, preserving contextual defaults. */
+    public static final MetaKey<String> EMPTY_OPTION_LABEL = new MetaKey<>("empty_option_label");
 
     /**
      * [UI 指令] 按钮显示文本。

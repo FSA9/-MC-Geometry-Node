@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mine.geometry_node.client.feature.asset.path.AssetBrowserPathPolicy;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -290,7 +291,13 @@ final class ConfigSanitizer {
                 continue;
             }
 
-            File file = new File(path);
+            File file;
+            try {
+                file = AssetBrowserPathPolicy.resolveConfigPath(path);
+            } catch (java.io.UncheckedIOException migrationFailure) {
+                // A conflicting migration must not erase existing favorites during config repair.
+                file = new File(path);
+            }
             if (!file.exists() || !file.isFile()) {
                 changed = true;
                 continue;

@@ -58,8 +58,9 @@ public final class ServerGraphRepository implements ServerEngine {
             generation = ++state.generation;
         }
         try {
+            GraphStorageLayout.migrateServer(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT));
             publish(server, generation, GraphRepositoryLoader.loadAll(server), null);
-        } catch (RuntimeException error) {
+        } catch (java.io.IOException | RuntimeException error) {
             GeometryNode.LOGGER.error("[ServerGraphRepository] Initial graph load failed", error);
         }
     }

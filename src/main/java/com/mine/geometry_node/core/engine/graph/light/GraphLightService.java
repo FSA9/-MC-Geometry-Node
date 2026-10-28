@@ -169,7 +169,7 @@ public final class GraphLightService implements ServerEngine {
     private static void refreshResidency(ServerLevel level, Resource resource) {
         resource.position = resolvePosition(level, resource);
         AABB bounds = resource.residencyBounds();
-        UUID anchor = resource.definition.config().transform().entityId();
+        UUID anchor = liveEntity(resource.definition);
         var entity = anchor == null ? null : level.getEntity(anchor);
         int entityId = entity == null ? -1 : entity.getId();
         if (resource.entityId != entityId) { resource.entityId = entityId; resource.dirty = true; }
@@ -194,27 +194,29 @@ public final class GraphLightService implements ServerEngine {
         return new AABB(position, position).inflate(definition.range() + definition.emitterRadius());
     }
 
+    public static UUID liveEntity(LightDefinition definition) {
+        var anchor=definition.config().transform().anchor();
+        return anchor.requiresEntity()?anchor.entityId():null;
+    }
+
+    /** Conservative initial position; entity orientation is resolved at runtime. */
     public static Vec3 localPosition(LightDefinition definition) {
-        var local = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-definition.rotation().y),
-                (float)Math.toRadians(definition.rotation().x), (float)Math.toRadians(definition.rotation().z))
-                .transform(new org.joml.Vector3f((float)definition.config().transform().position().x,
-                        (float)definition.config().transform().position().y, (float)definition.config().transform().position().z));
-        return definition.position().add(local.x, local.y, local.z);
+        var anchor=definition.config().transform().anchor();
+        Vec3 base=anchor.followPosition()?Vec3.ZERO:anchor.position();
+        return spatialTransform(definition).position(base,new org.joml.Quaterniond());
+    }
+
+    public static com.mine.geometry_node.core.engine.spatial.SpatialTransform spatialTransform(LightDefinition definition) {
+        return new com.mine.geometry_node.core.engine.spatial.SpatialTransform(definition.position(),definition.rotation(),
+            definition.config().transform().position(),definition.config().transform().rotation());
     }
 
     private static Vec3 resolvePosition(ServerLevel level, Resource resource) {
-        var transform = resource.definition.config().transform();
-        Vec3 position = localPosition(resource.definition);
-        if (transform.entityId() == null) return resource.recordPosition(null, position);
-        var anchor = level.getEntity(transform.entityId());
-        if (anchor == null || anchor.isRemoved()) return resource.recordPosition(transform.entityId(), null);
-        float yaw = !transform.followView() && anchor instanceof net.minecraft.world.entity.LivingEntity living
-                ? living.yBodyRot : anchor.getYRot();
-        var rotation = new org.joml.Quaternionf().rotationYXZ((float)Math.toRadians(-yaw),
-                transform.followView() ? (float)Math.toRadians(anchor.getXRot()) : 0, 0);
-        var offset = rotation.transform(new org.joml.Vector3f((float)position.x, (float)position.y, (float)position.z));
-        return resource.recordPosition(transform.entityId(),
-                (transform.eyeAnchor() ? anchor.getEyePosition() : anchor.position()).add(offset.x, offset.y, offset.z));
+        var anchor=resource.definition.config().transform().anchor();
+        Vec3 base=com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolve(anchor,level);
+        var rotation=com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolveRotation(anchor,level);
+        Vec3 position=base==null||rotation==null?null:spatialTransform(resource.definition).position(base,rotation);
+        return resource.recordPosition(anchor.requiresEntity()?anchor.entityId():null,position);
     }
 
     private static void broadcastRemoval(ServerLevel level, GraphResourceId id) {
@@ -270,12 +272,14 @@ public final class GraphLightService implements ServerEngine {
         Objects.requireNonNull(definition);
         if (!GraphResourceTypeRegistry.LIGHT.equals(id.type()) || !level.dimension().equals(id.scope().dimension()))
             throw new IllegalArgumentException("Invalid light resource scope");
+        if (!definition.config().transform().anchor().dimensionOr(level.dimension()).equals(level.dimension()))
+            throw new IllegalArgumentException("Light anchor dimension does not match its resource scope");
         // UUID attachments may be authored or mutated while their entity is unloaded.
         // Residency, not existence, follows the entity in this resource's fixed dimension.
     }
 
     private static PacketGraphLight packet(ServerLevel level, Resource resource) {
-        UUID anchor = resource.definition.config().transform().entityId();
+        UUID anchor = liveEntity(resource.definition);
         var entity = anchor == null ? null : level.getEntity(anchor);
         return new PacketGraphLight(level.dimension().identifier(), GraphResourceIdCodec.encode(resource.id),
                 PacketGraphLight.UPSERT, entity == null ? -1 : entity.getId(), resource.wire);
@@ -296,7 +300,7 @@ public final class GraphLightService implements ServerEngine {
         // A queued activation will broadcast to all players. Do not publish an untracked client copy here.
         if (!resource.active || !resource.exists(level.getGameTime()) || !resource.definition.config().lifecycle().enabled()
                 || resource.wire == null || !ResourceResidency.isResident(level,
-                resource.residencyBounds(), resource.definition.config().transform().entityId())) return;
+                resource.residencyBounds(), liveEntity(resource.definition))) return;
         if (resource.asset != null) NetworkHandler.sendToPlayer(player,
                 new PacketVisualAssetData(resource.asset.assetId(), resource.asset.data()));
         NetworkHandler.sendToPlayer(player, packet(level, resource));
@@ -315,7 +319,7 @@ public final class GraphLightService implements ServerEngine {
             for (Resource resource : List.copyOf(levels.get(level).values())) {
                 boolean anchorRemoved = release instanceof GraphResourceRelease.Entity entity
                         && entity.dimension().equals(level.dimension())
-                        && entity.entityId().equals(resource.definition.config().transform().entityId());
+                        && entity.entityId().equals(liveEntity(resource.definition));
                 if (release.matches(resource.id) || anchorRemoved) remove(level, resource.id);
             }
         }
@@ -364,7 +368,7 @@ public final class GraphLightService implements ServerEngine {
         }
 
         void inheritPosition(Resource previous) {
-            UUID anchor = definition.config().transform().entityId();
+            UUID anchor = liveEntity(definition);
             if (anchor != null && anchor.equals(previous.positionAnchor) && previous.hasResolvedWorldPosition) {
                 position = previous.position;
                 hasResolvedWorldPosition = true;
@@ -378,14 +382,14 @@ public final class GraphLightService implements ServerEngine {
 
         QuerySnapshot snapshot(long now) {
             return !exists(now) || !hasResolvedWorldPosition
-                    || !Objects.equals(positionAnchor, definition.config().transform().entityId())
+                    || !Objects.equals(positionAnchor, liveEntity(definition))
                     ? null : new QuerySnapshot(id, definition, position);
         }
 
         void updatePendingDefinition(LightDefinition next, long created) {
             definition = next;
             this.created = created;
-            UUID anchor = next.config().transform().entityId();
+            UUID anchor = liveEntity(next);
             recordPosition(anchor, anchor == null ? localPosition(next) : null);
             wire = asset == null ? null : withAsset(next, asset);
             dirty = true;
@@ -419,7 +423,7 @@ public final class GraphLightService implements ServerEngine {
 
         Resource(GraphResourceId id, LightDefinition definition, long created) {
             this.id = id; this.definition = definition; this.created = created;
-            this.positionAnchor = definition.config().transform().entityId();
+            this.positionAnchor = liveEntity(definition);
             this.hasResolvedWorldPosition = positionAnchor == null;
             this.position = hasResolvedWorldPosition ? localPosition(definition) : null;
         }

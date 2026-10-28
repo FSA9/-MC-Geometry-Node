@@ -13,7 +13,7 @@ public record PacketMarkerSnapshot(List<MarkerPayload> markers) implements Custo
     private static final int MAX_MARKERS = 4096;
 
     public static final Type<PacketMarkerSnapshot> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath("geometry_node", "marker_snapshot")
+            Identifier.fromNamespaceAndPath("geometry_node", "marker_snapshot_v3")
     );
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketMarkerSnapshot> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.write(buf),

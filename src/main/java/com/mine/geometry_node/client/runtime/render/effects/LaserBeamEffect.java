@@ -16,6 +16,7 @@ public class LaserBeamEffect extends DirectedVisualEffect {
     @Override
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         DirectedAnchors anchors = computeAnchors(partialTick);
+        if (anchors == null) return;
         Vec3 startRel = anchors.start().subtract(camPos);
         Vec3 endRel = anchors.end().subtract(camPos);
 

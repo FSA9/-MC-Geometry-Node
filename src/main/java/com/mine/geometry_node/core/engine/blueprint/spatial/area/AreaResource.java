@@ -1,5 +1,9 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialTransform;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver;
+
 import com.mine.geometry_node.core.engine.metadata.state.RuntimeTags;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionEvaluationContext;
 import com.mine.geometry_node.core.engine.graph.expression.LiveValue;
@@ -7,7 +11,6 @@ import com.mine.geometry_node.core.engine.graph.expression.ServerExpressionBindi
 import com.mine.geometry_node.core.engine.graph.resource.GraphResourceId;
 import com.mine.geometry_node.core.engine.graph.scoped.storage.TransientScopedStateStore;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.Level;
@@ -34,10 +37,12 @@ public final class AreaResource {
     private final LiveValue.State<Vec3> center;
     private final LiveValue.State<Vec3> size;
     private final LiveValue.State<Vec3> rotation;
+    private final LiveValue.State<Vec3> worldRotation;
+    private final LiveValue.State<Vec3> localOffset;
+    private Vec3 evaluatedWorldRotation, evaluatedLocalOffset;
     private final LiveValue.State<Float> radius;
     private final LiveValue.State<Float> height;
-    @Nullable
-    private final UUID anchorEntityId;
+    private final SpatialAnchor spatialAnchor;
 
     private long resolvedGameTime = Long.MIN_VALUE;
     private long resolvedResidencyRevision = Long.MIN_VALUE;
@@ -52,7 +57,18 @@ public final class AreaResource {
                         AreaShape shape, long creationGameTime,
                         LiveValue<Vec3> center, LiveValue<Vec3> size,
                         LiveValue<Vec3> rotation, LiveValue<Float> radius,
-                        LiveValue<Float> height, @Nullable UUID anchorEntityId) {
+                        LiveValue<Float> height, SpatialAnchor spatialAnchor) {
+        this(address, owner, generation, shape, creationGameTime, center, size, rotation, radius, height,
+                com.mine.geometry_node.core.engine.graph.expression.LiveValues.captureXyz(null, Vec3.ZERO, null, null, null),
+                com.mine.geometry_node.core.engine.graph.expression.LiveValues.captureXyz(null, Vec3.ZERO, null, null, null), spatialAnchor);
+    }
+
+    public AreaResource(AreaAddress address, GraphResourceId owner, long generation,
+                        AreaShape shape, long creationGameTime,
+                        LiveValue<Vec3> center, LiveValue<Vec3> size,
+                        LiveValue<Vec3> rotation, LiveValue<Float> radius,
+                        LiveValue<Float> height, LiveValue<Vec3> worldRotation,
+                        LiveValue<Vec3> localOffset, SpatialAnchor spatialAnchor) {
         this.authored = null;
         this.address = Objects.requireNonNull(address, "address");
         this.owner = Objects.requireNonNull(owner, "owner");
@@ -64,9 +80,14 @@ public final class AreaResource {
         this.center = Objects.requireNonNull(center, "center").newState();
         this.size = Objects.requireNonNull(size, "size").newState();
         this.rotation = Objects.requireNonNull(rotation, "rotation").newState();
+        this.worldRotation = Objects.requireNonNull(worldRotation, "worldRotation").newState();
+        this.localOffset = Objects.requireNonNull(localOffset, "localOffset").newState();
         this.radius = Objects.requireNonNull(radius, "radius").newState();
         this.height = Objects.requireNonNull(height, "height").newState();
-        this.anchorEntityId = anchorEntityId;
+        Objects.requireNonNull(spatialAnchor, "spatialAnchor");
+        if (!spatialAnchor.dimensionOr(address.dimension()).equals(address.dimension()))
+            throw new IllegalArgumentException("Area anchor dimension mismatch");
+        this.spatialAnchor = spatialAnchor.withDimension(address.dimension());
     }
 
     /** Persistent scene ownership is deliberately separate from graph binding ownership. */
@@ -87,9 +108,9 @@ public final class AreaResource {
         this.lastResolved = resolved;
         this.shape = resolved.shape();
         this.creationGameTime = gameTime;
-        this.center = this.size = this.rotation = null;
+        this.center = this.size = this.rotation = this.worldRotation = this.localOffset = null;
         this.radius = this.height = null;
-        this.anchorEntityId = null;
+        this.spatialAnchor = SpatialAnchor.world(address.dimension(), Vec3.ZERO);
     }
     public boolean isAuthored() { return authored != null; }
     @Nullable public UUID authoredObjectId() { return authoredObjectId; }
@@ -106,7 +127,8 @@ public final class AreaResource {
     }
     public AreaShape shape() { return shape; }
     public long creationGameTime() { return creationGameTime; }
-    @Nullable public UUID anchorEntityId() { return anchorEntityId; }
+    @Nullable public UUID anchorEntityId() { return spatialAnchor.requiresEntity() ? spatialAnchor.entityId() : null; }
+    public SpatialAnchor spatialAnchor() { return spatialAnchor; }
 
     /** Disabling an authored area affects activity, not its identity, metadata or scoped state. */
     public void setAuthoredEnabled(boolean enabled) {
@@ -134,7 +156,7 @@ public final class AreaResource {
     }
 
     boolean isActive(Level level, @Nullable Resolved value, Residency residency) {
-        return enabled && value != null && residency.test(level, value.bounds(), anchorEntityId);
+        return enabled && value != null && residency.test(level, value.bounds(), anchorEntityId());
     }
 
     @FunctionalInterface
@@ -162,26 +184,33 @@ public final class AreaResource {
                 case CYLINDER -> cylinderSize(radius.evaluate(context), height.evaluate(context));
                 case BOX -> AreaEntityQuery.sanitizeSize(size.evaluate(context));
             };
-            evaluated = new Resolved(shape, center.evaluate(context), evaluatedSize,
-                    shape == AreaShape.SPHERE ? Vec3.ZERO : rotation.evaluate(context));
+            evaluated = new Resolved(shape, center.evaluate(context), evaluatedSize, rotation.evaluate(context));
+            evaluatedWorldRotation = worldRotation.evaluate(context);
+            evaluatedLocalOffset = localOffset.evaluate(context);
             evaluatedGameTime = gameTime;
         }
-        Vec3 evaluatedCenter = evaluated.center();
-
-        if (anchorEntityId != null) {
-            Entity anchor = level.getEntity(anchorEntityId);
-            if (anchor == null || anchor.isRemoved()) {
-                resolved = null;
-                resolvedGameTime = gameTime;
-                return null;
-            }
-            evaluatedCenter = anchor.position().add(evaluatedCenter);
+        Vec3 anchorPosition = SpatialAnchorResolver.resolve(spatialAnchor, level);
+        Quaterniond anchorRotation = SpatialAnchorResolver.resolveRotation(spatialAnchor, level);
+        if (anchorPosition == null || anchorRotation == null) {
+            resolved = null;
+            resolvedGameTime = gameTime;
+            return null;
         }
-
-        resolved = new Resolved(shape, evaluatedCenter, evaluated.size(), evaluated.rotation());
+        resolved = place(shape, evaluated.center(), evaluated.size(), evaluatedWorldRotation,
+                evaluatedLocalOffset, evaluated.rotation(), anchorPosition, anchorRotation);
         lastResolved = resolved;
         resolvedGameTime = gameTime;
         return resolved;
+    }
+
+    static Resolved place(AreaShape shape, Vec3 worldOffset, Vec3 size, Vec3 worldRotation,
+                          Vec3 localOffset, Vec3 localRotation, Vec3 anchorPosition, Quaterniond anchorRotation) {
+        SpatialTransform placement = new SpatialTransform(worldOffset, worldRotation, localOffset, localRotation);
+        Vec3 finalRotation = SpatialTransform.eulerDegrees(placement.orientation(anchorRotation));
+        // Area query geometry uses positive-Y Euler yaw internally.
+        finalRotation = new Vec3(finalRotation.x, -finalRotation.y, finalRotation.z);
+        return new Resolved(shape, placement.position(anchorPosition, anchorRotation), size,
+                shape == AreaShape.SPHERE ? Vec3.ZERO : finalRotation);
     }
 
     private static Vec3 diameter(float radius) {

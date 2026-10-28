@@ -31,6 +31,26 @@ public final class PortOptionResolver {
 
     public static Resolution resolve(PortRow row, RegistryAccess registryAccess,
                                      Function<String, String> translationResolver) {
+        return resolve(row, registryAccess, translationResolver, ignored -> null);
+    }
+
+    /** Host catalogs can supply options which are not present in the local registry access. */
+    public static Resolution resolve(PortRow row, RegistryAccess registryAccess,
+                                     Function<String, String> translationResolver,
+                                     Function<String, RegistryDataManager.DynamicOptions> hostOptions) {
+        Resolution result = resolveOptions(row, registryAccess, translationResolver, hostOptions);
+        if (row == null || row.hintParams() == null || result.source() == Source.NONE) return result;
+        String emptyLabel = (String) row.hintParams().get(PortMetaKeys.EMPTY_OPTION_LABEL);
+        if (emptyLabel == null || result.options().stream().anyMatch(option -> option.id().isEmpty())) return result;
+        List<Option> options = new ArrayList<>();
+        options.add(new Option("", translationResolver == null ? emptyLabel : translationResolver.apply(emptyLabel)));
+        options.addAll(result.options());
+        return new Resolution(result.source(), result.registryId(), result.available(), options);
+    }
+
+    private static Resolution resolveOptions(PortRow row, RegistryAccess registryAccess,
+                                             Function<String, String> translationResolver,
+                                             Function<String, RegistryDataManager.DynamicOptions> hostOptions) {
         if (row == null || row.uiHint() != UIHint.SELECT || row.hintParams() == null) {
             return new Resolution(Source.NONE, "", true, List.of());
         }
@@ -55,10 +75,12 @@ public final class PortOptionResolver {
         if (registryId == null || registryId.isBlank()) {
             return new Resolution(Source.NONE, "", true, List.of());
         }
-        RegistryDataManager.DynamicOptions live = RegistryDataManager.getLiveDynamicOptions(registryId);
+        RegistryDataManager.DynamicOptions live = hostOptions.apply(registryId);
+        if (live == null) live = RegistryDataManager.getLiveDynamicOptions(registryId);
         if (live != null) {
+            Map<String, String> labels = live.labels();
             List<Option> options = live.ids().stream()
-                    .map(id -> new Option(id, live.labels().getOrDefault(id, id))).toList();
+                    .map(id -> new Option(id, labels.getOrDefault(id, id))).toList();
             return new Resolution(Source.DYNAMIC, registryId, live.available(), options);
         }
         List<String> ids = RegistryDataManager.getDynamicOptions(registryId, registryAccess);

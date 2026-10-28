@@ -8,12 +8,13 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.value.light.LightConfig;
 import com.mine.geometry_node.core.node.document.NodeData;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
-/** Compatibility reader for existing graphs. New graphs use SetLightPropertyNode actions. */
+/** Independently composable light configuration groups. */
 public final class LightConfigurationNode extends BaseNode {
     public enum Group { TRANSFORM, SHADOW, VOLUME, PROJECTION, QUALITY, SURFACE_QUALITY, VOLUME_QUALITY, LIFECYCLE }
     private final Group group;
@@ -39,11 +40,9 @@ public final class LightConfigurationNode extends BaseNode {
     static void addGroupInputs(NodeDef.Builder b, Group group) {
         switch (group) {
             case TRANSFORM -> {
-                add(b, "entity", PortType.ENTITY, null, UIHint.DEFAULT);
-                add(b, "local_offset", PortType.XYZ, Vec3.ZERO, UIHint.VECTOR);
-                add(b, "local_rotation", PortType.XYZ, Vec3.ZERO, UIHint.VECTOR);
-                add(b, "follow_view", PortType.BOOLEAN, true, UIHint.CHECKBOX);
-                add(b, "eye_anchor", PortType.BOOLEAN, true, UIHint.CHECKBOX);
+                b.addRow(AnchorNodeSupport.row(StandardPorts.SPATIAL_ANCHOR));
+                b.addRow(PortRow.passthrough(port("local_offset",PortType.XYZ,Vec3.ZERO),UIHint.VECTOR,null,null));
+                b.addRow(PortRow.passthrough(port("local_rotation",PortType.XYZ,Vec3.ZERO),UIHint.VECTOR,null,null));
             }
             case SHADOW -> {
                 add(b, "enabled", PortType.BOOLEAN, true, UIHint.CHECKBOX);
@@ -101,10 +100,10 @@ public final class LightConfigurationNode extends BaseNode {
     LightConfig apply(GraphDataContext c, LightConfig base) {
         return switch (group) {
             case TRANSFORM -> {
-                Entity entity = getInputFromList(c, "entity", 0, Entity.class);
-                yield base.withTransform(new LightConfig.Transform(entity == null ? null : entity.getUUID(),
-                        value(c,"local_offset",Vec3.class,Vec3.ZERO), value(c,"local_rotation",Vec3.class,Vec3.ZERO),
-                        value(c,"follow_view",Boolean.class,true), value(c,"eye_anchor",Boolean.class,true)));
+                SpatialAnchor anchor = AnchorNodeSupport.read(c, StandardPorts.SPATIAL_ANCHOR);
+                if (anchor == null) throw new IllegalArgumentException("Light spatial anchor is unavailable");
+                yield base.withTransform(new LightConfig.Transform(anchor,
+                        value(c,"local_offset",Vec3.class,Vec3.ZERO), value(c,"local_rotation",Vec3.class,Vec3.ZERO)));
             }
             case SHADOW -> base.withShadow(new LightConfig.Shadow(value(c,"enabled",Boolean.class,true), value(c,"source_size",Float.class,0.02f)));
             case VOLUME -> base.withVolume(new LightConfig.Volume(value(c,"mode",String.class,"off"), value(c,"strength",Float.class,1f),

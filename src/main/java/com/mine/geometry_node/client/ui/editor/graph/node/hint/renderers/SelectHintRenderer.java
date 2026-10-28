@@ -1,6 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
 import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
+import com.mine.geometry_node.client.integration.graph.GraphPortOptions;
 
 import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchableMenu;
@@ -88,8 +89,9 @@ public class SelectHintRenderer implements UIHintRenderer {
             if (parent instanceof InteractionContext interactionContext && !portId.isEmpty()) {
                 java.util.function.Consumer<String> commit = selectedVal -> {
                     // A catalog reply can arrive before its UI notification closes an old menu.
-                    PortOptionResolver.Resolution latest = factionOptions ? resolveOptions(row) : currentResolution;
-                    if (factionOptions && !LiveMenu.canSelect(latest, selectedVal)) {
+                    boolean dynamic = currentResolution.source() == PortOptionResolver.Source.DYNAMIC;
+                    PortOptionResolver.Resolution latest = dynamic ? resolveOptions(row) : currentResolution;
+                    if (dynamic && !LiveMenu.canSelect(latest, selectedVal)) {
                         liveMenu.close();
                         return;
                     }
@@ -141,10 +143,7 @@ public class SelectHintRenderer implements UIHintRenderer {
     }
 
     private static PortOptionResolver.Resolution resolveOptions(PortRow row) {
-        var minecraft = net.minecraft.client.Minecraft.getInstance();
-        return PortOptionResolver.resolve(row,
-                minecraft.level == null ? null : minecraft.level.registryAccess(),
-                key -> net.minecraft.network.chat.Component.translatable(key).getString());
+        return GraphPortOptions.resolve(row);
     }
 
     @Override

@@ -18,6 +18,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,10 +28,7 @@ import java.util.Optional;
 
 public class RayBeamEffect extends AbstractVisualEffect {
 
-    private final int sourceEntityId;
-    private final LiveValue.State<Vec3> posOffset;
-    private final LiveValue.State<Float> pitchOffset;
-    private final LiveValue.State<Float> yawOffset;
+    private final VisualTransform transform;
     private final LiveValue.State<Float> maxLength;
     private final LiveValue.State<Float> radius;
     private final boolean penSolid, penTrans, penEnt;
@@ -41,36 +40,17 @@ public class RayBeamEffect extends AbstractVisualEffect {
     public RayBeamEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
         CompoundTag data = packet.extraData();
-        Vec3 baseOffset;
-        float basePitch;
-        float baseYaw;
+        this.transform=VisualTransform.capture(this,data);
         float baseLength;
         float baseRadius;
-        if (data != null) {
-            this.sourceEntityId = data.getIntOr("sourceId", -1);
-            baseOffset = new Vec3(data.getDoubleOr("offX", 0.0), data.getDoubleOr("offY", 0.0), data.getDoubleOr("offZ", 0.0));
-            basePitch = data.getFloatOr("offPitch", 0.0f);
-            baseYaw = data.getFloatOr("offYaw", 0.0f);
-            baseLength = data.getFloatOr("length", 20.0f);
-            baseRadius = data.getFloatOr("radius", 0.1f);
+        baseLength = data.getFloatOr("length", 20.0f);
+        baseRadius = data.getFloatOr("radius", 0.1f);
 
-            this.penSolid = data.getBooleanOr("penSolid", false);
-            this.penTrans = data.getBooleanOr("penTrans", true);
-            this.penEnt = data.getBooleanOr("penEnt", false);
-            this.maxEnt = data.getIntOr("maxEnt", 1);
-        } else {
-            this.sourceEntityId = -1;
-            baseOffset = Vec3.ZERO;
-            basePitch = 0.0F;
-            baseYaw = 0.0F;
-            baseLength = 20.0F;
-            baseRadius = 0.1F;
-            this.penSolid = false; this.penTrans = true; this.penEnt = false; this.maxEnt = 1;
-        }
+        this.penSolid = data.getBooleanOr("penSolid", false);
+        this.penTrans = data.getBooleanOr("penTrans", true);
+        this.penEnt = data.getBooleanOr("penEnt", false);
+        this.maxEnt = data.getIntOr("maxEnt", 1);
 
-        this.posOffset = captureXyz(DrawRayBeam.START_PORT, "offset", baseOffset);
-        this.pitchOffset = captureFloat(DrawRayBeam.PITCH_PORT, "pitch", basePitch);
-        this.yawOffset = captureFloat(DrawRayBeam.YAW_PORT, "yaw", baseYaw);
         this.maxLength = captureFloat(DrawRayBeam.DISTANCE_PORT, "distance", baseLength);
         this.radius = captureFloat(DrawRayBeam.RADIUS_PORT, "radius", baseRadius);
         this.currentHitDistance = Math.max(0.0F, baseLength);
@@ -84,23 +64,14 @@ public class RayBeamEffect extends AbstractVisualEffect {
         if (isDead) return true;
 
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null || sourceEntityId == -1) return false;
-
-        Entity source = level.getEntity(sourceEntityId);
-        if (source == null) return false;
-
-        ExpressionEvaluationContext expressionContext = expressionContext(0.0F);
-        Vec3 evaluatedOffset = posOffset.evaluate(expressionContext);
-        float evaluatedPitchOffset = pitchOffset.evaluate(expressionContext);
-        float evaluatedYawOffset = yawOffset.evaluate(expressionContext);
-        float evaluatedMaxLength = Math.max(0.0F, maxLength.evaluate(expressionContext));
-        float evaluatedRadius = Math.max(0.001F, Math.abs(radius.evaluate(expressionContext)));
-
-        // 获取不带 partialTick 的绝对坐标 (因为在 tick 里)
-        Vec3 startPos = source.getEyePosition().add(evaluatedOffset);
-        float currentPitch = source.getXRot() + evaluatedPitchOffset;
-        float currentYaw = source.getYRot() + evaluatedYawOffset;
-        Vec3 dir = Vec3.directionFromRotation(currentPitch, currentYaw);
+        if (level == null) return false;
+        RayFrame frame = resolveFrame(level, 1.0F, expressionContext(0.0F));
+        if (frame == null) return false;
+        Entity source = frame.source();
+        Vec3 startPos = frame.position();
+        Vec3 dir = frame.direction();
+        float evaluatedMaxLength = frame.length();
+        float evaluatedRadius = frame.radius();
         Vec3 maxEnd = startPos.add(dir.scale(evaluatedMaxLength));
         Vec3 actualEnd = maxEnd;
 
@@ -110,7 +81,8 @@ public class RayBeamEffect extends AbstractVisualEffect {
         if (!penSolid) {
             Vec3 currentStart = startPos;
             while (true) {
-                ClipContext clipCtx = new ClipContext(currentStart, maxEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, source);
+                ClipContext clipCtx = new ClipContext(currentStart, maxEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                        source == null ? CollisionContext.empty() : CollisionContext.of(source));
                 BlockHitResult blockHit = level.clip(clipCtx);
 
                 if (blockHit.getType() != HitResult.Type.MISS) {
@@ -164,23 +136,12 @@ public class RayBeamEffect extends AbstractVisualEffect {
     @Override
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null || sourceEntityId == -1) return;
-
-        Entity source = level.getEntity(sourceEntityId);
-        if (source == null) return;
-
-        ExpressionEvaluationContext expressionContext = expressionContext(partialTick);
-        Vec3 evaluatedOffset = posOffset.evaluate(expressionContext);
-        float evaluatedPitchOffset = pitchOffset.evaluate(expressionContext);
-        float evaluatedYawOffset = yawOffset.evaluate(expressionContext);
-        float evaluatedMaxLength = Math.max(0.0F, maxLength.evaluate(expressionContext));
-        float evaluatedRadius = Math.max(0.001F, Math.abs(radius.evaluate(expressionContext)));
-
-        // 1. 视角依然是 144Hz 极致丝滑插值
-        Vec3 startPos = source.getEyePosition(partialTick).add(evaluatedOffset);
-        float currentPitch = source.getViewXRot(partialTick) + evaluatedPitchOffset;
-        float currentYaw = source.getViewYRot(partialTick) + evaluatedYawOffset;
-        Vec3 dir = Vec3.directionFromRotation(currentPitch, currentYaw);
+        RayFrame frame = resolveFrame(level, partialTick, expressionContext(partialTick));
+        if (frame == null) return;
+        Vec3 startPos = frame.position();
+        Vec3 dir = frame.direction();
+        float evaluatedMaxLength = frame.length();
+        float evaluatedRadius = frame.radius();
 
         Vec3 endPos = startPos.add(dir.scale(Math.min(this.currentHitDistance, evaluatedMaxLength)));
 
@@ -196,4 +157,20 @@ public class RayBeamEffect extends AbstractVisualEffect {
                 color
         );
     }
+
+    /** Position follows the shared anchor; view inheritance remains an explicit ray option. */
+    @Nullable RayFrame resolveFrame(@Nullable ClientLevel level, float partialTick,
+                                    ExpressionEvaluationContext expressionContext) {
+        VisualTransform.Frame frame=transform.resolve(level,partialTick,expressionContext);
+        if(frame==null)return null;
+        var anchor=transform.anchor().anchor();
+        Entity source=anchor.requiresEntity() && level!=null ? level.getEntity(anchor.entityId()) : null;
+        return new RayFrame(frame.position(),
+                com.mine.geometry_node.core.engine.spatial.SpatialTransform.rotate(frame.orientation(),new Vec3(0,0,1)),
+                Math.max(0,maxLength.evaluate(expressionContext)),
+                Math.max(0.001F,Math.abs(radius.evaluate(expressionContext))),source);
+    }
+
+    record RayFrame(Vec3 position, Vec3 direction, float length, float radius, @Nullable Entity source) {}
+
 }

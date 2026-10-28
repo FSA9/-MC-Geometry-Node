@@ -94,12 +94,15 @@ public final class ClientMarkerStore {
         }
 
         Vec3 renderPosition(Minecraft minecraft, float partialTick) {
-            if (payload.anchorKind() == MarkerPayload.AnchorKind.ENTITY
-                    && payload.entityId() != null
-                    && minecraft.level != null) {
-                Entity entity = minecraft.level.getEntity(payload.entityId());
-                if (entity != null && !entity.isRemoved() && entity.isAlive()) {
-                    return entity.getEyePosition(partialTick);
+            if (minecraft.level != null) {
+                Entity entity = payload.anchor().requiresEntity() ? minecraft.level.getEntity(payload.entityId()) : null;
+                if (!payload.anchor().requiresEntity() || (entity != null && entity.isAlive())) {
+                    Vec3 base = com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolve(
+                            payload.anchor(), minecraft.level, partialTick);
+                    org.joml.Quaterniond rotation = com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolveRotation(
+                            payload.anchor(), minecraft.level, partialTick);
+                    if (base != null && rotation != null) return new com.mine.geometry_node.core.engine.spatial.SpatialTransform(
+                            payload.worldOffset(), Vec3.ZERO, payload.localOffset(), Vec3.ZERO).position(base, rotation);
                 }
             }
             return interpolatedPosition(System.nanoTime());

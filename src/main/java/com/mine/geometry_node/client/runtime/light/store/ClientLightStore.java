@@ -55,8 +55,12 @@ public final class ClientLightStore {
         if (!GraphResourceTypeRegistry.LIGHT.equals(id.type()) || !id.scope().dimension().equals(level.dimension())) { reject(packet, "resource_scope_mismatch"); return; }
         if (packet.operation() == PacketGraphLight.REMOVE) { close(LIGHTS.remove(packet.resourceId())); return; }
         if (!LIGHTS.containsKey(packet.resourceId()) && LIGHTS.size() >= GraphLightService.MAX_LIGHTS_PER_LEVEL) { reject(packet, "client_resource_budget"); return; }
-        acceptedUpserts++;
         var definition = packet.definition();
+        if (!definition.config().transform().anchor().dimensionOr(level.dimension()).equals(level.dimension())) {
+            reject(packet, "anchor_dimension_mismatch");
+            return;
+        }
+        acceptedUpserts++;
         if (LOGGED_LIGHTS.size() < 8 && LOGGED_LIGHTS.add(packet.resourceId()))
             com.mine.geometry_node.GeometryNode.LOGGER.info("Node light client accept: resource={}, position={}, rotation={}, intensity={}, range={}, shadow={}",
                     packet.resourceId(), definition.position(), definition.rotation(), definition.intensity(),
@@ -82,7 +86,7 @@ public final class ClientLightStore {
         Entry entry = new Entry(packet.resourceId(), packet.entityId(), definition, projection);
         close(LIGHTS.put(packet.resourceId(), entry));
         entry.registration = ResourceResidency.watch(level, GraphLightService.worldBounds(definition, entry.offset),
-                definition.config().transform().entityId(), entry::reconcile);
+                GraphLightService.liveEntity(definition), entry::reconcile);
         entry.reconcile(entry.registration.isResident());
     }
 
@@ -98,32 +102,27 @@ public final class ClientLightStore {
             LightDefinition d = entry.definition;
             // Direct decision catches unload immediately, before queued watch callbacks drain.
             entry.reconcile(ResourceResidency.isResident(level, GraphLightService.worldBounds(d, entry.offset),
-                    d.config().transform().entityId()));
+                    GraphLightService.liveEntity(d)));
             if (!entry.active) continue;
             if (entry.projection != null && entry.projection.texture() == null) continue;
             if (entry.stationary != null) {
                 result.add(entry.stationary);
                 continue;
             }
-            var t = d.config().transform();
-            Vec3 offset = entry.offset;
-            Vec3 position = offset;
-            Quaternionf anchorRotation = new Quaternionf();
-            if (t.entityId() != null) {
-                Entity entity = level.getEntity(entry.entityId);
-                if (entity == null || !t.entityId().equals(entity.getUUID())) entity = level.getEntity(t.entityId());
-                if (entity == null || entity.isRemoved() || !t.entityId().equals(entity.getUUID())) continue;
-                float entityAlpha = level.tickRateManager().isEntityFrozen(entity)
-                        ? Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false) : alpha;
-                float yaw = entity.getViewYRot(entityAlpha);
-                float pitch = t.followView() ? entity.getViewXRot(entityAlpha) : 0;
-                if (!t.followView() && entity instanceof LivingEntity living)
-                    yaw = net.minecraft.util.Mth.rotLerp(entityAlpha, living.yBodyRotO, living.yBodyRot);
-                anchorRotation.rotationYXZ((float) Math.toRadians(-yaw), (float) Math.toRadians(pitch), 0);
-                Vec3 base = t.eyeAnchor() ? entity.getEyePosition(entityAlpha) : entity.getPosition(entityAlpha);
-                position = base.add(rotate(anchorRotation, offset));
+            var anchor=d.config().transform().anchor();
+            float entityAlpha=alpha;
+            if(anchor.requiresEntity()) {
+                Entity entity=level.getEntity(anchor.entityId());
+                if(entity==null||entity.isRemoved())continue;
+                if(level.tickRateManager().isEntityFrozen(entity))
+                    entityAlpha=Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
             }
-            Quaternionf orientation = anchorRotation.mul(entry.baseRotation).mul(entry.localRotation);
+            Vec3 base=com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolve(anchor,level,entityAlpha);
+            var anchorRotation=com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver.resolveRotation(anchor,level,entityAlpha);
+            if(base==null||anchorRotation==null)continue;
+            var transform=GraphLightService.spatialTransform(d);
+            Vec3 position=transform.position(base,anchorRotation);
+            Quaternionf orientation=new Quaternionf(transform.orientation(anchorRotation));
             result.add(new ResolvedLight(pair.getKey(), d, position,
                     rotate(orientation, new Vec3(0, 0, 1)), rotate(orientation, new Vec3(1, 0, 0)),
                     rotate(orientation, new Vec3(0, 1, 0)), entry.projection == null ? null : entry.projection.texture()));
@@ -136,8 +135,9 @@ public final class ClientLightStore {
                 (float) Math.toRadians(degrees.x % 360), (float) Math.toRadians(degrees.z % 360));
     }
     public static Vec3 localPosition(LightDefinition definition) {
-        return definition.position().add(rotate(localRotation(definition.rotation()), definition.config().transform().position()));
+        return GraphLightService.localPosition(definition);
     }
+
     public static Vec3 rotate(Quaternionf rotation, Vec3 value) {
         Vector3f rotated = rotation.transform(new Vector3f((float) value.x, (float) value.y, (float) value.z));
         return new Vec3(rotated.x, rotated.y, rotated.z);
@@ -231,7 +231,7 @@ public final class ClientLightStore {
             this.projection = projection;
             baseRotation = localRotation(definition.rotation());
             localRotation = localRotation(definition.config().transform().rotation());
-            offset = definition.position().add(rotate(baseRotation, definition.config().transform().position()));
+            offset = localPosition(definition);
         }
 
         void reconcile(boolean resident) {
@@ -245,7 +245,7 @@ public final class ClientLightStore {
             if (projection != null) projection.activate();
             Identifier texture = projection == null ? null : projection.texture();
             // Never cache a released identifier or a missing texture from before late byte arrival.
-            if (definition.config().transform().entityId() == null
+            if (!definition.config().transform().anchor().requiresEntity()
                     && (stationary == null || !Objects.equals(stationary.projectionTexture(), texture))) {
                 Quaternionf orientation = new Quaternionf().mul(baseRotation).mul(localRotation);
                 stationary = new ResolvedLight(id, definition, offset,

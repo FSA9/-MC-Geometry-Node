@@ -82,6 +82,7 @@ public final class PortValueTypeRegistry {
         register(types, GeometryValue.class, PortType.GEOMETRY);
         register(types, com.mine.geometry_node.core.node.value.light.LightConfig.class, PortType.LIGHT_CONFIG);
         register(types, AreaRef.class, PortType.AREA);
+        register(types, com.mine.geometry_node.core.engine.spatial.SpatialAnchor.class, PortType.SPATIAL_ANCHOR);
         register(types, SlotRef.class, PortType.SLOT);
         register(types, Entity.class, PortType.ENTITY);
         register(types, UUID.class, PortType.ENTITY);

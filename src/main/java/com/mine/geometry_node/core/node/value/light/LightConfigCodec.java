@@ -6,6 +6,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializer;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonDeserializationContext;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec;
+import java.lang.reflect.Type;
 import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 import com.mine.geometry_node.core.engine.graph.value.GraphValueCodec;
@@ -25,7 +31,17 @@ public final class LightConfigCodec implements GraphValueCodec<LightConfig>, Gra
                 }
                 var o = json.getAsJsonObject();
                 return new Vec3(o.get("x").getAsDouble(), o.get("y").getAsDouble(), o.get("z").getAsDouble());
-            }).create();
+            }).registerTypeAdapter(SpatialAnchor.class, new AnchorAdapter()).create();
+
+    private static final class AnchorAdapter implements JsonSerializer<SpatialAnchor>, JsonDeserializer<SpatialAnchor> {
+        private final SpatialAnchorCodec codec = new SpatialAnchorCodec();
+        @Override public JsonElement serialize(SpatialAnchor value, Type type, JsonSerializationContext context) {
+            return codec.encode(value, null);
+        }
+        @Override public SpatialAnchor deserialize(JsonElement value, Type type, JsonDeserializationContext context) {
+            return codec.decode(value, null);
+        }
+    }
     public static LightConfig fromMap(Map<?, ?> value) {
         try {
             return new LightConfigCodec().decode(GSON.toJsonTree(value), null);

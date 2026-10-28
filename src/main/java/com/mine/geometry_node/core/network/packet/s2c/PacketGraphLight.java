@@ -2,6 +2,7 @@ package com.mine.geometry_node.core.network.packet.s2c;
 
 import com.mine.geometry_node.core.engine.graph.light.LightDefinition;
 import com.mine.geometry_node.core.node.value.light.LightConfig;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -12,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 public record PacketGraphLight(Identifier dimension, String resourceId, int operation, int entityId,
                                LightDefinition definition) implements CustomPacketPayload {
     public static final int UPSERT = 0, REMOVE = 1, CLEAR = 2;
-    public static final Type<PacketGraphLight> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "graph_light"));
+    public static final Type<PacketGraphLight> TYPE = new Type<>(Identifier.fromNamespaceAndPath("geometry_node", "graph_light_v3"));
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketGraphLight> STREAM_CODEC =
             StreamCodec.of(PacketGraphLight::write, PacketGraphLight::read);
 
@@ -25,8 +26,8 @@ public record PacketGraphLight(Identifier dimension, String resourceId, int oper
         b.writeFloat(d.intensity()); b.writeFloat(d.range()); b.writeFloat(d.coneAngle()); b.writeFloat(d.edgeSoftness());
         vec(b, d.position()); vec(b, d.rotation());
         var t = d.config().transform();
-        b.writeBoolean(t.entityId() != null); if (t.entityId() != null) b.writeUUID(t.entityId());
-        vec(b, t.position()); vec(b, t.rotation()); b.writeBoolean(t.followView()); b.writeBoolean(t.eyeAnchor());
+        b.writeNbt(new SpatialAnchorCodec().serialize(t.anchor()));
+        vec(b, t.position()); vec(b, t.rotation());
         var s = d.config().shadow(); b.writeBoolean(s.enabled()); b.writeFloat(s.sourceSize());
         var v = d.config().volume();
         b.writeUtf(v.mode(), 16); b.writeFloat(v.strength()); b.writeFloat(v.density());
@@ -50,7 +51,7 @@ public record PacketGraphLight(Identifier dimension, String resourceId, int oper
         int entity = b.readInt(); String type = b.readUtf(16); Vec3 color = vec(b);
         float intensity = b.readFloat(), range = b.readFloat(), angle = b.readFloat(), edge = b.readFloat();
         Vec3 position = vec(b), rotation = vec(b);
-        var transform = new LightConfig.Transform(b.readBoolean() ? b.readUUID() : null, vec(b), vec(b), b.readBoolean(), b.readBoolean());
+        var transform = new LightConfig.Transform(new SpatialAnchorCodec().deserialize(b.readNbt()), vec(b), vec(b));
         var shadow = new LightConfig.Shadow(b.readBoolean(), b.readFloat());
         var volume = new LightConfig.Volume(b.readUtf(16), b.readFloat(), b.readFloat(), b.readFloat(), b.readFloat(), vec(b), b.readInt());
         var projection = new LightConfig.Projection(b.readUtf(1024), b.readBoolean(), b.readFloat(), b.readFloat());

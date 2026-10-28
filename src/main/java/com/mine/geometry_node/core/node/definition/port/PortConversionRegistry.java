@@ -158,6 +158,8 @@ public final class PortConversionRegistry {
                 (value, context) -> RichTextValue.from(value));
         register(rules, PortType.DICT, PortType.COLOR,
                 (value, context) -> ColorValue.from(value));
+        register(rules, PortType.DICT, PortType.SPATIAL_ANCHOR,
+                (value, context) -> com.mine.geometry_node.core.engine.spatial.SpatialAnchorCodec.fromMap((Map<?, ?>) value));
         register(rules, PortType.DICT, PortType.LIGHT_CONFIG,
                 (value, context) -> com.mine.geometry_node.core.node.value.light.LightConfigCodec.fromMap((Map<?, ?>) value));
         register(rules, PortType.DICT, PortType.ENTITY_TEMPLATE,

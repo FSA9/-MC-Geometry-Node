@@ -1,5 +1,7 @@
 package com.mine.geometry_node.core.engine.blueprint.spatial.area;
 
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+
 import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
 import com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets;
 
@@ -42,18 +44,30 @@ public final class AreaResourceStore {
     }
 
     public AreaResource upsert(MinecraftServer server, AreaAddress address,
-                               GraphResourceId owner, AreaShape shape,
-                               long creationGameTime,
+                               GraphResourceId owner, AreaShape shape, long creationGameTime,
                                LiveValue<Vec3> center, LiveValue<Vec3> size,
                                LiveValue<Vec3> rotation, LiveValue<Float> radius,
-                               LiveValue<Float> height,
-                               @Nullable UUID anchorEntityId) {
+                               LiveValue<Float> height, SpatialAnchor anchor) {
+        return upsert(server, address, owner, shape, creationGameTime, center, size, rotation, radius, height,
+                com.mine.geometry_node.core.engine.graph.expression.LiveValues.captureXyz(null, Vec3.ZERO, null, null, null),
+                com.mine.geometry_node.core.engine.graph.expression.LiveValues.captureXyz(null, Vec3.ZERO, null, null, null), anchor);
+    }
+
+    public AreaResource upsert(MinecraftServer server, AreaAddress address,
+                               GraphResourceId owner, AreaShape shape, long creationGameTime,
+                               LiveValue<Vec3> center, LiveValue<Vec3> size,
+                               LiveValue<Vec3> rotation, LiveValue<Float> radius,
+                               LiveValue<Float> height, LiveValue<Vec3> worldRotation,
+                               LiveValue<Vec3> localOffset, SpatialAnchor anchor) {
+        if (!java.util.Objects.requireNonNull(anchor, "anchor").dimensionOr(address.dimension()).equals(address.dimension()))
+            throw new IllegalArgumentException("Area anchor dimension mismatch");
+        UUID anchorEntityId = anchor.requiresEntity() ? anchor.entityId() : null;
         AreaResource resource;
         synchronized (this) {
             ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
             if (state.authored.containsKey(address) || address.id().startsWith("scene/")) throw new IllegalArgumentException("Reserved scene area address");
             resource = new AreaResource(address, owner, ++state.generation,
-                    shape, creationGameTime, center, size, rotation, radius, height, anchorEntityId);
+                    shape, creationGameTime, center, size, rotation, radius, height, worldRotation, localOffset, anchor);
             state.entries.put(address, resource);
             state.snapshotsByDimension.remove(address.dimension());
         }

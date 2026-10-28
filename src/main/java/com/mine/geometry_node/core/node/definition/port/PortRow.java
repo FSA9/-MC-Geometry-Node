@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.node.definition.port;
 
 import com.mine.geometry_node.core.node.meta.MetaKey;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import java.util.Map;
@@ -21,10 +22,10 @@ public record PortRow(
     }
 
     public PortRow {
-        // Select widgets are editor configuration controls. Their values may still
-        // participate in evaluation, but the widget itself owns the interaction;
-        // exposing a pin beside it creates two competing ways to edit one value.
-        if (uiHint == UIHint.SELECT) {
+        // Most selectors configure a node's schema; explicitly connectable selectors
+        // instead use their dropdown as an unconnected input's fallback value.
+        if (uiHint == UIHint.SELECT && !(hintParams != null
+                && Boolean.TRUE.equals(hintParams.get(PortMetaKeys.CONNECTABLE_SELECT)))) {
             if (leftPort != null) leftPort = leftPort.hiddenPin();
             if (rightPort != null) rightPort = rightPort.hiddenPin();
         }

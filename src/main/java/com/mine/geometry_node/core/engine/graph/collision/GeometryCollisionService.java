@@ -1,5 +1,10 @@
 package com.mine.geometry_node.core.engine.graph.collision;
 
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialTransform;
+import org.joml.Quaterniond;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver;
+
 import com.mine.geometry_node.core.engine.metadata.state.MetadataOwnerThread;
 
 import com.mine.geometry_node.GeometryNode;
@@ -23,6 +28,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 
@@ -54,17 +60,20 @@ public final class GeometryCollisionService implements ServerEngine {
         });
     }
 
-    public void create(ServerLevel level, GraphResourceId id, GeometryValue geometry, Entity anchor,
+    /** Position already contains the world base or the live entity-relative offset. */
+    public void create(ServerLevel level, GraphResourceId id, GeometryValue geometry, SpatialAnchor anchor,
                        LiveValue<Vec3> position, LiveValue<Vec3> worldRotation, LiveValue<Vec3> pivot,
                        LiveValue<Vec3> translation, LiveValue<Vec3> rotation, LiveValue<Vec3> scale) throws ModelProblem {
         requireType(id);
         if (!id.scope().dimension().equals(level.dimension())) throw new IllegalArgumentException("collision dimension mismatch");
-        if (anchor != null && (anchor.level() != level || anchor.isRemoved()))
+        if (!java.util.Objects.requireNonNull(anchor, "anchor").dimensionOr(level.dimension()).equals(level.dimension()))
             throw new IllegalArgumentException("collision anchor is not in this level");
         Map<GraphResourceId, Resource> resources = levels.computeIfAbsent(level, ignored -> new LinkedHashMap<>());
         if (!resources.containsKey(id) && resources.size() >= MAX_RESOURCES_PER_LEVEL)
             throw new IllegalArgumentException("geometry collision resource budget exceeded");
-        Resource resource = new Resource(id, geometry, anchor == null ? null : anchor.getUUID(), level.getGameTime(),
+        anchor = SpatialAnchorResolver.capture(anchor, level);
+        if (anchor == null) throw new IllegalArgumentException("collision anchor is unavailable");
+        Resource resource = new Resource(id, geometry, anchor.withDimension(level.dimension()), level.getGameTime(),
                 List.of(position.newState(), worldRotation.newState(), pivot.newState(), translation.newState(),
                         rotation.newState(), scale.newState()));
         resolve(level, resource);
@@ -136,7 +145,7 @@ public final class GeometryCollisionService implements ServerEngine {
             return;
         }
         // Missing anchors suspend the resource; evaluating them must not delete the retained definition.
-        if (resource.anchor != null && !ResourceResidency.isEntityResident(level, resource.anchor)) {
+        if (resource.anchorEntityId() != null && !ResourceResidency.isEntityResident(level, resource.anchorEntityId())) {
             reconcile(level, resource, false);
             return;
         }
@@ -154,29 +163,34 @@ public final class GeometryCollisionService implements ServerEngine {
         long time = level.getGameTime();
         var context = new ExpressionEvaluationContext(time, Math.max(0, time - resource.created),
                 new ServerExpressionBindingResolver(level.getServer()));
-        Vec3 anchorPosition = null;
-        if (resource.anchor != null) {
-            Entity entity = level.getEntity(resource.anchor);
-            if (entity == null || entity.isRemoved()) return;
-            anchorPosition = entity.position();
-        }
-        resolve(resource, context, anchorPosition);
+        Vec3 anchorPosition = SpatialAnchorResolver.resolve(resource.spatialAnchor, level);
+        Quaterniond anchorRotation = SpatialAnchorResolver.resolveRotation(resource.spatialAnchor, level);
+        if (anchorPosition == null || anchorRotation == null) return;
+        resolve(resource, context, anchorPosition, anchorRotation);
     }
 
     static void resolve(Resource resource, ExpressionEvaluationContext context, Vec3 anchorPosition) throws ModelProblem {
+        resolve(resource, context, anchorPosition == null ? Vec3.ZERO : anchorPosition, new Quaterniond());
+    }
+
+    static void resolve(Resource resource, ExpressionEvaluationContext context, Vec3 anchorPosition,
+                        Quaterniond anchorRotation) throws ModelProblem {
         if (resource.closed || !resource.enabled) return;
         List<Vec3> values = resource.values.stream().map(value -> value.evaluate(context)).toList();
         for (Vec3 value : values) {
             if (value == null || !Double.isFinite(value.x) || !Double.isFinite(value.y) || !Double.isFinite(value.z))
                 throw new IllegalArgumentException("nonfinite geometry collision transform");
         }
-        Vec3 position = anchorPosition == null ? values.getFirst() : anchorPosition.add(values.getFirst());
-        boolean shapeChanged = resource.resolved == null || !values.subList(1, 6).equals(resource.resolved.subList(1, 6));
+        Vec3 position = anchorPosition.add(values.getFirst());
+        Quaterniond outer = SpatialTransform.outerRotation(values.get(1), anchorRotation);
+        boolean shapeChanged = resource.resolved == null || !values.subList(1, 6).equals(resource.resolved.subList(1, 6))
+                || !outer.equals(resource.resolvedOuterRotation);
         if (shapeChanged) {
-            var mesh = GeometryCollisionMeshBuilder.build(resource.geometry, values.get(1), values.get(2),
+            var mesh = GeometryCollisionMeshBuilder.build(resource.geometry, outer, values.get(2),
                     values.get(3), values.get(4), values.get(5));
             PacketGeometryCollision.validateMesh(mesh);
             resource.prepared = ModelCollisionScene.prepare(mesh);
+            resource.resolvedOuterRotation = new Quaterniond(outer);
         }
         resource.shapeDirty |= shapeChanged;
         resource.positionDirty |= !position.equals(resource.position);
@@ -186,7 +200,7 @@ public final class GeometryCollisionService implements ServerEngine {
 
     private void refreshResidency(ServerLevel level, Resource resource) {
         if (resource.registration == null) {
-            resource.registration = ResourceResidency.watch(level, resource.bounds(), resource.anchor, resident -> {
+            resource.registration = ResourceResidency.watch(level, resource.bounds(), resource.anchorEntityId(), resident -> {
                 if (resource.closed) return;
                 if (!resident || resource.updating) { reconcile(level, resource, resident); return; }
                 try {
@@ -198,7 +212,7 @@ public final class GeometryCollisionService implements ServerEngine {
                 }
             });
         } else {
-            resource.registration.update(resource.bounds(), resource.anchor);
+            resource.registration.update(resource.bounds(), resource.anchorEntityId());
         }
         reconcile(level, resource, resource.registration.isResident());
     }
@@ -212,11 +226,11 @@ public final class GeometryCollisionService implements ServerEngine {
             return;
         }
         Vec3 position = resource.position;
-        ModelCollisionScene.publish(level, resource.id, resource.prepared, position.x, position.y, position.z, resource.anchor);
+        ModelCollisionScene.publish(level, resource.id, resource.prepared, position.x, position.y, position.z, resource.anchorEntityId());
         NetworkHandler.sendToPlayers(level.players(), new PacketGeometryCollision(level.dimension().identifier(),
                 GraphResourceIdCodec.encode(resource.id), operation, position,
                 operation == PacketGeometryCollision.UPSERT ? resource.prepared.mesh() : null,
-                operation == PacketGeometryCollision.UPSERT ? resource.anchor : null));
+                operation == PacketGeometryCollision.UPSERT ? resource.anchorEntityId() : null));
     }
 
     public MetadataCapabilities.Access metadata(ServerLevel level, GraphResourceId id) {
@@ -251,10 +265,10 @@ public final class GeometryCollisionService implements ServerEngine {
         for (Resource resource : resources.values()) {
             // A queued activation will broadcast; every sent copy must be covered by active teardown.
             if (!resource.active || resource.closed || !resource.enabled || resource.prepared == null
-                    || !ResourceResidency.isResident(player.level(), resource.bounds(), resource.anchor)) continue;
+                    || !ResourceResidency.isResident(player.level(), resource.bounds(), resource.anchorEntityId())) continue;
             NetworkHandler.sendToPlayer(player, new PacketGeometryCollision(player.level().dimension().identifier(),
                     GraphResourceIdCodec.encode(resource.id), PacketGeometryCollision.UPSERT,
-                    resource.position, resource.prepared.mesh(), resource.anchor));
+                    resource.position, resource.prepared.mesh(), resource.anchorEntityId()));
         }
     }
 
@@ -263,7 +277,7 @@ public final class GeometryCollisionService implements ServerEngine {
             if (level.getServer() != server) continue;
             for (Resource resource : List.copyOf(levels.get(level).values())) {
                 boolean anchorRemoved = release instanceof GraphResourceRelease.Entity entity
-                        && entity.dimension().equals(level.dimension()) && entity.entityId().equals(resource.anchor);
+                        && entity.dimension().equals(level.dimension()) && entity.entityId().equals(resource.anchorEntityId());
                 if (release.matches(resource.id) || anchorRemoved) remove(level, resource.id);
             }
         }
@@ -285,10 +299,11 @@ public final class GeometryCollisionService implements ServerEngine {
     static final class Resource {
         final GraphResourceId id;
         final GeometryValue geometry;
-        final UUID anchor;
+        final SpatialAnchor spatialAnchor;
         final long created;
         final List<LiveValue.State<Vec3>> values;
         List<Vec3> resolved;
+        Quaterniond resolvedOuterRotation;
         Vec3 position;
         ModelCollisionScene.Prepared prepared;
         RuntimeMetadata metadata = new RuntimeMetadata();
@@ -325,8 +340,16 @@ public final class GeometryCollisionService implements ServerEngine {
             return operation;
         }
 
-        Resource(GraphResourceId id, GeometryValue geometry, UUID anchor, long created, List<LiveValue.State<Vec3>> values) {
-            this.id = id; this.geometry = geometry; this.anchor = anchor; this.created = created; this.values = values;
+        @Nullable UUID anchorEntityId() { return spatialAnchor.requiresEntity() ? spatialAnchor.entityId() : null; }
+
+        Resource(GraphResourceId id, GeometryValue geometry, SpatialAnchor anchor, long created,
+                 List<LiveValue.State<Vec3>> values) {
+            this.id = id;
+            this.geometry = geometry;
+            this.spatialAnchor = java.util.Objects.requireNonNull(anchor, "anchor");
+            this.created = created;
+            this.values = List.copyOf(values);
         }
+
     }
 }

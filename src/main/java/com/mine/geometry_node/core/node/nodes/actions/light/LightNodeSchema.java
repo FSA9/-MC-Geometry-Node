@@ -3,6 +3,8 @@ package com.mine.geometry_node.core.node.nodes.actions.light;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
@@ -12,13 +14,24 @@ import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import java.util.Map;
 import java.util.Set;
 
-/** Shared editor presentation for creation, setters and legacy configuration nodes. */
+/** Shared editor presentation for creation, setters and configuration nodes. */
 final class LightNodeSchema {
     private static final Set<String> VOLUME_FIELDS = Set.of("strength", "density", "noise_strength",
             "noise_scale", "velocity", "seed");
     private static final Set<String> NOISE_FIELDS = Set.of("noise_strength", "noise_scale", "velocity", "seed");
 
     private LightNodeSchema() {}
+
+    /** Light resources change through explicit actions; these ports capture creation-time values. */
+    static PortDef transformPort(PortDef port) {
+        return new PortDef(port.id(),port.displayName(),port.type(),port.defaultValue(),port.hidePin(),false);
+    }
+    static void addTransformInputs(NodeDef.Builder builder) {
+        builder.addPassthroughInput(transformPort(AnchorNodeSupport.WORLD_OFFSET),UIHint.VECTOR);
+        builder.addPassthroughInput(transformPort(AnchorNodeSupport.WORLD_ROTATION),UIHint.VECTOR);
+        builder.addRow(PortRow.passthrough(transformPort(AnchorNodeSupport.LOCAL_OFFSET),UIHint.VECTOR,null,null));
+        builder.addRow(PortRow.passthrough(transformPort(AnchorNodeSupport.LOCAL_ROTATION),UIHint.VECTOR,null,null));
+    }
 
     static void addType(NodeDef.Builder b) {
         b.addPassthroughInput(LightConfigurationNode.port("type", PortType.STRING, "spot").hiddenPin(), UIHint.SELECT, null,

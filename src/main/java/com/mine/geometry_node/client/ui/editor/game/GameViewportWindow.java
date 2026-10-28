@@ -65,7 +65,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private final HeldMenuKey menuKey = new HeldMenuKey();
     private final UiActionButton modeButton;
     private final UiActionButton projectionButton;
-    private final UiActionButton resetButton;
     private final TextView waiting;
     private final SidebarLayoutController sidebarLayout;
     private final GameViewportSidebarPanel sidebarPanel;
@@ -100,8 +99,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         tools.setBackground(background(UiThemes.EDITOR.surface().header()));
         modeButton = action(context, "mode.game", this::openModeMenu);
         projectionButton = action(context, "projection.perspective", this::toggleProjection);
-        resetButton = action(context, "reset_camera", this::resetCamera);
-        for (TextView button : new TextView[]{modeButton, projectionButton, resetButton}) {
+        for (TextView button : new TextView[]{modeButton, projectionButton}) {
             tools.addView(button, toolbarButtonLayout());
         }
         HorizontalScrollView toolScroller = new UiHorizontalScrollView(context);
@@ -339,13 +337,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         return true;
     }
 
-    public void resetCamera() {
-        if (!mode().usesEditorCamera()) return;
-        viewport.releaseInteraction();
-        markInteracted();
-        if (!Boolean.getBoolean("gn.standalone")) EditViewportRuntime.resetToPlayer(this);
-    }
-
     public void toggleProjection() {
         if (mode() != ViewportMode.EDIT) return;
         viewport.releaseInteraction();
@@ -406,7 +397,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         snapOptionsButton.setTooltipText(tr("snap.options"));
         snapButton.setTooltipText(tr("scene.snap")+" ("+GameViewportShortcuts.display(BuiltinConfigEntries.GAME_VIEW_SNAP)+")");
         projectionButton.setVisibility(editing ? View.VISIBLE : View.GONE);
-        resetButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         visibilityButton.setVisibility(mode().usesEditorCamera() ? View.VISIBLE : View.GONE);
         projectionButton.setText(tr("projection.orthographic"));
         projectionButton.setSelected(editCamera.isOrthographic());

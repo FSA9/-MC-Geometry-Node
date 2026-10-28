@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.asset.repository;
 
 import com.mine.geometry_node.core.engine.system.asset.AssetRelativePath;
+import com.mine.geometry_node.core.engine.graph.storage.GraphStorageLayout;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -11,7 +12,7 @@ import java.nio.file.Path;
 
 /** Canonical path policy and world-owned root for server assets. */
 public final class ServerAssetPaths {
-    public static final LevelResource ROOT = new LevelResource("geometry_nodes");
+    public static final LevelResource ROOT = new LevelResource(GraphStorageLayout.DIRECTORY);
 
     private ServerAssetPaths() {
     }

@@ -8,7 +8,7 @@ import net.minecraft.resources.Identifier;
 
 public record PacketMarkerUpsert(MarkerPayload marker) implements CustomPacketPayload {
     public static final Type<PacketMarkerUpsert> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath("geometry_node", "marker_upsert")
+            Identifier.fromNamespaceAndPath("geometry_node", "marker_upsert_v3")
     );
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketMarkerUpsert> STREAM_CODEC = StreamCodec.of(
             (buf, packet) -> packet.marker.write(buf),

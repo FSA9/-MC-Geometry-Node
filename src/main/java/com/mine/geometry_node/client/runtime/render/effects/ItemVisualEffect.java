@@ -13,7 +13,6 @@ import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -22,53 +21,43 @@ import org.joml.Quaternionf;
 public class ItemVisualEffect extends AbstractVisualEffect {
     private static final int FULL_BRIGHT_LIGHT = 15728880;
 
-    private final int sourceEntityId;
+    private final int renderSeed;
+    private final VisualTransform transform;
     private ItemStack itemStack = ItemStack.EMPTY;
     private ItemDisplayContext displayContext = ItemDisplayContext.FIXED;
 
-    private final Vec3 bTrans;
-    private final Vec3 bRot;
     private final Vec3 bScale;
-    private final LiveValue.State<Vec3> translation;
-    private final LiveValue.State<Vec3> rotation;
     private final LiveValue.State<Vec3> scale;
 
     public ItemVisualEffect(PacketSpawnDynamicVisual packet) {
         super(packet);
         CompoundTag data = packet.extraData();
+        this.transform = VisualTransform.capture(this,data);
+        var anchor = transform.anchor().anchor();
+        this.renderSeed = anchor.entityId() == null ? 0 : anchor.entityId().hashCode();
 
-        if (data != null) {
-            this.sourceEntityId = data.getIntOr("sourceId", -1);
+        this.bScale = new Vec3(data.getDoubleOr("bScaleX", 1.0), data.getDoubleOr("bScaleY", 1.0), data.getDoubleOr("bScaleZ", 1.0));
 
-            this.bTrans = new Vec3(data.getDoubleOr("bTransX", 0.0), data.getDoubleOr("bTransY", 0.0), data.getDoubleOr("bTransZ", 0.0));
-            this.bRot = new Vec3(data.getDoubleOr("bRotX", 0.0), data.getDoubleOr("bRotY", 0.0), data.getDoubleOr("bRotZ", 0.0));
-            this.bScale = new Vec3(data.getDoubleOr("bScaleX", 1.0), data.getDoubleOr("bScaleY", 1.0), data.getDoubleOr("bScaleZ", 1.0));
-
-            String contextStr = data.getStringOr("item_display", "fixed");
-            try {
-                this.displayContext = ItemDisplayContext.valueOf(contextStr.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                this.displayContext = ItemDisplayContext.FIXED;
-            }
-
-            ClientLevel level = Minecraft.getInstance().level;
-            if (level != null && data.contains("item")) {
-                CompoundTag itemTag = data.getCompoundOrEmpty("item");
-                this.itemStack = ItemStack.OPTIONAL_CODEC
-                        .parse(level.registryAccess().createSerializationContext(NbtOps.INSTANCE), itemTag)
-                        .result()
-                        .orElse(ItemStack.EMPTY);
-
-                if (this.itemStack.isEmpty()) {
-                    System.err.println("[ItemVisualEffect] 警告：客户端接收到的物品为空！");
-                }
-            }
-        } else {
-            this.sourceEntityId = -1;
-            this.bTrans = Vec3.ZERO; this.bRot = Vec3.ZERO; this.bScale = new Vec3(1, 1, 1);
+        String contextStr = data.getStringOr("item_display", "fixed");
+        try {
+            this.displayContext = ItemDisplayContext.valueOf(contextStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            this.displayContext = ItemDisplayContext.FIXED;
         }
-        this.translation = captureXyz(DrawItemVisual.TRANSLATION_PORT, "translation", bTrans);
-        this.rotation = captureXyz(DrawItemVisual.ROTATION_PORT, "rotation", bRot);
+
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level != null && data.contains("item")) {
+            CompoundTag itemTag = data.getCompoundOrEmpty("item");
+            this.itemStack = ItemStack.OPTIONAL_CODEC
+                    .parse(level.registryAccess().createSerializationContext(NbtOps.INSTANCE), itemTag)
+                    .result()
+                    .orElse(ItemStack.EMPTY);
+
+            if (this.itemStack.isEmpty()) {
+                System.err.println("[ItemVisualEffect] 警告：客户端接收到的物品为空！");
+            }
+        }
+
         this.scale = captureXyz(DrawItemVisual.SCALE_PORT, "scale", bScale);
     }
 
@@ -78,36 +67,14 @@ public class ItemVisualEffect extends AbstractVisualEffect {
 
         ClientLevel level = Minecraft.getInstance().level;
 
-        // 【核心逻辑】：默认锚点是世界原点 (0,0,0)
-        Vec3 anchorPos = Vec3.ZERO;
-
-        // 如果绑定了实体，锚点就变成实体的当前坐标
-        if (level != null && this.sourceEntityId != -1) {
-            Entity entity = level.getEntity(this.sourceEntityId);
-            if (entity != null) {
-                anchorPos = entity.getPosition(partialTick);
-            } else {
-                return; // 实体暂时离开渲染距离，跳过渲染
-            }
-        }
-
         ExpressionEvaluationContext expressionContext = expressionContext(partialTick);
-        Vec3 trans = translation.evaluate(expressionContext);
-        Vec3 rot = rotation.evaluate(expressionContext);
+        VisualTransform.Frame frame = transform.resolve(level,partialTick,expressionContext);
+        if(frame==null)return;
         Vec3 evaluatedScale = scale.evaluate(expressionContext);
-
-        // 最终坐标 = 锚点 + 偏移 - 相机坐标
-        Vec3 renderPos = anchorPos.add(trans).subtract(camPos);
-
+        Vec3 renderPos = frame.position().subtract(camPos);
         poseStack.pushPose();
-        poseStack.translate(renderPos.x, renderPos.y, renderPos.z);
-
-        Quaternionf rotationQuat = new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(-rot.y),
-                (float) Math.toRadians(rot.x),
-                (float) Math.toRadians(rot.z)
-        );
-        poseStack.mulPose(rotationQuat);
+        poseStack.translate(renderPos.x,renderPos.y,renderPos.z);
+        poseStack.mulPose(new Quaternionf(frame.orientation()));
         poseStack.scale((float) evaluatedScale.x, (float) evaluatedScale.y, (float) evaluatedScale.z);
 
         ItemStackRenderState renderState = new ItemStackRenderState();
@@ -117,7 +84,7 @@ public class ItemVisualEffect extends AbstractVisualEffect {
                 this.displayContext,
                 level,
                 null,
-                sourceEntityId
+                renderSeed
         );
         renderState.submit(
                 poseStack,

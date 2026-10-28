@@ -11,6 +11,8 @@ import com.mine.geometry_node.core.node.definition.node.*;
 import com.mine.geometry_node.core.node.definition.port.*;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
 import com.mine.geometry_node.core.node.value.light.LightConfig;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
@@ -32,8 +34,6 @@ public final class LightActionNode extends BaseNode {
         return definition(data);
     }
     private NodeDef definition(NodeData data) {
-        boolean legacyConfig = data != null && ((data.inputs != null && data.inputs.containsKey("config"))
-                || data.isInputConnected("config"));
         var b = NodeDef.builder(typeId(), NodeType.ACTION, Component.translatable("geometry_node.node." + typeId()))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null));
         if (operation == Operation.UPDATE)
@@ -43,13 +43,12 @@ public final class LightActionNode extends BaseNode {
         if (operation == Operation.REMOVE) return LightNodeSchema.finish(b.build(), null, false);
         LightNodeSchema.addType(b);
         b.addPassthroughInput(StandardPorts.COLOR.toInput(ColorValue.WHITE), UIHint.INPUT);
-        LightConfigurationNode.add(b,"position",PortType.XYZ,Vec3.ZERO,UIHint.VECTOR);
-        LightConfigurationNode.add(b,"rotation",PortType.XYZ,Vec3.ZERO,UIHint.VECTOR);
+        b.addRow(AnchorNodeSupport.row(StandardPorts.SPATIAL_ANCHOR));
+        LightNodeSchema.addTransformInputs(b);
         LightConfigurationNode.add(b,"source_visible",PortType.BOOLEAN,false,UIHint.CHECKBOX);
         LightConfigurationNode.add(b,"intensity",PortType.FLOAT,1f,UIHint.INPUT);
         LightNodeSchema.addShape(b);
-        if (legacyConfig || operation == Operation.UPDATE)
-            LightConfigurationNode.add(b,"config",PortType.LIGHT_CONFIG,LightConfig.DEFAULT,UIHint.DEFAULT);
+        b.addRow(PortRow.passthrough(LightConfigurationNode.port("config",PortType.LIGHT_CONFIG,LightConfig.DEFAULT),UIHint.DEFAULT,null,null));
         return LightNodeSchema.finish(b.build(), data, false);
     }
     private <T> T value(GraphDataContext c,String id,Class<T> type,T fallback) {
@@ -57,6 +56,8 @@ public final class LightActionNode extends BaseNode {
     }
     @Override public ExecutionResult execute(ExecutionContext c) {
         if (operation == Operation.CREATE) c.setNodeResult(StandardPorts.RESOURCE_ID.getId(), "");
+        if (operation != Operation.REMOVE && AnchorNodeSupport.read(c, StandardPorts.SPATIAL_ANCHOR) == null)
+            return next(StandardPorts.FLOW_OUT.getId());
         if (!(c.getLevel() instanceof ServerLevel level)) return next(StandardPorts.FLOW_OUT.getId());
         try {
             GraphResourceId id;
@@ -88,14 +89,18 @@ public final class LightActionNode extends BaseNode {
     LightDefinition readDefinition(GraphDataContext c) {
         ColorValue color=value(c,StandardPorts.COLOR.getId(),ColorValue.class,ColorValue.WHITE);
         LightConfig config=value(c,"config",LightConfig.class,LightConfig.DEFAULT);
+        SpatialAnchor anchor = AnchorNodeSupport.capture(c, StandardPorts.SPATIAL_ANCHOR);
+        if (anchor == null) throw new IllegalArgumentException("Light spatial anchor is unavailable");
+        config = config.withTransform(new LightConfig.Transform(anchor,
+                AnchorNodeSupport.vector(c,AnchorNodeSupport.LOCAL_OFFSET),AnchorNodeSupport.vector(c,AnchorNodeSupport.LOCAL_ROTATION)));
         config = config.withShadow(new LightConfig.Shadow(config.shadow().enabled(),
                 value(c,"source_size",Float.class,config.shadow().sourceSize())));
         config = config.withArea(new LightConfig.Area(value(c,"area_width",Float.class,config.area().width()),
                 value(c,"area_height",Float.class,config.area().height())));
         return new LightDefinition(value(c,"type",String.class,"spot"),new Vec3(color.r(),color.g(),color.b()),
                 value(c,"intensity",Float.class,1f),value(c,"range",Float.class,16f),value(c,"cone_angle",Float.class,45f),
-                value(c,"edge_softness",Float.class,0.25f),value(c,"position",Vec3.class,Vec3.ZERO),
-                value(c,"rotation",Vec3.class,Vec3.ZERO),config
+                value(c,"edge_softness",Float.class,0.25f),AnchorNodeSupport.vector(c,AnchorNodeSupport.WORLD_OFFSET),
+                AnchorNodeSupport.vector(c,AnchorNodeSupport.WORLD_ROTATION),config
                         .withSourceVisible(value(c,"source_visible",Boolean.class,config.sourceVisible())));
     }
     @Override public Object compute(GraphDataContext c,String port) {

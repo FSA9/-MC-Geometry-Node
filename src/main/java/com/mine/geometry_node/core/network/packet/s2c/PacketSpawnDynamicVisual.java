@@ -26,7 +26,7 @@ public record PacketSpawnDynamicVisual(
     private static final int MAX_FORMULA_LENGTH = 4096;
 
     public static final Type<PacketSpawnDynamicVisual> TYPE = new Type<>(
-            Identifier.fromNamespaceAndPath("geometry_node", "spawn_dynamic_visual")
+            Identifier.fromNamespaceAndPath("geometry_node", "spawn_dynamic_visual_v3")
     );
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PacketSpawnDynamicVisual> STREAM_CODEC = StreamCodec.of(

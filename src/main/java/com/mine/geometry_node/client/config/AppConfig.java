@@ -153,6 +153,7 @@ public class AppConfig {
         public String viewMenu = "GRAVE_ACCENT";
         public String add = "SHIFT+A";
         public String focus = "F";
+        public String alignToEntity = "KP_DECIMAL";
         public String cancel = "ESCAPE";
         public String toggleSnap = "SHIFT+TAB";
         public String move = "G";
@@ -180,6 +181,7 @@ public class AppConfig {
             copy.viewMenu = viewMenu;
             copy.add = add;
             copy.focus = focus;
+            copy.alignToEntity = alignToEntity;
             copy.cancel = cancel;
             copy.toggleSnap = toggleSnap;
             copy.move = move;

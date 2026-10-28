@@ -5,7 +5,9 @@ import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 
 import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
-import com.mine.geometry_node.core.engine.system.marker.model.MarkerAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchorResolver;
+import com.mine.geometry_node.core.engine.spatial.SpatialTransform;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAudience;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerInstance;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerRequest;
@@ -100,10 +102,14 @@ public final class MarkerService {
         long expiresAt = request.durationTicks() > 0
                 ? safeAdd(gameTime, request.durationTicks())
                 : MarkerInstance.NEVER_EXPIRES;
+        SpatialAnchor captured = SpatialAnchorResolver.capture(request.anchor(), level);
+        if (captured == null) return false;
         MarkerInstance marker = new MarkerInstance(
                 request.address(),
                 type.id(),
-                request.anchor(),
+                captured,
+                request.worldOffset(),
+                request.localOffset(),
                 request.text(),
                 request.showDistance(),
                 gameTime,
@@ -186,11 +192,12 @@ public final class MarkerService {
 
         for (MarkerAddress address : List.copyOf(addresses)) {
             MarkerInstance marker = storage.get(address).orElse(null);
-            if (marker == null || !(marker.anchor() instanceof MarkerAnchor.Entity anchor)) {
+            if (marker == null || !marker.anchor().requiresEntity()) {
                 continue;
             }
-            if (!anchor.dimension().equals(level.dimension())) {
-                MarkerInstance moved = marker.withAnchor(new MarkerAnchor.Entity(level.dimension(), anchor.entityId()));
+            SpatialAnchor anchor = marker.anchor();
+            if (anchor.followPosition() && !anchor.dimension().equals(level.dimension())) {
+                MarkerInstance moved = marker.withAnchor(anchor.withDimension(level.dimension()));
                 storage.put(moved);
             }
             state.entityStates.remove(address);
@@ -246,34 +253,24 @@ public final class MarkerService {
     }
 
     private MarkerPayload resolvePayload(MinecraftServer server, MarkerInstance marker) {
-        if (marker.anchor() instanceof MarkerAnchor.Coordinate coordinate) {
-            return new MarkerPayload(
-                    marker.address(), marker.typeId(), coordinate.dimension().identifier().toString(),
-                    MarkerPayload.AnchorKind.COORDINATE, null, true, coordinate.position(),
-                    marker.text(), marker.showDistance()
-            );
-        }
-
-        MarkerAnchor.Entity anchor = (MarkerAnchor.Entity) marker.anchor();
+        SpatialAnchor anchor = marker.anchor();
         ServerLevel level = server.getLevel(anchor.dimension());
-        Entity entity = level != null ? level.getEntity(anchor.entityId()) : null;
-        if (entity == null || entity.isRemoved() || !entity.isAlive()) {
-            return inactivePayload(marker);
+        Vec3 base = level == null ? null : SpatialAnchorResolver.resolve(anchor, level);
+        org.joml.Quaterniond rotation = level == null ? null : SpatialAnchorResolver.resolveRotation(anchor, level);
+        if (anchor.requiresEntity()) {
+            Entity entity = level == null ? null : level.getEntity(anchor.entityId());
+            if (entity == null || !entity.isAlive()) base = null;
         }
-        return new MarkerPayload(
-                marker.address(), marker.typeId(), anchor.dimension().identifier().toString(),
-                MarkerPayload.AnchorKind.ENTITY, anchor.entityId(), true, entity.getEyePosition(),
-                marker.text(), marker.showDistance()
-        );
+        boolean active = base != null && rotation != null;
+        Vec3 position = active ? new SpatialTransform(marker.worldOffset(), Vec3.ZERO, marker.localOffset(), Vec3.ZERO)
+                .position(base, rotation) : Vec3.ZERO;
+        return new MarkerPayload(marker.address(), marker.typeId(), anchor, marker.worldOffset(), marker.localOffset(),
+                active, position, marker.text(), marker.showDistance());
     }
 
     private static MarkerPayload inactivePayload(MarkerInstance marker) {
-        MarkerAnchor.Entity anchor = (MarkerAnchor.Entity) marker.anchor();
-        return new MarkerPayload(
-                marker.address(), marker.typeId(), anchor.dimension().identifier().toString(),
-                MarkerPayload.AnchorKind.ENTITY, anchor.entityId(), false, Vec3.ZERO,
-                marker.text(), marker.showDistance()
-        );
+        return new MarkerPayload(marker.address(), marker.typeId(), marker.anchor(), marker.worldOffset(), marker.localOffset(),
+                false, Vec3.ZERO, marker.text(), marker.showDistance());
     }
 
     private static void publishUpsert(MinecraftServer server, MarkerInstance marker, MarkerPayload payload) {
@@ -331,7 +328,7 @@ public final class MarkerService {
             for (Set<MarkerAddress> addresses : entityIndex.values()) {
                 for (MarkerAddress address : addresses) {
                     MarkerInstance marker = storage.get(address).orElse(null);
-                    if (marker != null && marker.anchor() instanceof MarkerAnchor.Entity) {
+                    if (marker != null && marker.anchor().requiresEntity()) {
                         markers.add(marker);
                     }
                 }
@@ -341,22 +338,22 @@ public final class MarkerService {
         }
 
         void index(MarkerInstance marker) {
-            if (marker.anchor() instanceof MarkerAnchor.Entity entity) {
-                entityIndex.computeIfAbsent(entity.entityId(), ignored -> new HashSet<>()).add(marker.address());
+            if (marker.anchor().requiresEntity()) {
+                entityIndex.computeIfAbsent(marker.anchor().entityId(), ignored -> new HashSet<>()).add(marker.address());
             }
         }
 
         void unindex(MarkerInstance marker) {
-            if (!(marker.anchor() instanceof MarkerAnchor.Entity entity)) {
+            if (!marker.anchor().requiresEntity()) {
                 return;
             }
-            Set<MarkerAddress> addresses = entityIndex.get(entity.entityId());
+            Set<MarkerAddress> addresses = entityIndex.get(marker.anchor().entityId());
             if (addresses == null) {
                 return;
             }
             addresses.remove(marker.address());
             if (addresses.isEmpty()) {
-                entityIndex.remove(entity.entityId());
+                entityIndex.remove(marker.anchor().entityId());
             }
         }
     }

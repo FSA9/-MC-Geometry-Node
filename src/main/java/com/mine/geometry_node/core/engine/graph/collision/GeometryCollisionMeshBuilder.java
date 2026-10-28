@@ -23,6 +23,15 @@ public final class GeometryCollisionMeshBuilder {
         return build(geometry, new Transform(worldRotation, pivot, translation, localRotation, scale));
     }
 
+    public static ModelCollisionMesh build(GeometryValue geometry, Quaterniond outerRotation,
+            Vec3 pivot, Vec3 translation, Vec3 localRotation, Vec3 scale) {
+        Vec3 safeScale = finite(scale, new Vec3(1, 1, 1));
+        if (Math.abs(safeScale.x) < 1e-6 || Math.abs(safeScale.y) < 1e-6 || Math.abs(safeScale.z) < 1e-6)
+            throw new IllegalArgumentException("collision scale must be nonzero");
+        return build(geometry, new Transform(new Quaterniond(outerRotation), finite(pivot, Vec3.ZERO),
+                finite(translation, Vec3.ZERO), quaternion(localRotation), safeScale));
+    }
+
     /** Authored scenes use XYZ radians; avoid converting through the graph's YXZ degree convention. */
     public static ModelCollisionMesh buildScene(GeometryValue geometry, Vec3 rotation, Vec3 scale) {
         return build(geometry, new Transform(new Quaterniond(), Vec3.ZERO, Vec3.ZERO,

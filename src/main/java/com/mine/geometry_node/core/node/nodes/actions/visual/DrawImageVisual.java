@@ -4,35 +4,36 @@ import com.mine.geometry_node.GeometryNode;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionContext;
 import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.graph.expression.ExpressionData;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
+import com.mine.geometry_node.core.engine.spatial.VisualSpatialAnchors;
 import com.mine.geometry_node.core.engine.system.image.ImagePathReference;
 import com.mine.geometry_node.core.engine.system.image.ImageVisualRequest;
 import com.mine.geometry_node.core.engine.system.image.ServerImageAssetService;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
-import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.nodes.BaseNode;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
-import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
+import com.mine.geometry_node.core.node.meta.PortMetaKeys;
+import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
+import com.mine.geometry_node.core.node.util.VisualTransformInputs;
 import com.mine.geometry_node.core.utils.RateLimitedLog;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /** Displays an image as a temporary plane in world space. */
 public final class DrawImageVisual extends BaseNode {
     public static final String TYPE_ID = "draw_image_visual";
     public static final String SIZE_MODE_STRETCH = "stretch";
     public static final String SIZE_MODE_FIT = "fit";
-    public static final PortDef POSITION_PORT = StandardPorts.XYZ.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.world_position").liveExpression();
-    public static final PortDef ROTATION_PORT = StandardPorts.ROTATION.toInput(Vec3.ZERO).withDisplayName("geometry_node.port.world_rotation").liveExpression();
     public static final PortDef WIDTH_PORT = StandardPorts.WIDTH.toInput(1.0F).liveExpression();
     public static final PortDef HEIGHT_PORT = StandardPorts.HEIGHT.toInput(1.0F).liveExpression();
     public static final PortDef ALPHA_PORT = StandardPorts.ALPHA.toInput(1.0F).liveExpression();
@@ -44,8 +45,11 @@ public final class DrawImageVisual extends BaseNode {
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .input(StandardPorts.PATH, "path")
-                        .input(StandardPorts.XYZ, "xyz")
-                        .input(StandardPorts.ROTATION, "rotation")
+                        .input(StandardPorts.SPATIAL_ANCHOR, "geometry_node.anchor.help")
+                        .input(AnchorNodeSupport.WORLD_OFFSET.id(), "geometry_node.transform.world_offset.help")
+                        .input(AnchorNodeSupport.WORLD_ROTATION.id(), "geometry_node.transform.world_rotation.help")
+                        .input(AnchorNodeSupport.LOCAL_OFFSET.id(), "geometry_node.transform.local_offset.help")
+                        .input(AnchorNodeSupport.LOCAL_ROTATION.id(), "geometry_node.transform.local_rotation.help")
                         .input(StandardPorts.SIZE_MODE, "size_mode")
                         .input(StandardPorts.WIDTH, "width")
                         .input(StandardPorts.HEIGHT, "height")
@@ -55,8 +59,11 @@ public final class DrawImageVisual extends BaseNode {
                         .build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)
-                .addPassthroughInput(POSITION_PORT, UIHint.VECTOR)
-                .addPassthroughInput(ROTATION_PORT, UIHint.VECTOR)
+                .addRow(AnchorNodeSupport.row(StandardPorts.SPATIAL_ANCHOR))
+                .addPassthroughInput(AnchorNodeSupport.WORLD_OFFSET, UIHint.VECTOR)
+                .addPassthroughInput(AnchorNodeSupport.WORLD_ROTATION, UIHint.VECTOR)
+                .addRow(PortRow.passthrough(AnchorNodeSupport.LOCAL_OFFSET, UIHint.VECTOR,null,null))
+                .addRow(PortRow.passthrough(AnchorNodeSupport.LOCAL_ROTATION, UIHint.VECTOR,null,null))
                 .addPassthroughInput(StandardPorts.SIZE_MODE.toInput(SIZE_MODE_STRETCH), UIHint.SELECT, null, Map.of(
                                 PortMetaKeys.OPTIONS, new String[]{SIZE_MODE_STRETCH, SIZE_MODE_FIT},
                                 PortMetaKeys.OPTION_LABELS, new String[]{
@@ -86,8 +93,9 @@ public final class DrawImageVisual extends BaseNode {
 
         try {
             ImagePathReference reference = ImagePathReference.parse(rawPath);
-            Vec3 position = valueOr(getInput(context, StandardPorts.XYZ.getId(), Vec3.class), Vec3.ZERO);
-            Vec3 rotation = valueOr(getInput(context, StandardPorts.ROTATION.getId(), Vec3.class), Vec3.ZERO);
+            SpatialAnchor anchor = AnchorNodeSupport.capture(context, StandardPorts.SPATIAL_ANCHOR);
+            if (anchor == null
+                    || !VisualSpatialAnchors.canBroadcast(anchor, level)) return next(StandardPorts.FLOW_OUT.getId());
             String sizeMode = valueOr(getInput(context, StandardPorts.SIZE_MODE.getId(), String.class), SIZE_MODE_STRETCH);
             if (!SIZE_MODE_FIT.equals(sizeMode)) sizeMode = SIZE_MODE_STRETCH;
             float width = clamp(valueOr(getInput(context, StandardPorts.WIDTH.getId(), Float.class), 1.0f), 0.01f, 1024.0f);
@@ -97,28 +105,25 @@ public final class DrawImageVisual extends BaseNode {
             double visibleRange = clamp(valueOr(getInput(context, StandardPorts.VISIBILITY_RANGE.getId(), Float.class), 128.0f), 1.0f, 4096.0f);
 
             CompoundTag extraData = new CompoundTag();
+            VisualSpatialAnchors.write(extraData, "anchor", anchor, level);
             extraData.putString("imageSource", reference.source().id());
-            extraData.putDouble("posX", position.x);
-            extraData.putDouble("posY", position.y);
-            extraData.putDouble("posZ", position.z);
-            extraData.putDouble("rotX", rotation.x);
-            extraData.putDouble("rotY", rotation.y);
-            extraData.putDouble("rotZ", rotation.z);
             extraData.putString("sizeMode", sizeMode);
             extraData.putFloat("width", width);
             extraData.putFloat("height", height);
             extraData.putFloat("alpha", alpha);
 
             Map<String, ExpressionData> expressions = new LinkedHashMap<>();
-            putInputExpression(context, StandardPorts.XYZ.getId(), "position", expressions);
-            putInputExpression(context, StandardPorts.ROTATION.getId(), "rotation", expressions);
+            putInputExpression(context, StandardPorts.SPATIAL_ANCHOR.getId(), "anchor", expressions);
+            var transform = VisualTransformInputs.write(context, extraData, expressions);
             putInputExpression(context, StandardPorts.WIDTH.getId(), "width", expressions);
             putInputExpression(context, StandardPorts.HEIGHT.getId(), "height", expressions);
             putInputExpression(context, StandardPorts.ALPHA.getId(), "alpha", expressions);
 
+            Vec3 center = VisualSpatialAnchors.worldPosition(anchor, level, transform);
+            if (center == null) return next(StandardPorts.FLOW_OUT.getId());
             if (reference.source() == ImagePathReference.Source.SERVER) {
                 return ExecutionResult.externalWait(ServerImageAssetService.ID, new ImageVisualRequest(
-                        reference.path(), duration, expressions, extraData, position, visibleRange));
+                        reference.path(), duration, expressions, extraData, center, visibleRange));
             }
             extraData.putString("imageRef", reference.path());
 
@@ -128,7 +133,7 @@ public final class DrawImageVisual extends BaseNode {
                     duration,
                     expressions,
                     extraData,
-                    position,
+                    center,
                     visibleRange,
                     List.of()
             );

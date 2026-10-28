@@ -20,6 +20,7 @@ public class DebugLineEffect extends DirectedVisualEffect {
     public void render(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource, SubmitNodeCollector submitNodeCollector, Vec3 camPos, float partialTick) {
         // 3. 获取当前帧动态计算后的起点和终点
         DirectedAnchors anchors = computeAnchors(partialTick);
+        if (anchors == null) return;
 
         Vec3 relStart = anchors.start().subtract(camPos);
         Vec3 relEnd = anchors.end().subtract(camPos);

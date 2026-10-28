@@ -541,7 +541,7 @@ public final class DebugRendererSessionManager {
         return new GeometryDebugElement(
                 mesh.id(), mesh.graphId(), mesh.type(), color, mesh.showPoints(),
                 mesh.center(), mesh.size(), mesh.rotation(),
-                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.anchorUuid(), mesh.anchorEntityId()
+                mesh.vertices(), mesh.edges(), mesh.faces(), mesh.placement(), mesh.anchorEntityId()
         );
     }
 
@@ -821,6 +821,7 @@ public final class DebugRendererSessionManager {
                 signature = mix(signature, mesh.anchorUuid().getLeastSignificantBits());
             }
             signature = mix(signature, mesh.anchorEntityId());
+        signature = mix(signature, mesh.placement() == null ? 0 : mesh.placement().hashCode());
             signature = mix(signature, Double.doubleToLongBits(mesh.center().x));
             signature = mix(signature, Double.doubleToLongBits(mesh.center().y));
             signature = mix(signature, Double.doubleToLongBits(mesh.center().z));

@@ -168,7 +168,7 @@ public final class GraphPatchPlanner {
                 if (set.expectedOldValue() == null && !isNewReference(set.port())) {
                     throw fail("EXPECTED_OLD_VALUE_REQUIRED", "修改现有节点端口必须提供 expected_old_value");
                 }
-                JsonElement actual = GSON.toJsonTree(node.inputs != null && node.inputs.containsKey(port.portId())
+                JsonElement actual = GraphJsonIO.toJsonValue(node.inputs != null && node.inputs.containsKey(port.portId())
                         ? node.inputs.get(port.portId()) : row.leftPort().defaultValue());
                 if (set.expectedOldValue() != null && !actual.equals(set.expectedOldValue())) {
                     throw fail("OLD_VALUE_CONFLICT", "端口旧值已变化: " + nodeId + "." + port.portId());

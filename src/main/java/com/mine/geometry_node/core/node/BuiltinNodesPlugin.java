@@ -309,6 +309,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // Data/World
         registry.register("data/world", new GetGameTime());
         registry.register("data/world", new GetWorldTime());
+        registry.register("data/world", new CreateSpatialAnchor());
 
         // Data/Area
         registry.register("data/area", new GetAreaId());

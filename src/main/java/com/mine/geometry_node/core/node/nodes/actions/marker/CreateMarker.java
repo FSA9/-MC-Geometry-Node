@@ -8,15 +8,17 @@ import com.mine.geometry_node.core.engine.blueprint.runtime.ExecutionResult;
 import com.mine.geometry_node.core.engine.system.marker.MarkerService;
 import com.mine.geometry_node.core.engine.system.marker.type.MarkerTypeRegistry;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerAddress;
-import com.mine.geometry_node.core.engine.system.marker.model.MarkerAnchor;
 import com.mine.geometry_node.core.engine.system.marker.model.MarkerRequest;
 import com.mine.geometry_node.core.node.definition.node.NodeComment;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
-import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
+import com.mine.geometry_node.core.node.util.AnchorNodeSupport;
+import com.mine.geometry_node.core.engine.spatial.SpatialAnchor;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
+import com.mine.geometry_node.core.node.definition.port.PortDef;
+import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.definition.port.StandardPorts;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import net.minecraft.network.chat.Component;
@@ -30,57 +32,31 @@ import com.mine.geometry_node.core.node.util.ResourceNodeSupport;
 
 public final class CreateMarker extends BaseNode {
     public static final String TYPE_ID = "create_marker";
-    public static final String ANCHOR_COORDINATE = "coordinate";
-    public static final String ANCHOR_ENTITY = "entity";
-
     @Override
     public NodeDef getDefaultDefinition() {
-        return buildDefinition(ANCHOR_COORDINATE);
-    }
-
-    @Override
-    public NodeDef getDefinition(NodeData instanceData) {
-        Object binding = instanceData == null ? null : instanceData.inputs.get(StandardPorts.ANCHOR_TYPE.getId());
-        return buildDefinition(ANCHOR_ENTITY.equals(binding) ? ANCHOR_ENTITY : ANCHOR_COORDINATE);
-    }
-
-    private NodeDef buildDefinition(String bindingType) {
-        boolean entityBinding = ANCHOR_ENTITY.equals(bindingType);
-        NodeComment.Builder comment = NodeComment.builder(TYPE_ID)
-                .text("summary")
-                .input(StandardPorts.FLOW_IN, "flow_in")
-                .output(StandardPorts.FLOW_OUT, "flow_out")
-                .output(StandardPorts.BOOL, "bool")
-                .input(StandardPorts.KEY, "key")
-                .input(StandardPorts.MARKER_TYPE, "marker_type")
-                .input(StandardPorts.PLAYER, "player")
-                .input(StandardPorts.ANCHOR_TYPE, "anchor_type")
-                .input(entityBinding ? StandardPorts.TARGET_ENTITY : StandardPorts.XYZ,
-                        entityBinding ? "target_entity" : "xyz")
-                .input(StandardPorts.MESSAGE, "message")
-                .input(StandardPorts.SHOW_DISTANCE, "show_distance")
-                .input(StandardPorts.TICK, "tick");
-        NodeDef.Builder builder = NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_marker"))
-                .comment(comment.build())
+        return NodeDef.builder(TYPE_ID, NodeType.ACTION, Component.translatable("geometry_node.node.create_marker"))
+                .comment(NodeComment.builder(TYPE_ID).text("summary")
+                        .input(StandardPorts.FLOW_IN, "flow_in").output(StandardPorts.FLOW_OUT, "flow_out")
+                        .output(StandardPorts.BOOL, "bool").input(StandardPorts.KEY, "key")
+                        .input(StandardPorts.MARKER_TYPE, "marker_type").input(StandardPorts.PLAYER, "player")
+                        .input(StandardPorts.SPATIAL_ANCHOR, "spatial_anchor")
+                        .input(AnchorNodeSupport.WORLD_OFFSET.id(), "world_offset")
+                        .input(AnchorNodeSupport.LOCAL_OFFSET.id(), "local_offset")
+                        .input(StandardPorts.MESSAGE, "message").input(StandardPorts.SHOW_DISTANCE, "show_distance")
+                        .input(StandardPorts.TICK, "tick").build())
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(ResourceNodeSupport.creationRow(StandardPorts.KEY.getId(), StandardPorts.RESOURCE_ID.getId()))
                 .addPassthroughInput(StandardPorts.MESSAGE.toInput(""), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(), UIHint.SELECT, null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID))
+                .addPassthroughInput(StandardPorts.MARKER_TYPE.toInput(MarkerTypeRegistry.DEFAULT_TYPE_ID).hiddenPin(), UIHint.SELECT,
+                        null, Map.of(PortMetaKeys.DYNAMIC_REGISTRY_ID, MarkerTypeRegistry.DYNAMIC_REGISTRY_ID))
                 .addPassthroughInput(StandardPorts.PLAYER.toInput(), UIHint.DEFAULT)
-                .addPassthroughInput(StandardPorts.ANCHOR_TYPE.toInput(bindingType).hiddenPin(), UIHint.SELECT, null, Map.of(
-                                PortMetaKeys.OPTIONS, new String[]{ANCHOR_COORDINATE, ANCHOR_ENTITY},
-                                PortMetaKeys.OPTION_LABELS, new String[]{
-                                        "geometry_node.marker.anchor.coordinate",
-                                        "geometry_node.marker.anchor.entity"
-                                }
-                        ));
-        if (entityBinding) {
-            builder.addPassthroughInput(StandardPorts.TARGET_ENTITY.toInput(), UIHint.DEFAULT);
-        } else {
-            builder.addPassthroughInput(StandardPorts.XYZ.toInput(Vec3.ZERO), UIHint.VECTOR);
-        }
-        return builder.addPassthroughInput(StandardPorts.SHOW_DISTANCE.toInput(true), UIHint.CHECKBOX)
+                .addRow(AnchorNodeSupport.row(StandardPorts.SPATIAL_ANCHOR))
+                .addPassthroughInput(PortDef.create("world_offset",
+                        "geometry_node.port.world_offset", PortType.XYZ, Vec3.ZERO), UIHint.VECTOR)
+                .addRow(PortRow.passthrough(PortDef.create("local_offset",
+                        "geometry_node.port.local_offset", PortType.XYZ, Vec3.ZERO), UIHint.VECTOR, null, null))
+                .addPassthroughInput(StandardPorts.SHOW_DISTANCE.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.TICK.toInput(0), UIHint.INPUT, null, Map.of(PortMetaKeys.NUMERIC_MIN, 0))
                 .build();
     }
@@ -94,7 +70,7 @@ public final class CreateMarker extends BaseNode {
         if (level != null) {
             try {
                 MarkerAddress address = resolveAddress(context, key);
-                MarkerAnchor anchor = resolveAnchor(context, level);
+                SpatialAnchor anchor = resolveAnchor(context, level);
                 if (address != null && anchor != null) {
                     String typeId = valueOr(getInput(context, StandardPorts.MARKER_TYPE.getId(), String.class),
                             MarkerTypeRegistry.DEFAULT_TYPE_ID);
@@ -102,7 +78,10 @@ public final class CreateMarker extends BaseNode {
                     boolean showDistance = valueOr(getInput(context, StandardPorts.SHOW_DISTANCE.getId(), Boolean.class), true);
                     int duration = Math.max(0, valueOr(getInput(context, StandardPorts.TICK.getId(), Integer.class), 0));
                     success = MarkerService.INSTANCE.upsert(level,
-                            new MarkerRequest(address, typeId, anchor, text, showDistance, duration));
+                            new MarkerRequest(address, typeId, anchor,
+                                    AnchorNodeSupport.vector(context, AnchorNodeSupport.WORLD_OFFSET),
+                                    AnchorNodeSupport.vector(context, AnchorNodeSupport.LOCAL_OFFSET),
+                                    text, showDistance, duration));
                     if (success) context.setNodeResult(StandardPorts.RESOURCE_ID.getId(), GraphResourceReferences.encode(address));
                 }
             } catch (IllegalArgumentException ignored) {
@@ -129,18 +108,17 @@ public final class CreateMarker extends BaseNode {
         return player.getUUID().equals(address.viewerId()) ? address : null;
     }
 
-    private MarkerAnchor resolveAnchor(ExecutionContext context, ServerLevel fallbackLevel) {
-        String anchorType = valueOr(getInput(context, StandardPorts.ANCHOR_TYPE.getId(), String.class), ANCHOR_COORDINATE);
-        if (ANCHOR_ENTITY.equals(anchorType)) {
-            Entity target = getInputFromList(
-                    context, StandardPorts.TARGET_ENTITY.getId(), 0, Entity.class);
-            if (target == null || target.isRemoved() || !target.isAlive() || !(target.level() instanceof ServerLevel targetLevel)) {
-                return null;
-            }
-            return new MarkerAnchor.Entity(targetLevel.dimension(), target.getUUID());
+    private SpatialAnchor resolveAnchor(ExecutionContext context, ServerLevel fallbackLevel) {
+        SpatialAnchor anchor = AnchorNodeSupport.read(context, StandardPorts.SPATIAL_ANCHOR);
+        if (anchor == null) return null;
+        anchor = anchor.withDimension(anchor.dimensionOr(fallbackLevel.dimension()));
+        ServerLevel anchorLevel = fallbackLevel.getServer().getLevel(anchor.dimension());
+        if (anchorLevel == null) return null;
+        if (anchor.isEntity()) {
+            Entity entity = anchorLevel.getEntity(anchor.entityId());
+            if (entity == null || entity.isRemoved() || !entity.isAlive()) return null;
         }
-        Vec3 position = valueOr(getInput(context, StandardPorts.XYZ.getId(), Vec3.class), Vec3.ZERO);
-        return new MarkerAnchor.Coordinate(fallbackLevel.dimension(), position);
+        return anchor;
     }
 
     private static <T> T valueOr(T value, T fallback) {
