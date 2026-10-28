@@ -9,6 +9,8 @@ import java.util.*;
 public record SceneObject(UUID id, String typeId, String name, Vec3 position, Vec3 color,
                           boolean enabled, long revision, Map<String,String> parameters, Vec3 rotation, Vec3 scale, OwnerMetadata metadata) {
     public static final String POINT_LIGHT="point_light";
+    public static final String SPOT_LIGHT="spot_light";
+    public static final String AREA_LIGHT="area_light";
     public static final int MAX_PARAMETERS = 32;
     public SceneObject {
         Objects.requireNonNull(metadata);

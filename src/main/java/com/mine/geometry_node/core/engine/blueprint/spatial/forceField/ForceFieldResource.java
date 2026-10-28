@@ -19,6 +19,7 @@ public final class ForceFieldResource {
     private final AreaAddress area;
     private final long creationGameTime;
     private final LiveValue.State<Float> strength;
+    @Nullable private final UUID authoredObjectId;
     /** Mirrors the referenced Area's spatial anchor for entity-unload cleanup. */
     @Nullable
     private UUID anchorEntityId;
@@ -26,8 +27,24 @@ public final class ForceFieldResource {
     public ForceFieldResource(ForceFieldAddress address, GraphResourceId owner, long generation,
                               AreaAddress area, long creationGameTime,
                               LiveValue<Float> strength, @Nullable UUID anchorEntityId) {
+        this(address, Objects.requireNonNull(owner, "owner"), generation, area, creationGameTime,
+                strength, anchorEntityId, null);
+    }
+
+    public static ForceFieldResource authored(ForceFieldAddress address, UUID objectId, long revision,
+            AreaAddress area, long creationGameTime, float strength) {
+        if (!Float.isFinite(strength)) throw new IllegalArgumentException("Nonfinite force-field strength");
+        return new ForceFieldResource(address, null, revision, area, creationGameTime,
+                com.mine.geometry_node.core.engine.graph.expression.LiveValues.captureFloat(null, strength, null),
+                null, Objects.requireNonNull(objectId));
+    }
+
+    private ForceFieldResource(ForceFieldAddress address, @Nullable GraphResourceId owner, long generation,
+            AreaAddress area, long creationGameTime, LiveValue<Float> strength,
+            @Nullable UUID anchorEntityId, @Nullable UUID authoredObjectId) {
         this.address = Objects.requireNonNull(address, "address");
-        this.owner = Objects.requireNonNull(owner, "owner");
+        this.owner = owner;
+        this.authoredObjectId = authoredObjectId;
         this.generation = generation;
         this.area = Objects.requireNonNull(area, "area");
         this.creationGameTime = creationGameTime;
@@ -36,7 +53,9 @@ public final class ForceFieldResource {
     }
 
     public ForceFieldAddress address() { return address; }
-    public GraphResourceId owner() { return owner; }
+    @Nullable public GraphResourceId owner() { return owner; }
+    public boolean isAuthored() { return authoredObjectId != null; }
+    @Nullable public UUID authoredObjectId() { return authoredObjectId; }
     public long generation() { return generation; }
     public AreaAddress area() { return area; }
     public long creationGameTime() { return creationGameTime; }

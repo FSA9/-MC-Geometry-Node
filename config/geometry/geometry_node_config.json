@@ -42,12 +42,14 @@
       "toggleRightSidebar": "N"
     },
     "gameView": {
-      "entityMove": "CTRL+RIGHT_CLICK",
+      "edit": "CTRL+RIGHT_CLICK",
+      "entityMove": "SHIFT+RIGHT_CLICK",
       "toggleProjection": "KP_5",
       "toggleSidebar": "N",
       "viewMenu": "GRAVE_ACCENT",
       "add": "SHIFT+A",
       "focus": "F",
+      "alignToEntity": "KP_DECIMAL",
       "cancel": "ESCAPE",
       "toggleSnap": "SHIFT+TAB",
       "move": "G",

@@ -30,7 +30,11 @@ public final class ScenePresentations {
         registerCategory("geometry", new Presentation(ViewportVisualization.Layer.GEOMETRY, false));
         registerCategory("area", new Presentation(ViewportVisualization.Layer.AREA, false));
         registerCategory("collision", new Presentation(ViewportVisualization.Layer.COLLISION, false));
+        registerCategory("force_field", new Presentation(ViewportVisualization.Layer.FORCE_FIELD, false,
+                new DebugRenderStyle(DebugRenderChannel.FORCE_FIELD.color(), true), SceneGeometryInputs::areaMesh));
         register(SceneObject.POINT_LIGHT, new Presentation(ViewportVisualization.Layer.LIGHT, true));
+        register(SceneObject.SPOT_LIGHT, new Presentation(ViewportVisualization.Layer.LIGHT, true));
+        register(SceneObject.AREA_LIGHT, new Presentation(ViewportVisualization.Layer.LIGHT, true));
         // Native geometry remains supplied by the existing interaction debug provider.
         register(SceneNativeInteractions.TYPE_ID, new Presentation(ViewportVisualization.Layer.INTERACTION, false));
         register(com.mine.geometry_node.core.engine.system.scene.SceneNativeEntities.TYPE_ID,

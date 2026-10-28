@@ -17,6 +17,7 @@ import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import icyllis.modernui.mc.MuiModApi;
@@ -123,8 +124,12 @@ public final class WorldObjectEditorDialog extends ModalWindowView {
         LinearLayout footer = new LinearLayout(getContext());
         footer.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         footer.setPadding(px(18), px(10), px(18), px(10));
-        footer.addView(button(Component.translatable("geometry_node.entity_editor.close").getString(), this::requestClose),
-                new LinearLayout.LayoutParams(-2, px(32)));
+        UiActionButton close = button(Component.translatable("geometry_node.entity_editor.close").getString(), this::requestClose);
+        UIUtils.setLockedTextSize(close, UiMetrics.TEXT_BODY);
+        close.setSingleLine(true);
+        close.setMinWidth(px(88)); close.setMinimumWidth(px(88));
+        close.setPadding(px(12), 0, px(12), 0);
+        footer.addView(close, new LinearLayout.LayoutParams(-2, px(32)));
         root.addView(footer, new LinearLayout.LayoutParams(-1, -2));
         setContent(root); selectTab(0);
     }

@@ -15,6 +15,50 @@ public final class ViewportSceneMath {
 
     public record Projected(double u, double v, double depth, boolean visible) {}
     public record Ray(Vec3 origin, Vec3 direction, double length) {}
+    public record ProjectedSegment(Projected from, Projected to) {}
+
+    /** Clips the segment against the homogeneous frustum before dividing by w.
+     * Both endpoints may be outside while the segment still crosses the visible image. */
+    public static ProjectedSegment projectSegment(PresentedViewportFrame frame, Vec3 from, Vec3 to) {
+        if (frame == null || from == null || to == null) return null;
+        var camera = frame.camera();
+        var matrix = frame.viewProjection(new Matrix4d());
+        var a = new Vector4d(from.x - camera.x(), from.y - camera.y(), from.z - camera.z(), 1);
+        var b = new Vector4d(to.x - camera.x(), to.y - camera.y(), to.z - camera.z(), 1);
+        matrix.transform(a); matrix.transform(b);
+        if (!finite(a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w)) return null;
+        double start = 0, end = 1;
+        // x/y sides, depth convention, far plane and a positive perspective divisor.
+        for (int plane = 0; plane < 7; plane++) {
+            double first = clipDistance(a, plane, frame.zeroToOne());
+            double last = clipDistance(b, plane, frame.zeroToOne());
+            if (first < 0 && last < 0) return null;
+            if (first < 0) start = Math.max(start, first / (first - last));
+            else if (last < 0) end = Math.min(end, first / (first - last));
+            if (start > end) return null;
+        }
+        return new ProjectedSegment(segmentPoint(new Vector4d(a).lerp(b, start), frame.zeroToOne()),
+                segmentPoint(new Vector4d(a).lerp(b, end), frame.zeroToOne()));
+    }
+
+    private static double clipDistance(Vector4d p, int plane, boolean zeroToOne) {
+        return switch (plane) {
+            case 0 -> p.w + p.x;
+            case 1 -> p.w - p.x;
+            case 2 -> p.w + p.y;
+            case 3 -> p.w - p.y;
+            case 4 -> zeroToOne ? p.z : p.w + p.z;
+            case 5 -> p.w - p.z;
+            default -> p.w - EPSILON;
+        };
+    }
+
+    private static Projected segmentPoint(Vector4d p, boolean zeroToOne) {
+        // Clipped intersections can land a few ulps outside a plane.
+        return new Projected(Math.clamp((p.x / p.w + 1) * .5, 0, 1),
+                Math.clamp((1 - p.y / p.w) * .5, 0, 1),
+                Math.clamp(p.z / p.w, zeroToOne ? 0 : -1, 1), true);
+    }
 
     public static Projected project(PresentedViewportFrame frame, Vec3 point) {
         if (frame == null || point == null) return new Projected(Double.NaN, Double.NaN, Double.NaN, false);

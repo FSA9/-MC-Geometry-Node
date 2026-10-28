@@ -130,6 +130,7 @@ public final class ServerWorldObjectQueries {
     }
     static WorldObjectPage execute(ServerPlayer player, PacketWorldObjectQuery request) {
         if (!WorldEditPermissions.canManageWorld(player)) return WorldObjectPage.empty(request.requestId(), "permission_denied");
+        if (request.lookup() != null) return lookup(player, request);
         WorldObjectQuery query = request.query(); MinecraftServer server = player.level().getServer();
         String current = player.level().dimension().identifier().toString();
         if (query.range() == WorldObjectQuery.Range.NEARBY && !query.dimension().isEmpty() && !query.dimension().equals(current))
@@ -214,5 +215,28 @@ public final class ServerWorldObjectQueries {
         return new WorldObjectPage(request.requestId(), entries, collector.truncated,
                 dimensions.stream().sorted().toList(), catalog.types(), coverage,
                 WorldObjectTypeCatalog.resultMessage(collector.truncated, metadataTruncated), collector.counts());
+    }
+
+    private static WorldObjectPage lookup(ServerPlayer player, PacketWorldObjectQuery request) {
+        var target = request.lookup();
+        MinecraftServer server = player.level().getServer();
+        ServerLevel level = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION, net.minecraft.resources.Identifier.parse(target.dimension())));
+        WorldObjectProvider provider = WorldObjectProviders.all().stream()
+                .filter(value -> value.id().equals(target.provider())).findFirst().orElse(null);
+        if (level == null || provider == null) return WorldObjectPage.empty(request.requestId(), "");
+        var context = new WorldObjectProvider.Context(server, List.of(level), target.dimension()::equals);
+        WorldObjectEntry entry = provider.lookup(context, target.objectId());
+        if (entry == null || !entry.provider().equals(target.provider()) || !entry.dimension().equals(target.dimension()))
+            return WorldObjectPage.empty(request.requestId(), "");
+        var access = provider.resolveMetadata(context, entry);
+        entry = TAG_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectTagEdits()).advertise(entry, access);
+        try {
+            entry = DATA_EDITS.computeIfAbsent(player.connection, ignored -> new WorldObjectDataEdits(server.registryAccess()))
+                    .advertise(entry, access);
+        } catch (IllegalArgumentException | IllegalStateException | UnsupportedOperationException unavailable) {
+            // Preserve the base editor and TAG capability when DATA cannot be represented.
+        }
+        return new WorldObjectPage(request.requestId(), List.of(entry), false, List.of(target.dimension()), List.of(), List.of(), "");
     }
 }

@@ -51,7 +51,6 @@ import net.minecraft.network.chat.Component;
 public final class GameViewportWindow extends LinearLayout implements AreaEditorWindow, com.mine.geometry_node.client.ui.workspace.surface.HistorySurface, SurfaceRegistrationAware, EditViewportFlightInput.ViewMenuOwner {
     private final com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization visualization = new com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization();
     private final com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneMenus sceneMenus;
-    private final com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel propertiesPanel;
     private final EditorSidebar sidebar;
     private final UiActionButton visibilityButton;
     private final UiActionButton snapButton;
@@ -82,6 +81,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     private boolean toolOrthographic;
     private long nextSidebarRefresh;
     private long creationRequest;
+    private long editorRequest;
     private final Runnable refresh = this::refresh;
     private final Runnable refreshVisibility = this::updateVisibility;
 
@@ -149,7 +149,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         sidebar = new EditorSidebar(context);
         sidebar.installRegisteredPanels(new SidebarPanelContext(context, SidebarPanelScope.GAME_VIEWPORT, this));
         sidebarPanel = sidebar.requirePanel(GameViewportSidebarPanel.PANEL_ID, GameViewportSidebarPanel.class);
-        propertiesPanel = sidebar.requirePanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID, com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.class);
         workspace.addView(sidebar, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.25f));
         sidebarLayout = new SidebarLayoutController(workspace, content, divider, sidebar, 0.25f, null);
         sidebar.setOnCollapseRequested(() -> sidebarLayout.setVisible(false, true));
@@ -241,12 +240,35 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         com.mine.geometry_node.client.runtime.game.scene.ViewportCreationPlacement.resolve(placement, position -> post(() -> {
             if (request != creationRequest || disposed || !registered || mode() != ViewportMode.EDIT
                     || !viewport.canNavigate() || !placement.current(com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.snapshot())) return;
-            sceneMenus.createAt(menuX,menuY,position,()->{
-                sidebarLayout.setVisible(true,true);
-                sidebar.selectPanel(com.mine.geometry_node.client.ui.editor.game.sidebar.ScenePropertiesPanel.PANEL_ID);
-                viewport.requestFocus();
-            });
+            sceneMenus.createAt(menuX, menuY, position, viewport::requestFocus);
         }));
+    }
+
+    void openObjectContextMenu(float rootX, float rootY,
+                               java.util.function.Consumer<com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu> build) {
+        closeSceneMenus(); closeViewMenu(); viewport.prepareViewMenu();
+        sceneMenus.contextAt(rootX, rootY, build);
+    }
+
+    public boolean canEditSelectedObject() {
+        return !disposed && shown && registered && mode() == ViewportMode.EDIT
+                && com.mine.geometry_node.client.integration.game.WorkspaceSceneObjectEditor.supports(
+                        com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE.snapshot(), viewport.selectedTargets());
+    }
+
+    public void editSelectedObject() {
+        if (!canEditSelectedObject()) return;
+        closeSceneMenus(); closeViewMenu(); viewport.prepareViewMenu();
+        var service = com.mine.geometry_node.client.feature.scene.ClientSceneService.INSTANCE;
+        var snapshot = service.snapshot();
+        var selection = viewport.selectedTargets();
+        long request = ++editorRequest;
+        java.util.function.BooleanSupplier scope = () -> !disposed && shown && mode() == ViewportMode.EDIT
+                && service.snapshot().worldGeneration() == snapshot.worldGeneration()
+                && service.snapshot().dimension().equals(snapshot.dimension());
+        com.mine.geometry_node.client.integration.game.WorkspaceSceneObjectEditor.show(this, snapshot, selection,
+                () -> scope.getAsBoolean() && request == editorRequest && registered && canEditSelectedObject()
+                        && selection.equals(viewport.selectedTargets()), scope, this::refresh);
     }
 
     public ViewportMode mode() { return modes.current(); }
@@ -403,7 +425,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         for (UiActionButton button : new UiActionButton[]{modeButton, projectionButton, snapButton, gridButton})
             button.setPalette(toolbarPalette(button.isSelected()));
         if (sidebarPanel != null) sidebarPanel.refresh();
-        if (propertiesPanel != null) propertiesPanel.refresh();
     }
 
     private void updateVisibility() {
@@ -467,7 +488,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
         long now = System.nanoTime();
         if (sidebarLayout.isVisible() && now >= nextSidebarRefresh) {
             sidebarPanel.refresh();
-            propertiesPanel.refresh();
             nextSidebarRefresh = now + 250_000_000L;
         }
         boolean available = viewport.isFrameAvailable();
@@ -499,10 +519,7 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
     public boolean dispatchTouchEvent(icyllis.modernui.view.MotionEvent event) {
         int action = event.getActionMasked();
         if (action == icyllis.modernui.view.MotionEvent.ACTION_DOWN) {
-            boolean dismissedProperties = propertiesPanel.dismissIfOutside(event.getRawX(), event.getRawY());
-            boolean dismissedScene = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
-            dismissingMenuGesture = dismissedProperties || dismissedScene;
-            propertiesPanel.commitIfOutside(event.getRawX(),event.getRawY());
+            dismissingMenuGesture = sceneMenus.dismissIfOutside(event.getRawX(), event.getRawY());
         }
         if (dismissingMenuGesture) {
             if (action == icyllis.modernui.view.MotionEvent.ACTION_UP
@@ -514,16 +531,6 @@ public final class GameViewportWindow extends LinearLayout implements AreaEditor
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (propertiesPanel.isMenuOpen()) {
-            if (sceneMenus.isOpen()) closeSceneMenus();
-            KeyBinding cancel = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_CANCEL));
-            if (event.getAction() == KeyEvent.ACTION_DOWN && cancel != null && UiInputBindings.matches(cancel, event)) {
-                propertiesPanel.dismissMenu();
-                viewport.requestFocus();
-                return true;
-            }
-            return super.dispatchKeyEvent(event);
-        }
         KeyBinding menuBinding = KeyBinding.parse(ConfigManager.INSTANCE.get(BuiltinConfigEntries.GAME_VIEW_MENU));
         if (menuKey.dispatch(event, menuBinding, !(findFocus() instanceof EditText) && viewport.canNavigate()
                 && !EditViewportFlightInput.isCaptured(), this::openViewMenu, this::confirmViewMenu, viewMenu::dismiss)) return true;

@@ -20,7 +20,7 @@ public final class WorldObjectCategories {
         builtIn("interaction", Set.of("native"), (p,t) -> t.equals("minecraft:interaction"));
         builtIn("entity", Set.of("native"), (p,t) -> !t.equals("minecraft:interaction"));
         builtIn("schematic", Set.of("schematic"), (p,t) -> p.equals("schematic"));
-        builtIn("force_field", Set.of("force_field"), (p,t) -> p.equals("force_field"));
+        builtIn("force_field", Set.of("scene", "force_field"), (p,t) -> p.equals("force_field") || t.startsWith("force_field/"));
     }
     private WorldObjectCategories() {}
     private static void builtIn(String id, Set<String> providers, BiPredicate<String,String> accepts) {

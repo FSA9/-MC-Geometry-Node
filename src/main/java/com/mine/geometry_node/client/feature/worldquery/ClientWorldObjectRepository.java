@@ -6,6 +6,7 @@ import com.mine.geometry_node.core.engine.system.worldquery.WorldObjectEntries;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectPage;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectQuery;
+import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectLookup;
 import com.mine.geometry_node.core.engine.system.worldquery.metadata.WorldObjectTagEdits;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectType;
 import com.mine.geometry_node.core.network.NetworkHandler;
@@ -483,7 +484,16 @@ public final class ClientWorldObjectRepository {
             clientQueue.accept(prepared.dispatch());
             return prepared.id();
         }
+        /** Resolve one current owner using the same bounded request lifecycle and metadata leases as tables. */
+        public long lookup(WorldObjectLookup target) {
+            PreparedQuery prepared = prepareQuery(WorldObjectQuery.defaults(), false, Objects.requireNonNull(target));
+            clientQueue.accept(prepared.dispatch());
+            return prepared.id();
+        }
         private PreparedQuery prepareQuery(WorldObjectQuery query, boolean retainRows) {
+            return prepareQuery(query, retainRows, null);
+        }
+        private PreparedQuery prepareQuery(WorldObjectQuery query, boolean retainRows, WorldObjectLookup lookup) {
             Objects.requireNonNull(query);
             final long id, expectedGeneration;
             final List<PendingData> canceledData = new ArrayList<>();
@@ -509,7 +519,7 @@ public final class ClientWorldObjectRepository {
                 final PacketWorldObjectQuery packet;
                 synchronized (ClientWorldObjectRepository.this) {
                     if (closed || generation != expectedGeneration || requestId != id) return;
-                    packet = new PacketWorldObjectQuery(sessionId, id, query);
+                    packet = new PacketWorldObjectQuery(sessionId, id, query, lookup);
                 }
                 // Transport may block. A newer query/close/disconnect must still acquire the repository lock.
                 String failureMessage = null;

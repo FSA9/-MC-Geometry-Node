@@ -16,6 +16,8 @@ import com.mine.geometry_node.core.node.definition.port.*;
 import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.meta.PortMetaKeys;
 import com.mine.geometry_node.core.node.nodes.actions.area.CreateArea;
+import com.mine.geometry_node.core.node.nodes.actions.area.CreateForceField;
+import com.mine.geometry_node.core.engine.system.scene.light.SceneLightTypes;
 import com.mine.geometry_node.core.node.nodes.actions.collision.CreateGeometryCollision;
 import com.mine.geometry_node.core.node.nodes.actions.geometry.CreateMesh;
 import com.mine.geometry_node.core.node.nodes.actions.display_entity.SpawnInteractionEntity;
@@ -68,7 +70,7 @@ public final class SceneNodeInputs {
     private static synchronized Model model(String typeId) { return MODELS.computeIfAbsent(typeId, SceneNodeInputs::build); }
     private static Model build(String typeId) {
         Builder b = new Builder();
-        if (!typeId.equals(SceneObject.POINT_LIGHT) && !typeId.equals(SceneNativeInteractions.TYPE_ID) && !Set.of("geometry", "collision", "area").stream()
+        if (!SceneLightTypes.isLight(typeId) && !typeId.equals(SceneNativeInteractions.TYPE_ID) && !Set.of("geometry", "collision", "area", "force_field").stream()
                 .anyMatch(category -> List.of("cube", "cylinder", "uv_sphere").stream().anyMatch(shape -> typeId.equals(category + "/" + shape))))
             return new Model(List.of(), new Schema(List.copyOf(b.fields.values())), List.of());
         if (SceneNativeInteractions.TYPE_ID.equals(typeId)) {
@@ -82,12 +84,13 @@ public final class SceneNodeInputs {
                     StandardPorts.WIDTH.getId(), row -> b.scalar(row, "width", Double.MIN_VALUE, Double.MAX_VALUE),
                     StandardPorts.HEIGHT.getId(), row -> b.scalar(row, "height", Double.MIN_VALUE, Double.MAX_VALUE),
                     StandardPorts.RESPONSIVE.getId(), row -> b.scalar(row, "responsive", 0, 1)));
-        } else if (SceneObject.POINT_LIGHT.equals(typeId)) {
-            NodeData data = data("create_light", "type", "point");
+        } else if (SceneLightTypes.isLight(typeId)) {
+            String lightType = SceneLightTypes.lightType(typeId);
+            NodeData data = data("create_light", "type", lightType);
             NodeDef def = new LightActionNode(LightActionNode.Operation.CREATE).getDefinition(data);
             Map<String, Consumer<PortRow>> lightBindings = new HashMap<>();
             lightBindings.put(StandardPorts.KEY.getId(), row -> b.context(row, o -> "scene:" + o.id(), "Scene object UUID supplies resource ownership"));
-            lightBindings.put("type", row -> b.context(row, o -> "point", "Fixed point-light preset"));
+            lightBindings.put("type", row -> b.context(row, o -> lightType, "Fixed light preset"));
             lightBindings.put(StandardPorts.SPATIAL_ANCHOR.getId(), row -> b.provided(row, "World anchor supplied by the enclosing scene"));
             lightBindings.put("color", b::color);
             lightBindings.put("world_offset", row -> b.envelopeVector(row, "position", SceneObject::position, SceneObject::withPosition));
@@ -99,11 +102,19 @@ public final class SceneNodeInputs {
             lightBindings.put("intensity", row -> b.scalar(row, "intensity", 0, 1024));
             lightBindings.put("range", row -> b.scalar(row, "range", .01, 32));
             lightBindings.put("source_size", row -> b.scalar(row, "source_size", 0, 4));
+            lightBindings.put("area_width", row -> b.scalar(row, "area_width", .01, 8));
+            lightBindings.put("area_height", row -> b.scalar(row, "area_height", .01, 8));
+            lightBindings.put("cone_angle", row -> b.scalar(row, "cone_angle", 1, 179));
+            lightBindings.put("edge_softness", row -> b.scalar(row, "edge_softness", 0, 1));
             b.consume(def, lightBindings);
             b.consume(new SetLightPropertyNode(SetLightPropertyNode.Property.LIFECYCLE).getDefinition(data), Map.of(
                     "resource_id", row -> b.provided(row, "Scene object UUID identifies the existing light"),
                     "duration_ticks", row -> b.unsupported(row, "Persisted scene objects have no timed destruction lifecycle"),
                     "enabled", row -> b.enabled(row)));
+            if (SceneObject.POINT_LIGHT.equals(typeId))
+                for (String axis : List.of("x", "y", "z")) b.fields.remove("rotation." + axis);
+            if (!SceneObject.AREA_LIGHT.equals(typeId))
+                for (String axis : List.of("x", "y", "z")) b.fields.remove("scale." + axis);
         } else if (typeId.startsWith("geometry/") || typeId.startsWith("collision/")) {
             String shape = typeId.substring(typeId.indexOf('/') + 1);
             boolean collision = typeId.startsWith("collision/");
@@ -146,11 +157,11 @@ public final class SceneNodeInputs {
                     "local_rotation", row -> b.parameterVector(row, "local_rotation", -36000, 36000),
                     "size_3", row -> b.envelopeVector(row, "scale", SceneObject::scale,
                             (o, value) -> o.withTransform(o.position(), o.rotation(), value))));
-        } else if (typeId.startsWith("area/")) {
+        } else if (typeId.startsWith("area/") || typeId.startsWith("force_field/")) {
             String shape = switch (typeId) {
-                case "area/cube" -> AreaShape.BOX.id();
-                case "area/cylinder" -> AreaShape.CYLINDER.id();
-                case "area/uv_sphere" -> AreaShape.SPHERE.id();
+                case "area/cube", "force_field/cube" -> AreaShape.BOX.id();
+                case "area/cylinder", "force_field/cylinder" -> AreaShape.CYLINDER.id();
+                case "area/uv_sphere", "force_field/uv_sphere" -> AreaShape.SPHERE.id();
                 default -> throw new IllegalArgumentException("Unsupported area preset: " + typeId);
             };
             NodeData data = data(CreateArea.TYPE_ID, CreateArea.SHAPE_PORT, shape);
@@ -168,6 +179,15 @@ public final class SceneNodeInputs {
             bindings.put("radius", row -> b.scalar(row, "radius", .01, 256));
             bindings.put("height", row -> b.scalar(row, "height", .01, 256));
             b.consume(def, bindings);
+            if (typeId.startsWith("force_field/")) {
+                b.consume(new CreateForceField().getDefinition(new NodeData()), Map.of(
+                        StandardPorts.FORCE_FIELD_ID.getId(), row -> b.context(row, o -> "scene/" + o.id(), "Scene-owned force-field identity"),
+                        StandardPorts.AREA.getId(), row -> b.provided(row, "The scene runtime owns the field's private area"),
+                        StandardPorts.STRENGTH.getId(), row -> b.scalar(row, "strength", -1024, 1024)));
+                b.put(new Field("enabled", Component.translatable("geometry_node.port.enabled"), Kind.BOOLEAN, List.of(),
+                        o -> Boolean.toString(o.enabled()),
+                        (o, value) -> o.withProperties(o.name(), o.color(), Boolean.parseBoolean(value), o.parameters())));
+            }
         }
         return new Model(List.copyOf(b.parameters.values()), new Schema(List.copyOf(b.fields.values())), List.copyOf(b.inputs));
     }

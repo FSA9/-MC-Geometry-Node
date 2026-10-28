@@ -297,8 +297,9 @@ final class GameViewportView extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
                 if (!canNavigate() || !displayedBounds.contains(eventX(event), eventY(event))) return false;
-                if(!contextPressed){handlingRepeat=false;contextPressed=shortcuts.onMouseDown(event);}
-                if(contextPressed){requestFocus();onInteraction.run();return true;}
+                // A popup may consume the previous release; every new DOWN starts a fresh gesture.
+                contextPressed=dispatchPointerCommand(event);
+                if(contextPressed)return true;
                 navigating = event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)
                         || event.getActionButton() == MotionEvent.BUTTON_TERTIARY;
                 // ModernUI's native ACTION_MOVE currently omits modifier flags.
@@ -357,9 +358,10 @@ final class GameViewportView extends View {
         }
         if(inputOwner.mode()==ViewportMode.EDIT&&canNavigate()&&!scene.busy()
                 &&!orientation.contains(eventX(event),eventY(event))
+                &&displayedBounds.contains(eventX(event),eventY(event))
                 &&event.getActionMasked()==MotionEvent.ACTION_BUTTON_PRESS){
-            if(!contextPressed){handlingRepeat=false;contextPressed=shortcuts.onMouseDown(event);}
-            if(contextPressed){requestFocus();onInteraction.run();return true;}
+            if(!contextPressed)contextPressed=dispatchPointerCommand(event);
+            if(contextPressed)return true;
         }
         if (editing() && orientation.contains(eventX(event), eventY(event))
                 && event.getActionMasked() == MotionEvent.ACTION_SCROLL) return true;
@@ -392,6 +394,78 @@ final class GameViewportView extends View {
         orientation.reset();
         requestFocus();
         onInteraction.run();
+    }
+
+    java.util.Set<com.mine.geometry_node.client.runtime.game.selection.ViewportTarget.Key> selectedTargets() {
+        return scene.selectedTargets();
+    }
+
+    /** Both ModernUI pointer delivery forms use one dispatcher; configured bindings win. */
+    private boolean dispatchPointerCommand(MotionEvent event) {
+        requestFocus();
+        onInteraction.run();
+        handlingRepeat = false;
+        if (shortcuts.onMouseDown(event)) return true;
+        boolean secondary = event.getActionButton() == MotionEvent.BUTTON_SECONDARY
+                || event.getActionButton() == 0 && event.isButtonPressed(MotionEvent.BUTTON_SECONDARY);
+        if (!secondary || event.isControlPressed() || event.isShiftPressed()
+                || event.isAltPressed() || event.isSuperPressed()) return false;
+        // ModernUI delivers BUTTON_PRESS before this gesture's DOWN. Opening here
+        // on BUTTON_PRESS lets that DOWN dismiss the still-unlaid-out popup as an
+        // outside click. Reserve the press, then present after DOWN has crossed
+        // the window's outside-click boundary.
+        // An additional mouse button has no DOWN; its BUTTON_PRESS is already final.
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                || (event.getButtonState() & ~MotionEvent.BUTTON_SECONDARY) != 0) openObjectContextMenu();
+        return true;
+    }
+
+    private boolean contextCurrent(com.mine.geometry_node.client.ui.editor.game.scene.ViewportSceneInteraction.ContextSelection selection) {
+        return inputOwner.mode() == ViewportMode.EDIT && canNavigate() && scene.contextSelectionCurrent(selection);
+    }
+
+    private void editSelectedObject() {
+        var selection = scene.contextSelection();
+        if (!contextCurrent(selection) || selection.targets().size() != 1 || !inputOwner.canEditSelectedObject()) return;
+        scene.cancel();
+        inputOwner.editSelectedObject();
+    }
+
+    private void openObjectContextMenu() {
+        var selection = scene.contextSelection();
+        if (selection == null) {
+            if (scene.selectedTargets().isEmpty()) inputOwner.openCreateMenu(pointerRootX, pointerRootY,
+                    scene.creationPosition(eventPointerX(), eventPointerY()));
+            return;
+        }
+        float x = eventPointerX(), y = eventPointerY();
+        Runnable navigation = selection.targets().size() == 1 ? scene.navigationCommand(x, y) : null;
+        inputOwner.openObjectContextMenu(pointerRootX, pointerRootY, menu -> {
+            if (selection.targets().size() == 1 && inputOwner.canEditSelectedObject()) {
+                menu.addMenuItem(GameViewportShortcuts.label(GameViewportShortcuts.Action.EDIT),
+                        GameViewportShortcuts.shortcutText(GameViewportShortcuts.Action.EDIT), () -> {
+                            if (contextCurrent(selection)) editSelectedObject();
+                        });
+            }
+            menu.addMenuItem(GameViewportShortcuts.label(GameViewportShortcuts.Action.DELETE),
+                    GameViewportShortcuts.shortcutText(GameViewportShortcuts.Action.DELETE), () -> {
+                        if (contextCurrent(selection) && scene.canDeleteSelection()) scene.deleteSelected();
+                    });
+            if (navigation != null) {
+                menu.addMenuItem(GameViewportShortcuts.label(GameViewportShortcuts.Action.ENTITY_MOVE),
+                        GameViewportShortcuts.shortcutText(GameViewportShortcuts.Action.ENTITY_MOVE), () -> {
+                            if (contextCurrent(selection)) navigation.run();
+                        });
+            }
+        });
+    }
+
+    private float eventPointerX() {
+        return UIUtils.rootToLocal(this, pointerRootX, pointerRootY, inputMatrix, inputPoint) ? inputPoint[0] : Float.NaN;
+    }
+
+    private float eventPointerY() {
+        return UIUtils.rootToLocal(this, pointerRootX, pointerRootY, inputMatrix, inputPoint) ? inputPoint[1] : Float.NaN;
     }
 
     void setMoveSnap(ViewportSnapSettings settings){scene.setSnapSettings(settings);}
@@ -457,6 +531,7 @@ final class GameViewportView extends View {
                 case ALIGN_ENTITY -> {
                     if (scene.alignToSelectedEntity(inputOwner)) onInteraction.run();
                 }
+                case EDIT -> editSelectedObject();
                 case ENTITY_MOVE -> {
                     if(UIUtils.rootToLocal(this,pointerRootX,pointerRootY,inputMatrix,inputPoint))
                         scene.contextAction(inputPoint[0],inputPoint[1]);

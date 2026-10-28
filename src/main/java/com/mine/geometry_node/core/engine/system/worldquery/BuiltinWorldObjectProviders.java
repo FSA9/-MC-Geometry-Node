@@ -38,11 +38,28 @@ import java.util.function.*;
 
 final class BuiltinWorldObjectProviders {
     private static boolean initialized;
+    private static final Map<String, BiFunction<WorldObjectProvider.Context, UUID, WorldObjectEntry>> LOOKUPS = new HashMap<>();
     private static final Map<String, BiFunction<WorldObjectProvider.Context, WorldObjectEntry, MetadataCapabilities.Access>> METADATA = new HashMap<>();
     private BuiltinWorldObjectProviders() {}
     static synchronized void init() {
         if (initialized) return;
         initialized = true;
+        LOOKUPS.put("scene", (context, id) -> {
+            for (ServerLevel level : context.levels()) {
+                String dimension = dimension(level);
+                var object = SceneSavedData.get(context.server()).document(dimension).object(id);
+                if (object != null) return WorldObjectEntries.scene(dimension, object);
+            }
+            return null;
+        });
+        LOOKUPS.put("native", (context, id) -> {
+            for (ServerLevel level : context.levels()) {
+                var entity = level.getEntity(id);
+                if (entity instanceof net.minecraft.world.entity.Interaction && !entity.isRemoved() && entity.isAlive())
+                    return WorldObjectEntries.interaction(context.server(), entity);
+            }
+            return null;
+        });
         METADATA.put("scene", (c, e) -> SceneMetadataTargets.access(c.server(), e.dimension(), e.sceneObjectId()));
         METADATA.put("native", (c, e) -> {
             if (e.entityState() != null && !e.entityState().loaded()) return registeredSnapshotData(c, e);
@@ -91,13 +108,7 @@ final class BuiltinWorldObjectProviders {
             SceneSavedData.get(c.server()).visitWorldQuery((dim, object) -> {
                 if (!sink.scan()) return false;
                 if (!c.acceptsDimension().test(dim)) return true;
-                return sink.emit(new WorldObjectEntry(WorldObjectEntry.key("scene", dim, object.id().toString()),
-                        "scene", object.typeId(), object.name(), dim, object.position(),
-                        WorldObjectEntries.sceneBounds(object), object.tags(), "scene", "persistent",
-                        object.id(), null, Map.of("enabled", Boolean.toString(object.enabled()),
-                                "resourceId", GraphResourceReferences.encode(new GraphResourceReferences.SceneObjectAddress(
-                                        net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
-                                                net.minecraft.resources.Identifier.parse(dim)), object.id())))));
+                return sink.emit(WorldObjectEntries.scene(dim, object));
             }));
         register("collision", "server_collision_instances", () -> types("collision", "geometry_collision", "model_collision"), (c, sink) -> {
             for (ServerLevel level : c.levels()) {
@@ -214,22 +225,7 @@ final class BuiltinWorldObjectProviders {
             for (ServerLevel level : c.levels()) for (var entity : level.getAllEntities()) {
                 if (!sink.scan()) return;
                 if (entity.isRemoved() || !(entity instanceof net.minecraft.world.entity.Interaction)) continue;
-                String dim = dimension(level);
-                Map<String, String> references = new LinkedHashMap<>();
-                references.put("entityUuid", entity.getUUID().toString());
-                var attachment = entity.hasData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
-                        ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT) : null;
-                var graphs = attachment == null ? List.<WorldObjectGraph>of()
-                        : WorldObjectGraphMetadata.collect(attachment.getBindings(),
-                            id -> ServerGraphRepository.INSTANCE.getGraph(c.server(), id));
-                if (!sink.emit(new WorldObjectEntry(WorldObjectEntry.key("native", "", entity.getUUID().toString()), "native",
-                        BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(),
-                        entity.hasCustomName() ? entity.getCustomName().getString() : "", dim,
-                        entity.position(), entity.getBoundingBox(),
-                        attachment == null ? List.of() : attachment.customTags(),
-                        "", "loaded",
-                        entity.getUUID(),
-                        entity.getId(), references, graphs))) return;
+                if (!sink.emit(WorldObjectEntries.interaction(c.server(), entity))) return;
             }
         });
     }
@@ -273,6 +269,10 @@ final class BuiltinWorldObjectProviders {
             public MetadataCapabilities.Access resolveMetadata(Context context, WorldObjectEntry entry) {
                 var resolver = METADATA.get(id);
                 return resolver == null ? null : resolver.apply(context, entry);
+            }
+            public WorldObjectEntry lookup(Context context, UUID objectId) {
+                var lookup = LOOKUPS.get(id);
+                return lookup == null ? null : lookup.apply(context, objectId);
             }
             public void collect(Context context, Sink sink) { collect.accept(context, sink); }
         });

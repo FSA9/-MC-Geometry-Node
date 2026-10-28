@@ -147,7 +147,8 @@ public class AppConfig {
     }
 
     public static class GameViewKeyBindingsConfig {
-        public String entityMove = "CTRL+RIGHT_CLICK";
+        public String edit = "CTRL+RIGHT_CLICK";
+        public String entityMove = "SHIFT+RIGHT_CLICK";
         public String toggleProjection = "KP_5";
         public String toggleSidebar = "N";
         public String viewMenu = "GRAVE_ACCENT";
@@ -175,6 +176,7 @@ public class AppConfig {
 
         GameViewKeyBindingsConfig copy() {
             GameViewKeyBindingsConfig copy = new GameViewKeyBindingsConfig();
+            copy.edit = edit;
             copy.entityMove = entityMove;
             copy.toggleProjection = toggleProjection;
             copy.toggleSidebar = toggleSidebar;

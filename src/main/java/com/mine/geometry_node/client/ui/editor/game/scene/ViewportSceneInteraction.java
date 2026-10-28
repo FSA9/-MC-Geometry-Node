@@ -37,6 +37,47 @@ public final class ViewportSceneInteraction {
     private String selectionMessage="";
     private Set<UUID> expectedSceneSelection=Set.of();
     private long selectionGeneration=-1;
+    private long selectionEpoch;
+
+    /** Immutable command identity; includes every selected source, not only its active item. */
+    public record ContextSelection(long worldGeneration, String dimension, long epoch,
+                                   Set<ViewportTarget.Key> targets) {
+        public ContextSelection { targets = Set.copyOf(targets); }
+    }
+
+    public ContextSelection contextSelection() {
+        var snapshot = service.snapshot();
+        if (busy() || !current(frame) || selectionGeneration != snapshot.worldGeneration()
+                || !snapshot.dimension().equals(frame.scene().dimension())
+                || !snapshot.selected().equals(expectedSceneSelection)) return null;
+        var selected = combinedSelection();
+        if (selected.isEmpty()) return null;
+        Set<ViewportTarget.Key> available = new HashSet<>();
+        for (var object : frame.scene().objects()) if (selectable(object)) available.add(sceneKey(object.id()));
+        for (var target : frame.targets()) if (selectable(target)) available.add(selectionKey(target.key()));
+        if (!available.containsAll(selected)) return null;
+        return new ContextSelection(snapshot.worldGeneration(), snapshot.dimension(), selectionEpoch, selected);
+    }
+
+    /** Re-evaluate ownership, permissions and the displayed complete selection at execution time. */
+    public boolean contextSelectionCurrent(ContextSelection expected) {
+        if (expected == null || !expected.equals(contextSelection())) return false;
+        var snapshot = service.snapshot();
+        return snapshot.canEdit() && !snapshot.pending();
+    }
+
+    public boolean canDeleteSelection() {
+        return contextSelection() != null
+                && service.availability(SceneEditCapabilities.Action.DELETE, !worldSelection.isEmpty()).allowed();
+    }
+
+    public boolean canNavigateSelection() {
+        var context = contextSelection();
+        if (!contextSelectionCurrent(context)) return false;
+        var targets = actionableWorldSelection();
+        return !targets.isEmpty() && targets.size() == context.targets().size()
+                && targets.stream().allMatch(key -> key.source().equals(ViewportEntitySource.ID));
+    }
     private final ViewportWorldActions worldActions=new ViewportWorldActions();
     private final ViewportSelectionOverlay worldOverlay=new ViewportSelectionOverlay();
     private static ViewportTarget.Key sceneKey(UUID id){return new ViewportTarget.Key("geometry_node:scene",id.toString());}
@@ -69,6 +110,7 @@ public final class ViewportSceneInteraction {
     }
     private void applySelection(Set<ViewportTarget.Key> selected){applySelection(selected,null);}
     private void applySelection(Set<ViewportTarget.Key> selected,ViewportTarget.Key preferred){
+        if (!combinedSelection().equals(selected)) selectionEpoch++;
         selectionMessage="";
         Set<UUID> scene=new LinkedHashSet<>();Set<ViewportTarget.Key> world=new LinkedHashSet<>();
         for (var key : selected) {
@@ -88,10 +130,24 @@ public final class ViewportSceneInteraction {
         service.select(scene,active);
     }
     public boolean contextAction(float x,float y){
-        if(busy()||!current(frame)||bounds==null||!bounds.contains(x,y))return false;
-        var selected=actionableWorldSelection();
-        if(selected.isEmpty())return false;
-        boolean result=ViewportSelectionSources.action(selected,frame,ViewportSceneMath.ray(frame,u(bounds,x),v(bounds,y)),worldActions);
+        if(!canNavigateSelection()||bounds==null||!bounds.contains(x,y))return false;
+        return performContextAction(actionableWorldSelection(),frame,ViewportSceneMath.ray(frame,u(bounds,x),v(bounds,y)));
+    }
+    /** A menu command targets the image and ray under the original context click. */
+    public Runnable navigationCommand(float x, float y) {
+        if (!canNavigateSelection() || bounds == null || !bounds.contains(x, y)) return null;
+        var expected = contextSelection();
+        var displayed = frame;
+        var targets = actionableWorldSelection();
+        var ray = ViewportSceneMath.ray(displayed, u(bounds, x), v(bounds, y));
+        if (ray == null) return null;
+        return () -> {
+            if (contextSelectionCurrent(expected) && canNavigateSelection()) performContextAction(targets, displayed, ray);
+        };
+    }
+    private boolean performContextAction(Set<ViewportTarget.Key> selected, PresentedViewportFrame displayed,
+                                         ViewportSceneMath.Ray ray) {
+        boolean result=ViewportSelectionSources.action(selected,displayed,ray,worldActions);
         if(result)changed.run();return result;
     }
     private EditViewportCamera.Axis dragAxis;
@@ -135,6 +191,7 @@ public final class ViewportSceneInteraction {
         }
         var snapshot=service.snapshot();
         if(selectionGeneration!=snapshot.worldGeneration()||!snapshot.selected().equals(expectedSceneSelection)){
+            selectionEpoch++;
             worldSelection=Set.of();worldActions.clear();selectionMessage="";expectedSceneSelection=snapshot.selected();
             selectionGeneration=snapshot.worldGeneration();
         }
@@ -144,7 +201,7 @@ public final class ViewportSceneInteraction {
             return id != null && snapshot.object(id) != null;
         })) applySelection(combinedSelection());
     }
-    public void clearFrame(){frame=null;bounds=null;cancel();}
+    public void clearFrame(){selectionEpoch++;frame=null;bounds=null;cancel();}
     public boolean busy(){return pressed||transforming();}
     public void cancel(){snapping.end();if(transform!=null){transform.cancel();transform=null;changed.run();}boolean wasPressed=pressed||hovered!=null;hovered=null;if(dragAxis!=null)service.cancelPreview(this);pressed=marquee=dragValid=false;dragAxis=null;gestureFrame=null;originals=Map.of();if(wasPressed)changed.run();}
     public boolean down(float x,float y,boolean shift){return down(x,y,shift,false);}
@@ -315,10 +372,8 @@ public final class ViewportSceneInteraction {
                 if(layer==null||!visibility.visible(layer))continue;
                 if(layer==ViewportVisualization.Layer.INTERACTION&&!visibility.helpers())continue;
                 if(!ViewportSelectionSources.presented(object,frame))continue;
-                if(!ScenePresentations.pointMarker(object)){
-                    if(selection.contains(object.id())||Objects.equals(hovered,object.id()))drawBounds(canvas,object,selection.contains(object.id()));
-                    continue;
-                }
+                // Selection is conveyed by the world pass; AABBs remain picking geometry only.
+                if(!ScenePresentations.pointMarker(object))continue;
                 var projected=ViewportSceneMath.project(frame,object.position());if(!projected.visible())continue;
                 boolean selected=selection.contains(object.id());boolean active=object.id().equals(service.snapshot().active());
                 float x=px(bounds,projected.u()),y=py(bounds,projected.v()),r=UIUtils.dp2px(selected?7:5);
@@ -329,7 +384,7 @@ public final class ViewportSceneInteraction {
             }
             if(visibility.gizmo())drawAxes(canvas);
         }
-        worldOverlay.draw(canvas,frame,bounds,actionableWorldSelection(),worldActions.target(),this::selectable);
+        worldOverlay.draw(canvas,frame,bounds,worldActions.target());
         if(pressed&&marquee){
             paint.setStyle(Paint.FILL);paint.setColor(UiThemes.EDITOR.selection().marqueeFill());canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
             paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor(UiThemes.EDITOR.selection().outline());canvas.drawRect(Math.min(startX,currentX),Math.min(startY,currentY),Math.max(startX,currentX),Math.max(startY,currentY),paint);
@@ -352,23 +407,13 @@ public final class ViewportSceneInteraction {
         var ray=ViewportSceneMath.ray(f,.5,.5);
         return ray==null?Double.POSITIVE_INFINITY:o.position().subtract(ray.origin()).dot(ray.direction());
     }
-    private void drawBounds(Canvas canvas,SceneObject object,boolean selected){
-        AABB box=selectionBounds(object,frame);
-        paint.setColor(selected?UiThemes.EDITOR.selection().outline():UiThemes.EDITOR.text().strong());paint.setStrokeWidth(UIUtils.dp2px(selected?2:1));
-        for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0){
-            int j=i|bit;
-            var a=ViewportSceneMath.project(frame,new Vec3((i&1)==0?box.minX:box.maxX,(i&2)==0?box.minY:box.maxY,(i&4)==0?box.minZ:box.maxZ));
-            var b=ViewportSceneMath.project(frame,new Vec3((j&1)==0?box.minX:box.maxX,(j&2)==0?box.minY:box.maxY,(j&4)==0?box.minZ:box.maxZ));
-            if(a.visible()&&b.visible())canvas.drawLine(px(bounds,a.u()),py(bounds,a.v()),px(bounds,b.u()),py(bounds,b.v()),paint);
-        }
-    }
     private void drawRange(Canvas canvas,SceneObject object){
         paint.setStyle(Paint.STROKE);paint.setStrokeWidth(UIUtils.dp2px(1));paint.setColor((UiThemes.EDITOR.selection().outline() & 0x00FFFFFF) | 0x66000000);
         for(int plane=0;plane<3;plane++)for(int i=0;i<48;i++){
             double a=i*Math.PI/24,b=(i+1)*Math.PI/24,r=0.5;
             Vec3 p=com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.local(object,ring(plane,Math.cos(a)*r,Math.sin(a)*r)).add(object.position()),q=com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms.local(object,ring(plane,Math.cos(b)*r,Math.sin(b)*r)).add(object.position());
-            var from=ViewportSceneMath.project(frame,p);var to=ViewportSceneMath.project(frame,q);
-            if(from.visible()&&to.visible())canvas.drawLine(px(bounds,from.u()),py(bounds,from.v()),px(bounds,to.u()),py(bounds,to.v()),paint);
+            var segment=ViewportSceneMath.projectSegment(frame,p,q);
+            if(segment!=null)canvas.drawLine(px(bounds,segment.from().u()),py(bounds,segment.from().v()),px(bounds,segment.to().u()),py(bounds,segment.to().v()),paint);
         }
     }
     private static Vec3 ring(int plane,double a,double b){return plane==0?new Vec3(a,b,0):plane==1?new Vec3(a,0,b):new Vec3(0,a,b);}
@@ -387,12 +432,15 @@ public final class ViewportSceneInteraction {
         return height*UIUtils.dp2px(72)/pixels;
     }
     private void drawAxes(Canvas canvas){
-        Vec3 center=selectedCenter();if(center==null)return;var p=ViewportSceneMath.project(frame,center);if(!p.visible())return;
-        float x=px(bounds,p.u()),y=py(bounds,p.v());double length=axisLength(center);
+        Vec3 center=selectedCenter();if(center==null)return;
+        double length=axisLength(center);
         // XYZ identity colors and the active-axis yellow belong to the transform gizmo, not the UI theme.
-        for(int i=0;i<3;i++){var axis=AXES[i];var end=ViewportSceneMath.project(frame,center.add(axis.x*length,axis.y*length,axis.z*length));if(!end.visible())continue;
+        for(int i=0;i<3;i++){var axis=AXES[i];Vec3 tip=center.add(axis.x*length,axis.y*length,axis.z*length);
+            var segment=ViewportSceneMath.projectSegment(frame,center,tip);if(segment==null)continue;
             paint.setColor((dragAxis==axis||(transforming()&&(transform.axes()&(1<<i))!=0))?0xFFFFFF77:new int[]{0xFFEB5967,0xFFA4CE50,0xFF4698EE}[i]);paint.setStrokeWidth(UIUtils.dp2px(2));
-            float ex=px(bounds,end.u()),ey=py(bounds,end.v());canvas.drawLine(x,y,ex,ey,paint);paint.setStyle(Paint.FILL);canvas.drawCircle(ex,ey,UIUtils.dp2px(7),paint);drawAxisLetter(canvas,axis,ex,ey);
+            canvas.drawLine(px(bounds,segment.from().u()),py(bounds,segment.from().v()),px(bounds,segment.to().u()),py(bounds,segment.to().v()),paint);
+            var end=ViewportSceneMath.project(frame,tip);if(!end.visible())continue;
+            float ex=px(bounds,end.u()),ey=py(bounds,end.v());paint.setStyle(Paint.FILL);canvas.drawCircle(ex,ey,UIUtils.dp2px(7),paint);drawAxisLetter(canvas,axis,ex,ey);
         }
     }
     private void drawAxisLetter(Canvas canvas,EditViewportCamera.Axis axis,float x,float y){
@@ -405,10 +453,10 @@ public final class ViewportSceneInteraction {
     }
     private EditViewportCamera.Axis hitAxis(float x,float y){
         if(!visibility.gizmo())return null;
-        Vec3 origin=selectedCenter();if(origin==null)return null;var p=ViewportSceneMath.project(frame,origin);if(!p.visible())return null;
+        Vec3 origin=selectedCenter();if(origin==null)return null;
         double length=axisLength(origin),best=UIUtils.dp2px(7);EditViewportCamera.Axis hit=null;
-        for(var axis:AXES){var q=ViewportSceneMath.project(frame,origin.add(axis.x*length,axis.y*length,axis.z*length));if(!q.visible())continue;
-            double ax=px(bounds,p.u()),ay=py(bounds,p.v()),dx=px(bounds,q.u())-ax,dy=py(bounds,q.v())-ay,len=dx*dx+dy*dy;if(len<64)continue;
+        for(var axis:AXES){var segment=ViewportSceneMath.projectSegment(frame,origin,origin.add(axis.x*length,axis.y*length,axis.z*length));if(segment==null)continue;
+            double ax=px(bounds,segment.from().u()),ay=py(bounds,segment.from().v()),dx=px(bounds,segment.to().u())-ax,dy=py(bounds,segment.to().v())-ay,len=dx*dx+dy*dy;if(len<64)continue;
             double t=Math.clamp(((x-ax)*dx+(y-ay)*dy)/len,.2,1);double distance=Math.hypot(x-ax-t*dx,y-ay-t*dy);if(distance<best){best=distance;hit=axis;}}
         return hit;
     }

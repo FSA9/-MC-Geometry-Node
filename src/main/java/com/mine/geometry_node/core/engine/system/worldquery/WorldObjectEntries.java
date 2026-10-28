@@ -30,6 +30,32 @@ public final class WorldObjectEntries {
         return entry.registryType();
     }
 
+    /** Same authoritative rows for table collection and direct editor lookup. */
+    public static WorldObjectEntry scene(String dimension, com.mine.geometry_node.core.engine.system.scene.SceneObject object) {
+        return new WorldObjectEntry(WorldObjectEntry.key("scene", dimension, object.id().toString()),
+                "scene", object.typeId(), object.name(), dimension, object.position(), sceneBounds(object),
+                object.tags(), "scene", "persistent", object.id(), null,
+                Map.of("enabled", Boolean.toString(object.enabled()), "resourceId",
+                        GraphResourceReferences.encode(new GraphResourceReferences.SceneObjectAddress(
+                                ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)), object.id()))));
+    }
+
+    public static WorldObjectEntry interaction(net.minecraft.server.MinecraftServer server, net.minecraft.world.entity.Entity entity) {
+        if (!(entity instanceof net.minecraft.world.entity.Interaction))
+            throw new IllegalArgumentException("Expected interaction entity");
+        String dimension = entity.level().dimension().identifier().toString();
+        var attachment = entity.hasData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
+                ? entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT) : null;
+        var graphs = attachment == null ? List.<com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectGraph>of()
+                : WorldObjectGraphMetadata.collect(attachment.getBindings(),
+                        id -> com.mine.geometry_node.core.engine.graph.storage.ServerGraphRepository.INSTANCE.getGraph(server, id));
+        return new WorldObjectEntry(WorldObjectEntry.key("native", "", entity.getUUID().toString()), "native",
+                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(),
+                entity.hasCustomName() ? entity.getCustomName().getString() : "", dimension,
+                entity.position(), entity.getBoundingBox(), attachment == null ? List.of() : attachment.customTags(),
+                "", "loaded", entity.getUUID(), entity.getId(), Map.of("entityUuid", entity.getUUID().toString()), graphs);
+    }
+
     /** Query bounds use the same transformed extent as the runtime and editor. */
     public static AABB sceneBounds(com.mine.geometry_node.core.engine.system.scene.SceneObject object) {
         if (Set.of("area/cube", "area/cylinder", "area/uv_sphere").contains(object.typeId()))

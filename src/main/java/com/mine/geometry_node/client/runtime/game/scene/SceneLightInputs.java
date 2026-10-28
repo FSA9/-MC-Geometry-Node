@@ -3,9 +3,9 @@ package com.mine.geometry_node.client.runtime.game.scene;
 import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.render.EditViewportRuntime;
 import com.mine.geometry_node.client.runtime.light.store.ClientLightStore;
-import com.mine.geometry_node.core.engine.graph.light.LightDefinition;
 import com.mine.geometry_node.core.engine.system.scene.SceneObject;
-import com.mine.geometry_node.core.node.value.light.LightConfig;
+import com.mine.geometry_node.core.engine.system.scene.light.SceneLightTypes;
+import com.mine.geometry_node.core.engine.system.scene.geometry.SceneTransforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
@@ -28,15 +28,14 @@ public final class SceneLightInputs {
     public static List<ClientLightStore.ResolvedLight> resolve(List<SceneObject> objects, Predicate<AABB> residency) {
         List<ClientLightStore.ResolvedLight> result=new ArrayList<>();
         for(var object:objects) {
-            if(!SceneObject.POINT_LIGHT.equals(object.typeId()) || !object.enabled() || object.intensity()<=0) continue;
-            double diameter = object.range() * 2.0;
-            if (!residency.test(AABB.ofSize(object.position(), diameter, diameter, diameter))) continue;
-            var config=LightConfig.DEFAULT.withShadow(new LightConfig.Shadow(LightConfig.DEFAULT.shadow().enabled(),
-                    (float)object.number("source_size"))).withSourceVisible(Boolean.parseBoolean(object.parameters().get("source_visible")));
-            var definition=new LightDefinition("point",object.color(),object.intensity(),object.range(),60,0.25f,
-                    object.position(),Vec3.ZERO,config);
+            if(!SceneLightTypes.isLight(object.typeId()) || !object.enabled() || object.intensity()<=0) continue;
+            var definition = SceneLightTypes.definition(object);
+            if (!residency.test(SceneLightTypes.influenceBounds(definition))) continue;
+            var rotation = SceneTransforms.rotation(object.rotation());
             result.add(new ClientLightStore.ResolvedLight("scene:"+object.id(),definition,object.position(),
-                    new Vec3(0,0,1),new Vec3(1,0,0),new Vec3(0,1,0),null));
+                    SceneTransforms.rotate(rotation, new Vec3(0,0,1)),
+                    SceneTransforms.rotate(rotation, new Vec3(1,0,0)),
+                    SceneTransforms.rotate(rotation, new Vec3(0,1,0)),null));
         }
         return List.copyOf(result);
     }

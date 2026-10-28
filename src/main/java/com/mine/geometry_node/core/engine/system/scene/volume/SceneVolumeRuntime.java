@@ -16,6 +16,7 @@ import java.util.*;
 /** Level-local derived runtime. SavedData remains authoritative; unchanged objects never rebuild. */
 public final class SceneVolumeRuntime {
     private final SceneCollisionRuntime collisions = new SceneCollisionRuntime();
+    private final SceneForceFieldRuntime forceFields = new SceneForceFieldRuntime();
     private final Map<UUID, SceneObject> areas = new LinkedHashMap<>();
     private final Map<UUID, UUID> areaIncarnations = new HashMap<>();
     public void prepareChanges(List<SceneChange> changes) {
@@ -26,6 +27,7 @@ public final class SceneVolumeRuntime {
     public void synchronize(ServerLevel level, List<SceneObject> objects) {
         collisions.synchronize(level, objects);
         SceneDocument document = SceneSavedData.get(level.getServer()).document(level.dimension().identifier().toString());
+        forceFields.synchronize(level, document, objects);
         Set<UUID> removed = new HashSet<>(areas.keySet());
         for (SceneObject object : objects) {
             if (!object.typeId().startsWith("area/")) continue;
@@ -60,9 +62,9 @@ public final class SceneVolumeRuntime {
     }
     public static AreaResource.Resolved resolved(SceneObject object) {
         AreaShape shape = switch (object.typeId()) {
-            case "area/cube" -> AreaShape.BOX;
-            case "area/cylinder" -> AreaShape.CYLINDER;
-            case "area/uv_sphere" -> AreaShape.SPHERE;
+            case "area/cube", "force_field/cube" -> AreaShape.BOX;
+            case "area/cylinder", "force_field/cylinder" -> AreaShape.CYLINDER;
+            case "area/uv_sphere", "force_field/uv_sphere" -> AreaShape.SPHERE;
             default -> throw new IllegalArgumentException("Not an authored area");
         };
         Vec3 size = ScenePrimitiveTypes.find(object.typeId()).primitive().apply(object).size().multiply(object.scale());
@@ -73,6 +75,7 @@ public final class SceneVolumeRuntime {
     }
     public void clear(ServerLevel level) {
         collisions.clear(level);
+        forceFields.clear(level);
         for (UUID id : areas.keySet()) AreaResourceStore.INSTANCE.removeAuthored(level.getServer(), address(level, id));
         areas.clear();
         areaIncarnations.clear();

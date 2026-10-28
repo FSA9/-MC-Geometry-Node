@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.feature.scene.ClientSceneService;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportVisualization;
 import com.mine.geometry_node.client.runtime.game.scene.ScenePresentations;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiPopover;
+import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiSearchMenuLayout;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
@@ -31,15 +32,34 @@ public final class ViewportSceneMenus {
     private final ViewportVisualization state;
     private final Runnable changed;
     private UiPopover open;
+    private UiContextMenu context;
     private long epoch;
     public ViewportSceneMenus(View owner,FrameLayout host,ViewportVisualization state,Runnable changed){this.owner=owner;this.host=host;this.state=state;this.changed=changed;}
     public boolean dismissIfOutside(float rootX, float rootY) {
+        if (context != null && context.dismissIfOutside(rootX, rootY)) { dismiss(); return true; }
         if (open == null || !open.dismissIfOutside(rootX, rootY)) return false;
         dismiss();
         return true;
     }
-    public boolean isOpen(){return open!=null&&open.isOpen();}
-    public void dismiss(){epoch++;if(open!=null)open.dismiss();open=null;}
+    public boolean isOpen(){return open!=null&&open.isOpen()||context!=null&&context.isOpen();}
+    public void dismiss(){
+        epoch++;
+        if(open!=null)open.dismiss();open=null;
+        UiContextMenu previous=context;context=null;if(previous!=null)previous.dismiss();
+    }
+    /** Context commands reuse the asset browser's menu, input barrier and shortcut column. */
+    public void contextAt(float rootX, float rootY, Consumer<UiContextMenu> build) {
+        dismiss();
+        float[] point = {rootX, rootY};
+        if (!UIUtils.rootToLocal(host, rootX, rootY, new icyllis.modernui.graphics.Matrix(), point)) return;
+        UiContextMenu menu = new UiContextMenu(owner.getContext(), UiThemes.EDITOR);
+        build.accept(menu);
+        if (!menu.hasItems()) return;
+        context = menu;
+        menu.setOnDismissListener(() -> { if (context == menu) { context = null; epoch++; } });
+        menu.showAt(point[0], point[1], host);
+        if (!menu.isOpen() && context == menu) context = null;
+    }
     public void createAt(float rootX,float rootY,Vec3 position,Runnable created){
         dismiss();
         long token=epoch;

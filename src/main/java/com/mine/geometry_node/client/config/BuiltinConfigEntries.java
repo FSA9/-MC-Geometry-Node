@@ -132,11 +132,16 @@ public final class BuiltinConfigEntries {
             config -> config.keyBindings.gameView.focus, (config, value) -> config.keyBindings.gameView.focus = value);
     public static final ConfigEntry<String> GAME_VIEW_ALIGN_ENTITY = key("keyBindings.gameView.alignToEntity", SHORTCUT_GAME_VIEW_EDIT, 411, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.alignToEntity, (config, value) -> config.keyBindings.gameView.alignToEntity = value);
+    public static final ConfigEntry<String> GAME_VIEW_EDIT = ConfigEntry.builder(
+            "keyBindings.gameView.edit", SHORTCUT_GAME_VIEW_EDIT, ConfigEntry.EditorType.SHORTCUT,
+            (AppConfig config) -> config.keyBindings.gameView.edit, (config, value) -> config.keyBindings.gameView.edit = value)
+            .label(labelKey("keyBindings.gameView.edit")).description(descriptionKey("keyBindings.gameView.edit"))
+            .order(412).keyScope(KeyScope.GAME_VIEW).normalize(BuiltinConfigEntries::normalizeShortcut).build();
     public static final ConfigEntry<String> GAME_VIEW_ENTITY_MOVE = ConfigEntry.builder(
             "keyBindings.gameView.entityMove", SHORTCUT_GAME_VIEW_EDIT, ConfigEntry.EditorType.SHORTCUT,
             (AppConfig config) -> config.keyBindings.gameView.entityMove, (config, value) -> config.keyBindings.gameView.entityMove = value)
             .label(labelKey("keyBindings.gameView.entityMove")).description(descriptionKey("keyBindings.gameView.entityMove"))
-            .order(412).keyScope(KeyScope.GAME_VIEW).normalize(BuiltinConfigEntries::normalizeShortcut).build();
+            .order(413).keyScope(KeyScope.GAME_VIEW).normalize(BuiltinConfigEntries::normalizeShortcut).build();
     public static final ConfigEntry<String> GAME_VIEW_CANCEL = key("keyBindings.gameView.cancel", SHORTCUT_GAME_VIEW_EDIT, 450, KeyScope.GAME_VIEW,
             config -> config.keyBindings.gameView.cancel, (config, value) -> config.keyBindings.gameView.cancel = value);
 
@@ -174,7 +179,7 @@ public final class BuiltinConfigEntries {
             VIEWPORT_MOVE, VIEWPORT_GROUP_FRAME, VIEWPORT_GROUP_NODE, SHOP_CLEAR_SLOT,
             GAME_VIEW_PROJECTION, GAME_VIEW_SIDEBAR, GAME_VIEW_MENU,
             GAME_VIEW_SNAP, GAME_VIEW_MOVE, GAME_VIEW_ROTATE, GAME_VIEW_SCALE, GAME_VIEW_AXIS_X, GAME_VIEW_AXIS_Y, GAME_VIEW_AXIS_Z, GAME_VIEW_CONFIRM,
-            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ALIGN_ENTITY, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_CANCEL,
+            GAME_VIEW_ADD, GAME_VIEW_FOCUS, GAME_VIEW_ALIGN_ENTITY, GAME_VIEW_EDIT, GAME_VIEW_ENTITY_MOVE, GAME_VIEW_CANCEL,
             GAME_FLIGHT_FORWARD, GAME_FLIGHT_BACKWARD, GAME_FLIGHT_LEFT, GAME_FLIGHT_RIGHT, GAME_FLIGHT_UP, GAME_FLIGHT_DOWN, GAME_FLIGHT_EXIT);
 
     private BuiltinConfigEntries() {}

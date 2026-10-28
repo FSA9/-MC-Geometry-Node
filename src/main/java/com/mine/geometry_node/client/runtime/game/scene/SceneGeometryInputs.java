@@ -116,7 +116,8 @@ public final class SceneGeometryInputs {
             if (!editorPass && presentation.layer() != ViewportVisualization.Layer.GEOMETRY) continue;
             if (editorPass && !visualization.visible(presentation.layer())) continue;
             AABB bounds = switch (object.typeId()) {
-                case "area/cube", "area/cylinder", "area/uv_sphere" -> SceneVolumeRuntime.resolved(object).bounds();
+                case "area/cube", "area/cylinder", "area/uv_sphere",
+                     "force_field/cube", "force_field/cylinder", "force_field/uv_sphere" -> SceneVolumeRuntime.resolved(object).bounds();
                 default -> ViewportSceneMath.focusBounds(object);
             };
             if (!residency.test(bounds)) continue;

@@ -1,7 +1,6 @@
 package com.mine.geometry_node.client.ui.editor.game.selection;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.runtime.game.selection.ViewportTarget;
 import com.mine.geometry_node.client.runtime.game.render.PresentedViewportFrame;
 import com.mine.geometry_node.client.runtime.game.scene.ViewportSceneMath;
 import com.mine.geometry_node.client.ui.editor.game.layout.GameViewportLayout;
@@ -9,26 +8,17 @@ import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.*;
-import java.util.Set;
 
-/** UI box outlines only. Entity discs render in the world pass with real depth occlusion. */
+/** Navigation destination outline only. Selection highlights render in the world pass. */
 public final class ViewportSelectionOverlay {
     private final Paint paint = new Paint();
     public ViewportSelectionOverlay() { paint.setAntiAlias(true); }
     public void draw(Canvas canvas, PresentedViewportFrame frame, GameViewportLayout layout,
-                     Set<ViewportTarget.Key> selected, BlockPos destination,
-                     java.util.function.Predicate<ViewportTarget> selectable) {
-        for (var target : frame.targets()) if (selected.contains(target.key()) && selectable.test(target)) {
-            if (target.decoration() == ViewportTarget.Decoration.BOX) box(canvas, frame, layout, target.bounds());
-        }
+                     BlockPos destination) {
         if (destination != null) box(canvas, frame, layout, new AABB(destination).inflate(.005));
     }
     private void box(Canvas canvas,PresentedViewportFrame frame,GameViewportLayout layout,AABB b) {
         paint.setStyle(Paint.STROKE);paint.setColor(UiThemes.EDITOR.selection().outline());
-        // No dp/pixel floor: distant outlines must shrink with the world as well.
-        float width=projectedWidth(frame,layout,b.getCenter(),.02);
-        if(width<=0)return;
-        paint.setStrokeWidth(width);
         for(int i=0;i<8;i++)for(int bit:new int[]{1,2,4})if((i&bit)==0)line(canvas,frame,layout,corner(b,i),corner(b,i|bit));
     }
     static float projectedWidth(PresentedViewportFrame frame,GameViewportLayout layout,Vec3 center,double worldWidth) {
@@ -45,7 +35,18 @@ public final class ViewportSelectionOverlay {
     private static float px(GameViewportLayout b,double u){return b.left()+(float)u*(b.right()-b.left());}
     private static float py(GameViewportLayout b,double v){return b.top()+(float)v*(b.bottom()-b.top());}
     private void line(Canvas canvas,PresentedViewportFrame frame,GameViewportLayout b,Vec3 from,Vec3 to) {
-        var a=ViewportSceneMath.project(frame,from);var z=ViewportSceneMath.project(frame,to);
-        if(inDepth(frame,a)&&inDepth(frame,z))canvas.drawLine(px(b,a.u()),py(b,a.v()),px(b,z.u()),py(b,z.v()),paint);
+        var segment=ViewportSceneMath.projectSegment(frame,from,to);
+        if(segment==null)return;
+        // Measure at the visible piece, not the box center (which may be behind the near plane).
+        var a=segment.from();var z=segment.to();
+        var sample=new org.joml.Vector4d(a.u()+z.u()-1,1-a.v()-z.v(),(a.depth()+z.depth())*.5,1);
+        frame.inverseViewProjection(new org.joml.Matrix4d()).transform(sample);
+        if(!Double.isFinite(sample.w)||Math.abs(sample.w)<1e-9)return;
+        sample.div(sample.w);var camera=frame.camera();
+        float width=projectedWidth(frame,b,new Vec3(sample.x+camera.x(),sample.y+camera.y(),sample.z+camera.z()),.02);
+        if(width<=0)return;
+        // No dp/pixel floor: distant outlines shrink with the world as well.
+        paint.setStrokeWidth(width);
+        canvas.drawLine(px(b,a.u()),py(b,a.v()),px(b,z.u()),py(b,z.v()),paint);
     }
 }

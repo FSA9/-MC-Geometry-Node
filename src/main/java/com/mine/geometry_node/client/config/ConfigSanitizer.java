@@ -31,6 +31,11 @@ final class ConfigSanitizer {
         // Adding a registered setting must not require another hand-maintained loader branch.
         for (ConfigEntry<?> entry : ConfigRegistry.INSTANCE.entries()) readEntry(root, config, entry);
 
+        // The old default occupied the new editor chord. Preserve deliberate custom navigation bindings.
+        JsonObject gameKeys = readObject(readObject(root, "keyBindings"), "gameView");
+        if (!gameKeys.has("edit") && "CTRL+RIGHT_CLICK".equals(config.keyBindings.gameView.entityMove))
+            config.keyBindings.gameView.entityMove = "SHIFT+RIGHT_CLICK";
+
         JsonObject assets = readObject(root, "assetBrowser");
         ReadList favorites = readStringList(assets, "favoriteAssetPaths");
         if (favorites.valid) config.assetBrowser.favoriteAssetPaths = favorites.value;

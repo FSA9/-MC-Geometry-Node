@@ -19,6 +19,7 @@ final class ForceFieldDebugProvider {
         List<GeometryDebugElement> meshes = new ArrayList<>();
         double radiusSquared = radius * radius;
         for (var field : ForceFieldResourceStore.INSTANCE.snapshot(level)) {
+            if (field.isAuthored()) continue; // Scene presentation owns its helper; it has no graph owner.
             var resource = AreaResourceStore.INSTANCE.get(level.getServer(), field.area());
             var area = resource == null ? null : resource.resolveActive(level);
             if (area == null || area.center().distanceToSqr(origin) > radiusSquared) continue;

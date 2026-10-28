@@ -40,9 +40,7 @@ public final class SceneObjectTypes {
     }
     private static final Map<String,Type> TYPES=new LinkedHashMap<>();
     static {
-        register(new Type(SceneObject.POINT_LIGHT,"geometry_node.game_view.scene.point_light","",
-                SceneNodeInputs.properties(SceneObject.POINT_LIGHT),
-                o->new AABB(o.position().subtract(.5,.5,.5),o.position().add(.5,.5,.5)),o->{}));
+        com.mine.geometry_node.core.engine.system.scene.light.SceneLightTypes.register();
         SceneGeometryTypes.register();
         com.mine.geometry_node.core.engine.system.scene.volume.SceneVolumeTypes.register();
         register(new Type(SceneNativeInteractions.TYPE_ID,"geometry_node.game_view.scene.layer.interaction","",

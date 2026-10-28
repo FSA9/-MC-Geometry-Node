@@ -14,6 +14,8 @@ public interface WorldObjectProvider {
     List<WorldObjectType> types();
     String coverage();
     void collect(Context context, Sink sink);
+    /** Optional exact lookup, independent of list limits. Never load an owner or trust a client DTO. */
+    default WorldObjectEntry lookup(Context context, java.util.UUID objectId) { return null; }
     /** Optional live owner resolver. Called on the server thread, never with client-supplied rows.
      * Returned capabilities must reject access after owner removal/replacement. */
     default com.mine.geometry_node.core.metadata.MetadataCapabilities.Access resolveMetadata(Context context, WorldObjectEntry entry) {

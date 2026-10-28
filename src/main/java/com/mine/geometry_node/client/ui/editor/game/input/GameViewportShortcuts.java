@@ -11,7 +11,7 @@ import java.util.List;
 
 /** Commands use the same configuration and scoped dispatch as the node editor. */
 public final class GameViewportShortcuts {
-    public enum Action { SNAP_TOGGLE, PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, ALIGN_ENTITY, ENTITY_MOVE, COPY, PASTE, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
+    public enum Action { SNAP_TOGGLE, PROJECTION, MOVE, ROTATE, SCALE, AXIS_X, AXIS_Y, AXIS_Z, CONFIRM, ADD, FOCUS, ALIGN_ENTITY, EDIT, ENTITY_MOVE, COPY, PASTE, DELETE, UNDO, REDO, CANCEL, SELECT_ALL }
 
     public static final List<ScopedAction<Action>> ACTIONS = List.of(
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.SNAP_TOGGLE, "geometry_node.game_view.scene.snap", BuiltinConfigEntries.GAME_VIEW_SNAP, null),
@@ -31,6 +31,8 @@ public final class GameViewportShortcuts {
                     BuiltinConfigEntries.GAME_VIEW_FOCUS, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.ALIGN_ENTITY, "geometry_node.game_view.align_entity",
                     BuiltinConfigEntries.GAME_VIEW_ALIGN_ENTITY, null),
+            new ScopedAction<>(KeyScope.GAME_VIEW, Action.EDIT, "geometry_node.game_view.scene.edit",
+                    BuiltinConfigEntries.GAME_VIEW_EDIT, null),
             new ScopedAction<>(KeyScope.GAME_VIEW, Action.ENTITY_MOVE, "geometry_node.game_view.entities.move",
                     BuiltinConfigEntries.GAME_VIEW_ENTITY_MOVE, null),
             new ScopedAction<>(KeyScope.GLOBAL, Action.COPY, "geometry_node.game_view.scene.copy",
@@ -53,6 +55,19 @@ public final class GameViewportShortcuts {
         if (binding == null || binding.isBlank())
             return Component.translatable("geometry_node.settings.value.unassigned").getString();
         return binding.replace("GRAVE_ACCENT", "`");
+    }
+
+    /** Menus use the same configured binding and label as scoped dispatch. */
+    public static String shortcutText(Action id) {
+        return command(id).shortcutText(ConfigManager.INSTANCE.getConfig());
+    }
+
+    public static String label(Action id) {
+        return Component.translatable(command(id).label()).getString();
+    }
+
+    private static ScopedAction<Action> command(Action id) {
+        return ACTIONS.stream().filter(action -> action.id() == id).findFirst().orElseThrow();
     }
 
     public static String flightHint() {

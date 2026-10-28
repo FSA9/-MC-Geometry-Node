@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.UUID;
 
-/** Runtime store for non-persistent force fields addressed by dimension + ID. */
+/** Derived force fields addressed by dimension + ID; graph and authored scene ownership stay separate. */
 public final class ForceFieldResourceStore {
     public static final ForceFieldResourceStore INSTANCE = new ForceFieldResourceStore();
     private final Map<MinecraftServer, ServerState> servers = new WeakHashMap<>();
@@ -40,6 +40,8 @@ public final class ForceFieldResourceStore {
         AreaResource areaResource = AreaResourceStore.INSTANCE.get(server, area);
         synchronized (this) {
             ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
+            if (address.id().startsWith("scene/") || state.authored.containsKey(address))
+                throw new IllegalArgumentException("Reserved scene force-field address");
             ForceFieldResource resource = new ForceFieldResource(address, owner, ++state.generation,
                     area, creationGameTime, strength,
                     areaResource != null ? areaResource.anchorEntityId() : null);
@@ -47,6 +49,26 @@ public final class ForceFieldResourceStore {
             state.snapshotsByDimension.remove(address.dimension());
             return resource;
         }
+    }
+
+    /** Only scene runtime can write this bucket; graph release/remove never touches it. */
+    public synchronized void putAuthored(MinecraftServer server, ForceFieldResource field) {
+        if (!field.isAuthored() || !field.address().id().startsWith("scene/")
+                || !field.area().dimension().equals(field.address().dimension())
+                || !field.area().id().startsWith("scene/"))
+            throw new IllegalArgumentException("Expected authored scene force field and area");
+        var area = AreaResourceStore.INSTANCE.get(server, field.area());
+        if (area == null || !area.isAuthored() || !field.authoredObjectId().equals(area.authoredObjectId()))
+            throw new IllegalArgumentException("Force field must own its authored area");
+        ServerState state = servers.computeIfAbsent(server, ignored -> new ServerState());
+        if (state.entries.containsKey(field.address())) throw new IllegalArgumentException("Force-field address already exists");
+        state.authored.put(field.address(), field);
+        state.snapshotsByDimension.remove(field.address().dimension());
+    }
+
+    public synchronized void removeAuthored(MinecraftServer server, ForceFieldAddress address) {
+        ServerState state = servers.get(server);
+        if (state != null && state.authored.remove(address) != null) state.snapshotsByDimension.remove(address.dimension());
     }
 
     public synchronized void updateAreaAnchor(MinecraftServer server, AreaAddress area,
@@ -61,11 +83,15 @@ public final class ForceFieldResourceStore {
     @Nullable
     public synchronized ForceFieldResource get(MinecraftServer server, ForceFieldAddress address) {
         ServerState state = servers.get(server);
-        return state != null ? state.entries.get(address) : null;
+        return state != null ? state.entries.getOrDefault(address, state.authored.get(address)) : null;
     }
 
     public MetadataCapabilities.Access metadata(MinecraftServer server, ForceFieldAddress address) {
         MetadataOwnerThread.requireCurrent(server);
+        ForceFieldResource resource = get(server, address);
+        if (resource != null && resource.isAuthored())
+            return com.mine.geometry_node.core.engine.system.scene.SceneMetadataTargets.access(server,
+                    address.dimension().identifier().toString(), resource.authoredObjectId());
         return metadata(server, address, GraphMetadataValuePolicy.of(server.registryAccess()),
                 () -> MetadataOwnerThread.requireCurrent(server));
     }
@@ -75,6 +101,7 @@ public final class ForceFieldResourceStore {
         requireThread.run();
         ForceFieldResource resource = get(server, address);
         if (resource == null) throw new IllegalStateException("Force field no longer exists");
+        if (resource.isAuthored()) throw new IllegalArgumentException("Authored metadata belongs to the scene owner");
         RuntimeMetadata metadata = resource.metadata;
         return metadata.access(policy, () -> {
             requireThread.run();
@@ -86,7 +113,10 @@ public final class ForceFieldResourceStore {
 
     public synchronized long metadataRevision(MinecraftServer server, ForceFieldAddress address) {
         metadata(server, address);
-        return get(server, address).metadata.revision();
+        ForceFieldResource resource = get(server, address);
+        return resource.isAuthored() ? com.mine.geometry_node.core.engine.system.scene.SceneSavedData.get(server)
+                .document(address.dimension().identifier().toString()).object(resource.authoredObjectId()).revision()
+                : resource.metadata.revision();
     }
 
     public synchronized boolean remove(MinecraftServer server, ForceFieldAddress address) {
@@ -104,11 +134,14 @@ public final class ForceFieldResourceStore {
 
     public synchronized List<ForceFieldResource> snapshot(ServerLevel level) {
         ServerState state = servers.get(level.getServer());
-        if (state == null || state.entries.isEmpty()) return List.of();
+        if (state == null || (state.entries.isEmpty() && state.authored.isEmpty())) return List.of();
         List<ForceFieldResource> cached = state.snapshotsByDimension.get(level.dimension());
         if (cached != null) return cached;
         List<ForceFieldResource> result = new ArrayList<>();
         for (ForceFieldResource resource : state.entries.values()) {
+            if (resource.address().dimension().equals(level.dimension())) result.add(resource);
+        }
+        for (ForceFieldResource resource : state.authored.values()) {
             if (resource.address().dimension().equals(level.dimension())) result.add(resource);
         }
         List<ForceFieldResource> snapshot = List.copyOf(result);
@@ -137,6 +170,7 @@ public final class ForceFieldResourceStore {
 
     private static final class ServerState {
         private final Map<ForceFieldAddress, ForceFieldResource> entries = new HashMap<>();
+        private final Map<ForceFieldAddress, ForceFieldResource> authored = new HashMap<>();
         private final Map<ResourceKey<Level>, List<ForceFieldResource>> snapshotsByDimension = new HashMap<>();
         private long generation;
     }
