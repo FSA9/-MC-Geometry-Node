@@ -1719,7 +1719,7 @@
   "geometry_node.settings.validation.number": "Enter a valid number within the allowed range.",
   "geometry_node.settings.validation.shortcut_conflict": "Conflicts with",
   "geometry_node.settings.choice.asset_view.list": "List",
-  "geometry_node.settings.choice.asset_view.icon_small": "Small Icons",
+  "geometry_node.settings.choice.asset_view.icon_small": "Icons",
   "geometry_node.settings.choice.asset_view.icon_medium": "Medium Icons",
   "geometry_node.settings.choice.asset_view.icon_large": "Large Icons",
   "geometry_node.main_menu.file": "File",

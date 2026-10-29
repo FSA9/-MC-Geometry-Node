@@ -112,7 +112,7 @@ public class AssetNavigationPanel extends UiScrollView {
             mExpanded.put(source, !mExpanded.get(source));
             buildSidebar();
         });
-        addIcon(header, expanded ? SvgIconView.Icon.CHEVRON_DOWN : SvgIconView.Icon.CHEVRON_RIGHT,
+        addIcon(header, SvgIconView.Icon.forExpandedState(expanded),
                 UiThemes.EDITOR.text().muted());
         addIcon(header, remote ? SvgIconView.Icon.CLOUD : SvgIconView.Icon.FOLDER,
                 remote ? UiThemes.EDITOR.decoration().remote() : FOLDER_COLOR);

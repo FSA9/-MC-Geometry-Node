@@ -37,10 +37,6 @@ final class QuestEntryUi {
         return UiIconButton.Style.forPreset(UiThemes.EDITOR, UiIconButton.Preset.INLINE).withSize(0, 0, 11);
     }
 
-    static SvgIconView.Icon disclosureIcon(boolean expanded) {
-        return expanded ? SvgIconView.Icon.CHEVRON_DOWN : SvgIconView.Icon.CHEVRON_RIGHT;
-    }
-
     /** Only changing the inline text discards its rich formatting. */
     static RichTextValue afterInlineEdit(RichTextValue value, CharSequence text) {
         String plain = text.toString();
@@ -222,7 +218,7 @@ final class QuestEntryUi {
             setPadding(0, UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(8));
             LinearLayout disclosure = new LinearLayout(context);
             disclosure.setGravity(Gravity.CENTER_VERTICAL);
-            arrow = new SvgIconView(context, disclosureIcon(true), UiThemes.EDITOR.text().muted());
+            arrow = new SvgIconView(context, SvgIconView.Icon.forExpandedState(true), UiThemes.EDITOR.text().muted());
             disclosure.addView(arrow, new LayoutParams(UIUtils.dp2pxInt(12), UIUtils.dp2pxInt(12)));
             TextView title = label(context, tr(titleKey), 11, UiThemes.EDITOR.text().normal());
             LayoutParams titleLp = new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(28));
@@ -245,7 +241,7 @@ final class QuestEntryUi {
         void setExpanded(boolean value) {
             expanded = value;
             body.setVisibility(value ? View.VISIBLE : View.GONE);
-            arrow.setIcon(disclosureIcon(value));
+            arrow.setIcon(SvgIconView.Icon.forExpandedState(value));
         }
 
         void setCount(int value) { count.setText(Integer.toString(value)); }

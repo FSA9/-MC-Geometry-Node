@@ -328,7 +328,8 @@ public class Viewport extends FrameLayout implements InteractionContext, NativeP
 
     @Override
     protected void onDraw(Canvas canvas) {
-        mBackgroundLayer.draw(canvas, mCamera, getWidth(), getHeight());
+        mBackgroundLayer.draw(canvas, mController.getCurrentSession() != null ? mCamera : null,
+                getWidth(), getHeight());
         super.onDraw(canvas);
     }
 

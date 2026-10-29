@@ -30,9 +30,9 @@ final class AssetBrowserStatusBar extends LinearLayout {
         summary.setSingleLine(true);
         addView(summary, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         summary.setGravity(Gravity.CENTER_VERTICAL);
-        grid = button(context, SvgIconView.Icon.GRID_VIEW, "icon_medium");
+        grid = button(context, SvgIconView.Icon.GRID_VIEW, "icon_small");
         list = button(context, SvgIconView.Icon.LIST_VIEW, "list");
-        grid.setOnClickListener(view -> onModeSelected.accept(AssetViewMode.ICON_MEDIUM));
+        grid.setOnClickListener(view -> onModeSelected.accept(AssetViewMode.ICON_SMALL));
         list.setOnClickListener(view -> onModeSelected.accept(AssetViewMode.LIST));
         addView(grid, new LayoutParams(UIUtils.dp2pxInt(28), UIUtils.dp2pxInt(24)));
         addView(list, new LayoutParams(UIUtils.dp2pxInt(28), UIUtils.dp2pxInt(24)));

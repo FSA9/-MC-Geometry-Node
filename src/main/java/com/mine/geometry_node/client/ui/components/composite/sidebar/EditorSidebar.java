@@ -84,7 +84,7 @@ public final class EditorSidebar extends LinearLayout {
         mTitleView = label(context, "", 12.0f, COLOR_TEXT);
         header.addView(mTitleView, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f));
 
-        SvgIconView collapseIcon = new SvgIconView(context, SvgIconView.Icon.SIDEBAR_COLLAPSE, COLOR_MUTED);
+        SvgIconView collapseIcon = new SvgIconView(context, SvgIconView.Icon.CHEVRON_RIGHT, COLOR_MUTED);
         UiIconButton collapse = new UiIconButton(context, collapseIcon).tooltip(tr("geometry_node.sidebar.collapse"));
         collapse.setOnClickListener(v -> {
             if (mOnCollapseRequested != null) mOnCollapseRequested.run();

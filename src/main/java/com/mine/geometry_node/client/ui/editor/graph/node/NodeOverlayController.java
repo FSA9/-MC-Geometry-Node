@@ -4,6 +4,7 @@ import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawab
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.feature.graph.edit.commands.port.CmdAddBranch;
 import com.mine.geometry_node.client.feature.graph.edit.commands.group.CmdAddGroupVirtualPort;
@@ -50,7 +51,7 @@ final class NodeOverlayController {
     private final Map<String, View> mRemoveButtons = new HashMap<>();
 
     private View mAddButton;
-    private TextView mCommentButton;
+    private SvgIconView mCommentButton;
     private TextView mCommentTooltip;
     private int mNodeWidth;
     private int mTotalHeight;
@@ -405,9 +406,8 @@ final class NodeOverlayController {
             return;
         }
 
-        mCommentButton = UIUtils.createLockedTextView(context, "▼", 8.0f, (UiThemes.EDITOR.text().strong() & 0x00FFFFFF) | 0xDD000000);
-        mCommentButton.setGravity(Gravity.CENTER);
-        mCommentButton.setBackground(null);
+        mCommentButton = new SvgIconView(context, SvgIconView.Icon.forExpandedState(false),
+                (UiThemes.EDITOR.text().strong() & 0x00FFFFFF) | 0xDD000000);
         mCommentButton.setOnClickListener(v -> toggleCommentPopup());
 
         int buttonSize = UIUtils.dp2pxInt(12);
@@ -453,11 +453,13 @@ final class NodeOverlayController {
         closeOpenCommentPopup();
         sOpenCommentOverlay = this;
         mCommentTooltip.setVisibility(View.VISIBLE);
+        mCommentButton.setIcon(SvgIconView.Icon.forExpandedState(true));
     }
 
     private void hideCommentPopup() {
         if (mCommentTooltip != null && mCommentTooltip.getVisibility() != View.GONE) {
             mCommentTooltip.setVisibility(View.GONE);
+            mCommentButton.setIcon(SvgIconView.Icon.forExpandedState(false));
         }
     }
 

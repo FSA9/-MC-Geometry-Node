@@ -77,9 +77,6 @@ public class SvgIconView extends View {
         RESET("actions/refresh.svg"),
         SHUFFLE("actions/shuffle.svg"),
         CLOSE("actions/close.svg"),
-        EXPAND("navigation/chevrons-up-down-64px.svg"),
-        COLLAPSE("navigation/chevrons-down-up-64px.svg"),
-        SIDEBAR_COLLAPSE("navigation/sidebar-collapse.svg"),
         SQUARE_CHECK("actions/square-check-64px.svg"),
         SQUARE_PLUS("actions/square-plus-64px.svg"),
         SQUARE_MINUS("actions/square-minus-64px.svg"),
@@ -112,8 +109,9 @@ public class SvgIconView extends View {
             return null;
         }
 
+        /** Shared disclosure indicator: open sections point down, closed sections point right. */
         public static Icon forExpandedState(boolean expanded) {
-            return expanded ? COLLAPSE : EXPAND;
+            return expanded ? CHEVRON_DOWN : CHEVRON_RIGHT;
         }
     }
 

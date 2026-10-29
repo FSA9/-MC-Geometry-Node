@@ -290,7 +290,9 @@ public final class AssetTransferPanel extends FrameLayout implements SidebarPane
         boolean expanded = expandedSections.getOrDefault(section, true);
         SvgIconView disclosure = new SvgIconView(getContext(),
                 SvgIconView.Icon.forExpandedState(expanded), COLOR_MUTED);
-        header.addView(disclosure, new LinearLayout.LayoutParams(px(22), px(22)));
+        LinearLayout.LayoutParams disclosureParams = new LinearLayout.LayoutParams(px(12), px(12));
+        disclosureParams.setMargins(px(4), 0, px(6), 0);
+        header.addView(disclosure, disclosureParams);
         TextView label = label(title, 10, COLOR_TEXT);
         header.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         if (action != null) header.addView(action, new LinearLayout.LayoutParams(

@@ -206,7 +206,7 @@ public final class QuestRewardsEditor extends LinearLayout {
             numberLabel = QuestEntryUi.entryNumber(getContext());
             contentRow.addView(numberLabel, new LayoutParams(UIUtils.dp2pxInt(22), UIUtils.dp2pxInt(28)));
             expandIcon = new SvgIconView(getContext(),
-                    QuestEntryUi.disclosureIcon(expanded), COLOR_TEXT);
+                    SvgIconView.Icon.forExpandedState(expanded), COLOR_TEXT);
             expandButton = new UiIconButton(getContext(), expandIcon, QuestEntryUi.disclosureStyle());
             expandButton.setOnClickListener(v -> toggleExpanded());
             contentInput = singleLineInput(getContext(), content.plain(),
@@ -379,7 +379,7 @@ public final class QuestRewardsEditor extends LinearLayout {
         private void updateExpandedUi() {
             details.setVisibility(expanded ? View.VISIBLE : View.GONE);
             detailsDivider.setVisibility(expanded ? View.VISIBLE : View.GONE);
-            expandIcon.setIcon(QuestEntryUi.disclosureIcon(expanded));
+            expandIcon.setIcon(SvgIconView.Icon.forExpandedState(expanded));
             expandButton.setTooltipText(tr(expanded
                     ? "geometry_node.graph_properties.quest.reward_collapse"
                     : "geometry_node.graph_properties.quest.reward_expand"));

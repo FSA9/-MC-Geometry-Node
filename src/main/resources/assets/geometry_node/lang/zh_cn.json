@@ -1719,7 +1719,7 @@
   "geometry_node.settings.validation.number": "请输入范围内的有效数字。",
   "geometry_node.settings.validation.shortcut_conflict": "与以下快捷键冲突",
   "geometry_node.settings.choice.asset_view.list": "列表",
-  "geometry_node.settings.choice.asset_view.icon_small": "小图标",
+  "geometry_node.settings.choice.asset_view.icon_small": "图标",
   "geometry_node.settings.choice.asset_view.icon_medium": "中等图标",
   "geometry_node.settings.choice.asset_view.icon_large": "大图标",
   "geometry_node.main_menu.file": "文件",
