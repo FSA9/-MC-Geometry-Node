@@ -43,8 +43,4 @@ class ConfigStore {
             Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
-
-    void delete() throws IOException {
-        Files.deleteIfExists(ClientPaths.getConfigFile().toPath());
-    }
 }

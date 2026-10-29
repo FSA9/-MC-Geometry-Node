@@ -41,11 +41,11 @@ public class ConfigManager {
         boolean shouldSave;
         try {
             JsonObject root = mStore.loadRoot();
-            if (root == null || !ConfigSanitizer.looksLikeConfig(root)) {
+            if (root == null || !ConfigJsonCodec.looksLikeConfig(root)) {
                 loadedConfig = AppConfig.defaults();
                 shouldSave = true;
             } else {
-                ConfigSanitizer.Result result = ConfigSanitizer.fromJson(root);
+                ConfigJsonCodec.Result result = ConfigJsonCodec.fromJson(root);
                 loadedConfig = result.config();
                 shouldSave = result.changed();
             }
