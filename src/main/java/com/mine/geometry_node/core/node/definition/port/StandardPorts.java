@@ -214,10 +214,6 @@ public enum StandardPorts {
 
     // DICT
     DICT("dict", PortType.DICT),
-    RESULT_DICT("result_dict", PortType.DICT),
-    DATA("data", PortType.DICT),
-    BLOCK_STATS("block_stats", PortType.DICT),
-    SHOP_DATA("shop_data", PortType.SHOP),
 
     // XYZ
     XYZ("xyz", PortType.XYZ),

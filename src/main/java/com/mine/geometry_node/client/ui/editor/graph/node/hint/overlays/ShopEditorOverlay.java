@@ -156,7 +156,7 @@ public final class ShopEditorOverlay extends UiInputBarrier {
         }
         String portId = row != null && row.leftPort() != null
                 ? row.leftPort().id()
-                : StandardPorts.SHOP_DATA.getId();
+                : StandardPorts.DICT.getId();
 
         ShopEditorOverlay overlay = new ShopEditorOverlay(anchor.getContext(), editorContext, nodeData, portId);
         closeOpenOverlay();

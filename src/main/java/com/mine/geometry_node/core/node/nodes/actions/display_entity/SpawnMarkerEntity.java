@@ -36,7 +36,7 @@ public class SpawnMarkerEntity extends BaseNode {
                 .addRow(new PortRow(null, StandardPorts.ENTITY.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.XYZ.toInput(), UIHint.VECTOR)
                 .addPassthroughInput(StandardPorts.TAG.toInput(""), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.DATA.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
@@ -51,7 +51,7 @@ public class SpawnMarkerEntity extends BaseNode {
 
         String tag = getInput(context, StandardPorts.TAG.getId(), String.class);
         Map<String, Object> dataDict = TypeConverter.convertStringMap(
-                getInput(context, StandardPorts.DATA.getId(), Object.class), context);
+                getInput(context, StandardPorts.DICT.getId(), Object.class), context);
 
         Marker marker = EntityType.MARKER.create(level, EntitySpawnReason.COMMAND);
         if (marker != null) {

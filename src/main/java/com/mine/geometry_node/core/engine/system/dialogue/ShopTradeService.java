@@ -126,7 +126,7 @@ final class ShopTradeService {
                 StandardPorts.OFFER_ID.getId(), offerId,
                 StandardPorts.COSTS.getId(), copyStacks(costs),
                 StandardPorts.REWARDS.getId(), copyStacks(rewards),
-                StandardPorts.SHOP_DATA.getId(), shop.toMap()
+                StandardPorts.DICT.getId(), shop.toMap()
         ));
     }
 

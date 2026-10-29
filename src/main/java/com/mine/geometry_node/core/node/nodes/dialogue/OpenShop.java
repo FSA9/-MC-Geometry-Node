@@ -38,7 +38,6 @@ public class OpenShop extends BaseNode {
     public static final String PLAYER = StandardPorts.PLAYER.getId();
     public static final String TITLE = StandardPorts.TITLE.getId();
     public static final String SHOP_ID = StandardPorts.SHOP_ID.getId();
-    public static final String SHOP_DATA = StandardPorts.SHOP_DATA.getId();
     public static final String TEMP_SHOP_DATA = "open_shop_data";
 
     private static final String ACTION_OPEN_SHOP_EDITOR = "open_shop_editor";
@@ -64,7 +63,7 @@ public class OpenShop extends BaseNode {
                 .addPassthroughInput(StandardPorts.BUYER.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.TITLE.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.SHOP_ID.toInput(""), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.SHOP_DATA.toInput(DEFAULT_SHOP_DATA).hiddenPin(), UIHint.BUTTON, null, Map.of(
+                .addPassthroughInput(StandardPorts.DICT.toInput(DEFAULT_SHOP_DATA).hiddenPin(), UIHint.BUTTON, null, Map.of(
                                 PortMetaKeys.BUTTON_LABEL, "geometry_node.button.edit_shop",
                                 PortMetaKeys.BUTTON_ACTION, ACTION_OPEN_SHOP_EDITOR,
                                 PortMetaKeys.BUTTON_COLOR, 0xFF3D6EA8,
@@ -94,7 +93,7 @@ public class OpenShop extends BaseNode {
     public ExecutionResult execute(ExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
         Map<String, Object> shopData = ShopPagePayloadFactory.normalize(
-                TypeConverter.convertStringMap(getInput(context, SHOP_DATA, Object.class), context));
+                TypeConverter.convertStringMap(getInput(context, StandardPorts.DICT.getId(), Object.class), context));
         String title = getInput(context, TITLE, String.class);
         String safeTitle = title == null ? "" : title;
         String configuredShopId = getInput(context, SHOP_ID, String.class);

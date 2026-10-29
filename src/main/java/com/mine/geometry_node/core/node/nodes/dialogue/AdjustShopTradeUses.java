@@ -27,14 +27,14 @@ public class AdjustShopTradeUses extends BaseNode {
                 .addPassthroughInput(StandardPorts.SHOP_ID.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.OFFER_ID.toInput(""), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.INT.toInput(1), UIHint.INPUT)
-                .addPassthroughInput(StandardPorts.SHOP_DATA.toInput(), UIHint.DEFAULT)
+                .addPassthroughInput(StandardPorts.DICT.toInput(), UIHint.DEFAULT)
                 .build();
     }
 
     @Override
     public ExecutionResult execute(ExecutionContext context) {
         Map<String, Object> shopData = TypeConverter.convertStringMap(
-                getInput(context, StandardPorts.SHOP_DATA.getId(), Object.class), context);
+                getInput(context, StandardPorts.DICT.getId(), Object.class), context);
         String shopId = getInput(context, StandardPorts.SHOP_ID.getId(), String.class);
         if (shopId == null || shopId.isBlank()) {
             shopId = ShopTradeUseStore.shopId(shopData, "");

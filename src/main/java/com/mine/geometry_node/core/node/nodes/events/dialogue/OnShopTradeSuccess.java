@@ -21,7 +21,7 @@ public class OnShopTradeSuccess extends BaseEventNode {
                 .addRow(new PortRow(null, StandardPorts.OFFER_ID.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COSTS.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.REWARDS.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.SHOP_DATA.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.DICT.toOutput(), UIHint.DEFAULT, null, null))
                 .build();
     }
 }

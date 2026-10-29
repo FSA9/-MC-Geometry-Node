@@ -36,7 +36,7 @@ public class RepairSchematicPlacement extends BaseNode {
                         .output(StandardPorts.FLOW_OUT, "flow_out")
                         .output(StandardPorts.BOOL, "bool")
                         .output(StandardPorts.COUNT, "count")
-                        .output(StandardPorts.BLOCK_STATS, "block_stats")
+                        .output(StandardPorts.DICT, "block_stats")
                         .input(StandardPorts.FLOW_IN, "flow_in")
                         .input(StandardPorts.KEY, "resource_id")
                         .input(StandardPorts.REPAIR_AIR, "repair_air")
@@ -45,7 +45,7 @@ public class RepairSchematicPlacement extends BaseNode {
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.BOOL.toOutput(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, StandardPorts.COUNT.toOutput(), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, StandardPorts.BLOCK_STATS.toOutput(), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, StandardPorts.DICT.toOutput(), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(ResourceNodeSupport.input(StandardPorts.KEY.getId()), UIHint.INPUT)
                 .addPassthroughInput(StandardPorts.REPAIR_AIR.toInput(true), UIHint.CHECKBOX)
                 .addPassthroughInput(StandardPorts.AFFECT_ENTITIES.toInput(true), UIHint.CHECKBOX)
@@ -61,7 +61,7 @@ public class RepairSchematicPlacement extends BaseNode {
             if (target.level() == null) {
                 context.setNodeResult(StandardPorts.BOOL.getId(), false);
                 context.setNodeResult(StandardPorts.COUNT.getId(), 0);
-                context.setNodeResult(StandardPorts.BLOCK_STATS.getId(), Map.of());
+                context.setNodeResult(StandardPorts.DICT.getId(), Map.of());
                 return next(StandardPorts.FLOW_OUT.getId());
             }
             level = target.level();
@@ -90,7 +90,7 @@ public class RepairSchematicPlacement extends BaseNode {
 
         context.setNodeResult(StandardPorts.BOOL.getId(), affected(result));
         context.setNodeResult(StandardPorts.COUNT.getId(), result.blocks());
-        context.setNodeResult(StandardPorts.BLOCK_STATS.getId(), result.blockStats());
+        context.setNodeResult(StandardPorts.DICT.getId(), result.blockStats());
         return next(StandardPorts.FLOW_OUT.getId());
     }
 
@@ -98,7 +98,7 @@ public class RepairSchematicPlacement extends BaseNode {
     public Object compute(GraphDataContext context, String portName) {
         if (StandardPorts.BOOL.getId().equals(portName)
                 || StandardPorts.COUNT.getId().equals(portName)
-                || StandardPorts.BLOCK_STATS.getId().equals(portName)) {
+                || StandardPorts.DICT.getId().equals(portName)) {
             return context.getNodeResult(portName);
         }
         return null;

@@ -61,7 +61,7 @@ public final class GraphEditorPreviews {
             shopId = "nativepreview:" + safeNodeId(node);
         }
         Map<String, Boolean> conditions = previewShopConditions(node);
-        Object rawShopData = input(node, OpenShop.SHOP_DATA);
+        Object rawShopData = input(node, StandardPorts.DICT.getId());
         ShopPagePayload shop = ShopPagePayloadFactory.create(
                 rawShopData instanceof Map<?, ?> map ? map : Map.of(),
                 conditions,
