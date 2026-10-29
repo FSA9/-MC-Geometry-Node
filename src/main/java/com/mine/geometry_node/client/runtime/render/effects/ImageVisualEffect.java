@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
@@ -56,6 +57,9 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
             textureResolved = textureLease != null || !"server".equals(imageSource);
         }
         Identifier texture = textureLease == null ? null : textureLease.texture();
+        if (texture == null && textureResolved && usesClientFile()) {
+            texture = MissingTextureAtlasSprite.getLocation();
+        }
         if (texture == null) return;
 
         ExpressionEvaluationContext context = expressionContext(partialTick);
@@ -113,6 +117,7 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
         if (imageAspectResolved) return imageAspect;
         imageAspectResolved = true;
         Identifier texture = textureLease == null ? null : textureLease.texture();
+        if (texture == null && textureResolved && usesClientFile()) return imageAspect = 1.0F;
         if (texture == null) return 0.0F;
         var abstractTexture = Minecraft.getInstance().getTextureManager().getTexture(texture);
         if (!(abstractTexture instanceof DynamicTexture dynamicTexture)) return 0.0F;
@@ -120,6 +125,10 @@ public final class ImageVisualEffect extends AbstractVisualEffect {
         if (pixels == null || pixels.isClosed() || pixels.getWidth() <= 0 || pixels.getHeight() <= 0) return 0.0F;
         imageAspect = pixels.getWidth() / (float) pixels.getHeight();
         return imageAspect;
+    }
+
+    private boolean usesClientFile() {
+        return "local".equals(imageSource) || "pack".equals(imageSource) || "worldpack".equals(imageSource);
     }
 
     @Override
