@@ -15,6 +15,7 @@ import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.List;
 import static com.mine.geometry_node.client.ui.components.integration.entity.editor.EntityEditorViews.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Shared tag operations and chips; completed changes enter the owner's automatic-save session. */
 final class EntityTagsView extends UiScrollView {
@@ -37,7 +38,7 @@ final class EntityTagsView extends UiScrollView {
         LinearLayout.LayoutParams ap = size(32, 32); ap.leftMargin = px(8);
         compose.addView(add, ap); root.addView(compose, size(-1, 42));
         tags = new TagFlowLayout(context, 8, 8); tags.setPadding(px(12), px(12), px(12), px(12));
-        tags.setMinimumHeight(px(150)); tags.setBackground(fill(theme.control().input())); root.addView(tags, size(-1, -2));
+        tags.setMinimumHeight(px(150)); tags.setBackground(solid(theme.control().input())); root.addView(tags, size(-1, -2));
         error = text(context, "", theme.status().error()); root.addView(error, size(-1, 32));
         input.setOnKeyListener((view, code, event) -> {
             if (code != KeyEvent.KEY_ENTER && code != KeyEvent.KEY_KP_ENTER) return false;

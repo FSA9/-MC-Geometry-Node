@@ -143,6 +143,23 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
         return false;
     }
 
+    /** Shared surfaces require a host that publishes a viewport transform for this preview. */
+    protected boolean usesSharedNativePreviewHost() {
+        return !followsNativePointer();
+    }
+
+    public final void setViewportScale(float scale) {
+        updateNativePreviewScale(scale);
+    }
+
+    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx) {
+        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, getNativePreviewOrder());
+    }
+
+    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx, long previewOrder) {
+        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, previewOrder);
+    }
+
     protected final void updateNativePreviewScale(float scale) {
         synchronized (mTransformLock) {
             mViewportScale = sanitizeScale(scale);
@@ -296,7 +313,7 @@ public abstract class ViewportNativePreviewView extends FrameLayout implements V
         super.onAttachedToWindow();
         mAggregatedVisible = isShown();
         releaseNativePreviewRegistration();
-        NativePreviewHost host = followsNativePointer() ? null : findNativePreviewHost();
+        NativePreviewHost host = usesSharedNativePreviewHost() ? findNativePreviewHost() : null;
         if (host != null) {
             removeFallbackSurface();
             mPreviewRegistration = host.registerNativePreview(this);

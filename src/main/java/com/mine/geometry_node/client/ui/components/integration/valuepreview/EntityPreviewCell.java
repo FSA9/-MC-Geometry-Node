@@ -10,7 +10,6 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
-import net.minecraft.network.chat.Component;
 import java.util.UUID;
 
 /** Read-only square preview cell. Pointer selection and ordinary scrolling belong to its row. */
@@ -67,15 +66,9 @@ public final class EntityPreviewCell extends ViewGroup {
     }
 
     private void showStatus(EntityTemplatePreviewView.Status status) {
-        String key = switch (status) {
-            case LOADING -> "loading";
-            case UNAVAILABLE -> "unavailable";
-            case ERROR -> "error";
-            default -> null;
-        };
-        placeholder.setText(key == null ? ""
-                : Component.translatable("geometry_node.ui.entity_preview." + key).getString());
-        placeholder.setVisibility(key == null ? GONE : VISIBLE);
+        String text = status.placeholderText();
+        placeholder.setText(text);
+        placeholder.setVisibility(text.isEmpty() ? GONE : VISIBLE);
     }
 
     @Override protected void onMeasure(int widthSpec, int heightSpec) {

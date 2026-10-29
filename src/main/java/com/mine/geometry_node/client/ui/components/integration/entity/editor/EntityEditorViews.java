@@ -7,7 +7,6 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.text.TextUtils;
@@ -16,6 +15,8 @@ import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.network.chat.Component;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Entity editor presentation only; capability and persistence stay outside this helper. */
 final class EntityEditorViews {
@@ -72,8 +73,7 @@ final class EntityEditorViews {
             @Override public void afterTextChanged(Editable value) { action.run(); }
         });
     }
-    static ShapeDrawable fill(int color) { ShapeDrawable d = new ShapeDrawable(); d.setColor(color); return d; }
-    static View divider(Context c, UiTheme theme) { View v = new View(c); v.setBackground(fill(theme.border().subtle())); return v; }
+    static View divider(Context c, UiTheme theme) { View v = new View(c); v.setBackground(solid(theme.border().subtle())); return v; }
 
     /** Protect the action row; status gets the remainder, or its own line in a narrow host. */
     static final class Footer extends LinearLayout {

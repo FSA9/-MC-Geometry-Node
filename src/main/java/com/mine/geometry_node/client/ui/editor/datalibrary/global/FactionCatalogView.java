@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary.global;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
+
 import com.mine.geometry_node.client.feature.faction.ClientFactionRepository;
 import com.mine.geometry_node.client.ui.components.base.button.*;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
@@ -8,6 +11,7 @@ import com.mine.geometry_node.client.ui.components.base.input.*;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
+import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ModalWindowView;
 import com.mine.geometry_node.client.ui.components.composite.table.UiTableStyle;
 import com.mine.geometry_node.client.ui.components.integration.faction.*;
@@ -61,17 +65,14 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     FactionCatalogView(Context context, UiStateContext state, ClientFactionRepository repository, Consumer<Runnable> postToUi) {
         super(context); this.repository = Objects.requireNonNull(repository); this.state = Objects.requireNonNull(state);
         this.postToUi = Objects.requireNonNull(postToUi);
-        setOrientation(VERTICAL); setBackground(fill(theme.surface().canvas()));
-        LinearLayout catalog = column(context); catalog.setBackground(fill(theme.surface().root()));
+        setOrientation(VERTICAL); setBackground(solid(theme.surface().canvas()));
+        LinearLayout catalog = column(context); catalog.setBackground(solid(theme.surface().root()));
         LinearLayout toolbar = row(context); toolbar.setPadding(px(10), px(8), px(10), px(8));
-        search = UiSearchInput.createThemed(context, theme); search.setHint(tr("search")); search.setSingleLine(true);
-        toolbar.addView(search, new LayoutParams(0, px(30), 1));
-        UiIconButton submitSearch = icon(context, SvgIconView.Icon.SEARCH, "search"); toolbar.addView(submitSearch, actionParams());
+        UiSearchBar searchBar = new UiSearchBar(context, tr("search"), tr("search"), this::submitSearch, theme);
+        search = searchBar.input();
+        toolbar.addView(searchBar, new LayoutParams(0, -2, 1));
         add = icon(context, SvgIconView.Icon.PLUS, "add"); remove = icon(context, SvgIconView.Icon.CLEAR, "delete");
         toolbar.addView(add, actionParams()); toolbar.addView(remove, actionParams());
-        UiSearchSubmit.bind(submitSearch, () -> {
-            navigationRevision++; query = search.getText().toString().trim(); savePage(); refresh();
-        }, search);
         catalog.addView(toolbar, new LayoutParams(-1, -2));
         LinearLayout selection = row(context); selection.setPadding(px(10), 0, px(10), 0);
         selectAll = UiCheckBox.createThemed(context, theme); selectAll.setContentDescription(tr("select_all"));
@@ -85,7 +86,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         list = column(context); UiScrollView scroll = new UiScrollView(context, theme.scroll());
         scroll.addView(list, new FrameLayout.LayoutParams(-1, -2)); catalog.addView(scroll, new LayoutParams(-1, 0, 1));
         details = new FrameLayout(context);
-        details.setBackground(fill(theme.surface().sidebar()));
+        details.setBackground(solid(theme.surface().sidebar()));
         factionSplit = new UiFixedSplitLayout(context, ThinResizableDivider.Orientation.HORIZONTAL,
                 UiFixedSplitLayout.Edge.FIRST, 260, 180, 300, theme); factionSplit.setPanes(catalog, details);
         addView(factionSplit, new LayoutParams(-1, 0, 1));
@@ -140,7 +141,7 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
         List<FactionDefinition> visible = visible(); Set<UUID> displayed = new HashSet<>(); int index = 0;
         for (FactionDefinition faction : visible) {
             displayed.add(faction.id()); Row row = rows.computeIfAbsent(faction.id(), this::createRow);
-            row.name().setText(FactionTextViews.display(faction.name())); row.name().setTooltipText(faction.name().plain());
+            row.name().setText(ModernDialogueText.display(faction.name())); row.name().setTooltipText(faction.name().plain());
             if (row.view().getParent() == null) list.addView(row.view(), index, new LayoutParams(-1, px(42)));
             index++;
         }
@@ -265,6 +266,9 @@ final class FactionCatalogView extends LinearLayout implements GlobalDataSection
     private UiIconButton icon(Context context, SvgIconView.Icon icon, String key) { return UiIconButton.createThemed(context, theme, icon, tr(key)); }
     private static LinearLayout column(Context context) { LinearLayout view = new LinearLayout(context); view.setOrientation(VERTICAL); return view; }
     private static LinearLayout row(Context context) { LinearLayout view = new LinearLayout(context); view.setGravity(Gravity.CENTER_VERTICAL); view.setBaselineAligned(false); return view; }
-    private static LayoutParams actionParams() { LayoutParams value = new LayoutParams(px(30), px(30)); value.leftMargin = px(6); return value; }
+    private void submitSearch() {
+        navigationRevision++; query = search.getText().toString().trim(); savePage(); refresh();
+    }
+    private static LayoutParams actionParams() { LayoutParams value = new LayoutParams(px(UiSearchBar.CONTROL_SIZE_DP), px(UiSearchBar.CONTROL_SIZE_DP)); value.leftMargin = px(6); return value; }
     private static UUID uuid(String value) { try { return UUID.fromString(value); } catch (IllegalArgumentException invalid) { return null; } }
 }

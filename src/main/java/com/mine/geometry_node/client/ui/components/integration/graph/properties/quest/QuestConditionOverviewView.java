@@ -9,7 +9,7 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import java.util.List;
-import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 
 public final class QuestConditionOverviewView extends LinearLayout {
@@ -58,7 +58,7 @@ public final class QuestConditionOverviewView extends LinearLayout {
                 UIUtils.dp2pxInt(5),
                 UIUtils.dp2pxInt(8),
                 UIUtils.dp2pxInt(5));
-        row.setBackground(rect(COLOR_ROW, 3.0f));
+        row.setBackground(rect(COLOR_ROW, 3.0f, 0, 0));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);

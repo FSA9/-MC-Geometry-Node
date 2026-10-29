@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.sidebar;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
@@ -376,14 +378,6 @@ public final class EditorSidebar extends LinearLayout {
         view.setGravity(Gravity.CENTER_VERTICAL);
         view.setSingleLine(true);
         return view;
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        return drawable;
     }
 
     private static String tr(String key) {

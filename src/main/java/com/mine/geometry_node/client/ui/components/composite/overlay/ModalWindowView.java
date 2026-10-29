@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.overlay.modal.UiModal;
@@ -10,7 +12,6 @@ import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.overlay.UiWindowLifetime;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.MotionEvent;
@@ -107,7 +108,7 @@ public class ModalWindowView extends LinearLayout implements UiModal {
         this.style = Objects.requireNonNull(style, "style");
 
         setOrientation(VERTICAL);
-        setBackground(windowBackground(style));
+        setBackground(rect(style.windowColor(), style.cornerRadiusDp(), 1, style.borderColor()));
         setFocusable(true);
 
         LinearLayout titleBar = new LinearLayout(context);
@@ -536,20 +537,6 @@ public class ModalWindowView extends LinearLayout implements UiModal {
             throw new IllegalArgumentException(name + " must be finite and non-negative");
         }
         return value;
-    }
-
-    private static ShapeDrawable windowBackground(Style style) {
-        return rect(style.windowColor(), style.cornerRadiusDp(), 1, style.borderColor());
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
     }
 
     private static int clamp(int value, int min, int max) {

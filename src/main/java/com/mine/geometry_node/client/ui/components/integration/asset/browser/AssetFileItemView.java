@@ -28,6 +28,7 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import java.util.List;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 final class AssetFileItemView extends LinearLayout {
     interface Listener {
@@ -76,7 +77,7 @@ final class AssetFileItemView extends LinearLayout {
         mListener = listener;
         setGravity(Gravity.CENTER_VERTICAL);
         if (mode != AssetViewMode.LIST) setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
-        if (mode != AssetViewMode.LIST) setBackground(AssetFileBrowserPanel.createRectDrawable(COLOR_ITEM_TRANSPARENT, 4));
+        if (mode != AssetViewMode.LIST) setBackground(rect(COLOR_ITEM_TRANSPARENT, 4, 0, 0));
 
         mIconView = new SvgIconView(context, iconKind(), iconColor());
         SvgIconView.Icon graphIcon = AssetTypeRegistry.INSTANCE.isType(entry, AssetTypeRegistry.GRAPH_ID)
@@ -124,7 +125,7 @@ final class AssetFileItemView extends LinearLayout {
         mIsSelected = selected;
         super.setSelected(selected);
         if (mRow != null) mRow.setSelected(selected);
-        else setBackground(AssetFileBrowserPanel.createRectDrawable(selected ? COLOR_ITEM_SELECTED : COLOR_ITEM_TRANSPARENT, 4));
+        else setBackground(rect(selected ? COLOR_ITEM_SELECTED : COLOR_ITEM_TRANSPARENT, 4, 0, 0));
     }
 
     private void buildLayoutForMode(AssetViewMode mode, String displayName, String parentLabel) {

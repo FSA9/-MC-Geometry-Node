@@ -22,6 +22,7 @@ import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.PointerIcon;
 import icyllis.modernui.view.ViewConfiguration;
 import net.minecraft.ReportedException;
+import net.minecraft.network.chat.Component;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
@@ -58,7 +59,20 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
     });
     private final int mTouchSlop;
 
-    public enum Status { EMPTY, LOADING, READY, UNAVAILABLE, NO_APPEARANCE, ERROR }
+    public enum Status {
+        EMPTY, LOADING, READY, UNAVAILABLE, NO_APPEARANCE, ERROR;
+
+        /** Shared passive-preview feedback; appearance pickers provide their own fuller captions. */
+        public String placeholderText() {
+            String key = switch (this) {
+                case LOADING -> "loading";
+                case UNAVAILABLE -> "unavailable";
+                case ERROR -> "error";
+                default -> null;
+            };
+            return key == null ? "" : Component.translatable("geometry_node.ui.entity_preview." + key).getString();
+        }
+    }
     private record Reference(UUID id, String dimension) {}
     private volatile Reference mReference;
     private volatile EntityAppearanceSpec mAppearance;
@@ -256,18 +270,6 @@ public class EntityTemplatePreviewView extends ViewportNativePreviewView {
 
     /** Content zoom is opt-in and independent of the surrounding viewport's scale. */
     public final PreviewZoomController zoom() { return mZoom; }
-
-    public final void setViewportScale(float scale) {
-        updateNativePreviewScale(scale);
-    }
-
-    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx) {
-        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, getNativePreviewOrder());
-    }
-
-    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx, long previewOrder) {
-        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, previewOrder);
-    }
 
     public synchronized void setDisplayTemplate(EntityTemplateValue template) {
         setDisplayTemplate(template, EntityAppearanceSpec.NONE);

@@ -5,13 +5,14 @@ import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
 import java.util.function.Consumer;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Listing summary and view controls; navigation and persistence stay in the browser owner. */
 final class AssetBrowserStatusBar extends LinearLayout {
@@ -24,9 +25,7 @@ final class AssetBrowserStatusBar extends LinearLayout {
         setOrientation(HORIZONTAL);
         setGravity(Gravity.CENTER_VERTICAL);
         setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(6), 0);
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(UiThemes.EDITOR.surface().sidebar());
-        setBackground(background);
+        setBackground(solid(UiThemes.EDITOR.surface().sidebar()));
         summary = UIUtils.createLockedTextView(context, "", 12, UiThemes.EDITOR.text().secondary());
         summary.setSingleLine(true);
         addView(summary, new LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));

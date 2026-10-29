@@ -10,14 +10,12 @@ import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
 import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
-import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
 import java.util.function.Supplier;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
-import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
@@ -25,13 +23,12 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
-import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.singleLineInput;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertyNumbers.format;
@@ -172,9 +169,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
     private record FocusedEdit(
             String entryId,
             EditField field,
-            String text,
-            int selectionStart,
-            int selectionEnd
+            QuestEntryUi.TextEdit textEdit
     ) {}
 
     private final class ObjectiveRow {
@@ -328,9 +323,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private QuestObjectiveDefinition definition() {
-            RichTextValue updatedContent = contentInput.getText().toString().equals(content.plain())
-                    ? content
-                    : RichTextValue.plain(contentInput.getText().toString());
+            RichTextValue updatedContent = QuestEntryUi.afterInlineEdit(content, contentInput.getText());
             return new QuestObjectiveDefinition(
                     entryId,
                     updatedContent,
@@ -350,12 +343,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private FocusedEdit focusedEdit(EditField field, EditText input) {
-            return new FocusedEdit(
-                    entryId,
-                    field,
-                    input.getText().toString(),
-                    input.getSelectionStart(),
-                    input.getSelectionEnd());
+            return new FocusedEdit(entryId, field, QuestEntryUi.TextEdit.capture(input));
         }
 
         private void restoreFocusedEdit(FocusedEdit focusedEdit) {
@@ -364,18 +352,11 @@ public final class QuestObjectivesEditor extends LinearLayout {
                 case COUNTER_KEY -> counterKeyInput;
                 case TARGET -> targetInput;
             };
-            input.setText(focusedEdit.text());
-            int length = focusedEdit.text().length();
-            int start = Math.clamp(focusedEdit.selectionStart(), 0, length);
-            int end = Math.clamp(focusedEdit.selectionEnd(), start, length);
-            input.requestFocus();
-            input.setSelection(start, end);
+            focusedEdit.textEdit().restore(input);
         }
 
         private void openRichEditor(View anchor) {
-            content = contentInput.getText().toString().equals(content.plain())
-                    ? content
-                    : RichTextValue.plain(contentInput.getText().toString());
+            content = QuestEntryUi.afterInlineEdit(content, contentInput.getText());
             ExpandedTextInputOverlay.showRichText(getContext(), anchor, content, value -> {
                 content = value;
                 contentInput.setText(value.plain());
@@ -384,13 +365,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private void pickItem() {
-            var selection = QuestHintSelection.capture(captureTarget.get(), entryId, QuestHintSelection.EntryKind.OBJECTIVE);
-            VanillaInventoryPicker.openItem(stack -> {
-                Minecraft minecraft = Minecraft.getInstance();
-                if (minecraft.level == null) return;
-                selection.accept(QuestHintType.ITEM_STACK,
-                        ItemCodecUtils.toJson(stack, minecraft.level.registryAccess()));
-            }, () -> {
+            QuestHintSelection.pickItem(captureTarget.get(), entryId, QuestHintSelection.EntryKind.OBJECTIVE, () -> {
                 if (hintPreview.isAttachedToWindow()) hintPreview.requestHintFocus();
             });
         }

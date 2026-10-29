@@ -433,10 +433,9 @@ public class SvgIconView extends View {
     }
 
     private static final class SvgPathParser {
-        private static final Pattern TOKEN_PATTERN = Pattern.compile(
-                "[CcHhLlMmQqSsTtVvZz]|[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?");
-        private static final Pattern NUMBER_PATTERN = Pattern.compile(
-                "[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?");
+        private static final String NUMBER_REGEX = "[-+]?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?";
+        private static final Pattern NUMBER_PATTERN = Pattern.compile(NUMBER_REGEX);
+        private static final Pattern TOKEN_PATTERN = Pattern.compile("[CcHhLlMmQqSsTtVvZz]|" + NUMBER_REGEX);
 
         private final List<String> mTokens = new ArrayList<>();
         private final Path2D.Float mPath;

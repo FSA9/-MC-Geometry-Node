@@ -42,6 +42,7 @@ import java.util.function.Consumer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import static com.mine.geometry_node.client.ui.components.integration.entity.editor.EntityEditorViews.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Direct-edit entity modal. Completed operations are serialized through server-owned transactions. */
 public final class EntityEditorDialog extends ModalWindowView {
@@ -146,11 +147,11 @@ public final class EntityEditorDialog extends ModalWindowView {
         contentHost().setPadding(0, 0, 0, 0);
         LinearLayout root = column(getContext());
         tabs = row(getContext()); tabs.setPadding(px(20), 0, px(20), 0);
-        tabs.setBackground(fill(theme.surface().header()));
+        tabs.setBackground(solid(theme.surface().header()));
         root.addView(tabs, size(-1, 44)); root.addView(divider(getContext(), theme), size(-1, 1));
         pages = new FrameLayout(getContext()); root.addView(pages, new LinearLayout.LayoutParams(-1, 0, 1));
         blocker = new View(getContext()); blocker.setClickable(true); blocker.setFocusable(true);
-        blocker.setBackground(fill(UiTheme.withAlpha(theme.surface().panel(), 150)));
+        blocker.setBackground(solid(UiTheme.withAlpha(theme.surface().panel(), 150)));
         pages.addView(blocker, new FrameLayout.LayoutParams(-1, -1));
         root.addView(divider(getContext(), theme), size(-1, 1));
         status = text(getContext(), tr("loading"), theme.text().muted());
@@ -179,13 +180,19 @@ public final class EntityEditorDialog extends ModalWindowView {
         if (session.closed()) return;
         active = false;
         // Disarm blur handlers before removing controls. Closing never completes raw input.
+        disposePages();
+        session.close();
+        pages.removeAllViews(); pageViews.clear(); tabs.removeAllViews(); tabButtons.clear(); tabPresentations.clear();
+        attributes = null; factions = null; tags = null; data = null; equipment = null; graphs = null;
+    }
+    private void disposePages() {
         if (attributes != null) attributes.dispose();
         if (factions != null) factions.dispose();
         if (data != null) data.dispose();
         if (graphs != null) graphs.dispose();
-        session.close();
-        pages.removeAllViews(); pageViews.clear(); tabs.removeAllViews(); tabButtons.clear(); tabPresentations.clear();
-        attributes = null; factions = null; tags = null; data = null; equipment = null; graphs = null;
+    }
+    private boolean canEdit(EntityEditDraft expected) {
+        return active && !session.closed() && !session.blocked() && !session.loading() && session.draft() == expected;
     }
     @Override public boolean canClose(OverlayCloseReason reason) { return true; }
     private void renderSession() {
@@ -208,16 +215,13 @@ public final class EntityEditorDialog extends ModalWindowView {
     private void install(EntityEditDraft next) {
         changing = true;
         try {
-            if (attributes != null) attributes.dispose();
-            if (factions != null) factions.dispose();
-            if (data != null) data.dispose();
-            if (graphs != null) graphs.dispose();
+            disposePages();
             pages.removeAllViews(); tabs.removeAllViews(); pageViews.clear(); tabButtons.clear(); tabPresentations.clear();
             draft = next;
             registryType = String.valueOf(draft.snapshot().getOrDefault("registryType", ""));
             EntityEditDraft attributesDraft = draft;
             attributes = new EntityAttributesView(getContext(), theme, attributesDraft, entity, dimension, this::changed,
-                    () -> active && !session.closed() && !session.blocked() && !session.loading() && session.draft() == attributesDraft,
+                    () -> canEdit(attributesDraft),
                     registrationApplied);
             addPage("tab.attributes", attributes);
             equipment = null;
@@ -241,15 +245,13 @@ public final class EntityEditorDialog extends ModalWindowView {
             if (draft.snapshot().containsKey("factions")) {
                 EntityEditDraft factionsDraft = draft;
                 factions = factionsFactory.create(getContext(), theme, factionsDraft,
-                        () -> active && !session.closed() && !session.blocked() && !session.loading()
-                                && session.draft() == factionsDraft, this::changed);
+                        () -> canEdit(factionsDraft), this::changed);
                 addPage("tab.factions", factions);
             }
             EntityEditDraft graphDraft = draft;
             graphs = new EntityGraphsView(getContext(), theme, graphDraft.graphs("graphs"),
                     graphDraft.graphs("availableGraphs"), bindings -> graphDraft.set("graphs", bindings),
-                    () -> active && !session.closed() && !session.blocked() && !session.loading()
-                            && session.draft() == graphDraft, graphActionsFactory, this::requestClose);
+                    () -> canEdit(graphDraft), graphActionsFactory, this::requestClose);
             addPage("tab.graphs", graphs);
             pages.addView(blocker, new FrameLayout.LayoutParams(-1, -1));
             selectedTab = Math.min(selectedTab, pageViews.size() - 1); selectTab(selectedTab);
@@ -278,7 +280,7 @@ public final class EntityEditorDialog extends ModalWindowView {
         };
         host.addView(tab, new FrameLayout.LayoutParams(-2, -1));
         View underline = divider(getContext(), theme);
-        underline.setBackground(fill(theme.selection().outline()));
+        underline.setBackground(solid(theme.selection().outline()));
         host.addView(underline, new FrameLayout.LayoutParams(-1, px(2), Gravity.BOTTOM));
         tabs.addView(host, new LinearLayout.LayoutParams(-2, -1));
         tabButtons.add(tab); tabPresentations.put(tab, new TabPresentation(label, underline));

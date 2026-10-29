@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.core.node.value.RichTextValue;
@@ -12,6 +13,7 @@ import icyllis.modernui.view.Gravity;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.components.integration.faction.FactionUi.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Formatted preview and the existing rich-text editor; no HTML or translation-key data. */
 public final class FactionRichField extends LinearLayout {
@@ -31,7 +33,7 @@ public final class FactionRichField extends LinearLayout {
         preview = new UiDisplayText(context, "", UiMetrics.TEXT_BODY, theme.text().normal());
         preview.setSingleLine(!multiline);
         if (appearance == Appearance.FORM) {
-            var background = fill(theme.control().input());
+            var background = solid(theme.control().input());
             background.setStroke(Math.max(1, px(UiMetrics.BORDER)), theme.control().inputBorder());
             preview.setBackground(background);
             preview.setPadding(px(10), px(7), px(10), px(7));
@@ -52,7 +54,7 @@ public final class FactionRichField extends LinearLayout {
     }
     public void refresh(RichTextValue next) {
         value = next == null ? RichTextValue.EMPTY : next;
-        preview.setText(FactionTextViews.display(value));
+        preview.setText(ModernDialogueText.display(value));
         preview.setTooltipText(value.plain());
     }
     public void setEditable(boolean enabled) { editable = enabled; edit.setEnabled(enabled); }

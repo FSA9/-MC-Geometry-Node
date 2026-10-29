@@ -5,11 +5,12 @@ import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.MeasureSpec;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 /** Shared popup panel and host limits; callers retain their anchor and cascade policies. */
 public final class UiMenuPanelLayout {
@@ -23,11 +24,7 @@ public final class UiMenuPanelLayout {
         java.util.Objects.requireNonNull(theme, "theme");
         UiScrollView panel = new UiScrollView(context, theme.scroll());
         panel.setOnClickListener(view -> {});
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(theme.surface().popup());
-        background.setCornerRadius(UIUtils.dp2px(4));
-        background.setStroke(UIUtils.dp2pxInt(1), theme.border().strong());
-        panel.setBackground(background);
+        panel.setBackground(rect(theme.surface().popup(), 4, 1, theme.border().strong()));
         panel.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
         int padding = UIUtils.dp2pxInt(7);
         int side = Math.max(padding, panel.getVerticalScrollbarWidth()) + Math.max(1, UIUtils.dp2pxInt(4));

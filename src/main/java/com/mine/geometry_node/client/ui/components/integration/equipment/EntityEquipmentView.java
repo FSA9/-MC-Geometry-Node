@@ -12,7 +12,6 @@ import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.graphics.Rect;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
@@ -32,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Reusable equipment editor backed exclusively by detached authoritative snapshot stacks.
  * Hosts may retain this view and unfinished carried-stack operations across tab switches.
@@ -75,7 +76,7 @@ public final class EntityEquipmentView extends FrameLayout {
         this.draft = new EntityEquipmentDraft(equipment, inventory);
         this.changed = Objects.requireNonNull(changed, "changed");
         this.interaction = new EquipmentInventoryInteraction(draft, this::completed, this::refresh);
-        setBackground(background(theme.surface().panel(), theme.border().subtle(), false));
+        setBackground(solid(theme.surface().panel()));
 
         preview = new EquipmentEntityPreviewView(context, theme);
         preview.setFullVisibilityAnchor(preview);
@@ -426,14 +427,9 @@ public final class EntityEquipmentView extends FrameLayout {
     }
 
     private void showPreviewStatus(EntityTemplatePreviewView.Status status) {
-        String key = switch (status) {
-            case LOADING -> "loading";
-            case UNAVAILABLE -> "unavailable";
-            case ERROR -> "error";
-            default -> null;
-        };
-        previewStatus.setText(key == null ? "" : Component.translatable("geometry_node.ui.entity_preview." + key).getString());
-        previewStatus.setVisibility(key == null ? GONE : VISIBLE);
+        String text = status.placeholderText();
+        previewStatus.setText(text);
+        previewStatus.setVisibility(text.isEmpty() ? GONE : VISIBLE);
     }
 
     private LinearLayout equipmentGroup(String key, List<String> names) {
@@ -500,17 +496,12 @@ public final class EntityEquipmentView extends FrameLayout {
     }
     private void divider(LinearLayout column, int margin) {
         View line = new View(getContext());
-        line.setBackground(background(theme.border().divider(), theme.border().divider(), false));
+        line.setBackground(solid(theme.border().divider()));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, px(1));
         params.topMargin = px(margin);
         column.addView(line, params);
     }
-    private static ShapeDrawable background(int fill, int border, boolean stroke) {
-        ShapeDrawable result = new ShapeDrawable();
-        result.setColor(fill);
-        if (stroke) result.setStroke(px(1), border);
-        return result;
-    }
+
     private static LinearLayout.LayoutParams wrap() { return new LinearLayout.LayoutParams(-1, -2); }
     private static String tr(String key, Object... arguments) { return Component.translatable(PREFIX + key, arguments).getString(); }
     private static int px(float value) { return UIUtils.dp2pxInt(value); }

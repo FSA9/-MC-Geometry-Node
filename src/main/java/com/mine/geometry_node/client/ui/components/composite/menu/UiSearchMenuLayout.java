@@ -1,12 +1,13 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.LinearLayout;
@@ -36,10 +37,7 @@ public final class UiSearchMenuLayout {
             heading.setSingleLine(true);
             heading.setGravity(Gravity.CENTER_VERTICAL);
             heading.setPadding(UIUtils.dp2pxInt(10), 0, UIUtils.dp2pxInt(10), 0);
-            ShapeDrawable background = new ShapeDrawable();
-            background.setColor(theme.control().input());
-            background.setCornerRadius(UIUtils.dp2px(4));
-            heading.setBackground(background);
+            heading.setBackground(rect(theme.control().input(), 4, 0, 0));
             content.addView(heading, titleLayoutParams());
         }
         if (!searchable) return null;

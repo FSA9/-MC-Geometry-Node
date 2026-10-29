@@ -9,6 +9,7 @@ import com.mine.geometry_node.core.cache.ManagedCache;
 import java.util.concurrent.CompletionStage;
 
 import com.mine.geometry_node.core.engine.system.schematic.LegacySchematicBlockStateMapper;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnailProjection.MaterialColors;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockStateModelSet;
@@ -84,24 +85,6 @@ final class SchematicThumbnailMaterialResolver {
     private SchematicThumbnailMaterialResolver() {
     }
 
-    static MaterialColors resolve(String stateText, int fallbackColor) {
-        String key = (stateText == null ? "" : stateText) + "|" + fallbackColor;
-        long startedGeneration;
-        synchronized (CACHE) {
-            startedGeneration = generation;
-            MaterialColors cached = CACHE.get(key);
-            if (cached != null) {
-                return cached;
-            }
-        }
-
-        MaterialColors resolved = resolveUncached(stateText, fallbackColor);
-        synchronized (CACHE) {
-            if (startedGeneration == generation) CACHE.put(key, resolved);
-        }
-        return resolved;
-    }
-
     static MaterialColors resolveBudgeted(String stateText, int fallbackColor, boolean[] deferred) {
         String key = (stateText == null ? "" : stateText) + "|" + fallbackColor;
         long startedGeneration;
@@ -115,7 +98,7 @@ final class SchematicThumbnailMaterialResolver {
                 if (deferred != null && deferred.length > 0) {
                     deferred[0] = true;
                 }
-                return MaterialColors.fromFallback(fallbackColor);
+                return MaterialColors.uniform(fallbackColor);
             }
         }
 
@@ -142,19 +125,19 @@ final class SchematicThumbnailMaterialResolver {
     private static MaterialColors resolveUncached(String stateText, int fallbackColor) {
         BlockState state = parseBlockState(stateText);
         if (state == null) {
-            return MaterialColors.fromFallback(fallbackColor);
+            return MaterialColors.uniform(fallbackColor);
         }
 
         try {
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft == null || minecraft.getModelManager() == null) {
-                return MaterialColors.fromFallback(fallbackColor);
+                return MaterialColors.uniform(fallbackColor);
             }
 
             BlockStateModelSet modelSet = minecraft.getModelManager().getBlockStateModelSet();
             BlockStateModel model = modelSet.get(state);
             if (model == null) {
-                return MaterialColors.fromFallback(fallbackColor);
+                return MaterialColors.uniform(fallbackColor);
             }
 
             List<BlockStateModelPart> parts = collectParts(model);
@@ -172,7 +155,7 @@ final class SchematicThumbnailMaterialResolver {
             if (right == 0) right = fallbackColor;
             return new MaterialColors(top, left, right);
         } catch (Exception ignored) {
-            return MaterialColors.fromFallback(fallbackColor);
+            return MaterialColors.uniform(fallbackColor);
         }
     }
 
@@ -379,9 +362,4 @@ final class SchematicThumbnailMaterialResolver {
         }
     }
 
-    record MaterialColors(int top, int left, int right) {
-        private static MaterialColors fromFallback(int color) {
-            return new MaterialColors(color, color, color);
-        }
-    }
 }

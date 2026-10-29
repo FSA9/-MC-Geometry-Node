@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.workspace.area.AreaLifecycle;
@@ -16,7 +18,6 @@ import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.SpannableStringBuilder;
 import icyllis.modernui.text.Spanned;
@@ -218,7 +219,7 @@ public final class ExpandedTextInputOverlay extends UiInputBarrier {
     private static void showInternal(Context context, View anchor, PortType expectedType, Object value,
                                      ValueParser valueParser, Predicate<Object> valueValidator,
                                      Consumer<Object> commitHandler, Runnable onDismissed, UiTheme theme) {
-        ViewGroup host = findWindowHost(anchor);
+        ViewGroup host = UiOverlayHosts.findWindowHost(anchor);
         if (host == null) {
             if (onDismissed != null) onDismissed.run();
             return;
@@ -331,21 +332,6 @@ public final class ExpandedTextInputOverlay extends UiInputBarrier {
         if (sOpenOverlay != null) {
             sOpenOverlay.dismiss(OverlayCloseReason.REPLACED);
         }
-    }
-
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
     }
 
     private LinearLayout createRichTextToolbar(Context context) {
@@ -661,15 +647,5 @@ public final class ExpandedTextInputOverlay extends UiInputBarrier {
     @FunctionalInterface
     public interface ValueParser {
         Object parse(Editable text);
-    }
-
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
     }
 }

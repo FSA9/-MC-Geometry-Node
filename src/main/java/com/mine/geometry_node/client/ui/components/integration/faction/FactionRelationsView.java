@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
+import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
@@ -127,7 +128,7 @@ public final class FactionRelationsView extends LinearLayout {
                 // Disable before UiTableItems hides a filtered row and before any focus loss.
                 row.score().setEditable(enabled && !current.missing());
                 row.clear().setEnabled(enabled && current.missing());
-                row.name().setText(FactionTextViews.display(current.name()));
+                row.name().setText(ModernDialogueText.display(current.name()));
                 row.name().setTooltipText(current.name().plain());
                 row.score().refresh(current.score());
                 row.clear().setVisibility(current.missing() ? VISIBLE : GONE);

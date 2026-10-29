@@ -33,7 +33,7 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         search = input(context, "search", true, theme); addView(search, params(-1, 30));
         status = text(context, "", theme.text().muted()); addView(status, params(-1, 28));
         entries = column(context); addView(entries, params(-1, -2));
-        manageButton = button(context, "manage", this::manage, theme);
+        manageButton = button(context, "manage", () -> manage(null), theme);
         LayoutParams buttons = params(-1, 30); buttons.topMargin = px(8); addView(manageButton, buttons);
         watch(search, this::renderEntries);
         render(null);
@@ -51,9 +51,14 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         if (editingEnabled == enabled) return;
         editingEnabled = enabled; renderEntries();
     }
-    private void manage() {
-        if (!editingEnabled || binding == null || state == null || !state.available() || state.loading() || state.saving()) return;
-        if (manage != null) manage.run(); else UiDataDictionaryEditor.show(this, binding, theme);
+    private boolean canManage() {
+        return editingEnabled && binding != null && state != null && state.available() && !state.loading() && !state.saving();
+    }
+    private void manage(String key) {
+        if (!canManage()) return;
+        if (key != null && manageEntry != null) manageEntry.accept(key);
+        else if (manage != null) manage.run();
+        else UiDataDictionaryEditor.show(this, tr("title"), binding, key, theme);
     }
     @Override protected boolean refreshOnAttach() { return true; }
     @Override protected void render(DataDictionaryBinding.State state) {
@@ -64,7 +69,7 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
         entries.removeAllViews();
         boolean available = state != null && state.available() && !state.loading();
         search.setEnabled(available); manageButton.setVisibility(editingEnabled ? VISIBLE : GONE);
-        manageButton.setEnabled(editingEnabled && available && !state.saving());
+        manageButton.setEnabled(canManage());
         if (!available) {
             status.setText(state == null ? tr("unavailable") : status(state)); return;
         }
@@ -77,14 +82,9 @@ public final class UiDataDictionaryPreview extends MetadataViews.BoundView {
             name.setSingleLine(true); name.setEllipsize(TextUtils.TruncateAt.END);
             value.setSingleLine(true); value.setEllipsize(TextUtils.TruncateAt.END);
             row.addView(name, params(-1, 20)); row.addView(value, params(-1, 20));
-            row.setOnClickListener(view -> {
-                if (!editingEnabled || binding == null || state == null || !state.available() || state.loading() || state.saving()) return;
-                if (manageEntry != null) manageEntry.accept(key);
-                else if (manage != null) manage.run();
-                else UiDataDictionaryEditor.show(this, tr("title"), binding, key, theme);
-            });
-            row.setClickable(editingEnabled && !state.saving());
-            row.setFocusable(editingEnabled && !state.saving());
+            row.setOnClickListener(view -> manage(key));
+            row.setClickable(canManage());
+            row.setFocusable(canManage());
             entries.addView(row, params(-1, -2));
         }
     }

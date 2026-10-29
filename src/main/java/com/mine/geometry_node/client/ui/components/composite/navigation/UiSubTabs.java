@@ -1,12 +1,13 @@
 package com.mine.geometry_node.client.ui.components.composite.navigation;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiHorizontalScrollView;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
@@ -32,7 +33,7 @@ public final class UiSubTabs extends UiHorizontalScrollView {
         setScrollBarStyle(View.SCROLLBARS_OUTSIDE_OVERLAY);
         setFillViewport(true);
         setMinimumHeight(UIUtils.dp2pxInt(HEIGHT));
-        setBackground(background(theme.surface().panel()));
+        setBackground(solid(theme.surface().panel()));
         strip = new LinearLayout(context);
         strip.setOrientation(LinearLayout.HORIZONTAL);
         strip.setBaselineAligned(false);
@@ -58,7 +59,7 @@ public final class UiSubTabs extends UiHorizontalScrollView {
         host.addView(button, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         // A later sibling stays above the button's text and state background.
         View underline = new View(getContext());
-        underline.setBackground(background(theme.selection().outline()));
+        underline.setBackground(solid(theme.selection().outline()));
         underline.setVisibility(INVISIBLE);
         host.addView(underline, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT,
                 UIUtils.dp2pxInt(2), Gravity.BOTTOM));
@@ -82,12 +83,6 @@ public final class UiSubTabs extends UiHorizontalScrollView {
         return new UiActionButton.Palette(selected ? theme.surface().header() : theme.surface().panel(),
                 theme.control().iconHover(), theme.control().iconPressed(),
                 selected ? theme.text().strong() : theme.text().muted());
-    }
-
-    private static ShapeDrawable background(int color) {
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(color);
-        return background;
     }
 
     private record Tab(UiActionButton button, View underline) {}

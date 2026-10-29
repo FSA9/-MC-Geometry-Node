@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.toolbar;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.config.AppConfig;
 import com.mine.geometry_node.client.config.ConfigChangeListener;
@@ -10,7 +12,6 @@ import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRegist
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionRequest;
 import com.mine.geometry_node.client.ui.editor.graph.action.ViewportActionSink;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.FrameLayout;
@@ -54,7 +55,7 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         mTooltip.setHorizontallyScrolling(false);
         mTooltip.setMinLines(1);
         mTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
-        mTooltip.setBackground(createRectDrawable(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
+        mTooltip.setBackground(rect(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
         mTooltip.setVisibility(View.GONE);
         mTooltip.setEnabled(false);
         LayoutParams tooltipLp = new LayoutParams(UIUtils.dp2pxInt(120), LayoutParams.WRAP_CONTENT);
@@ -146,15 +147,6 @@ public final class ViewportToolbar extends FrameLayout implements ViewportToolBu
         requestLayout();
     }
 
-    private static ShapeDrawable createRectDrawable(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private void applyConfig(AppConfig config) {
         if (config == null || config.keyBindings == null) return;

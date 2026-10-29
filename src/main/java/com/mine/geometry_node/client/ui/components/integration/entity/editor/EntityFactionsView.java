@@ -19,6 +19,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 import static com.mine.geometry_node.client.ui.components.integration.entity.editor.EntityEditorViews.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Entity faction page: owns the draft bridge and catalog subscription, not table widgets. */
 final class EntityFactionsView extends LinearLayout {
@@ -44,7 +45,7 @@ final class EntityFactionsView extends LinearLayout {
                        Supplier<FactionCatalog> catalog, BooleanSupplier catalogLoaded) {
         super(context); this.theme = theme; this.draft = draft; this.editable = editable; this.changed = changed;
         this.catalog = catalog; this.catalogLoaded = catalogLoaded; setOrientation(HORIZONTAL);
-        setBackground(fill(theme.surface().panel()));
+        setBackground(solid(theme.surface().panel()));
         UiScrollView navigationScroll = new UiScrollView(context, theme.scroll());
         navigationScroll.setFillViewport(true);
         LinearLayout navigation = column(context); navigation.setPadding(px(20), px(18), px(20), px(20));

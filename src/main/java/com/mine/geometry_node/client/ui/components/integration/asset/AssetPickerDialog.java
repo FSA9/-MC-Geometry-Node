@@ -22,7 +22,6 @@ import com.mine.geometry_node.core.engine.system.asset.AssetDescriptor;
 import com.mine.geometry_node.core.engine.system.asset.AssetMetadata;
 import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -34,6 +33,8 @@ import java.io.File;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 /** Single-selection modal backed by the shared asset browser and the anchor's overlay host. */
 public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCoordinator {
@@ -110,14 +111,15 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
 
         LinearLayout browserArea = new LinearLayout(context);
         browserArea.setOrientation(LinearLayout.HORIZONTAL);
-        browserArea.setBackground(rect(theme.surface().root(), UiMetrics.RADIUS_INPUT));
+        browserArea.setBackground(rect(theme.surface().root(), UiMetrics.RADIUS_INPUT, 0, 0));
         mSidebar = new AssetNavigationPanel(context, this);
         browserArea.addView(mSidebar, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .22f));
         browserArea.addView(ThinResizableDivider.weighted(context, ThinResizableDivider.Orientation.HORIZONTAL));
         browserArea.addView(mBrowser, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, .78f));
         mPanel.addView(browserArea, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(430)));
 
-        mStatus = label(context, "", 12, theme.status().warning());
+        mStatus = UIUtils.createLockedTextView(context, "", 12, theme.status().warning());
+        mStatus.setGravity(Gravity.CENTER_VERTICAL);
         mPanel.addView(mStatus, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(22)));
 
         LinearLayout actions = new LinearLayout(context);
@@ -316,22 +318,6 @@ public class AssetPickerDialog extends ModalWindowView implements AssetBrowserCo
         bindSessionOwner(anchor);
         return java.util.Objects.requireNonNull(OverlayHost.find(anchor), "No overlay host for asset dialog").showModal(this,
                 new ModalOptions(false, true, anchor, mTheme.surface().modalScrimLight()));
-    }
-
-    private TextView label(Context context, String text, float size, int color) {
-        TextView label = new TextView(context);
-        label.setText(text);
-        UIUtils.setLockedTextSize(label, size);
-        label.setTextColor(color);
-        label.setGravity(Gravity.CENTER_VERTICAL);
-        return label;
-    }
-
-    private ShapeDrawable rect(int color, float radius) {
-        ShapeDrawable background = new ShapeDrawable();
-        background.setColor(color);
-        background.setCornerRadius(UIUtils.dp2px(radius));
-        return background;
     }
 
     private static String tr(String key) {

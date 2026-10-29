@@ -78,53 +78,32 @@ public final class ModernDialogueText {
     }
 
     private static void applyStyle(SpannableStringBuilder builder, int start, int end, Style style) {
-        if (start >= end || style.isEmpty()) {
-            return;
-        }
-        int flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
+        if (start >= end || style.isEmpty()) return;
         TextColor color = style.getColor();
-        if (color != null) {
-            builder.setSpan(new ForegroundColorSpan(0xFF000000 | color.getValue()), start, end, flags);
-        }
-        if (style.isBold() && style.isItalic()) {
-            builder.setSpan(new StyleSpan(Typeface.BOLD_ITALIC), start, end, flags);
-        } else if (style.isBold()) {
-            builder.setSpan(new StyleSpan(Typeface.BOLD), start, end, flags);
-        } else if (style.isItalic()) {
-            builder.setSpan(new StyleSpan(Typeface.ITALIC), start, end, flags);
-        }
-        if (style.isUnderlined()) {
-            builder.setSpan(new UnderlineSpan(), start, end, flags);
-        }
-        if (style.isStrikethrough()) {
-            builder.setSpan(new StrikethroughSpan(), start, end, flags);
-        }
+        applyStyle(builder, start, end, color == null ? null : color.getValue(),
+                style.isBold(), style.isItalic(), style.isUnderlined(), style.isStrikethrough());
     }
 
     private static void applyStyle(SpannableStringBuilder builder, int start, int end, java.util.Map<String, Object> style) {
-        if (start >= end || style == null || style.isEmpty()) {
-            return;
-        }
+        if (start >= end || style == null || style.isEmpty()) return;
+        applyStyle(builder, start, end, parseColor(style.get("color")),
+                truthy(style.get("bold")), truthy(style.get("italic")),
+                truthy(style.get("underlined")) || truthy(style.get("underline")),
+                truthy(style.get("strikethrough")));
+    }
+
+    private static void applyStyle(SpannableStringBuilder builder, int start, int end, Integer color,
+                                   boolean bold, boolean italic, boolean underlined, boolean strikethrough) {
         int flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
-        Integer color = parseColor(style.get("color"));
         if (color != null) {
             builder.setSpan(new ForegroundColorSpan(0xFF000000 | (color & 0xFFFFFF)), start, end, flags);
         }
-        boolean bold = truthy(style.get("bold"));
-        boolean italic = truthy(style.get("italic"));
-        if (bold && italic) {
-            builder.setSpan(new StyleSpan(Typeface.BOLD_ITALIC), start, end, flags);
-        } else if (bold) {
-            builder.setSpan(new StyleSpan(Typeface.BOLD), start, end, flags);
-        } else if (italic) {
-            builder.setSpan(new StyleSpan(Typeface.ITALIC), start, end, flags);
+        if (bold || italic) {
+            builder.setSpan(new StyleSpan(bold && italic ? Typeface.BOLD_ITALIC
+                    : bold ? Typeface.BOLD : Typeface.ITALIC), start, end, flags);
         }
-        if (truthy(style.get("underlined")) || truthy(style.get("underline"))) {
-            builder.setSpan(new UnderlineSpan(), start, end, flags);
-        }
-        if (truthy(style.get("strikethrough"))) {
-            builder.setSpan(new StrikethroughSpan(), start, end, flags);
-        }
+        if (underlined) builder.setSpan(new UnderlineSpan(), start, end, flags);
+        if (strikethrough) builder.setSpan(new StrikethroughSpan(), start, end, flags);
     }
 
     private static boolean truthy(Object value) {

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.menu.UiPopupOverlay;
@@ -8,7 +10,6 @@ import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
@@ -160,8 +161,7 @@ public class UiContextMenu extends UiPopupOverlay {
 
     public void addDivider() {
         View divider = new View(getContext());
-        ShapeDrawable line = new ShapeDrawable(); line.setColor(theme.border().divider());
-        divider.setBackground(line);
+        divider.setBackground(solid(theme.border().divider()));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1));
         lp.setMargins(0, UIUtils.dp2pxInt(4), 0, UIUtils.dp2pxInt(4));
         mContentLayout.addView(divider, lp);
@@ -334,5 +334,4 @@ public class UiContextMenu extends UiPopupOverlay {
     private LinearLayout.LayoutParams menuItemLayoutParams() {
         return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(MENU_ITEM_HEIGHT_DP));
     }
-
 }

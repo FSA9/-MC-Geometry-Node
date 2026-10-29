@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
@@ -8,7 +10,6 @@ import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.graphics.Matrix;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.*;
@@ -30,20 +31,6 @@ public class UiSearchableMenu extends UiPopupOverlay {
     private static final int ITEM_HEIGHT_DP = 24;
 
     private final UiTheme theme;
-
-    private static ShapeDrawable createRectDrawable(int color, float radiusDp) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        return drawable;
-    }
-
-    private static ShapeDrawable createRectDrawable(int color, float radiusDp, float strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = createRectDrawable(color, radiusDp);
-        drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        return drawable;
-    }
-
 
     private LinearLayout mContentLayout;
     private LinearLayout mListContainer;
@@ -107,7 +94,7 @@ public class UiSearchableMenu extends UiPopupOverlay {
 
         mContentLayout = new LinearLayout(context);
         mContentLayout.setOrientation(LinearLayout.VERTICAL);
-        mContentLayout.setBackground(createRectDrawable(theme.surface().panel(), 6, 1, theme.border().strong()));
+        mContentLayout.setBackground(rect(theme.surface().panel(), 6, 1, theme.border().strong()));
         mContentLayout.setPadding(
                 UIUtils.dp2pxInt(MENU_PADDING_DP),
                 UIUtils.dp2pxInt(MENU_PADDING_DP),

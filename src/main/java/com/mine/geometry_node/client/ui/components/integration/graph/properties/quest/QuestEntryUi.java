@@ -3,8 +3,10 @@ package com.mine.geometry_node.client.ui.components.integration.graph.properties
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
+import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
@@ -13,6 +15,27 @@ import static com.mine.geometry_node.client.ui.components.integration.graph.prop
 /** Shared sizing and controls for objective and reward cards. */
 final class QuestEntryUi {
     private QuestEntryUi() {}
+
+    /** Only changing the inline text discards its rich formatting. */
+    static RichTextValue afterInlineEdit(RichTextValue value, CharSequence text) {
+        String plain = text.toString();
+        return plain.equals(value.plain()) ? value : RichTextValue.plain(plain);
+    }
+
+    /** Detached text and caret state; the owning editor still resolves the entry and field. */
+    record TextEdit(String text, int selectionStart, int selectionEnd) {
+        static TextEdit capture(EditText input) {
+            return new TextEdit(input.getText().toString(), input.getSelectionStart(), input.getSelectionEnd());
+        }
+
+        void restore(EditText input) {
+            input.setText(text);
+            int start = Math.clamp(selectionStart, 0, text.length());
+            int end = Math.clamp(selectionEnd, start, text.length());
+            input.requestFocus();
+            input.setSelection(start, end);
+        }
+    }
 
     static LinearLayout.LayoutParams detailParams() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(

@@ -15,6 +15,9 @@ import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.widget.EditText;
+import icyllis.modernui.view.Gravity;
+import icyllis.modernui.view.View;
+import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,6 +27,27 @@ public class UIHintUtils {
 
     public static float getStandardInputHeight() {
         return NodeUiMetrics.ROW_HEIGHT - INPUT_HEIGHT_OFFSET;
+    }
+
+    /** Full-width control on the extra row below a port caption. */
+    public static void layoutExtraRowInput(View view, PortRow row, float currentY, int nodeWidth) {
+        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
+        float inputHeight = getStandardInputHeight();
+        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
+        float topOffset = hasLabel ? NodeUiMetrics.ROW_HEIGHT : 0;
+        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - inputHeight) / 2;
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+        int width = UIUtils.dp2pxInt(nodeWidth - 2 * startX);
+        int height = UIUtils.dp2pxInt(inputHeight);
+        if (params == null) params = new FrameLayout.LayoutParams(width, height);
+        else {
+            params.width = width;
+            params.height = height;
+        }
+        params.gravity = Gravity.LEFT | Gravity.TOP;
+        params.leftMargin = UIUtils.dp2pxInt(startX);
+        params.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
+        view.setLayoutParams(params);
     }
 
     public static boolean hasDynamicRemoveButton(PortRow row) {

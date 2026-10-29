@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.shortcut.UiInputBindings;
@@ -24,7 +26,6 @@ import com.mine.geometry_node.client.ui.document.DocumentManager;
 import com.mine.geometry_node.client.ui.workspace.surface.UiSurfaceRegistry;
 import com.mine.geometry_node.client.ui.workspace.surface.ViewportSurface;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.view.KeyEvent;
@@ -51,7 +52,7 @@ public class GraphEditorWindow extends LinearLayout
         super(context);
         mUiStateContext = java.util.Objects.requireNonNull(uiStateContext);
         setOrientation(LinearLayout.HORIZONTAL);
-        setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
+        setBackground(solid(UiThemes.EDITOR.surface().root()));
 
         if (!mUiStateContext.contains(EditorSidebarState.GRAPH, EditorSidebarState.SCOPE)) {
             AppConfig.ViewportConfig viewportConfig = ConfigManager.INSTANCE.getConfig().viewport;
@@ -190,11 +191,5 @@ public class GraphEditorWindow extends LinearLayout
         return params;
     }
 
-    private ShapeDrawable createColorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setShape(ShapeDrawable.RECTANGLE);
-        drawable.setColor(color);
-        return drawable;
-    }
 
 }

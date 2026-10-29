@@ -21,8 +21,7 @@ public final class ThinResizableDivider extends ResizableDivider {
     private ThinResizableDivider(Context context, Orientation orientation, DragListener listener,
                                  boolean weighted, float minimumWeight, UiTheme theme) {
         super(context, orientation, listener, weighted, true, minimumWeight, theme);
-        LinearLayout.LayoutParams params = layoutParams(orientation == Orientation.VERTICAL
-                ? Orientation.VERTICAL : Orientation.HORIZONTAL);
+        LinearLayout.LayoutParams params = layoutParams(orientation);
         // Only the line occupies layout space. The rest of the hit target lies over
         // the panes, so their backgrounds reach the line instead of exposing a gutter.
         int hit = orientation == Orientation.VERTICAL ? params.height : params.width;

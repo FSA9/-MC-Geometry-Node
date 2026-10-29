@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.editor.graph.GraphUiStyle;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
@@ -15,7 +17,6 @@ import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.group.GroupNodeFactory;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -216,25 +217,13 @@ public class PortMenu {
 
     private static void addDivider(Context context, LinearLayout panel) {
         View divider = new View(context);
-        divider.setBackground(rect(COLOR_DIVIDER, 0));
+        divider.setBackground(rect(COLOR_DIVIDER, 0, 0, 0));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
         lp.setMargins(0, dp(6), 0, dp(6));
         panel.addView(divider, lp);
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp) {
-        return rect(color, radiusDp, 0, 0);
-    }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(dp(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private static int dp(float value) {
         return UIUtils.dp2pxInt(value);

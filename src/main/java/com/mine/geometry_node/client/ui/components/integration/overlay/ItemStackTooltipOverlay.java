@@ -1,12 +1,12 @@
 package com.mine.geometry_node.client.ui.components.integration.overlay;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.composite.overlay.UiOverlayHosts;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
@@ -22,6 +22,8 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 public final class ItemStackTooltipOverlay {
     private static final int TOOLTIP_MAX_WIDTH_DP = 220;
@@ -77,7 +79,7 @@ public final class ItemStackTooltipOverlay {
         }
 
         ViewGroup host = OverlayMount.host(anchor);
-        if (host == null) host = findWindowHost(anchor);
+        if (host == null) host = UiOverlayHosts.findWindowHost(anchor);
         if (host == null) {
             hide(anchor);
             return;
@@ -224,30 +226,7 @@ public final class ItemStackTooltipOverlay {
         return Math.max(1, units);
     }
 
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
-    }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private static int dp(int value) {
         return UIUtils.dp2pxInt(value);

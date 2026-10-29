@@ -21,7 +21,7 @@ import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 
 /**
@@ -176,8 +176,8 @@ public final class QuestPropertiesSection extends LinearLayout {
 
     public QuestDefinition definition() {
         mDefinition = new QuestDefinition(
-                richTextAfterInlineEdit(mDefinition.title(), mTitleInput.getText().toString()),
-                richTextAfterInlineEdit(mDefinition.description(), mDescriptionInput.getText().toString()),
+                QuestEntryUi.afterInlineEdit(mDefinition.title(), mTitleInput.getText()),
+                QuestEntryUi.afterInlineEdit(mDefinition.description(), mDescriptionInput.getText()),
                 mObjectivesEditor.objectives(),
                 mRewardsEditor.rewards());
         return mDefinition;
@@ -255,14 +255,7 @@ public final class QuestPropertiesSection extends LinearLayout {
     }
 
     private static RichTextValue preservePendingText(RichTextValue value, String pendingText) {
-        if (pendingText == null || pendingText.equals(value.plain())) return value;
-        return RichTextValue.plain(pendingText);
-    }
-
-    private static RichTextValue richTextAfterInlineEdit(RichTextValue value, String text) {
-        RichTextValue current = value != null ? value : RichTextValue.EMPTY;
-        String normalizedText = text != null ? text : "";
-        return normalizedText.equals(current.plain()) ? current : RichTextValue.plain(normalizedText);
+        return pendingText == null ? value : QuestEntryUi.afterInlineEdit(value, pendingText);
     }
 
 }

@@ -28,8 +28,9 @@ public final class UiSelectButton extends View {
     private final RectF mRect = new RectF();
     private final TextPaint mTextPaint = new TextPaint();
     private final FontMetricsInt mMetrics = new FontMetricsInt();
+    private String mValue;
     private ShapedText mValueText;
-    private ShapedText mArrowText;
+    private final ShapedText mArrowText;
 
     public UiSelectButton(Context context, String value, float textSizeDp,
                           java.util.function.DoubleSupplier cornerRadius) {
@@ -53,6 +54,8 @@ public final class UiSelectButton extends View {
 
     public void setValue(String value) {
         String safeValue = value == null ? "" : value;
+        if (safeValue.equals(mValue)) return;
+        mValue = safeValue;
         mValueText = shape(safeValue);
         invalidate();
     }

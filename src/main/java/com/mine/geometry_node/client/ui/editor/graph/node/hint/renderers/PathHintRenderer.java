@@ -1,10 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.renderers;
 
-import com.mine.geometry_node.client.ui.editor.graph.node.NodeUiMetrics;
 
 import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
 import com.mine.geometry_node.client.ui.components.integration.asset.dialog.FilePickerDialog;
-import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.InlineActionButton;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintUtils;
 import com.mine.geometry_node.client.ui.editor.graph.node.hint.UIHintValueBinder;
@@ -15,7 +13,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 
 public class PathHintRenderer implements UIHintRenderer {
@@ -50,26 +47,7 @@ public class PathHintRenderer implements UIHintRenderer {
 
     @Override
     public void updateLayout(View view, PortRow row, float currentY, int nodeWidth) {
-        float startX = NodeUiMetrics.LABEL_MARGIN_PORT;
-        float endX = nodeWidth - NodeUiMetrics.LABEL_MARGIN_PORT;
-        float inputBoxHeight = UIHintUtils.getStandardInputHeight();
-        boolean hasLabel = row.leftPort() != null || row.rightPort() != null;
-        float topOffset = hasLabel ? NodeUiMetrics.ROW_HEIGHT : 0.0f;
-        float verticalMargin = (NodeUiMetrics.ROW_HEIGHT - inputBoxHeight) / 2.0f;
-
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) view.getLayoutParams();
-        int widthPx = UIUtils.dp2pxInt(endX - startX);
-        int heightPx = UIUtils.dp2pxInt(inputBoxHeight);
-        if (lp == null) {
-            lp = new FrameLayout.LayoutParams(widthPx, heightPx);
-        } else {
-            lp.width = widthPx;
-            lp.height = heightPx;
-        }
-        lp.gravity = Gravity.LEFT | Gravity.TOP;
-        lp.leftMargin = UIUtils.dp2pxInt(startX);
-        lp.topMargin = UIUtils.dp2pxInt(currentY + topOffset + verticalMargin);
-        view.setLayoutParams(lp);
+        UIHintUtils.layoutExtraRowInput(view, row, currentY, nodeWidth);
     }
 
     private View createPickButton(Context context, EditText input, NodeData nodeData, String portId, EditorContext editorContext) {

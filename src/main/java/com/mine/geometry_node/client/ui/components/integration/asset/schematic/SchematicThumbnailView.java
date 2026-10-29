@@ -4,6 +4,7 @@ import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.feature.asset.model.AssetTypeRegistry;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnail;
+import com.mine.geometry_node.core.engine.system.asset.preview.generator.schematic.SchematicThumbnailProjection;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.BlendMode;
@@ -76,7 +77,7 @@ public final class SchematicThumbnailView extends View {
     private void drawThumbnail(Canvas canvas, SchematicThumbnail thumbnail) {
         float padding = UIUtils.dp2px(3.0f);
         boolean[] deferredMaterials = {false};
-        SchematicThumbnailRenderer.render(thumbnail, getWidth(), getHeight(), padding,
+        SchematicThumbnailProjection.render(thumbnail, getWidth(), getHeight(), padding,
                 (state, color) -> SchematicThumbnailMaterialResolver.resolveBudgeted(state, color, deferredMaterials),
                 (x0, y0, x1, y1, x2, y2, x3, y3, color) ->
                         drawQuad(canvas, x0, y0, x1, y1, x2, y2, x3, y3, color));

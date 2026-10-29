@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Source groups own their fold state; the feature store owns shortcut identity and persistence. */
 public class AssetNavigationPanel extends UiScrollView {
@@ -67,8 +68,8 @@ public class AssetNavigationPanel extends UiScrollView {
         mExpanded.put(AssetSourceKind.REMOTE, true);
         mExpanded.put(AssetSourceKind.LOCAL, true);
         mSidebar = verticalLayout();
-        setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
-        mSidebar.setBackground(colorDrawable(UiThemes.EDITOR.surface().panel()));
+        setBackground(solid(UiThemes.EDITOR.surface().panel()));
+        mSidebar.setBackground(solid(UiThemes.EDITOR.surface().panel()));
         addView(mSidebar, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         buildSidebar();
@@ -136,7 +137,7 @@ public class AssetNavigationPanel extends UiScrollView {
     /** Disks and local shortcuts remain visible independently of the Common/Packs group. */
     private void addLocalLocations() {
         View separator = new View(getContext());
-        separator.setBackground(colorDrawable(UiThemes.EDITOR.border().divider()));
+        separator.setBackground(solid(UiThemes.EDITOR.border().divider()));
         LinearLayout.LayoutParams separatorParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(1));
         separatorParams.setMargins(dp2pxInt(14), dp2pxInt(13), dp2pxInt(14), dp2pxInt(7));
@@ -233,7 +234,7 @@ public class AssetNavigationPanel extends UiScrollView {
         int hover = UiThemes.EDITOR.selection().subtleHover();
         int pressed = UiThemes.EDITOR.selection().subtlePressed();
         int selected = UiThemes.EDITOR.selection().subtle();
-        ShapeDrawable background = colorDrawable(normal);
+        ShapeDrawable background = solid(normal);
         background.setColor(new ColorStateList(new int[][]{
                 {-R.attr.state_enabled, R.attr.state_selected}, {-R.attr.state_enabled},
                 {R.attr.state_pressed}, {R.attr.state_selected}, {R.attr.state_hovered}, {}
@@ -467,9 +468,4 @@ public class AssetNavigationPanel extends UiScrollView {
         }
     }
 
-    private static ShapeDrawable colorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        return drawable;
-    }
 }

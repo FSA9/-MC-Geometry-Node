@@ -1,5 +1,8 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary.global;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
+
 import com.mine.geometry_node.client.feature.faction.ClientFactionRepository;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
@@ -55,7 +58,7 @@ final class FactionEditorView extends LinearLayout {
         this.state = state; this.scope = scope;
         repositoryGeneration = repository.generation();
         this.editable = editable; this.submit = submit; this.changedTab = changedTab; setOrientation(VERTICAL);
-        setBackground(fill(theme.surface().sidebar()));
+        setBackground(solid(theme.surface().sidebar()));
         LinearLayout identity = new LinearLayout(context); identity.setOrientation(VERTICAL); identity.setPadding(px(18), px(17), px(18), px(17));
         heading = new UiDisplayText(context, "", 17, theme.text().strong());
         identity.addView(heading, new LayoutParams(-1, -2));
@@ -139,7 +142,7 @@ final class FactionEditorView extends LinearLayout {
         syncData(active && section.equals("data") && repository.loaded() && ownerCurrent());
         if (active && section.equals("info")) tags.resume(); else tags.suspend();
         if (data != null) data.refreshCommitted();
-        heading.setText(FactionTextViews.display(faction.name())); name.refresh(faction.name()); description.refresh(faction.description());
+        heading.setText(ModernDialogueText.display(faction.name())); name.refresh(faction.name()); description.refresh(faction.description());
         name.setEditable(canEdit() && section.equals("info")); description.setEditable(canEdit() && section.equals("info"));
         relations.setEditable(() -> canEdit() && section.equals("relations"));
         ranks.setActive(active && section.equals("ranks"));
@@ -194,7 +197,7 @@ final class FactionEditorView extends LinearLayout {
     private FactionDefinition current() { return ownerCurrent() ? repository.snapshot().find(id).orElse(null) : null; }
     private UiDisplayText label(String text) { return new UiDisplayText(getContext(), text, 13, theme.text().muted()); }
     private void addDivider() {
-        View divider = new View(getContext()); divider.setBackground(fill(theme.border().divider()));
+        View divider = new View(getContext()); divider.setBackground(solid(theme.border().divider()));
         addView(divider, new LayoutParams(-1, Math.max(1, px(1))));
     }
 }

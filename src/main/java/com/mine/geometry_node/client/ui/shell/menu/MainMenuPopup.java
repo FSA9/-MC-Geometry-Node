@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.shell.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.menu.UiMenuItems;
 import com.mine.geometry_node.GeometryNode;
@@ -7,7 +9,6 @@ import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuItemDefinition;
 import com.mine.geometry_node.client.ui.shell.menu.api.MainMenuItemType;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -34,7 +35,7 @@ final class MainMenuPopup extends LinearLayout {
         setOrientation(VERTICAL);
         int padding = UIUtils.dp2pxInt(3.0f);
         setPadding(padding, padding, padding, padding);
-        setBackground(background(COLOR_BACKGROUND, 3.0f, 1, COLOR_BORDER));
+        setBackground(rect(COLOR_BACKGROUND, 3.0f, 1, COLOR_BORDER));
         setClickable(true);
 
         for (MainMenuItemDefinition definition : normalized(definitions)) {
@@ -100,7 +101,7 @@ final class MainMenuPopup extends LinearLayout {
 
     private static View divider(Context context) {
         View divider = new View(context);
-        divider.setBackground(background(COLOR_DIVIDER, 0.0f, 0, 0));
+        divider.setBackground(rect(COLOR_DIVIDER, 0.0f, 0, 0));
         return divider;
     }
 
@@ -158,13 +159,4 @@ final class MainMenuPopup extends LinearLayout {
         }
     }
 
-    private static ShapeDrawable background(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 }

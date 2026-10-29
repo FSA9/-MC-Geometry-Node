@@ -36,7 +36,6 @@ final class EntityAttributesView extends LinearLayout {
     private final EntityTypesView biologicalTypes;
     private final EntityRegistrationView registration;
     private final EntityAppearanceFieldView appearance;
-    private final Map<String, UiTextInput> numbers = new LinkedHashMap<>();
     private final Map<String, UiTextInput> inputs = new LinkedHashMap<>();
     private final Map<String, UiCheckBox> flags = new LinkedHashMap<>();
     private final Map<String, String> stagedText = new HashMap<>();
@@ -222,7 +221,7 @@ final class EntityAttributesView extends LinearLayout {
                     LinearLayout.LayoutParams unitParams = size(-2, -1); unitParams.leftMargin = px(8);
                     control.addView(unit, unitParams);
                 }
-                numbers.put(field.key(), input); bindInput(field.key(), input, value);
+                bindInput(field.key(), input, value);
             }
         }
         return row;

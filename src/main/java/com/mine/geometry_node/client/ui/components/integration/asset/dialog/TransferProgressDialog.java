@@ -39,23 +39,29 @@ public class TransferProgressDialog extends AssetDialogBase {
     /** Terminal success is explicit: progress text/counts may describe work awaiting commit. */
     public void complete(String message, int processed, int total) {
         update(message, processed, total);
-        mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
-        mCancelButton.setText(tr("geometry_node.common.close")); requestClose();
+        finish();
+        requestClose();
     }
     public void enterCommitPhase() { mCommitting = true; mCancelButton.setEnabled(false); mCancelButton.setText(tr("geometry_node.asset_transfer.status.committing")); }
     public void fail(String message) {
-        mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
+        finish();
         mStatus.setText(message == null || message.isEmpty() ? tr("geometry_node.common.operation_failed") : message);
-        mStatus.setTextColor(UiThemes.EDITOR.status().error()); mCancelButton.setText(tr("geometry_node.common.close"));
+        mStatus.setTextColor(UiThemes.EDITOR.status().error());
     }
     public void cancelled() {
-        mFinished = true; mCommitting = false; mCancelButton.setEnabled(true);
+        finish();
         mStatus.setText(tr("geometry_node.common.cancelled")); mStatus.setTextColor(UiThemes.EDITOR.status().warning());
-        mProgress.setText(""); mCancelButton.setText(tr("geometry_node.common.close"));
+        mProgress.setText("");
     }
     public void closeSilently() {
         mFinished = true; mCommitting = false;
         requestClose();
+    }
+    private void finish() {
+        mFinished = true;
+        mCommitting = false;
+        mCancelButton.setEnabled(true);
+        mCancelButton.setText(tr("geometry_node.common.close"));
     }
     @Override protected void onCloseRequested() { if (mFinished) requestClose(); else if (!mCommitting && mOnCancel != null) mOnCancel.run(); }
     @Override public boolean onEscapePressed() { onCloseRequested(); return true; }

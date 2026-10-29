@@ -273,14 +273,9 @@ public class UiNumericInput extends FrameLayout {
     private void handleClick(float x) {
         if (mSpec.showArrows() && mHovered) {
             float arrowWidth = UIUtils.dp2px(ARROW_HIT_WIDTH_DP);
-            if (x <= arrowWidth) {
-                Object newValue = mSpec.stepValue(mSpec.valueOrDefault(mDisplayValue, mBinding.defaultValue()), -1);
-                persistHover(true);
-                commitIfChanged(mStoredValue, newValue);
-                return;
-            }
-            if (x >= getWidth() - arrowWidth) {
-                Object newValue = mSpec.stepValue(mSpec.valueOrDefault(mDisplayValue, mBinding.defaultValue()), 1);
+            int direction = x <= arrowWidth ? -1 : x >= getWidth() - arrowWidth ? 1 : 0;
+            if (direction != 0) {
+                Object newValue = mSpec.stepValue(mSpec.valueOrDefault(mDisplayValue, mBinding.defaultValue()), direction);
                 persistHover(true);
                 commitIfChanged(mStoredValue, newValue);
                 return;
@@ -371,13 +366,8 @@ public class UiNumericInput extends FrameLayout {
             return;
         }
         rememberDraggedFloatFormat(newValue, draggedFormat);
-        boolean changed = mBinding.commit(oldValue, newValue);
-        if (changed) {
-            syncFromBinding();
-        } else {
-            rememberDraggedFloatFormat(newValue, false);
-            syncFromBinding();
-        }
+        if (!mBinding.commit(oldValue, newValue)) rememberDraggedFloatFormat(newValue, false);
+        syncFromBinding();
     }
 
     private void syncFromBinding() {
@@ -390,7 +380,7 @@ public class UiNumericInput extends FrameLayout {
     private void setDisplayValue(Object value, boolean draggedFormat) {
         mDisplayValue = value;
         String text = draggedFormat ? mSpec.displayDragged(value) : mSpec.display(value);
-        mDisplayText = TextShaper.shapeText(text, 0, text.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
+        mDisplayText = shapeText(text);
         invalidate();
     }
 
@@ -430,7 +420,7 @@ public class UiNumericInput extends FrameLayout {
             return;
         }
         mLabel = label.trim();
-        mLabelText = shapeLabel(mLabel);
+        mLabelText = shapeText(mLabel);
     }
 
     private ShapedText labelTextForWidth(float availableWidth) {
@@ -440,13 +430,13 @@ public class UiNumericInput extends FrameLayout {
         float originalSize = mTextPaint.getTextSize();
         float fittedSize = Math.max(UIUtils.dp2px(1.0f), originalSize * availableWidth / mLabelText.getAdvance());
         mTextPaint.setTextSize(fittedSize);
-        ShapedText fitted = shapeLabel(mLabel);
+        ShapedText fitted = shapeText(mLabel);
         mTextPaint.setTextSize(originalSize);
         return fitted;
     }
 
-    private ShapedText shapeLabel(String label) {
-        return TextShaper.shapeText(label, 0, label.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
+    private ShapedText shapeText(String text) {
+        return TextShaper.shapeText(text, 0, text.length(), TextDirectionHeuristics.FIRSTSTRONG_LTR, mTextPaint);
     }
 
     private void drawArrow(Canvas canvas, boolean left, float w, float h) {

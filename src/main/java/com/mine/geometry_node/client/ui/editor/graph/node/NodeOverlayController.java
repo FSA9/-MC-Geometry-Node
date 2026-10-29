@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.node;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.feature.graph.edit.EditorContext;
@@ -24,7 +26,6 @@ import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.port.PortRow;
 import com.mine.geometry_node.core.node.definition.port.UIHint;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
@@ -422,7 +423,7 @@ final class NodeOverlayController {
         mCommentTooltip.setHorizontallyScrolling(false);
         mCommentTooltip.setMinLines(1);
         mCommentTooltip.setPadding(UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5), UIUtils.dp2pxInt(7), UIUtils.dp2pxInt(5));
-        mCommentTooltip.setBackground(createRectDrawable(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
+        mCommentTooltip.setBackground(rect(UiThemes.EDITOR.surface().tooltip(), 4.0f, 1, UiThemes.EDITOR.border().strong()));
         mCommentTooltip.setTextIsSelectable(true);
         mCommentTooltip.setHighlightColor(UiThemes.EDITOR.selection().text());
         UiScrollView.applyScrollbarColors(mCommentTooltip, UiThemes.EDITOR.scroll());
@@ -535,13 +536,4 @@ final class NodeOverlayController {
         return mNodeData != null && (mNodeData.isGroupInputNode() || mNodeData.isGroupOutputNode());
     }
 
-    private ShapeDrawable createRectDrawable(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 }

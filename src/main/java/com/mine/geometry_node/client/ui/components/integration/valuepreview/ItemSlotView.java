@@ -121,18 +121,6 @@ public class ItemSlotView extends ViewportNativePreviewView {
     /** Content zoom is opt-in and independent of the surrounding viewport's scale. */
     public final PreviewZoomController zoom() { return mZoom; }
 
-    public final void setViewportScale(float scale) {
-        updateNativePreviewScale(scale);
-    }
-
-    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx) {
-        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, getNativePreviewOrder());
-    }
-
-    public final void setViewportTransform(float scale, float windowLeftPx, float windowTopPx, long previewOrder) {
-        updateNativePreviewTransform(scale, windowLeftPx, windowTopPx, previewOrder);
-    }
-
     public void setDisplayStack(ItemStack stack) {
         ItemStack previousStack = mDisplayStack;
         mDisplayStack = stack != null ? stack.copy() : ItemStack.EMPTY;

@@ -11,7 +11,7 @@ import com.mine.geometry_node.client.ui.components.integration.asset.action.Asse
 import com.mine.geometry_node.client.ui.components.integration.asset.action.AssetLibraryActionRegistry;
 import com.mine.geometry_node.client.ui.components.integration.asset.dialog.ConfirmDialog;
 import com.mine.geometry_node.client.ui.components.integration.asset.dialog.TransferProgressDialog;
-import com.mine.geometry_node.client.ui.components.integration.asset.image.ImageThumbnailView;
+import com.mine.geometry_node.client.ui.components.integration.asset.preview.AssetPreviewCaches;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.feature.asset.model.AssetEntry;
 import com.mine.geometry_node.client.feature.asset.model.AssetSourceKind;
@@ -21,7 +21,6 @@ import com.mine.geometry_node.client.feature.asset.repository.LocalAssetReposito
 import com.mine.geometry_node.client.feature.asset.remote.RemoteAssetClient;
 import com.mine.geometry_node.core.engine.system.asset.AssetRepositoryPath;
 import com.mine.geometry_node.client.platform.DesktopFileBrowser;
-import com.mine.geometry_node.client.ui.components.integration.asset.schematic.SchematicThumbnailView;
 import com.mine.geometry_node.client.feature.asset.file.LocalAssetService;
 import com.mine.geometry_node.client.ui.components.integration.asset.task.AssetTaskController;
 import com.mine.geometry_node.client.config.ConfigManager;
@@ -135,18 +134,7 @@ final class AssetBrowserActionController {
 
     void copySelectionToClipboard() {
         if (!canCopySelection()) return;
-        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
-            List<File> files = mPanel.getSelectedLocalFiles();
-            if (files.isEmpty()) return;
-            mClipboard.setLocal(files, false);
-            return;
-        }
-
-        if (!mEnableRemoteTransferActions
-                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)) return;
-        List<AssetEntry> entries = mPanel.getSelectedEntries();
-        if (entries.isEmpty()) return;
-        setRemoteClipboard(entries, false);
+        setSelectionClipboard(false);
     }
 
     void pasteClipboard() {
@@ -159,18 +147,15 @@ final class AssetBrowserActionController {
 
     void cutSelectionToClipboard() {
         if (!canCutSelection()) return;
-        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
-            List<File> files = mPanel.getSelectedLocalFiles();
-            if (files.isEmpty()) return;
-            mClipboard.setLocal(files, true);
-            return;
-        }
+        setSelectionClipboard(true);
+    }
 
-        if (!mEnableRemoteTransferActions
-                || !mPanel.repositorySupports(AssetSourceKind.REMOTE, AssetRepositoryOperation.MANAGE)) return;
-        List<AssetEntry> entries = mPanel.getSelectedEntries();
-        if (entries.isEmpty()) return;
-        setRemoteClipboard(entries, true);
+    private void setSelectionClipboard(boolean cut) {
+        if (mPanel.getSourceKind() == AssetSourceKind.LOCAL) {
+            mClipboard.setLocal(mPanel.getSelectedLocalFiles(), cut);
+        } else {
+            setRemoteClipboard(mPanel.getSelectedEntries(), cut);
+        }
     }
 
     void deleteSelection() {
@@ -215,9 +200,7 @@ final class AssetBrowserActionController {
                 result -> {
                     mDocuments.refreshFileReferences();
                     for (LocalAssetService.FileMove move : result.movedFiles()) {
-                        ImageThumbnailView.invalidateUnder(move.source());
-                        SchematicThumbnailView.invalidateUnder(move.source());
-                        mFavoriteStore.updatePath(move.source(), move.destination());
+                        onLocalFileMoved(move.source(), move.destination());
                     }
                 }, (result, progress) -> {
                     if (!result.movedFiles().isEmpty()) {
@@ -399,8 +382,7 @@ final class AssetBrowserActionController {
                 result -> {
                     mDocuments.refreshFileReferences();
                     for (File file : result.successfulFiles()) {
-                        ImageThumbnailView.invalidateUnder(file);
-                        SchematicThumbnailView.invalidateUnder(file);
+                        AssetPreviewCaches.invalidateUnder(file);
                         mFavoriteStore.removePath(file);
                     }
                 }, (result, progress) -> {
@@ -584,9 +566,7 @@ final class AssetBrowserActionController {
                 result -> {
                     mDocuments.refreshFileReferences();
                     if (result.renamed()) {
-                        ImageThumbnailView.invalidateUnder(result.source());
-                        SchematicThumbnailView.invalidateUnder(result.source());
-                        mFavoriteStore.updatePath(result.source(), result.destination());
+                        onLocalFileMoved(result.source(), result.destination());
                     }
                 }, (result, progress) -> {
                     mPanel.refreshFileList();
@@ -606,9 +586,7 @@ final class AssetBrowserActionController {
                         mDocuments.refreshFileReferences();
                     }
                     for (LocalAssetService.FileMove move : result.movedFiles()) {
-                        ImageThumbnailView.invalidateUnder(move.source());
-                        SchematicThumbnailView.invalidateUnder(move.source());
-                        mFavoriteStore.updatePath(move.source(), move.destination());
+                        onLocalFileMoved(move.source(), move.destination());
                     }
                 }, (result, progress) -> {
                     if (cutOperation && !result.movedFiles().isEmpty()) {
@@ -623,6 +601,11 @@ final class AssetBrowserActionController {
                             result.successfulFiles().size(),
                             result.failedPaths());
                 });
+    }
+
+    private void onLocalFileMoved(File source, File destination) {
+        AssetPreviewCaches.invalidateUnder(source);
+        mFavoriteStore.updatePath(source, destination);
     }
 
     private void setRemoteClipboard(List<AssetEntry> entries, boolean cutOperation) {

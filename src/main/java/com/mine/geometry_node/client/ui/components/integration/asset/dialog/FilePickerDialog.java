@@ -124,10 +124,6 @@ public class FilePickerDialog extends AssetPickerDialog {
         if (!name.contains(".")) {
             return normalized;
         }
-        return parentRemoteDirectory(normalized);
-    }
-
-    private static String parentRemoteDirectory(String normalized) {
         return AssetPathUtils.parentRemoteDirectory(normalized);
     }
 

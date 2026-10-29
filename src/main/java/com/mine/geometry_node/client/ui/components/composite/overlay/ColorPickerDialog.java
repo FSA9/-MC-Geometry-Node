@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.overlay;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
@@ -16,7 +18,6 @@ import com.mine.geometry_node.client.ui.overlay.OverlayMount;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.Editable;
 import icyllis.modernui.text.TextWatcher;
 import icyllis.modernui.view.Gravity;
@@ -174,7 +175,7 @@ public final class ColorPickerDialog extends UiInputBarrier {
         if (context == null || anchor == null) {
             return null;
         }
-        ViewGroup host = findWindowHost(anchor);
+        ViewGroup host = UiOverlayHosts.findWindowHost(anchor);
         if (host == null) {
             return null;
         }
@@ -353,7 +354,7 @@ public final class ColorPickerDialog extends UiInputBarrier {
         int r = parseInt(mRedInput, red(mColor), 0, 255);
         int g = parseInt(mGreenInput, green(mColor), 0, 255);
         int b = parseInt(mBlueInput, blue(mColor), 0, 255);
-        setColorFromRgb(r, g, b, true);
+        setColor(0xFF000000 | (r << 16) | (g << 8) | b, true);
     }
 
     private void setColorFromHsvInputs() {
@@ -361,15 +362,6 @@ public final class ColorPickerDialog extends UiInputBarrier {
         float s = parseInt(mSaturationInput, Math.round(mSaturation * 100.0f), 0, 100) / 100.0f;
         float v = parseInt(mValueInput, Math.round(mValue * 100.0f), 0, 100) / 100.0f;
         setColorFromHsv(h, s, v, true);
-    }
-
-    private void setColorFromRgb(int red, int green, int blue, boolean skipFocusedField) {
-        mColor = 0xFF000000 | (clamp(red, 0, 255) << 16) | (clamp(green, 0, 255) << 8) | clamp(blue, 0, 255);
-        float[] hsv = rgbToHsv(red(mColor), green(mColor), blue(mColor));
-        mHue = hsv[0];
-        mSaturation = hsv[1];
-        mValue = hsv[2];
-        refresh(skipFocusedField);
     }
 
     private void setColorFromHsv(float hue, float saturation, float value, boolean skipFocusedField) {
@@ -453,16 +445,6 @@ public final class ColorPickerDialog extends UiInputBarrier {
         return view;
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(dpPx(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
-
     private static void addFullscreen(ViewGroup host, ColorPickerDialog dialog) {
         if (host instanceof FrameLayout) {
             host.addView(dialog, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -526,24 +508,6 @@ public final class ColorPickerDialog extends UiInputBarrier {
     private boolean isInsideWindow(float x, float y) {
         return x >= mWindow.getLeft() && x < mWindow.getRight()
                 && y >= mWindow.getTop() && y < mWindow.getBottom();
-    }
-
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        if (best != null) {
-            return best;
-        }
-        return anchor.getParent() instanceof ViewGroup parent ? parent : null;
     }
 
     private int parseInt(EditText input, int fallback, int min, int max) {

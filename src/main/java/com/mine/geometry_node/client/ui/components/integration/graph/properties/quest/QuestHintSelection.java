@@ -1,13 +1,16 @@
 package com.mine.geometry_node.client.ui.components.integration.graph.properties.quest;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.client.integration.picker.VanillaInventoryPicker;
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestEntryPresentation;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestRewardDefinition;
+import com.mine.geometry_node.core.utils.ItemCodecUtils;
 import icyllis.modernui.mc.MuiModApi;
+import net.minecraft.client.Minecraft;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -18,6 +21,16 @@ final class QuestHintSelection {
     enum EntryKind { OBJECTIVE, REWARD }
 
     private QuestHintSelection() {}
+
+    static void pickItem(GraphPropertiesTarget target, String entryId, EntryKind kind, Runnable onReturn) {
+        var selection = capture(target, entryId, kind);
+        VanillaInventoryPicker.openItem(stack -> {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) return;
+            selection.accept(QuestHintType.ITEM_STACK,
+                    ItemCodecUtils.toJson(stack, minecraft.level.registryAccess()));
+        }, onReturn);
+    }
 
     static BiConsumer<QuestHintType, String> capture(GraphPropertiesTarget target, String entryId, EntryKind kind) {
         return capture(target, entryId, kind, MuiModApi::postToUiThread);

@@ -1,5 +1,9 @@
 package com.mine.geometry_node.client.ui.editor.graph.node.hint.overlays;
 
+import com.mine.geometry_node.client.ui.components.composite.overlay.UiOverlayHosts;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.components.base.overlay.UiInputBarrier;
 
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
@@ -146,7 +150,7 @@ public final class ShopEditorOverlay extends UiInputBarrier {
         if (anchor == null || editorContext == null || nodeData == null) {
             return;
         }
-        ViewGroup host = findWindowHost(anchor);
+        ViewGroup host = UiOverlayHosts.findWindowHost(anchor);
         if (host == null) {
             return;
         }
@@ -582,20 +586,7 @@ public final class ShopEditorOverlay extends UiInputBarrier {
         return Math.round(rawX - loc[0]);
     }
 
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
-    }
+
 
     private static EditText field(Context context, String value, int gravity) {
         EditText input = new UiTextInput(context, new UiTextInput.Style(11, 8,
@@ -661,15 +652,6 @@ public final class ShopEditorOverlay extends UiInputBarrier {
         return Component.translatable(key, args).getString();
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private record DropTarget(StackListEditor list, int index) {
     }

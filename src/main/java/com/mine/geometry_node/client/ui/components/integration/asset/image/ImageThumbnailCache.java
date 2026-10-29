@@ -75,13 +75,14 @@ final class ImageThumbnailCache {
 
     static Subscription subscribe(File file, View view) {
         if (file == null || view == null || !file.isFile()) return Subscription.EMPTY;
-        String key = key(file);
+        String path = canonicalPath(file);
+        String key = key(path, file);
         Entry entry;
         Observer observer = new Observer(view);
         synchronized (CACHE) {
             entry = CACHE.get(key);
             if (entry == null) {
-                entry = new Entry(key, canonicalPath(file), file);
+                entry = new Entry(key, path, file);
                 CACHE.put(key, entry);
             }
             entry.addObserver(observer);
@@ -230,8 +231,8 @@ final class ImageThumbnailCache {
         }
     }
 
-    private static String key(File file) {
-        return canonicalPath(file) + '|' + file.lastModified() + '|' + file.length();
+    private static String key(String path, File file) {
+        return path + '|' + file.lastModified() + '|' + file.length();
     }
 
     private static String canonicalPath(File file) {

@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 final class FileContentLayout extends ViewGroup {
     interface SelectionHost {
@@ -72,7 +73,7 @@ final class FileContentLayout extends ViewGroup {
         mSelectionBorderPaint.setColor(UiThemes.EDITOR.selection().outline());
         mSelectionBorderPaint.setStyle(Paint.Style.STROKE);
         mSelectionBorderPaint.setStrokeWidth(dp2px(UiMetrics.MARQUEE_BORDER));
-        setBackground(AssetFileBrowserPanel.createColorDrawable(UiThemes.EDITOR.surface().root()));
+        setBackground(solid(UiThemes.EDITOR.surface().root()));
     }
 
     void setViewMode(AssetViewMode mode) {

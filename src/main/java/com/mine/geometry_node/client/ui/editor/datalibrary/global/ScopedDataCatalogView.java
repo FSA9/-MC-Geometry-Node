@@ -1,11 +1,13 @@
 package com.mine.geometry_node.client.ui.editor.datalibrary.global;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 import com.mine.geometry_node.client.feature.scopeddata.ClientScopedDataRepository;
 import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
 import com.mine.geometry_node.client.ui.components.base.display.UiDisplayText;
 import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
 import com.mine.geometry_node.client.ui.components.base.input.UiSearchInput;
-import com.mine.geometry_node.client.ui.components.base.input.UiSearchSubmit;
+import com.mine.geometry_node.client.ui.components.composite.input.UiSearchBar;
 import com.mine.geometry_node.client.ui.components.base.layout.ThinResizableDivider;
 import com.mine.geometry_node.client.ui.components.base.scroll.UiScrollView;
 import com.mine.geometry_node.client.ui.components.composite.layout.UiFixedSplitLayout;
@@ -17,7 +19,6 @@ import com.mine.geometry_node.client.ui.theme.*;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.workspace.state.*;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.mc.MuiModApi;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
@@ -63,16 +64,13 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         this.repository = Objects.requireNonNull(repository); this.state = Objects.requireNonNull(state);
         this.postToUi = Objects.requireNonNull(postToUi);
         scopeChanged = () -> postToUi.accept(this::ownerChanged);
-        setOrientation(VERTICAL); setBackground(fill(theme.surface().canvas()));
+        setOrientation(VERTICAL); setBackground(solid(theme.surface().canvas()));
 
-        LinearLayout catalog = column(context); catalog.setBackground(fill(theme.surface().root()));
+        LinearLayout catalog = column(context); catalog.setBackground(solid(theme.surface().root()));
         LinearLayout toolbar = row(context); toolbar.setPadding(px(10), px(8), px(10), px(8));
-        search = UiSearchInput.createThemed(context, theme); search.setHint(tr("search")); search.setSingleLine(true);
-        toolbar.addView(search, new LayoutParams(0, px(30), 1));
-        UiIconButton find = UiIconButton.createThemed(context, theme, SvgIconView.Icon.SEARCH, tr("search"));
-        LayoutParams findParams = new LayoutParams(px(30), px(30)); findParams.leftMargin = px(6);
-        toolbar.addView(find, findParams);
-        UiSearchSubmit.bind(find, this::submitSearch, search);
+        UiSearchBar searchBar = new UiSearchBar(context, tr("search"), tr("search"), this::submitSearch, theme);
+        search = searchBar.input();
+        toolbar.addView(searchBar, new LayoutParams(-1, -2));
         catalog.addView(toolbar, new LayoutParams(-1, -2));
         count = label(context, "", UiMetrics.TEXT_CAPTION, theme.text().muted());
         count.setPadding(px(16), 0, px(16), 0); count.setGravity(Gravity.CENTER_VERTICAL);
@@ -84,7 +82,7 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
         scroll = new UiScrollView(context, theme.scroll()); scroll.addView(targetRows, new FrameLayout.LayoutParams(-1, -2));
         catalog.addView(scroll, new LayoutParams(-1, 0, 1));
 
-        LinearLayout detail = column(context); detail.setBackground(fill(theme.surface().sidebar()));
+        LinearLayout detail = column(context); detail.setBackground(solid(theme.surface().sidebar()));
         LinearLayout identity = row(context); identity.setPadding(px(18), px(14), px(18), px(14));
         identity.setMinimumHeight(px(60));
         LinearLayout names = column(context);
@@ -280,11 +278,10 @@ final class ScopedDataCatalogView extends LinearLayout implements GlobalDataSect
     private void saveSplit() {
         if (!disposed) state.write(ScopedDataViewState.SPLIT, UiStateScopes.GLOBAL, new ScopedDataViewState.Split(split.preferredExtentDp()));
     }
-    private View divider(Context context) { View view = new View(context); view.setBackground(fill(theme.border().divider())); return view; }
+    private View divider(Context context) { View view = new View(context); view.setBackground(solid(theme.border().divider())); return view; }
     private static UiDisplayText label(Context context, String text, float size, int color) { return new UiDisplayText(context, text, size, color); }
     private static LinearLayout column(Context context) { LinearLayout view = new LinearLayout(context); view.setOrientation(VERTICAL); return view; }
     private static LinearLayout row(Context context) { LinearLayout view = new LinearLayout(context); view.setGravity(Gravity.CENTER_VERTICAL); view.setBaselineAligned(false); return view; }
-    private static ShapeDrawable fill(int color) { ShapeDrawable result = new ShapeDrawable(); result.setColor(color); return result; }
     private static String join(String first, String second) { return second.isEmpty() ? first : first + " · " + second; }
     private static String tr(String key, Object... args) { return Component.translatable("geometry_node.database.scoped_data." + key, args).getString(); }
     private static int px(float value) { return UIUtils.dp2pxInt(value); }

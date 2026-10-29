@@ -15,7 +15,6 @@ import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.core.Handler;
 import icyllis.modernui.core.Looper;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.KeyEvent;
@@ -31,6 +30,8 @@ import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.components.integration.metadata.MetadataViews.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 /** Shared form and list; the modal wrapper or entity editor owns persistence and window chrome. */
 final class UiDataDictionaryContent extends FrameLayout {
@@ -120,7 +121,7 @@ final class UiDataDictionaryContent extends FrameLayout {
                 error -> reportError(context, error));
         this.initialKey = initialKey; this.embedded = embedded;
         this.popupHost = popupHost == null ? this : popupHost;
-        setBackground(fill(theme.surface().panel()));
+        setBackground(solid(theme.surface().panel()));
         LinearLayout root = column(context);
         LinearLayout toolbar = row(context); toolbar.setPadding(px(16), px(10), px(16), px(10));
         search = input(context, "search", true, theme); toolbar.addView(search, new LinearLayout.LayoutParams(0, px(30), 1));
@@ -150,7 +151,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         LinearLayout content = row(context);
         LinearLayout left = column(context);
         LinearLayout listHeading = row(context); listHeading.setPadding(px(16), 0, px(16), 0);
-        listHeading.setBackground(fill(theme.surface().panel()));
+        listHeading.setBackground(solid(theme.surface().panel()));
         selectAll = UiCheckBox.createThemed(context, theme);
         selectAll.setContentDescription(tr("select_all"));
         LinearLayout.LayoutParams checkParams = params(14, 14); checkParams.rightMargin = px(10);
@@ -207,8 +208,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         form.addView(valueHeading, valueHeadingParams);
         valueInput = input(context, "value", false, theme); form.addView(valueInput, params(-1, 150));
         booleanRow = row(context); booleanRow.setPadding(px(10), 0, px(10), 0);
-        ShapeDrawable booleanBackground = fill(theme.control().input()); booleanBackground.setStroke(px(1), theme.border().subtle());
-        booleanRow.setBackground(booleanBackground);
+        booleanRow.setBackground(rect(theme.control().input(), 0, 1, theme.border().subtle()));
         booleanInput = UiCheckBox.createThemed(context, theme); booleanInput.setContentDescription(tr("value"));
         booleanRow.addView(booleanInput, params(14, 14));
         booleanLabel = text(context, "false", theme.text().normal());
@@ -230,7 +230,7 @@ final class UiDataDictionaryContent extends FrameLayout {
             if (automatic() && !adding) commitFocusedForm();
         }));
         tree = text(context, "", theme.text().secondary()); tree.setPadding(px(8), px(8), px(8), px(8));
-        treeScroll = new UiScrollView(context, theme.scroll()); treeScroll.setBackground(fill(theme.control().input()));
+        treeScroll = new UiScrollView(context, theme.scroll()); treeScroll.setBackground(solid(theme.control().input()));
         treeScroll.addView(tree, new FrameLayout.LayoutParams(-1, -2)); form.addView(treeScroll, params(-1, 180));
         View editDivider = divider(context); LinearLayout.LayoutParams editDividerParams = params(-1, 1); editDividerParams.topMargin = px(16);
         if (!automatic()) form.addView(editDivider, editDividerParams);
@@ -357,7 +357,7 @@ final class UiDataDictionaryContent extends FrameLayout {
             String key = visible.get(index);
             EntryRow entry = entryRows.computeIfAbsent(key, this::createEntryRow);
             entry.check().setChecked(checkedKeys.contains(key)); entry.check().setEnabled(editable());
-            entry.row().setBackground(Objects.equals(key, selectedKey) ? fill(theme.selection().fill()) : null);
+            entry.row().setBackground(Objects.equals(key, selectedKey) ? solid(theme.selection().fill()) : null);
             var orphan = session.orphanForm(key);
             entry.name().setText(orphan == null ? key : key + " · " + tr("dirty"));
             entry.summary().setText(orphan == null ? DataDictionaryDraft.summary(draft.values().get(key)) : orphan.valueText());
@@ -421,7 +421,7 @@ final class UiDataDictionaryContent extends FrameLayout {
             }
             keyInput.setErrorMessage(null); valueInput.setErrorMessage(null);
             valueType.setValue(typeLabel(selectedType));
-            try { tree.setText(DataDictionaryDraft.tree(DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), value))); }
+            try { tree.setText(DataDictionaryDraft.tree(parseFormValue())); }
             catch (IllegalArgumentException invalid) { tree.setText(""); showingPreview = false; }
             updateFormLayout();
             if (saved != null) {
@@ -449,8 +449,7 @@ final class UiDataDictionaryContent extends FrameLayout {
     private void setPreviewMode(boolean preview) {
         if (preview) {
             try {
-                Object old = draft != null && selectedKey != null ? draft.values().get(selectedKey) : null;
-                tree.setText(DataDictionaryDraft.tree(DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), old)));
+                tree.setText(DataDictionaryDraft.tree(parseFormValue()));
             } catch (IllegalArgumentException invalid) { valueInput.setErrorMessage(tr("invalid")); return; }
         }
         showingPreview = preview; updateFormLayout();
@@ -470,11 +469,14 @@ final class UiDataDictionaryContent extends FrameLayout {
         booleanInput.setChecked(Boolean.parseBoolean(valueInput.getText().toString()));
         booleanLabel.setText(Boolean.toString(booleanInput.isChecked()));
         try {
-            Object old = draft != null && selectedKey != null ? draft.values().get(selectedKey) : null;
-            tree.setText(DataDictionaryDraft.tree(DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), old)));
+            tree.setText(DataDictionaryDraft.tree(parseFormValue()));
             valueInput.setErrorMessage(null);
         } catch (IllegalArgumentException invalid) { valueInput.setErrorMessage(tr("invalid")); }
         updateButtons();
+    }
+    private Object parseFormValue() {
+        Object previous = draft != null && selectedKey != null ? draft.values().get(selectedKey) : null;
+        return DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), previous);
     }
     /** Submit validated, completed input. Suspension and closure never parse unfinished forms. */
     boolean saveEntry() {
@@ -483,8 +485,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         if (draft == null || !editable() || !selectedType.editable()) return false;
         try {
             String key = keyInput.getText().toString();
-            Object old = selectedKey == null ? null : draft.values().get(selectedKey);
-            Object value = DataDictionaryDraft.parse(selectedType, valueInput.getText().toString(), old);
+            Object value = parseFormValue();
             draft.put(adding || !draft.values().containsKey(selectedKey) ? null : selectedKey, key, value);
             session.forget(adding ? null : selectedKey);
             if (!adding && checkedKeys.remove(selectedKey)) checkedKeys.add(key);
@@ -581,9 +582,6 @@ final class UiDataDictionaryContent extends FrameLayout {
         System.getLogger(UiDataDictionaryContent.class.getName()).log(System.Logger.Level.ERROR, error);
         Toast.makeText(context, error, Toast.LENGTH_LONG).show();
     }
-    private static ShapeDrawable fill(int color) {
-        ShapeDrawable background = new ShapeDrawable(); background.setColor(color); return background;
-    }
     private UiActionButton themedButton(Context context, String key, Runnable action) {
         UiActionButton button = button(context, key, action, theme);
         UIUtils.setLockedTextSize(button, textSizeDp);
@@ -600,7 +598,7 @@ final class UiDataDictionaryContent extends FrameLayout {
         return input;
     }
     private View divider(Context context) {
-        View view = new View(context); view.setBackground(fill(theme.border().divider())); return view;
+        View view = new View(context); view.setBackground(solid(theme.border().divider())); return view;
     }
     private void dismissSelector() { if (selector != null) { selector.dismiss(); selector = null; } }
     private static String typeLabel(DataDictionaryDraft.Type type) { return tr("type." + type.id()); }

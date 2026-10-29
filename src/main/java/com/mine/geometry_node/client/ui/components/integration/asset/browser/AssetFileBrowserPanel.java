@@ -42,7 +42,6 @@ import com.mine.geometry_node.client.ui.shortcut.ScopedKeyManager;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.RectF;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.*;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.FrameLayout;
@@ -60,7 +59,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2px;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 import static com.mine.geometry_node.client.ui.utils.UIUtils.dp2pxInt;
 
 public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItemView.Listener, FileContentLayout.SelectionHost {
@@ -99,10 +98,6 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private AssetRequest mActiveBrowseRequest = AssetRequest.NONE;
     private AssetListing mCurrentListing = AssetListing.empty(null);
     private final boolean mEnableQuickAccessAdd;
-    private final boolean mEnableLocalFileActions;
-    private final boolean mEnableRemoteTransferActions;
-    private final boolean mOpenLocalJsonOnDoubleClick;
-    private final boolean mShowPickerContextActions;
     private Consumer<File> mLocalDirectoryChangedListener;
     private Consumer<String> mRemoteDirectoryChangedListener;
     private Runnable mLocationChangedListener;
@@ -155,14 +150,12 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         super(context);
         mCoordinator = coordinator;
         mEnableQuickAccessAdd = enableQuickAccessAdd;
-        mEnableLocalFileActions = enableLocalFileActions;
-        mEnableRemoteTransferActions = enableRemoteTransferActions;
-        mOpenLocalJsonOnDoubleClick = openLocalJsonOnDoubleClick;
-        mShowPickerContextActions = showPickerContextActions;
         mIoTasks = new AssetTaskController(this);
         AssetBrowserDocumentActions documents = java.util.Objects.requireNonNull(documentActions.apply(mIoTasks));
         mAllowCreateFiles = documents != AssetBrowserDocumentActions.NONE;
-        mActionController = createActionController(documents);
+        mActionController = new AssetBrowserActionController(this, coordinator, mLocalAssetService,
+                documents, mFavoriteStore, mIoTasks, enableLocalFileActions,
+                enableRemoteTransferActions, openLocalJsonOnDoubleClick, showPickerContextActions);
         mViewMode = AssetViewMode.fromConfig(ConfigManager.INSTANCE.getConfig().assetBrowser.viewMode);
         mKeyManager = createKeyManager();
 
@@ -200,32 +193,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         mBodyFrame = new FrameLayout(context);
         mGridScrollView = new UiScrollView(context);
         mFileContent = new FileContentLayout(context, this);
-        mListTable = new AssetListTable(context, this, mFileContent, () -> renderEntries(mCurrentListing), checked -> {
-            mSelectedPaths.clear();
-            if (checked) for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
-            syncSelectionViews();
-            notifySelectionChanged();
-        });
+        mListTable = new AssetListTable(context, this, mFileContent,
+                () -> renderEntries(mCurrentListing), this::selectAll);
         mScrollView = mListTable.table.scroll();
         configureBody();
         mStatusBar = new AssetBrowserStatusBar(context, this::setViewMode);
         addView(mStatusBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(30)));
         updateStatus();
-    }
-
-    private AssetBrowserActionController createActionController(AssetBrowserDocumentActions documents) {
-        return new AssetBrowserActionController(
-                this,
-                mCoordinator,
-                mLocalAssetService,
-                documents,
-                mFavoriteStore,
-                mIoTasks,
-                mEnableLocalFileActions,
-                mEnableRemoteTransferActions,
-                mOpenLocalJsonOnDoubleClick,
-                mShowPickerContextActions
-        );
     }
 
     private ScopedKeyManager<AssetLibraryActionId, AssetFileBrowserPanel> createKeyManager() {
@@ -247,7 +221,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         LinearLayout navBar = new LinearLayout(context);
         navBar.setOrientation(LinearLayout.VERTICAL);
         navBar.setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
-        navBar.setBackground(createColorDrawable(COLOR_TOOLBAR_BG));
+        navBar.setBackground(solid(COLOR_TOOLBAR_BG));
         return navBar;
     }
 
@@ -453,12 +427,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
             case CUT -> mActionController.cutSelectionToClipboard();
             case DELETE -> mActionController.deleteSelection();
             case RENAME -> mActionController.renameSelection();
-            case SELECT_ALL -> {
-                mSelectedPaths.clear();
-                for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
-                syncSelectionViews();
-                notifySelectionChanged();
-            }
+            case SELECT_ALL -> selectAll(true);
         }
     }
 
@@ -571,7 +540,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     }
 
     public List<AssetEntry> getSelectedEntriesSnapshot() {
-        return new ArrayList<>(getSelectedEntries());
+        return getSelectedEntries();
     }
 
     public void setSelectionChangedListener(Consumer<List<AssetEntry>> listener) {
@@ -896,6 +865,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         notifySelectionChanged();
     }
 
+    private void selectAll(boolean selected) {
+        mSelectedPaths.clear();
+        if (selected) for (AssetEntry entry : mVisibleEntries) mSelectedPaths.add(entry.key());
+        syncSelectionViews();
+        notifySelectionChanged();
+    }
+
     void selectOnly(AssetEntry entry) {
         if (mSelectedPaths.size() == 1 && mSelectedPaths.contains(entry.key())) {
             syncSelectionViews();
@@ -944,12 +920,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     @Override
     public void onBoxSelection(RectF selectionRect, boolean additive, Set<String> baseSelection) {
         Set<String> previousSelection = new LinkedHashSet<>(mSelectedPaths);
-        if (!additive) {
-            mSelectedPaths.clear();
-        } else {
-            mSelectedPaths.clear();
-            mSelectedPaths.addAll(baseSelection);
-        }
+        mSelectedPaths.clear();
+        if (additive) mSelectedPaths.addAll(baseSelection);
 
         mFileContent.collectEntriesIntersecting(selectionRect, mSelectedPaths);
         syncSelectionViews();
@@ -1182,22 +1154,4 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
         return mFavoriteStore.pathKey(file);
     }
 
-    static ShapeDrawable createColorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        return drawable;
-    }
-
-    static ShapeDrawable createRectDrawable(int color, float radiusDp) {
-        return createRectDrawable(color, radiusDp, 0, 0);
-    }
-
-    static ShapeDrawable createRectDrawable(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = createColorDrawable(color);
-        drawable.setCornerRadius(dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 }

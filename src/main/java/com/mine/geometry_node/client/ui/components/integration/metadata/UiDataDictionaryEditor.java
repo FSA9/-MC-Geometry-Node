@@ -7,7 +7,6 @@ import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.modal.ModalOptions;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.text.SpannableString;
 import icyllis.modernui.text.Spanned;
@@ -17,6 +16,7 @@ import icyllis.modernui.view.View;
 import icyllis.modernui.widget.LinearLayout;
 import java.util.Objects;
 import static com.mine.geometry_node.client.ui.components.integration.metadata.MetadataViews.*;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /** Shared custom-data manager, available as a standalone window or an embedded child view. */
 public final class UiDataDictionaryEditor extends ModalWindowView {
@@ -117,7 +117,7 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
                 false, this::requestClose, contentHost());
         setContent(content);
         setActions(content.actions()); content.actions().setLayoutParams(new LinearLayout.LayoutParams(-1, -1));
-        actionsHost().setBackground(fill(theme.surface().panel()));
+        actionsHost().setBackground(solid(theme.surface().panel()));
     }
     @Override protected void onWindowShown() { content.start(); }
     @Override protected void onWindowSuspended() { content.suspend(); }
@@ -125,7 +125,4 @@ public final class UiDataDictionaryEditor extends ModalWindowView {
     @Override protected void onWindowClosed(OverlayCloseReason reason) { content.dispose(); }
     @Override protected void onWindowDestroyed() { content.dispose(); }
     @Override public boolean onEscapePressed() { return content.onEscapePressed(); }
-    private static ShapeDrawable fill(int color) {
-        ShapeDrawable background = new ShapeDrawable(); background.setColor(color); return background;
-    }
 }

@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.components.composite.button;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
@@ -36,9 +38,7 @@ public final class UiSplitButton extends LinearLayout {
         secondary = button(context, "▾", palette, 5, secondaryAction, theme);
         addView(primary, new LayoutParams(-2, -1));
         icyllis.modernui.view.View divider = new icyllis.modernui.view.View(context);
-        ShapeDrawable separator = new ShapeDrawable();
-        separator.setColor(theme.border().divider());
-        divider.setBackground(separator);
+        divider.setBackground(solid(theme.border().divider()));
         addView(divider, new LayoutParams(border, -1));
         addView(secondary, new LayoutParams(-2, -1));
     }

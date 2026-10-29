@@ -1,10 +1,12 @@
 package com.mine.geometry_node.client.ui.components.integration.overlay;
 
 import com.mine.geometry_node.client.ui.theme.UiThemes;
+import com.mine.geometry_node.client.ui.components.composite.overlay.UiOverlayHosts;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.ItemTooltipProxy;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.client.ui.components.integration.valuepreview.ValuePreviewStyle;
+import com.mine.geometry_node.client.ui.components.integration.nativepreview.ViewportNativePreviewView;
 import com.mine.geometry_node.client.ui.overlay.OverlayCloseReason;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
 import com.mine.geometry_node.client.ui.overlay.OverlayMount;
@@ -14,8 +16,6 @@ import icyllis.modernui.core.Context;
 import icyllis.modernui.graphics.Canvas;
 import icyllis.modernui.graphics.Paint;
 import icyllis.modernui.graphics.RectF;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
-import icyllis.modernui.mc.MinecraftSurfaceView;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.MotionEvent;
@@ -29,10 +29,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 
 public final class InventoryItemPickerOverlay extends UiInputBarrier {
     private static final int COLUMNS = 9;
@@ -116,7 +117,7 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
         if (anchor == null) {
             return null;
         }
-        ViewGroup host = findWindowHost(anchor);
+        ViewGroup host = UiOverlayHosts.findWindowHost(anchor);
         return host == null ? null : show(anchor, host, theme, onPicked, onDismissed);
     }
 
@@ -321,22 +322,8 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
         }
     }
 
-    private static ViewGroup findWindowHost(View anchor) {
-        View current = anchor;
-        ViewGroup best = anchor instanceof ViewGroup viewGroup ? viewGroup : null;
-        while (current != null) {
-            if (current instanceof FrameLayout frameLayout) {
-                best = frameLayout;
-            }
-            if (!(current.getParent() instanceof View parentView)) {
-                break;
-            }
-            current = parentView;
-        }
-        return best != null ? best : anchor.getParent() instanceof ViewGroup parent ? parent : null;
-    }
 
-    public static final class ItemStackView extends FrameLayout {
+    public static final class ItemStackView extends ViewportNativePreviewView {
         private static final ValuePreviewStyle DEFAULT_STYLE = previewStyleFor(UiThemes.EDITOR);
         private static final float ITEM_SIZE_GUI = 16.0f;
         private static final float ITEM_PADDING_DP = 4.0f;
@@ -349,8 +336,7 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
         private final Consumer<ItemStack> onPicked;
         private final boolean pickOnClick;
         private final float visualScale;
-        private MinecraftSurfaceView surfaceView;
-        private ItemStack stack;
+        private volatile ItemStack stack;
         private boolean pointerPressed;
 
         public ItemStackView(Context context, ItemStack stack, Consumer<ItemStack> onPicked, boolean pickOnClick) {
@@ -388,7 +374,7 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
             this.previewStyle = style != null ? style : DEFAULT_STYLE;
             this.tooltipTheme = java.util.Objects.requireNonNull(tooltipTheme, "tooltipTheme");
             this.populatedBorderColor = populatedBorderColor;
-            this.stack = stack == null ? ItemStack.EMPTY : stack;
+            this.stack = stack == null ? ItemStack.EMPTY : stack.copy();
             this.onPicked = onPicked;
             this.pickOnClick = pickOnClick;
             this.visualScale = Math.max(0.1f, visualScale);
@@ -400,25 +386,6 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
                 handleHover(event);
                 return true;
             });
-
-            surfaceView = new MinecraftSurfaceView(context);
-            surfaceView.setEnabled(false);
-            surfaceView.setClickable(false);
-            surfaceView.setFocusable(false);
-            surfaceView.setRenderer(new MinecraftSurfaceView.Renderer() {
-                @Override
-                public void onSurfaceChanged(int width, int height) {
-                }
-
-                @Override
-                public void onDraw(@Nonnull GuiGraphicsExtractor gr, int mouseX, int mouseY, float deltaTick, double guiScale, float alpha) {
-                    if (ItemStackView.this.stack.isEmpty()) {
-                        return;
-                    }
-                    drawStack(gr, guiScale);
-                }
-            });
-            addView(surfaceView, new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         }
 
         public ValuePreviewStyle getPreviewStyle() {
@@ -441,10 +408,8 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
         public void setStack(ItemStack stack) {
             ItemTooltipProxy.clearTooltipTask(this.stack);
             ItemStackTooltipOverlay.hide(this);
-            this.stack = stack == null ? ItemStack.EMPTY : stack;
-            if (surfaceView != null) {
-                surfaceView.invalidate();
-            }
+            this.stack = stack == null ? ItemStack.EMPTY : stack.copy();
+            requestNativePreviewRender();
             invalidate();
         }
 
@@ -452,21 +417,34 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
             return stack;
         }
 
-        private void drawStack(GuiGraphicsExtractor gr, double guiScale) {
-            gr.pose().pushMatrix();
-            float safeGuiScale = guiScale > 0.0 ? (float) guiScale : 1.0f;
-            float slotGuiW = getWidth() / safeGuiScale;
-            float slotGuiH = getHeight() / safeGuiScale;
-            float padding = UIUtils.dp2px(ITEM_PADDING_DP * visualScale) / safeGuiScale;
-            float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
-            float itemScale = contentSize / ITEM_SIZE_GUI;
-            float drawX = (slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f;
-            float drawY = (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f;
-            gr.pose().translate(drawX, drawY);
-            gr.pose().scale(itemScale, itemScale);
-            gr.item(stack, 0, 0);
-            gr.itemDecorations(Minecraft.getInstance().font, stack, 0, 0);
-            gr.pose().popMatrix();
+        @Override
+        protected boolean usesSharedNativePreviewHost() {
+            // Picker and HUD grids have no node host publishing per-slot viewport transforms.
+            return false;
+        }
+
+        @Override
+        protected void renderNativePreviewContent(GuiGraphicsExtractor graphics, float deltaTick,
+                float guiScale, float alpha, float left, float top, float width, float height, float viewportScale) {
+            ItemStack snapshot = stack;
+            if (snapshot.isEmpty()) return;
+            graphics.pose().pushMatrix();
+            try {
+                graphics.pose().translateLocal(left / guiScale - graphics.pose().m20(),
+                        top / guiScale - graphics.pose().m21());
+                float slotGuiW = width / guiScale;
+                float slotGuiH = height / guiScale;
+                float padding = UIUtils.dp2px(ITEM_PADDING_DP * visualScale) * viewportScale / guiScale;
+                float contentSize = Math.max(1.0f, Math.min(slotGuiW, slotGuiH) - padding * 2.0f);
+                float itemScale = contentSize / ITEM_SIZE_GUI;
+                graphics.pose().translate((slotGuiW - ITEM_SIZE_GUI * itemScale) / 2.0f,
+                        (slotGuiH - ITEM_SIZE_GUI * itemScale) / 2.0f);
+                graphics.pose().scale(itemScale, itemScale);
+                graphics.item(snapshot, 0, 0);
+                graphics.itemDecorations(Minecraft.getInstance().font, snapshot, 0, 0);
+            } finally {
+                graphics.pose().popMatrix();
+            }
         }
 
         @Override
@@ -565,15 +543,6 @@ public final class InventoryItemPickerOverlay extends UiInputBarrier {
         }
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private static int dp(int value) {
         return UIUtils.dp2pxInt(value);

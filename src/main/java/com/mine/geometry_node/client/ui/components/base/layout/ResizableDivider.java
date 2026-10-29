@@ -13,6 +13,8 @@ import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 public class ResizableDivider extends FrameLayout {
     public enum Orientation {
         HORIZONTAL,
@@ -34,6 +36,8 @@ public class ResizableDivider extends FrameLayout {
     private final boolean mResizeWeightedSiblings;
     private final float mMinimumWeight;
     private final View mVisualLine;
+    private final ShapeDrawable mLineBackground = new ShapeDrawable();
+    private final ShapeDrawable mDragBackground;
     private final boolean mHighlightOnHover;
     private boolean mHovered;
     private boolean mDragging;
@@ -73,10 +77,12 @@ public class ResizableDivider extends FrameLayout {
         mResizeWeightedSiblings = resizeWeightedSiblings;
         mHighlightOnHover = highlightOnHover;
         mVisualLine = new View(context);
+        mVisualLine.setBackground(mLineBackground);
+        mDragBackground = solid(theme.selection().marqueeFill());
 
         setZ(2.0f);
-        updateVisual(false);
         addView(mVisualLine, visualParams(false));
+        updateVisual(false);
         setOnTouchListener(this::handleTouch);
     }
 
@@ -107,10 +113,10 @@ public class ResizableDivider extends FrameLayout {
 
     public static LinearLayout.LayoutParams layoutParams(Orientation orientation) {
         int hit = UIUtils.dp2pxInt(HITBOX_DP);
-        if (orientation == Orientation.HORIZONTAL) {
-            return new LinearLayout.LayoutParams(hit, ViewGroup.LayoutParams.MATCH_PARENT);
+        if (orientation == Orientation.VERTICAL) {
+            return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, hit);
         }
-        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, hit);
+        return new LinearLayout.LayoutParams(hit, ViewGroup.LayoutParams.MATCH_PARENT);
     }
 
     private boolean handleTouch(View view, MotionEvent event) {
@@ -245,21 +251,19 @@ public class ResizableDivider extends FrameLayout {
 
     private void updateVisual(boolean dragging) {
         boolean highlighted = dragging || (mHighlightOnHover && mHovered);
-        setBackground(dragging && !mHighlightOnHover ? rect(theme.selection().marqueeFill()) : null);
-        if (mVisualLine != null) {
-            mVisualLine.setBackground(rounded(
-                    highlighted ? theme.selection().outline()
-                            : mHighlightOnHover ? theme.border().subtle() : theme.border().divider(),
-                    highlighted && !mHighlightOnHover ? 3.0f : 0.0f
-            ));
+        setBackground(dragging && !mHighlightOnHover ? mDragBackground : null);
+        mLineBackground.setColor(highlighted ? theme.selection().outline()
+                : mHighlightOnHover ? theme.border().subtle() : theme.border().divider());
+        mLineBackground.setCornerRadius(UIUtils.dp2px(highlighted && !mHighlightOnHover ? 3.0f : 0.0f));
+        ViewGroup.LayoutParams params = mVisualLine.getLayoutParams();
+        int thickness = mOrientation == Orientation.HORIZONTAL ? params.width : params.height;
+        if (thickness != visualThickness(highlighted)) {
             mVisualLine.setLayoutParams(visualParams(highlighted));
         }
     }
 
-    private FrameLayout.LayoutParams visualParams(boolean dragging) {
-        int normal = Math.max(1, UIUtils.dp2pxInt(NORMAL_DP));
-        int drag = UIUtils.dp2pxInt(DRAG_DP);
-        int thickness = dragging && !mHighlightOnHover ? drag : normal;
+    private FrameLayout.LayoutParams visualParams(boolean highlighted) {
+        int thickness = visualThickness(highlighted);
         FrameLayout.LayoutParams params = mOrientation == Orientation.HORIZONTAL
                 ? new FrameLayout.LayoutParams(thickness, ViewGroup.LayoutParams.MATCH_PARENT)
                 : new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, thickness);
@@ -267,15 +271,8 @@ public class ResizableDivider extends FrameLayout {
         return params;
     }
 
-    private static ShapeDrawable rect(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        return drawable;
-    }
-
-    private static ShapeDrawable rounded(int color, float radiusDp) {
-        ShapeDrawable drawable = rect(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        return drawable;
+    private int visualThickness(boolean highlighted) {
+        return highlighted && !mHighlightOnHover
+                ? UIUtils.dp2pxInt(DRAG_DP) : Math.max(1, UIUtils.dp2pxInt(NORMAL_DP));
     }
 }

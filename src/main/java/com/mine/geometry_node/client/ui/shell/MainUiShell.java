@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.shell;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
+
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.overlay.OverlayHost;
 import com.mine.geometry_node.client.ui.overlay.OverlayHandle;
@@ -20,7 +22,6 @@ import com.mine.geometry_node.client.ui.settings.page.builtin.BuiltinSettingsPag
 import com.mine.geometry_node.client.ui.settings.window.SettingsWindowController;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.ViewGroup;
@@ -41,7 +42,7 @@ public final class MainUiShell extends FrameLayout implements OverlayHost {
 
     public MainUiShell(Context context) {
         super(context);
-        setBackground(createColorDrawable(UiThemes.EDITOR.surface().root()));
+        setBackground(solid(UiThemes.EDITOR.surface().root()));
 
         LinearLayout contentLayer = new LinearLayout(context);
         contentLayer.setOrientation(LinearLayout.VERTICAL);
@@ -141,10 +142,4 @@ public final class MainUiShell extends FrameLayout implements OverlayHost {
         layer.setVisibility(View.GONE);
     }
 
-    private static ShapeDrawable createColorDrawable(int color) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setShape(ShapeDrawable.RECTANGLE);
-        drawable.setColor(color);
-        return drawable;
-    }
 }

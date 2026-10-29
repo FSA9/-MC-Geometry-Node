@@ -19,7 +19,7 @@ import icyllis.modernui.widget.ScrollView;
 import icyllis.modernui.widget.TextView;
 import java.util.function.Consumer;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 
 /**

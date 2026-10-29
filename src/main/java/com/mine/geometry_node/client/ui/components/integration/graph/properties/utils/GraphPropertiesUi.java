@@ -8,13 +8,13 @@ import com.mine.geometry_node.client.ui.components.base.button.UiActionButton;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.network.chat.Component;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 
 /**
  * Stateless view factories and styling shared by graph-properties components.
@@ -104,7 +104,7 @@ public final class GraphPropertiesUi {
         up.setOnClickListener(v -> moveUp.run());
         order.addView(up, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         View divider = new View(context);
-        divider.setBackground(rect(ACTION_PRESSED, 0));
+        divider.setBackground(solid(ACTION_PRESSED));
         order.addView(divider, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, UIUtils.dp2pxInt(1))));
         UiIconButton down = new UiIconButton(context,
@@ -113,18 +113,6 @@ public final class GraphPropertiesUi {
         down.setOnClickListener(v -> moveDown.run());
         order.addView(down, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         return order;
-    }
-
-    public static ShapeDrawable rect(int color, float radiusDp) {
-        return rect(color, radiusDp, 0, 0);
-    }
-
-    public static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) drawable.setStroke(UIUtils.dp2pxInt(strokeWidthDp), strokeColor);
-        return drawable;
     }
 
     public static String tr(String key) {

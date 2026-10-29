@@ -1,5 +1,7 @@
 package com.mine.geometry_node.client.ui.editor.graph.menu;
 
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
+
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
 import com.mine.geometry_node.client.ui.components.base.input.UiTextInput;
@@ -11,11 +13,7 @@ import com.mine.geometry_node.client.ui.editor.graph.frame.FrameVisualAdapter;
 import com.mine.geometry_node.client.ui.editor.graph.interaction.InteractionContext;
 import com.mine.geometry_node.core.node.document.FrameData;
 import icyllis.modernui.core.Context;
-import icyllis.modernui.graphics.Canvas;
-import icyllis.modernui.graphics.Paint;
-import icyllis.modernui.graphics.drawable.ShapeDrawable;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.MotionEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.EditText;
@@ -30,7 +28,6 @@ public final class FrameMenu {
     private static final int INPUT_H_DP = 30;
     private static final int ACTION_H_DP = 28;
     private static final int SWATCH_SIZE_DP = 20;
-    private static final int SWATCH_GAP_DP = 3;
 
     private static final int COLOR_PANEL_BG = (UiThemes.EDITOR.surface().popup() & 0x00FFFFFF) | 0xF0000000;
     private static final int COLOR_PANEL_BORDER = UiThemes.EDITOR.border().strong();
@@ -57,7 +54,6 @@ public final class FrameMenu {
         Context uiContext = context.getUIContext();
         FrameData frameData = frame.getFrameData();
         int initialColor = ensureOpaque(frameData.color);
-        final int[] selectedColor = {initialColor};
 
         GraphMenuOverlay popupOverlay = new GraphMenuOverlay(context,
                 () -> GraphMenuOverlay.containsIdentity(context.getAllFrameVisuals(), frame));
@@ -95,16 +91,8 @@ public final class FrameMenu {
         colorLabelLp.topMargin = dp(10);
         panel.addView(colorLabel, colorLabelLp);
 
-        LinearLayout swatches = new LinearLayout(uiContext);
-        swatches.setOrientation(LinearLayout.HORIZONTAL);
+        GraphColorPalette swatches = new GraphColorPalette(uiContext, initialColor, PRESET_COLORS);
         panel.addView(swatches, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(SWATCH_SIZE_DP + 4)));
-
-        addColorSwatch(uiContext, swatches, initialColor, selectedColor, true);
-        for (int color : PRESET_COLORS) {
-            if (ensureOpaque(color) != initialColor) {
-                addColorSwatch(uiContext, swatches, color, selectedColor, false);
-            }
-        }
 
         LinearLayout actions = new LinearLayout(uiContext);
         actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -118,13 +106,13 @@ public final class FrameMenu {
             if (!popupOverlay.isCurrent()) return;
             String newTitle = titleInput.getText().toString().trim();
             if (newTitle.isEmpty()) newTitle = "New Frame";
-            if (!newTitle.equals(oldTitle) || selectedColor[0] != initialColor) {
+            if (!newTitle.equals(oldTitle) || swatches.selectedColor() != initialColor) {
                 context.getActionSink().performAction(
                         ViewportActionId.SET_FRAME_PROPERTY,
                         ViewportActionRequest.builder()
                                 .frameId(frame.getFrameId())
                                 .title(newTitle)
-                                .color(selectedColor[0])
+                                .color(swatches.selectedColor())
                                 .build()
                 );
             }
@@ -141,25 +129,6 @@ public final class FrameMenu {
         popupOverlay.bindLifetime();
         titleInput.requestFocus();
         titleInput.setSelection(0, oldTitle.length());
-    }
-
-    private static void addColorSwatch(Context context, LinearLayout swatches, int color, int[] selectedColor, boolean selected) {
-        int normalizedColor = ensureOpaque(color);
-        ColorSwatch swatch = new ColorSwatch(context, normalizedColor);
-        swatch.setSelectedColor(selected);
-        swatch.setOnClickListener(v -> {
-            selectedColor[0] = normalizedColor;
-            for (int i = 0; i < swatches.getChildCount(); i++) {
-                View child = swatches.getChildAt(i);
-                if (child instanceof ColorSwatch colorSwatch) {
-                    colorSwatch.setSelectedColor(colorSwatch.getColor() == selectedColor[0]);
-                }
-            }
-        });
-
-        LinearLayout.LayoutParams swatchLp = new LinearLayout.LayoutParams(dp(SWATCH_SIZE_DP), dp(SWATCH_SIZE_DP));
-        swatchLp.rightMargin = dp(SWATCH_GAP_DP);
-        swatches.addView(swatch, swatchLp);
     }
 
     private static FrameLayout.LayoutParams createPanelLayout(ViewGroup parent, float screenX, float screenY) {
@@ -190,15 +159,6 @@ public final class FrameMenu {
         return view;
     }
 
-    private static ShapeDrawable rect(int color, float radiusDp, int strokeWidthDp, int strokeColor) {
-        ShapeDrawable drawable = new ShapeDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(UIUtils.dp2px(radiusDp));
-        if (strokeWidthDp > 0) {
-            drawable.setStroke(dp(strokeWidthDp), strokeColor);
-        }
-        return drawable;
-    }
 
     private static int dp(float value) {
         return UIUtils.dp2pxInt(value);
@@ -208,65 +168,4 @@ public final class FrameMenu {
         return color | 0xFF000000;
     }
 
-    private static int lighten(int color, float amount) {
-        int a = (color >>> 24) & 0xFF;
-        int r = (color >>> 16) & 0xFF;
-        int g = (color >>> 8) & 0xFF;
-        int b = color & 0xFF;
-        r = Math.min(255, Math.round(r + (255 - r) * amount));
-        g = Math.min(255, Math.round(g + (255 - g) * amount));
-        b = Math.min(255, Math.round(b + (255 - b) * amount));
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private static final class ColorSwatch extends View {
-        private final int mColor;
-        private boolean mSelectedColor;
-        private boolean mHovered;
-        private final Paint mPaint = new Paint();
-
-        ColorSwatch(Context context, int color) {
-            super(context);
-            mColor = ensureOpaque(color);
-            mPaint.setAntiAlias(true);
-            setWillNotDraw(false);
-            setOnHoverListener((v, event) -> {
-                if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                    mHovered = true;
-                    invalidate();
-                } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT) {
-                    mHovered = false;
-                    invalidate();
-                }
-                return false;
-            });
-        }
-
-        int getColor() {
-            return mColor;
-        }
-
-        void setSelectedColor(boolean selectedColor) {
-            if (mSelectedColor == selectedColor) return;
-            mSelectedColor = selectedColor;
-            invalidate();
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float inset = UIUtils.dp2px(2f);
-            float radius = UIUtils.dp2px(4f);
-            mPaint.setStyle(Paint.Style.FILL);
-            mPaint.setColor(mColor);
-            canvas.drawRoundRect(inset, inset, getWidth() - inset, getHeight() - inset, radius, radius, radius, radius, mPaint);
-
-            if (mSelectedColor || mHovered) {
-                mPaint.setStyle(Paint.Style.STROKE);
-                mPaint.setStrokeWidth(UIUtils.dp2px(mSelectedColor ? 2.0f : 1.0f));
-                mPaint.setColor(mSelectedColor ? UiThemes.EDITOR.selection().outline() : (UiThemes.EDITOR.text().strong() & 0x00FFFFFF) | 0x99000000);
-                canvas.drawRoundRect(inset, inset, getWidth() - inset, getHeight() - inset, radius, radius, radius, radius, mPaint);
-            }
-        }
-    }
 }

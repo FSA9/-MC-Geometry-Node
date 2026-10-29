@@ -6,6 +6,7 @@ import com.mine.geometry_node.client.ui.components.base.input.UiSelectButton;
 import com.mine.geometry_node.client.ui.components.composite.menu.UiContextMenu;
 import com.mine.geometry_node.client.ui.components.composite.table.*;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
+import com.mine.geometry_node.client.ui.components.integration.text.ModernDialogueText;
 import com.mine.geometry_node.client.ui.theme.UiTheme;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
 import com.mine.geometry_node.core.engine.system.faction.model.*;
@@ -120,7 +121,7 @@ public final class FactionMembershipsView extends LinearLayout {
                 var definition = catalog.get().find(id);
                 Map<UUID, Integer> values = memberships.get();
                 boolean joined = values.containsKey(id); Integer level = values.get(id);
-                row.name().setText(definition.map(f -> FactionTextViews.display(f.name()))
+                row.name().setText(definition.map(f -> ModernDialogueText.display(f.name()))
                         .orElseGet(() -> tr(catalogLoaded.getAsBoolean() ? "deleted" : "unavailable")));
                 row.name().setTooltipText(row.name().getText());
                 row.membership().setText(tr(joined ? "joined" : "not_joined"));
@@ -175,7 +176,7 @@ public final class FactionMembershipsView extends LinearLayout {
         UiContextMenu menu = new UiContextMenu(getContext(), theme); rankMenu = menu;
         new TreeMap<>(definition.ranks()).forEach((level, name) -> {
             var label = new icyllis.modernui.text.SpannableStringBuilder();
-            label.append(level + " · ").append(FactionTextViews.display(name));
+            label.append(level + " · ").append(ModernDialogueText.display(name));
             menu.addChoiceItem(label, Objects.equals(memberships.get().get(id), level), () -> {
                 if (disposed || generation != menuGeneration || rankMenu != menu || !menu.isOpen()
                         || !canEdit() || !exists(id) || !memberships.get().containsKey(id)

@@ -18,7 +18,6 @@ import com.mine.geometry_node.core.engine.system.scene.property.SceneInspectorSc
 import icyllis.modernui.core.Context;
 import icyllis.modernui.text.TextUtils;
 import icyllis.modernui.view.Gravity;
-import icyllis.modernui.view.KeyEvent;
 import icyllis.modernui.view.View;
 import icyllis.modernui.view.ViewGroup;
 import icyllis.modernui.widget.*;
@@ -76,11 +75,7 @@ public class ScenePropertiesView extends UiScrollView {
             @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
             @Override public void afterTextChanged(icyllis.modernui.text.Editable text) { markDirty(); }
         });
-        input.setOnKeyListener((view, key, event) -> {
-            if (key != KeyEvent.KEY_ENTER && key != KeyEvent.KEY_KP_ENTER) return false;
-            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) commitDraft();
-            return true;
-        });
+        input.setEditActions(this::commitDraft, null);
         input.setOnFocusChangeListener((view, focused) -> {
             if (!focused && dirty && !updatingFields) commitDraft();
         });

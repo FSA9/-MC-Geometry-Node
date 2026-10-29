@@ -38,7 +38,7 @@ import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.rect;
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 
 /**
