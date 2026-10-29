@@ -2,20 +2,17 @@ package com.mine.geometry_node.core.engine.system.quest.screen;
 
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionCheck;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestRewardDefinition;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatus;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
+import com.mine.geometry_node.core.node.value.RichTextValue;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.ToDoubleFunction;
-import java.util.function.Function;
 
 /** Maps quest domain models to immutable screen views for both live sessions and previews. */
 public final class QuestScreenViewFactory {
@@ -31,19 +28,28 @@ public final class QuestScreenViewFactory {
         return List.copyOf(result);
     }
 
+    /** Preview convenience overload: both condition gates default to enabled. */
     public static PacketQuestScreenSnapshot.QuestView quest(String taskKey,
                                                             String instanceId,
                                                             String statusId,
                                                             boolean acceptEnabled,
                                                             long updatedAt,
                                                             QuestDefinition definition,
-                                                            QuestConditionOverview conditionOverview,
-                                                            @Nullable Function<QuestConditionKind, List<QuestConditionCheck>> conditionResolver,
+                                                            @Nullable ToDoubleFunction<String> counterResolver) {
+        return quest(taskKey, instanceId, statusId, acceptEnabled, updatedAt, definition,
+                true, true, counterResolver);
+    }
+
+    public static PacketQuestScreenSnapshot.QuestView quest(String taskKey,
+                                                            String instanceId,
+                                                            String statusId,
+                                                            boolean acceptEnabled,
+                                                            long updatedAt,
+                                                            QuestDefinition definition,
+                                                            boolean acceptanceEnabled,
+                                                            boolean completionEnabled,
                                                             @Nullable ToDoubleFunction<String> counterResolver) {
         QuestDefinition safeDefinition = definition == null ? QuestDefinition.EMPTY : definition;
-        QuestConditionOverview safeConditions = conditionOverview != null
-                ? conditionOverview
-                : QuestConditionOverview.EMPTY;
         String safeTaskKey = taskKey == null ? "" : taskKey;
         DialogueText title = safeDefinition.title().plain().isBlank()
                 ? DialogueText.plain(safeTaskKey)
@@ -84,29 +90,21 @@ public final class QuestScreenViewFactory {
                 statusId,
                 title,
                 DialogueText.rich(safeDefinition.description()),
-                conditionViews(QuestConditionKind.ACCEPTANCE, safeConditions, conditionResolver),
-                conditionViews(QuestConditionKind.COMPLETION, safeConditions, conditionResolver),
+                conditionViews(safeDefinition.acceptanceConditions(), acceptanceEnabled),
+                conditionViews(safeDefinition.completionConditions(), completionEnabled),
                 objectives,
                 rewards,
-                acceptEnabled,
+                acceptEnabled && acceptanceEnabled,
+                completionEnabled,
                 updatedAt
         );
     }
 
     private static List<PacketQuestScreenSnapshot.ConditionView> conditionViews(
-            QuestConditionKind kind,
-            QuestConditionOverview overview,
-            @Nullable Function<QuestConditionKind, List<QuestConditionCheck>> resolver) {
-        List<QuestConditionCheck> checks = resolver != null ? resolver.apply(kind) : List.of();
-        if (checks != null && !checks.isEmpty()) {
-            return checks.stream()
-                    .filter(check -> check != null && !check.displayText().isBlank())
-                    .map(check -> new PacketQuestScreenSnapshot.ConditionView(
-                            check.displayText(), check.evaluated(), check.allowed()))
-                    .toList();
-        }
-        return overview.texts(kind).stream()
-                .map(text -> new PacketQuestScreenSnapshot.ConditionView(text, false, false))
+            List<RichTextValue> descriptions, boolean conditionState) {
+        return descriptions.stream()
+                .filter(value -> !value.plain().isBlank() || !value.segments().isEmpty())
+                .map(value -> new PacketQuestScreenSnapshot.ConditionView(DialogueText.rich(value), conditionState))
                 .toList();
     }
 }

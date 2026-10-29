@@ -8,12 +8,7 @@ import com.mine.geometry_node.client.ui.components.integration.graph.properties.
 import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
 import com.mine.geometry_node.client.feature.graph.document.GraphSession;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
-import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
-import com.mine.geometry_node.core.node.document.NodeData;
 import com.mine.geometry_node.core.node.document.NodeGraph;
-import com.mine.geometry_node.core.node.definition.node.NodeDef;
-import com.mine.geometry_node.core.node.nodes.quest.CreateQuestCondition;
 
 import java.util.List;
 import java.util.Objects;
@@ -41,8 +36,7 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
                 graph.getGraphTypeId(),
                 graph.comment,
                 graph.tags,
-                graph.quest,
-                QuestConditionOverviewFactory.fromGraph(graph)));
+                graph.quest));
     }
 
     @Override
@@ -79,47 +73,8 @@ public final class GraphSessionPropertiesTarget implements GraphPropertiesTarget
     }
 
     @Override
-    public void onNodeAdded(NodeData nodeData) {
-        notifyChanged();
-    }
-
-    @Override
-    public void onNodeRemoved(String nodeId) {
-        notifyChanged();
-    }
-
-    @Override
-    public void onNodeStructureChanged(NodeData nodeData) {
-        if (isQuestConditionNode(nodeData)) notifyChanged();
-    }
-
-    @Override
-    public void onConnectionAdded(String outNode, String outPort, String inNode, String inPort) {
-        notifyChanged();
-    }
-
-    @Override
-    public void onConnectionRemoved(String outNode, String outPort, String inNode, String inPort) {
-        notifyChanged();
-    }
-
-    @Override
-    public void onGraphConnectionsRebuildRequested() {
-        notifyChanged();
-    }
-
-    @Override
     public void onGraphReloaded() {
         notifyChanged();
-    }
-
-    private static boolean isQuestConditionNode(NodeData nodeData) {
-        if (nodeData == null || nodeData.type == null) return false;
-        if (NodeDef.canonicalTypeId(CreateQuestCondition.TYPE_ID).equals(nodeData.type)) return true;
-        for (QuestConditionKind kind : QuestConditionKind.all()) {
-            if (NodeDef.canonicalTypeId(kind.nodeTypeId()).equals(nodeData.type)) return true;
-        }
-        return false;
     }
 
     private void notifyChanged() {

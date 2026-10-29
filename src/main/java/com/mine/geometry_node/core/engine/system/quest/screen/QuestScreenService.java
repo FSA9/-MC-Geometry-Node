@@ -1,13 +1,11 @@
 package com.mine.geometry_node.core.engine.system.quest.screen;
 
-import com.mine.geometry_node.core.engine.system.quest.QuestConditionService;
 import com.mine.geometry_node.core.engine.system.quest.QuestService;
 
 import com.mine.geometry_node.core.engine.blueprint.BlueprintRuntime;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionResult;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestListEntry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestOperationResult;
@@ -16,6 +14,7 @@ import com.mine.geometry_node.core.network.NetworkHandler;
 import com.mine.geometry_node.core.network.packet.c2s.PacketQuestScreenAction;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import org.jetbrains.annotations.Nullable;
@@ -30,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Single server-side entrypoint for immutable quest-screen sessions. */
+/** Server-side quest-screen sessions refreshed by quest mutations, without polling. */
 public final class QuestScreenService {
     public static final QuestScreenService INSTANCE = new QuestScreenService();
     public static final String REQUEST_SOURCE_UI = "quest_ui";
@@ -56,6 +55,15 @@ public final class QuestScreenService {
         }
     }
 
+    /** Publishes fresh data only to an owner who currently has the quest screen open. */
+    public void refreshIfOpen(Entity owner) {
+        if (owner instanceof ServerPlayer player && openSnapshots.containsKey(player.getUUID())) {
+            OpenSnapshot snapshot = createSnapshot(player);
+            openSnapshots.put(player.getUUID(), snapshot);
+            sendSnapshot(player, snapshot, null, false);
+        }
+    }
+
     public void handleAction(ServerPlayer player, PacketQuestScreenAction request) {
         if (player == null || request == null) return;
 
@@ -74,7 +82,8 @@ public final class QuestScreenService {
         switch (request.action()) {
             case PacketQuestScreenAction.ACCEPT -> {
                 QuestListEntry entry = QuestService.INSTANCE.findListEntry(player, request.taskKey());
-                if (entry == null || !entry.visible() || !entry.acceptEnabled()) {
+                if (entry == null || !QuestService.INSTANCE.isConditionEnabled(
+                        player, entry.taskKey(), QuestConditionKind.VISIBILITY)) {
                     result = QuestOperationResult.of(QuestOperationResult.Code.NOT_ACCEPTABLE);
                 } else {
                     result = QuestService.INSTANCE.accept(player, request.taskKey(), REQUEST_SOURCE_UI);
@@ -98,8 +107,10 @@ public final class QuestScreenService {
             }
             default -> result = QuestOperationResult.of(QuestOperationResult.Code.INVALID_TASK_KEY);
         }
-        // Keep the view stable for the lifetime of this open document. Actions return
-        // their result, but changed quest data is read only when the screen is reopened.
+        // Actions may dispatch graph listeners which change conditions, status, or counters.
+        // Read after those listeners finish so the response describes their final state.
+        snapshot = createSnapshot(player);
+        openSnapshots.put(player.getUUID(), snapshot);
         sendSnapshot(player, snapshot, result, false);
     }
 
@@ -145,13 +156,9 @@ public final class QuestScreenService {
         }
 
         for (QuestListEntry entry : QuestService.INSTANCE.getEntries(player)) {
-            if (!entry.visible()) continue;
-            QuestConditionResult visibility = QuestConditionService.INSTANCE.evaluate(
-                    player, entry.taskKey(), QuestConditionKind.VISIBILITY);
-            if (!visibility.evaluated() || !visibility.allowed()) continue;
             PacketQuestScreenSnapshot.QuestView view = createView(
                     player, entry.taskKey(), "", QuestStatusRegistry.UNACCEPTED.id(),
-                    entry.acceptEnabled(), entry.publishedAt(), null);
+                    true, entry.publishedAt(), null);
             if (view != null) {
                 result.add(view);
                 presentedEntryKeys.add(entry.taskKey());
@@ -182,6 +189,7 @@ public final class QuestScreenService {
             boolean acceptEnabled,
             long updatedAt,
             @Nullable QuestInstance instance) {
+        if (!QuestService.INSTANCE.isConditionEnabled(player, taskKey, QuestConditionKind.VISIBILITY)) return null;
         BlueprintPlan index = BlueprintRuntime.INSTANCE.getGraphIndex(
                 player.level().getServer(), taskKey);
         if (index == null) return null;
@@ -193,8 +201,8 @@ public final class QuestScreenService {
                 acceptEnabled,
                 updatedAt,
                 definition,
-                index.getQuestConditionOverview(),
-                kind -> QuestConditionService.INSTANCE.evaluateChecks(player, taskKey, kind),
+                QuestService.INSTANCE.isConditionEnabled(player, taskKey, QuestConditionKind.ACCEPTANCE),
+                QuestService.INSTANCE.isConditionEnabled(player, taskKey, QuestConditionKind.COMPLETION),
                 instance == null ? null : instance::counter
         );
     }

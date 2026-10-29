@@ -5,7 +5,6 @@ import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledGraph;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledDataIndex;
 import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeIndex;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.nodes.BaseNode;
@@ -30,7 +29,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
     private final CompiledNodeIndex nodes;
     private final String graphTypeId;
     private final QuestDefinition questDefinition;
-    private final QuestConditionOverview questConditionOverview;
 
     // ====================================================
     // 2. 核心索引结构
@@ -51,7 +49,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
 
     private BlueprintPlan(String graphTypeId,
                               QuestDefinition questDefinition,
-                              QuestConditionOverview questConditionOverview,
                               CompiledNodeIndex nodes,
                               Map<Integer, IntFlowTarget>[] flowOutputArray,
                               Map<String, List<Integer>> typeLookup,
@@ -60,9 +57,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
                               Map<String, List<Integer>> multiblockStructureLookup) {
         this.graphTypeId = graphTypeId;
         this.questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
-        this.questConditionOverview = questConditionOverview != null
-                ? questConditionOverview
-                : QuestConditionOverview.EMPTY;
         this.nodes = nodes;
         this.flowOutputArray = copyMapArray(flowOutputArray);
         this.typeLookup = copyLookup(typeLookup);
@@ -94,7 +88,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
      */
     public static BlueprintPlan createCompiled(String graphTypeId,
                                                    QuestDefinition questDefinition,
-                                                   QuestConditionOverview questConditionOverview,
                                                    CompiledNodeIndex nodes,
                                                    Map<Integer, IntFlowTarget>[] flowOutputArray,
                                                    Map<String, List<Integer>> typeLookup,
@@ -104,7 +97,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
         return new BlueprintPlan(
                 graphTypeId,
                 questDefinition,
-                questConditionOverview,
                 nodes,
                 flowOutputArray,
                 typeLookup,
@@ -139,10 +131,6 @@ public class BlueprintPlan implements CompiledGraph, CompiledDataIndex {
 
     public QuestDefinition getQuestDefinition() {
         return questDefinition;
-    }
-
-    public QuestConditionOverview getQuestConditionOverview() {
-        return questConditionOverview;
     }
 
     @Override

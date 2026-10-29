@@ -1,6 +1,5 @@
 package com.mine.geometry_node.core.engine.blueprint.compile;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mine.geometry_node.core.engine.blueprint.multiblock.MultiblockStructureManager;
 import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
@@ -16,10 +15,7 @@ import com.mine.geometry_node.core.engine.graph.compile.artifact.CompiledNodeInd
 import com.mine.geometry_node.core.engine.graph.compile.CompiledNodeTable;
 import com.mine.geometry_node.core.engine.graph.compile.validation.GraphDocumentValidator;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.node.NodeRegistry;
-import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.node.definition.node.NodeDef;
 import com.mine.geometry_node.core.node.definition.node.NodeType;
 import com.mine.geometry_node.core.node.nodes.functions.graph.ReceiveBlueprint;
@@ -37,7 +33,6 @@ import java.util.Set;
  * Compiles blueprint JSON into the immutable runtime index used by the VM.
  */
 public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
-    private static final Gson GSON = new Gson();
     public static final BlueprintCompiler INSTANCE = new BlueprintCompiler();
 
     private BlueprintCompiler() {
@@ -64,9 +59,6 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         QuestDefinition questDefinition = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
                 ? QuestDefinition.fromJson(root.get("quest"))
                 : QuestDefinition.EMPTY;
-        QuestConditionOverview questConditionOverview = GraphTypeRegistry.QUEST.id().equals(graphTypeId)
-                ? QuestConditionOverviewFactory.fromGraph(GSON.fromJson(root, NodeGraph.class))
-                : QuestConditionOverview.EMPTY;
         JsonObject rootNodes = root.getAsJsonObject("nodes");
 
         FlattenedGraph flattened = GraphFlattener.flatten(rootNodes);
@@ -155,7 +147,6 @@ public final class BlueprintCompiler implements GraphCompiler<BlueprintPlan> {
         return BlueprintPlan.createCompiled(
                 graphTypeId,
                 questDefinition,
-                questConditionOverview,
                 nodes,
                 flowOutputArray,
                 typeToIntList,

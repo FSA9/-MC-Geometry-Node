@@ -8,9 +8,6 @@ import com.google.gson.JsonParser;
 import com.mine.geometry_node.core.engine.graph.GraphDocumentType;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.graph.QuestConditionOverviewFactory;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
-import com.mine.geometry_node.core.node.document.NodeGraph;
 import com.mine.geometry_node.core.metadata.TagPolicy;
 import com.mine.geometry_node.core.metadata.TagSet;
 import com.mine.geometry_node.client.feature.graph.persistence.file.GraphDocumentStore;
@@ -30,8 +27,7 @@ public final class GraphTagIO {
     private GraphTagIO() {}
 
     public record GraphMetadata(String graphTypeId, String comment, List<String> tags,
-                                QuestDefinition questDefinition,
-                                QuestConditionOverview conditionOverview) {}
+                                QuestDefinition questDefinition) {}
 
     public static JsonObject readGraphRoot(File file) throws Exception {
         return parseGraphRoot(GraphDocumentStore.INSTANCE.readString(file.toPath()).trim());
@@ -79,8 +75,7 @@ public final class GraphTagIO {
                 resolveGraphTypeId(root),
                 comment,
                 readTags(root),
-                QuestDefinition.fromJson(root.get("quest")),
-                QuestConditionOverviewFactory.fromGraph(GSON.fromJson(root, NodeGraph.class)));
+                QuestDefinition.fromJson(root.get("quest")));
     }
 
     public static List<String> readTags(JsonObject root) {

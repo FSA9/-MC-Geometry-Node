@@ -42,7 +42,6 @@ public enum PortType {
     COLOR(0xFFFFD54F, ColorValue.WHITE),
     LIST(0xFFFF9800, List.of()),
     DIALOGUE_CHOICE(0xFFFF80AB, null),
-    QUEST_CONDITION(0xFFFFA726, null),
     DICT(0xFFE67E22, java.util.Map.of()),
     SHOP(0xFFFFB74D, java.util.Map.of("offers", List.of())),
     ANY(0xFF95A5A6, null);

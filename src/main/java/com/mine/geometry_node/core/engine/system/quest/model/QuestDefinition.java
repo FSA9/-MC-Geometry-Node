@@ -17,8 +17,13 @@ public record QuestDefinition(
         RichTextValue title,
         RichTextValue description,
         List<QuestObjectiveDefinition> objectives,
-        List<QuestRewardDefinition> rewards
+        List<QuestRewardDefinition> rewards,
+        List<RichTextValue> visibilityConditions,
+        List<RichTextValue> acceptanceConditions,
+        List<RichTextValue> completionConditions
 ) {
+    public static final int MAX_CONDITIONS_PER_GROUP = 32;
+
     private static final Gson GSON = new Gson();
 
     public static final QuestDefinition EMPTY = new QuestDefinition(
@@ -27,24 +32,77 @@ public record QuestDefinition(
             List.of(),
             List.of());
 
+    /** Compatibility constructor for definitions authored before condition descriptions. */
+    public QuestDefinition(RichTextValue title,
+                           RichTextValue description,
+                           List<QuestObjectiveDefinition> objectives,
+                           List<QuestRewardDefinition> rewards) {
+        this(title, description, objectives, rewards,
+                List.of(), List.of(), List.of());
+    }
+
     public QuestDefinition {
         title = title != null ? title : RichTextValue.EMPTY;
         description = description != null ? description : RichTextValue.EMPTY;
         objectives = objectives == null ? List.of() : List.copyOf(objectives);
         rewards = rewards == null ? List.of() : List.copyOf(rewards);
+        visibilityConditions = immutableConditions(visibilityConditions);
+        acceptanceConditions = immutableConditions(acceptanceConditions);
+        completionConditions = immutableConditions(completionConditions);
     }
 
     public boolean isEmpty() {
         return title.plain().isEmpty() && title.segments().isEmpty()
                 && description.plain().isEmpty() && description.segments().isEmpty()
                 && objectives.isEmpty()
-                && rewards.isEmpty();
+                && rewards.isEmpty()
+                && visibilityConditions.isEmpty()
+                && acceptanceConditions.isEmpty()
+                && completionConditions.isEmpty();
+    }
+
+    /** Ordered rich-text descriptions, independent of graph nodes and runtime state. */
+    public List<RichTextValue> conditionDescriptions(QuestConditionKind kind) {
+        return switch (kind) {
+            case VISIBILITY -> visibilityConditions;
+            case ACCEPTANCE -> acceptanceConditions;
+            case COMPLETION -> completionConditions;
+        };
+    }
+
+    private static List<RichTextValue> immutableConditions(List<RichTextValue> values) {
+        if (values == null) return List.of();
+        if (values.size() > MAX_CONDITIONS_PER_GROUP) {
+            throw new IllegalArgumentException("Too many quest condition descriptions: " + values.size());
+        }
+        return List.copyOf(values);
+    }
+
+    private static JsonArray conditionsToJson(List<RichTextValue> values) {
+        JsonArray array = new JsonArray();
+        values.forEach(value -> array.add(richTextToJson(value)));
+        return array;
+    }
+
+    private static List<RichTextValue> readConditions(@Nullable JsonElement element) {
+        if (element == null || element.isJsonNull()) return List.of();
+        if (element.isJsonArray()) {
+            List<RichTextValue> values = new ArrayList<>();
+            for (JsonElement item : element.getAsJsonArray()) values.add(readRichText(item));
+            return immutableConditions(values);
+        }
+        // Preserve a previously authored paragraph as one entry, including its formatting/newlines.
+        RichTextValue legacy = readRichText(element);
+        return legacy.plain().isEmpty() && legacy.segments().isEmpty() ? List.of() : List.of(legacy);
     }
 
     public JsonObject toJson() {
         JsonObject root = new JsonObject();
         root.add("title", GSON.toJsonTree(title.toMap()));
         root.add("description", GSON.toJsonTree(description.toMap()));
+        root.add("visibility_conditions", conditionsToJson(visibilityConditions));
+        root.add("acceptance_conditions", conditionsToJson(acceptanceConditions));
+        root.add("completion_conditions", conditionsToJson(completionConditions));
         JsonArray objectiveArray = new JsonArray();
         for (QuestObjectiveDefinition objective : objectives) {
             objectiveArray.add(objective.toJson());
@@ -67,7 +125,10 @@ public record QuestDefinition(
                 readRichText(root.get("title")),
                 readRichText(root.get("description")),
                 readObjectives(root.get("objectives")),
-                readRewards(root.get("rewards")));
+                readRewards(root.get("rewards")),
+                readConditions(root.get("visibility_conditions")),
+                readConditions(root.get("acceptance_conditions")),
+                readConditions(root.get("completion_conditions")));
     }
 
     static JsonElement richTextToJson(RichTextValue value) {

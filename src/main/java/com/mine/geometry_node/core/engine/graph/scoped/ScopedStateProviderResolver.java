@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.graph.scoped;
 
 import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataValuePolicy;
+import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.CustomDataDispatcher;
 
 import com.mine.geometry_node.core.config.ScopedStateServerConfig;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
@@ -17,6 +18,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.scores.Team;
@@ -168,7 +170,11 @@ public final class ScopedStateProviderResolver {
             return store().get(namespace, name, registries());
         }
         @Override public void put(String name, Object value) {
-            store().put(namespace, name, value, maxEntries, registries(), this::notifyLimit);
+            update(current -> {
+                Map<String, Object> next = new java.util.LinkedHashMap<>(current);
+                next.put(name, value);
+                return next;
+            });
         }
         @Override public boolean remove(String name) { return store().remove(namespace, name); }
         @Override public long revision() { return store().revision(namespace); }
@@ -183,13 +189,20 @@ public final class ScopedStateProviderResolver {
         }
         @Override public boolean update(UnaryOperator<Map<String, Object>> transformation) {
             Entity entity = requireOwner();
-            return entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
+            ServerPlayer observer = namespace == ScopedStateNamespace.PUBLIC && entity instanceof ServerPlayer player
+                    && CustomDataDispatcher.observes(player) ? player : null;
+            java.util.List<CustomDataDispatcher.Change> changes = new java.util.ArrayList<>();
+            boolean changed = entity.getData(com.mine.geometry_node.GeometryNode.GRAPH_DATA_ATTACHMENT)
                     .ownerScopedState().update(namespace, current -> {
+                        Map<String, Object> before = observer != null ? new java.util.LinkedHashMap<>(current) : Map.of();
                         Map<String, Object> candidate = transformation.apply(current);
                         requireOwner();
+                        if (observer != null) changes.addAll(CustomDataDispatcher.changes(before, candidate));
                         return candidate;
                     }, maxEntries,
                             entity.registryAccess(), this::notifyLimit);
+            if (changed && observer != null) CustomDataDispatcher.publish(observer, changes);
+            return changed;
         }
 
         private OwnerScopedStateStore store() {

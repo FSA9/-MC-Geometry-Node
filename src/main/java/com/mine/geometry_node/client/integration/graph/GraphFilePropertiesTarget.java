@@ -49,8 +49,7 @@ public final class GraphFilePropertiesTarget implements GraphPropertiesTarget {
                         metadata.graphTypeId(),
                         normalizeComment(metadata.comment()),
                         metadata.tags(),
-                        metadata.questDefinition(),
-                        metadata.conditionOverview());
+                        metadata.questDefinition());
             } catch (Exception e) {
                 throw new CompletionException(e);
             }

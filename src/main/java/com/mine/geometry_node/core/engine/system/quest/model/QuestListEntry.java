@@ -29,7 +29,7 @@ public record QuestListEntry(String taskKey,
     public static QuestListEntry load(CompoundTag tag) {
         return new QuestListEntry(
                 tag.getStringOr("TaskKey", ""),
-                tag.getBooleanOr("Visible", false),
+                tag.getBooleanOr("Visible", true),
                 tag.getBooleanOr("AcceptEnabled", true),
                 tag.getStringOr("SourceId", ""),
                 tag.getLongOr("PublishedAt", 0L)

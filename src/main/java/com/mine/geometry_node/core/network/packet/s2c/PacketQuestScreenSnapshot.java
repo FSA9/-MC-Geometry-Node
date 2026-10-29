@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.network.packet.s2c;
 
 import com.mine.geometry_node.core.engine.system.dialogue.model.DialogueText;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
 import com.mine.geometry_node.core.network.codec.DialogueTextStreamCodec;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -21,7 +22,7 @@ public record PacketQuestScreenSnapshot(
     private static final int MAX_STRING_LENGTH = 32767;
     private static final int MAX_STATUSES = 256;
     private static final int MAX_QUESTS = 4096;
-    private static final int MAX_CONDITIONS_PER_GROUP = 32;
+    private static final int MAX_CONDITIONS_PER_GROUP = QuestDefinition.MAX_CONDITIONS_PER_GROUP;
     private static final int MAX_OBJECTIVES_PER_QUEST = 1024;
     private static final int MAX_REWARDS_PER_QUEST = 1024;
 
@@ -84,6 +85,7 @@ public record PacketQuestScreenSnapshot(
                 buf.writeUtf(reward.hintValue(), MAX_STRING_LENGTH);
             }
             buf.writeBoolean(quest.acceptEnabled());
+            buf.writeBoolean(quest.completionEnabled());
             buf.writeLong(quest.updatedAt());
         }
 
@@ -121,6 +123,7 @@ public record PacketQuestScreenSnapshot(
                     readConditions(buf, "quest completion conditions"),
                     readObjectives(buf),
                     readRewards(buf),
+                    buf.readBoolean(),
                     buf.readBoolean(),
                     buf.readLong()
             ));
@@ -167,8 +170,7 @@ public record PacketQuestScreenSnapshot(
         List<ConditionView> values = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             values.add(new ConditionView(
-                    buf.readUtf(MAX_STRING_LENGTH),
-                    buf.readBoolean(),
+                    DialogueTextStreamCodec.STREAM_CODEC.decode(buf),
                     buf.readBoolean()));
         }
         return List.copyOf(values);
@@ -178,9 +180,8 @@ public record PacketQuestScreenSnapshot(
         List<ConditionView> safeValues = values != null ? values : List.of();
         writeCount(buf, safeValues.size(), MAX_CONDITIONS_PER_GROUP, label);
         for (ConditionView value : safeValues) {
-            ConditionView safeValue = value != null ? value : new ConditionView("", false, false);
-            buf.writeUtf(safeValue.text(), MAX_STRING_LENGTH);
-            buf.writeBoolean(safeValue.evaluated());
+            ConditionView safeValue = value != null ? value : new ConditionView(DialogueText.EMPTY, false);
+            DialogueTextStreamCodec.STREAM_CODEC.encode(buf, safeValue.text());
             buf.writeBoolean(safeValue.allowed());
         }
     }
@@ -223,6 +224,7 @@ public record PacketQuestScreenSnapshot(
             List<ObjectiveView> objectives,
             List<RewardView> rewards,
             boolean acceptEnabled,
+            boolean completionEnabled,
             long updatedAt
     ) {
         public QuestView {
@@ -241,13 +243,13 @@ public record PacketQuestScreenSnapshot(
     private static List<ConditionView> immutableConditions(List<ConditionView> values) {
         if (values == null || values.isEmpty()) return List.of();
         return values.stream()
-                .filter(value -> value != null && !value.text().isBlank())
+                .filter(java.util.Objects::nonNull)
                 .toList();
     }
 
-    public record ConditionView(String text, boolean evaluated, boolean allowed) {
+    public record ConditionView(DialogueText text, boolean allowed) {
         public ConditionView {
-            text = text == null ? "" : text.trim();
+            text = text == null ? DialogueText.EMPTY : text;
         }
     }
 

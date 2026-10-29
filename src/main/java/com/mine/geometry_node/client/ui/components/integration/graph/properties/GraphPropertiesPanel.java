@@ -346,7 +346,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
         mLoaded = snapshot;
         mFileValue.setText(snapshot.fileName());
         mTypeSelector.setSelectedId(snapshot.graphTypeId());
-        mQuestSection.setDefinition(snapshot.questDefinition(), snapshot.conditionOverview());
+        mQuestSection.setDefinition(snapshot.questDefinition());
         updateQuestSectionVisibility();
         mCommentInput.setText(pendingComment != null ? pendingComment : snapshot.comment());
         mTags.clear();
@@ -495,7 +495,7 @@ public final class GraphPropertiesPanel extends FrameLayout implements SidebarPa
                 || !GraphTypeRegistry.QUEST.id().equals(mTypeSelector.selectedId())) return;
         QuestDefinition definition = mQuestSection.definition();
         commitPendingEdits();
-        preview.previewQuest(snapshot.fileName(), definition, snapshot.conditionOverview());
+        preview.previewQuest(snapshot.fileName(), definition);
     }
 
 }

@@ -11,7 +11,6 @@ import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePay
 import com.mine.geometry_node.core.engine.system.dialogue.model.shop.ShopPagePayloadFactory;
 import com.mine.geometry_node.core.engine.system.quest.screen.QuestScreenViewFactory;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.network.packet.s2c.PacketOpenDialogue;
 import com.mine.geometry_node.core.network.packet.s2c.PacketQuestScreenSnapshot;
@@ -84,8 +83,7 @@ public final class GraphEditorPreviews {
         return ClientDialogueState.openPreview(toPackets(List.of(page), Component.empty()));
     }
 
-    public static boolean previewQuest(String taskKey, QuestDefinition definition,
-                                       QuestConditionOverview conditionOverview) {
+    public static boolean previewQuest(String taskKey, QuestDefinition definition) {
         QuestDefinition safeDefinition = definition == null ? QuestDefinition.EMPTY : definition;
         String safeTaskKey = normalizeTaskKey(taskKey);
         PacketQuestScreenSnapshot.QuestView quest = QuestScreenViewFactory.quest(
@@ -95,8 +93,6 @@ public final class GraphEditorPreviews {
                 false,
                 0L,
                 safeDefinition,
-                conditionOverview,
-                null,
                 ignored -> 0.0
         );
         return ClientQuestScreenState.openPreview(new PacketQuestScreenSnapshot(

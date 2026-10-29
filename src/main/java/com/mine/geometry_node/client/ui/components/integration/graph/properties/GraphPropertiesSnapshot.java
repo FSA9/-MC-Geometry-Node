@@ -2,7 +2,6 @@ package com.mine.geometry_node.client.ui.components.integration.graph.properties
 
 import com.mine.geometry_node.core.engine.graph.GraphType;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestDefinition;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionOverview;
 
 import java.util.List;
 
@@ -11,8 +10,7 @@ public record GraphPropertiesSnapshot(
         String graphTypeId,
         String comment,
         List<String> tags,
-        QuestDefinition questDefinition,
-        QuestConditionOverview conditionOverview) {
+        QuestDefinition questDefinition) {
 
     public GraphPropertiesSnapshot {
         fileName = fileName != null ? fileName : "";
@@ -20,7 +18,6 @@ public record GraphPropertiesSnapshot(
         comment = comment != null ? comment : "";
         tags = tags != null ? List.copyOf(tags) : List.of();
         questDefinition = questDefinition != null ? questDefinition : QuestDefinition.EMPTY;
-        conditionOverview = conditionOverview != null ? conditionOverview : QuestConditionOverview.EMPTY;
     }
 
     public GraphPropertiesSnapshot withMetadata(String updatedTypeId, String updatedComment, List<String> updatedTags,
@@ -30,7 +27,6 @@ public record GraphPropertiesSnapshot(
                 updatedTypeId,
                 updatedComment,
                 updatedTags,
-                updatedQuestDefinition,
-                conditionOverview);
+                updatedQuestDefinition);
     }
 }

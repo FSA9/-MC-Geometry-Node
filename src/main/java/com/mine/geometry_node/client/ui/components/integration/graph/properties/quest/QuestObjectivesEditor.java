@@ -1,47 +1,47 @@
 package com.mine.geometry_node.client.ui.components.integration.graph.properties.quest;
 
+import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
+import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
+import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
+import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
+import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
+import com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi;
+import com.mine.geometry_node.client.ui.components.integration.valuepreview.QuestHintView;
 import com.mine.geometry_node.client.ui.theme.UiMetrics;
 import com.mine.geometry_node.client.ui.theme.UiThemes;
-import com.mine.geometry_node.client.ui.components.integration.valuepreview.QuestHintView;
-import com.mine.geometry_node.client.ui.components.base.icon.SvgIconView;
-import com.mine.geometry_node.client.ui.components.base.button.UiIconButton;
-import com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi;
-import com.mine.geometry_node.client.ui.components.base.input.UiCheckBox;
 import com.mine.geometry_node.client.ui.utils.UIUtils;
-import com.mine.geometry_node.client.ui.components.composite.overlay.ExpandedTextInputOverlay;
-import com.mine.geometry_node.client.integration.picker.EntityTemplatePickerController;
-import com.mine.geometry_node.client.ui.components.integration.graph.properties.GraphPropertiesTarget;
-import java.util.function.Supplier;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestHintType;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestObjectiveDefinition;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.entity.EntityTemplateValue;
 import icyllis.modernui.core.Context;
 import icyllis.modernui.view.Gravity;
 import icyllis.modernui.view.View;
 import icyllis.modernui.widget.EditText;
-import icyllis.modernui.widget.FrameLayout;
 import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.TextView;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
+
+import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.solid;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.label;
-import static com.mine.geometry_node.client.ui.components.base.drawable.UiDrawables.rect;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.singleLineInput;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertiesUi.tr;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertyNumbers.format;
 import static com.mine.geometry_node.client.ui.components.integration.graph.properties.utils.GraphPropertyNumbers.parseNonNegativeDouble;
 
 public final class QuestObjectivesEditor extends LinearLayout {
-    private static final int COLOR_ROW = UiThemes.EDITOR.surface().panel();
     private static final int COLOR_INPUT = UiThemes.EDITOR.control().input();
     private static final int COLOR_BORDER = UiThemes.EDITOR.control().inputBorder();
     private static final int COLOR_TEXT = UiThemes.EDITOR.text().normal();
     private static final int COLOR_MUTED = UiThemes.EDITOR.text().muted();
 
     private final LinearLayout rows;
+    private final QuestEntryUi.SectionHeader header;
     private final Runnable onChanged;
     private final Supplier<GraphPropertiesTarget> captureTarget;
     private final List<ObjectiveRow> editors = new ArrayList<>();
@@ -54,19 +54,13 @@ public final class QuestObjectivesEditor extends LinearLayout {
         this.captureTarget = captureTarget;
         setOrientation(VERTICAL);
 
-        LinearLayout header = new LinearLayout(context);
-        header.setOrientation(HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(label(context, tr("geometry_node.graph_properties.quest.objectives"), 10.5f, UiThemes.EDITOR.text().muted()),
-                new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
-        UiIconButton add = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.PLUS,
-                "geometry_node.graph_properties.quest.objective_add");
-        add.setOnClickListener(v -> addObjective());
-        header.addView(add, GraphPropertiesUi.actionParams());
-        addView(header, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
-
         rows = new LinearLayout(context);
         rows.setOrientation(VERTICAL);
+        header = new QuestEntryUi.SectionHeader(context,
+                "geometry_node.graph_properties.quest.objectives",
+                "geometry_node.graph_properties.quest.objective_add", rows, this::addObjective);
+        header.setCount(0);
+        addView(header, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
         addView(rows, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
     }
 
@@ -123,11 +117,15 @@ public final class QuestObjectivesEditor extends LinearLayout {
 
     private void rebuildRows() {
         rows.removeAllViews();
-        for (ObjectiveRow editor : editors) {
+        for (int i = 0; i < editors.size(); i++) {
+            ObjectiveRow editor = editors.get(i);
+            int number = i + 1;
+            editor.numberLabel.setText(number < 10 ? "0" + number : Integer.toString(number));
             LayoutParams lp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-            lp.bottomMargin = UIUtils.dp2pxInt(6);
+            lp.bottomMargin = UIUtils.dp2pxInt(10);
             rows.addView(editor.root, lp);
         }
+        header.setCount(editors.size());
     }
 
     private void changed() {
@@ -182,7 +180,10 @@ public final class QuestObjectivesEditor extends LinearLayout {
         private boolean expanded;
 
         private final LinearLayout root;
-        private final FrameLayout expandButton;
+        private final TextView numberLabel;
+        private final LinearLayout details;
+        private final View detailsDivider;
+        private final UiIconButton expandButton;
         private final SvgIconView expandIcon;
         private final EditText contentInput;
         private final UiCheckBox quantityToggle;
@@ -191,9 +192,6 @@ public final class QuestObjectivesEditor extends LinearLayout {
         private final EditText targetInput;
         private final QuestHintSelector hintSelector;
         private final QuestHintView hintPreview;
-        private final LinearLayout quantityRow;
-        private final LinearLayout counterRow;
-        private final LinearLayout hintRow;
 
         private ObjectiveRow(QuestObjectiveDefinition definition) {
             entryId = definition.entryId();
@@ -206,47 +204,47 @@ public final class QuestObjectivesEditor extends LinearLayout {
 
             root = new LinearLayout(getContext());
             root.setOrientation(VERTICAL);
-            root.setPadding(UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(6),
-                    UIUtils.dp2pxInt(8), UIUtils.dp2pxInt(8));
-            root.setBackground(rect(COLOR_ROW, 5.0f, 1, UiThemes.EDITOR.border().subtle()));
-
             LinearLayout contentRow = new LinearLayout(getContext());
             contentRow.setOrientation(HORIZONTAL);
             contentRow.setGravity(Gravity.CENTER_VERTICAL);
+            details = new LinearLayout(getContext());
+            details.setOrientation(VERTICAL);
+            QuestEntryUi.decorateCard(root, contentRow, details);
+            contentRow.addView(QuestEntryUi.reorderHandle(getContext(), rows, root,
+                    delta -> moveRow(this, delta)), QuestEntryUi.handleParams());
+            numberLabel = QuestEntryUi.entryNumber(getContext());
+            contentRow.addView(numberLabel, new LayoutParams(UIUtils.dp2pxInt(22), UIUtils.dp2pxInt(28)));
             expandIcon = new SvgIconView(getContext(),
-                    SvgIconView.Icon.forExpandedState(expanded), COLOR_TEXT);
-            expandButton = new UiIconButton(getContext(), expandIcon, GraphPropertiesUi.actionStyle(14));
+                    QuestEntryUi.disclosureIcon(expanded), COLOR_TEXT);
+            expandButton = new UiIconButton(getContext(), expandIcon, QuestEntryUi.disclosureStyle());
             expandButton.setOnClickListener(v -> toggleExpanded());
-            LayoutParams expandLp = new LayoutParams(UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP),
-                    UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP));
-            expandLp.rightMargin = UIUtils.dp2pxInt(4);
-            contentRow.addView(expandButton, expandLp);
             contentInput = singleLineInput(getContext(), content.plain(),
                     tr("geometry_node.graph_properties.quest.objective_placeholder"),
-                    COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
+                    COLOR_TEXT, COLOR_MUTED, 0, 0);
+            contentInput.setBackground(null);
+            UIUtils.setLockedTextSize(contentInput, 12);
+            contentInput.setPadding(0, 0, 0, 0);
             contentInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
-            contentRow.addView(contentInput, new LayoutParams(0, UIUtils.dp2pxInt(30), 1.0f));
-            UiIconButton rich = GraphPropertiesUi.actionIcon(getContext(), SvgIconView.Icon.MORE_HORIZONTAL,
+            contentRow.addView(contentInput, new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
+            contentRow.addView(expandButton, GraphPropertiesUi.actionParams());
+            UiIconButton rich = QuestEntryUi.action(getContext(), SvgIconView.Icon.MORE_HORIZONTAL,
                     "geometry_node.graph_properties.quest.edit_rich_text");
             rich.setOnClickListener(v -> openRichEditor(rich));
             contentRow.addView(rich, GraphPropertiesUi.actionParams());
-            LinearLayout order = GraphPropertiesUi.orderButtons(getContext(),
-                    () -> moveRow(this, -1), () -> moveRow(this, 1),
-                    "geometry_node.graph_properties.quest.objective_move_up",
-                    "geometry_node.graph_properties.quest.objective_move_down");
-            contentRow.addView(order, GraphPropertiesUi.actionParams());
-            UiIconButton remove = GraphPropertiesUi.actionIcon(getContext(), SvgIconView.Icon.CLOSE,
+            UiIconButton remove = QuestEntryUi.action(getContext(), SvgIconView.Icon.CLOSE,
                     "geometry_node.graph_properties.quest.objective_remove");
             remove.setOnClickListener(v -> removeRow(this));
             contentRow.addView(remove, GraphPropertiesUi.actionParams());
             root.addView(contentRow, new LayoutParams(
-                    LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(30)));
+                    LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(44)));
+            detailsDivider = new View(getContext());
+            detailsDivider.setBackground(solid(UiThemes.EDITOR.border().subtle()));
+            root.addView(detailsDivider, new LayoutParams(LayoutParams.MATCH_PARENT, UIUtils.dp2pxInt(1)));
+            root.addView(details, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-            quantityRow = new LinearLayout(getContext());
-            quantityRow.setOrientation(HORIZONTAL);
-            quantityRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout quantityRow = QuestEntryUi.inlineRow(getContext());
             quantityToggle = new UiCheckBox(getContext());
             quantityToggle.setTooltipText(tr("geometry_node.graph_properties.quest.quantity_enabled"));
             quantityToggle.setOnCheckedChangeListener((v, checked) -> {
@@ -260,18 +258,13 @@ public final class QuestObjectivesEditor extends LinearLayout {
             targetInput = singleLineInput(getContext(), format(definition.targetValue()),
                     tr("geometry_node.graph_properties.quest.quantity_value"),
                     COLOR_TEXT, COLOR_MUTED, COLOR_INPUT, COLOR_BORDER);
-            targetInput.setGravity(Gravity.CENTER);
+            targetInput.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
             targetInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
-            LayoutParams targetLp = new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
-            targetLp.leftMargin = UIUtils.dp2pxInt(4);
-            quantityRow.addView(targetInput, targetLp);
-            root.addView(quantityRow, QuestEntryUi.detailParams());
+            quantityRow.addView(targetInput, QuestEntryUi.inlineFieldParams());
 
-            counterRow = new LinearLayout(getContext());
-            counterRow.setOrientation(HORIZONTAL);
-            counterRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout counterRow = QuestEntryUi.inlineRow(getContext());
             counterToggle = new UiCheckBox(getContext());
             counterToggle.setTooltipText(tr("geometry_node.graph_properties.quest.counter_enabled"));
             counterToggle.setOnCheckedChangeListener((v, checked) -> {
@@ -288,17 +281,13 @@ public final class QuestObjectivesEditor extends LinearLayout {
             counterKeyInput.setOnFocusChangeListener((v, focused) -> {
                 if (!focused) changed();
             });
-            LayoutParams keyLp = new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f);
-            keyLp.leftMargin = UIUtils.dp2pxInt(4);
-            counterRow.addView(counterKeyInput, keyLp);
-            root.addView(counterRow, QuestEntryUi.detailParams());
+            counterRow.addView(counterKeyInput, QuestEntryUi.inlineFieldParams());
+            QuestEntryUi.addQuantityAndCounter(details, quantityRow, counterRow);
 
-            hintRow = new LinearLayout(getContext());
-            hintRow.setOrientation(HORIZONTAL);
-            hintRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout hintRow = QuestEntryUi.inlineRow(getContext());
             TextView displayLabel = label(getContext(),
                     tr("geometry_node.graph_properties.quest.objective_display"), 10.5f, UiThemes.EDITOR.text().muted());
-            hintRow.addView(displayLabel, new LayoutParams(UIUtils.dp2pxInt(78), UIUtils.dp2pxInt(28)));
+            hintRow.addView(displayLabel, new LayoutParams(LayoutParams.WRAP_CONTENT, UIUtils.dp2pxInt(32)));
             hintSelector = new QuestHintSelector(getContext(), true, selected -> {
                 if (hintType == selected) return;
                 hintType = selected;
@@ -306,15 +295,13 @@ public final class QuestObjectivesEditor extends LinearLayout {
                 updateHintUi();
                 changed();
             });
-            hintRow.addView(hintSelector, new LayoutParams(0, UIUtils.dp2pxInt(28), 1.0f));
+            hintRow.addView(hintSelector, QuestEntryUi.inlineFieldParams());
             hintPreview = new QuestHintView(getContext());
             hintPreview.setDisplayClickAction(this::pickHint);
             hintPreview.setDisplayPasteAction(this::pasteItem);
             hintPreview.setEntityDisplayPasteAction(this::pasteEntity);
-            LayoutParams previewLp = new LayoutParams(UIUtils.dp2pxInt(32), UIUtils.dp2pxInt(32));
-            previewLp.leftMargin = UIUtils.dp2pxInt(4);
-            hintRow.addView(hintPreview, previewLp);
-            root.addView(hintRow, QuestEntryUi.detailParams());
+            hintRow.addView(hintPreview, new LayoutParams(UIUtils.dp2pxInt(32), UIUtils.dp2pxInt(32)));
+            details.addView(hintRow, QuestEntryUi.detailParams());
 
             updateQuantityUi();
             updateCounterUi();
@@ -356,8 +343,10 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private void openRichEditor(View anchor) {
+            if (!editors.contains(this)) return;
             content = QuestEntryUi.afterInlineEdit(content, contentInput.getText());
             ExpandedTextInputOverlay.showRichText(getContext(), anchor, content, value -> {
+                if (!editors.contains(this)) return;
                 content = value;
                 contentInput.setText(value.plain());
                 changed();
@@ -387,6 +376,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private void pasteItem(String itemJson) {
+            if (!editors.contains(this)) return;
             hintType = QuestHintType.ITEM_STACK;
             hintValue = itemJson != null ? itemJson : "";
             updateHintUi();
@@ -394,6 +384,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         }
 
         private void pasteEntity(EntityTemplateValue template) {
+            if (!editors.contains(this)) return;
             if (template == null || template.isEmpty()) return;
             hintType = QuestHintType.ENTITY;
             hintValue = template.toJsonString();
@@ -409,6 +400,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
 
         private void updateCounterUi() {
             counterToggle.setChecked(counterEnabled);
+            counterKeyInput.setVisibility(View.VISIBLE);
             counterKeyInput.setEnabled(counterEnabled);
             counterKeyInput.setAlpha(counterEnabled ? 1.0f : UiMetrics.DISABLED_ALPHA);
         }
@@ -416,7 +408,7 @@ public final class QuestObjectivesEditor extends LinearLayout {
         private void updateHintUi() {
             boolean hasHint = hintType != QuestHintType.NONE;
             hintSelector.setSelected(hintType);
-            hintPreview.setVisibility(hasHint ? View.VISIBLE : View.INVISIBLE);
+            hintPreview.setVisibility(hasHint ? View.VISIBLE : View.GONE);
             updateHintPreview();
         }
 
@@ -436,15 +428,12 @@ public final class QuestObjectivesEditor extends LinearLayout {
 
         private void updateExpandedUi() {
             int visibility = expanded ? View.VISIBLE : View.GONE;
-            quantityRow.setVisibility(visibility);
-            counterRow.setVisibility(visibility);
-            hintRow.setVisibility(visibility);
-            expandIcon.setIcon(SvgIconView.Icon.forExpandedState(expanded));
+            details.setVisibility(visibility);
+            detailsDivider.setVisibility(visibility);
+            expandIcon.setIcon(QuestEntryUi.disclosureIcon(expanded));
             expandButton.setTooltipText(tr(expanded
                     ? "geometry_node.graph_properties.quest.objective_collapse"
                     : "geometry_node.graph_properties.quest.objective_expand"));
         }
     }
-
-
 }

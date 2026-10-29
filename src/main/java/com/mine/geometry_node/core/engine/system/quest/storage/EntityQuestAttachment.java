@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.quest.storage;
 
 import com.mine.geometry_node.GeometryNode;
+import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestListEntry;
 import net.minecraft.nbt.CompoundTag;
@@ -11,20 +12,41 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 public final class EntityQuestAttachment {
-    private static final int DATA_VERSION = 3;
+    private static final int DATA_VERSION = 4;
 
+    // Independent of publication and instance lifetime, including tasks not yet accepted.
+    private final Map<String, EnumMap<QuestConditionKind, Boolean>> conditionStates = new LinkedHashMap<>();
     private final Map<String, QuestListEntry> entries = new LinkedHashMap<>();
     private final Map<UUID, QuestInstance> instancesById = new LinkedHashMap<>();
     private final Map<String, UUID> currentInstanceIds = new LinkedHashMap<>();
 
     public static EntityQuestAttachment get(Entity entity) {
         return entity.getData(GeometryNode.QUEST_DATA_ATTACHMENT);
+    }
+
+    public boolean isConditionEnabled(String taskKey, QuestConditionKind kind) {
+        Objects.requireNonNull(kind, "kind");
+        Map<QuestConditionKind, Boolean> states = conditionStates.get(taskKey);
+        return states == null || states.getOrDefault(kind, true);
+    }
+
+    /** Returns whether the stored setting changed; explicit true also survives save/load. */
+    public boolean setCondition(String taskKey, QuestConditionKind kind, boolean enabled) {
+        if (taskKey == null || taskKey.isBlank()) {
+            throw new IllegalArgumentException("Quest condition requires a task key");
+        }
+        Objects.requireNonNull(kind, "kind");
+        Boolean previous = conditionStates.computeIfAbsent(taskKey, ignored -> new EnumMap<>(QuestConditionKind.class))
+                .put(kind, enabled);
+        return previous == null || previous != enabled;
     }
 
     public Collection<QuestListEntry> getEntries() {
@@ -101,6 +123,17 @@ public final class EntityQuestAttachment {
         CompoundTag tag = new CompoundTag();
         tag.putInt("DataVersion", DATA_VERSION);
 
+        ListTag conditionList = new ListTag();
+        for (Map.Entry<String, EnumMap<QuestConditionKind, Boolean>> condition : conditionStates.entrySet()) {
+            CompoundTag conditionTag = new CompoundTag();
+            conditionTag.putString("TaskKey", condition.getKey());
+            condition.getValue().forEach((kind, enabled) -> conditionTag.putBoolean(kind.name(), enabled));
+            conditionList.add(conditionTag);
+        }
+        if (!conditionList.isEmpty()) {
+            tag.put("ConditionStates", conditionList);
+        }
+
         ListTag entryList = new ListTag();
         for (QuestListEntry entry : entries.values()) {
             entryList.add(entry.save());
@@ -131,6 +164,7 @@ public final class EntityQuestAttachment {
     }
 
     public void load(CompoundTag tag) {
+        conditionStates.clear();
         entries.clear();
         instancesById.clear();
         currentInstanceIds.clear();
@@ -140,6 +174,23 @@ public final class EntityQuestAttachment {
             QuestListEntry entry = QuestListEntry.load(entryList.getCompoundOrEmpty(i));
             if (!entry.taskKey().isEmpty()) {
                 entries.put(entry.taskKey(), entry);
+                // Legacy entry flags become task-level gates, so acceptance cannot erase them.
+                if (tag.getIntOr("DataVersion", 0) < 4) {
+                    setCondition(entry.taskKey(), QuestConditionKind.VISIBILITY, entry.visible());
+                    setCondition(entry.taskKey(), QuestConditionKind.ACCEPTANCE, entry.acceptEnabled());
+                }
+            }
+        }
+
+        ListTag conditionList = tag.getListOrEmpty("ConditionStates");
+        for (int i = 0; i < conditionList.size(); i++) {
+            CompoundTag conditionTag = conditionList.getCompoundOrEmpty(i);
+            String taskKey = conditionTag.getStringOr("TaskKey", "");
+            if (taskKey.isBlank()) continue;
+            for (QuestConditionKind kind : QuestConditionKind.values()) {
+                if (conditionTag.contains(kind.name())) {
+                    setCondition(taskKey, kind, conditionTag.getBooleanOr(kind.name(), true));
+                }
             }
         }
 

@@ -30,7 +30,7 @@ public final class SubmitQuest extends BaseNode {
                         PortDef.create(SUCCESS_PORT, "geometry_node.port.success", PortType.BOOLEAN),
                         UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null,
-                        PortDef.create(FAILURE_REASON_PORT, "geometry_node.port.quest_condition_failure_text", PortType.STRING),
+                        PortDef.create(FAILURE_REASON_PORT, "geometry_node.port.quest_failure_reason", PortType.STRING),
                         UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)

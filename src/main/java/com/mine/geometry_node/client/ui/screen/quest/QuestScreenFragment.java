@@ -407,9 +407,8 @@ public final class QuestScreenFragment extends Fragment {
         list.setOrientation(LinearLayout.VERTICAL);
         List<PacketQuestScreenSnapshot.ConditionView> values = conditions != null ? conditions : List.of();
         for (PacketQuestScreenSnapshot.ConditionView condition : values) {
-            int stateColor = !condition.evaluated()
-                    ? UiThemes.HUD.text().muted()
-                    : condition.allowed() ? UiThemes.HUD.status().success() : UiThemes.HUD.status().error();
+            int stateColor = condition.allowed()
+                    ? UiThemes.HUD.status().success() : UiThemes.HUD.status().error();
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setBackground(rect(
@@ -418,7 +417,7 @@ public final class QuestScreenFragment extends Fragment {
             View marker = new View(getContext());
             marker.setBackground(rect(stateColor, 0.0f, 0, 0));
             row.addView(marker, new LinearLayout.LayoutParams(dp(3), ViewGroup.LayoutParams.MATCH_PARENT));
-            TextView text = label(condition.text(), 9.0f, UiThemes.HUD.text().normal(),
+            TextView text = label(ModernDialogueText.display(ModernDialogueText.parse(condition.text())), 9.0f, UiThemes.HUD.text().normal(),
                     Gravity.LEFT | Gravity.CENTER_VERTICAL);
             text.setMinHeight(dp(26));
             text.setPadding(dp(7), dp(3), dp(6), dp(3));
@@ -574,6 +573,8 @@ public final class QuestScreenFragment extends Fragment {
             TextView submit = actionButton(tr("geometry_node.quest.screen.submit"),
                     QuestScreenStyle.BUTTON, QuestScreenStyle.BUTTON_HOVER,
                     () -> ClientQuestScreenState.submit(quest.taskKey(), quest.instanceId()));
+            submit.setEnabled(quest.completionEnabled());
+            submit.setAlpha(quest.completionEnabled() ? 1.0f : 0.45f);
             LinearLayout.LayoutParams submitLp = new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.MATCH_PARENT);
             submitLp.leftMargin = dp(8);
             actions.addView(submit, submitLp);

@@ -49,7 +49,7 @@ final class QuestHintSelector extends FrameLayout {
         value.setDuplicateParentStateEnabled(true);
         value.setPadding(UIUtils.dp2pxInt(8), 0, UIUtils.dp2pxInt(32), 0);
         addView(value, new LayoutParams(-1, -1));
-        arrow = GraphPropertiesUi.actionIcon(context, SvgIconView.Icon.CHEVRON_DOWN,
+        arrow = QuestEntryUi.action(context, SvgIconView.Icon.CHEVRON_DOWN,
                 "geometry_node.graph_properties.quest.objective_display");
         LayoutParams arrowLp = new LayoutParams(UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP),
                 UIUtils.dp2pxInt(GraphPropertiesUi.ACTION_SIZE_DP), Gravity.RIGHT | Gravity.CENTER_VERTICAL);

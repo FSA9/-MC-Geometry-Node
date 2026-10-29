@@ -1,6 +1,7 @@
 package com.mine.geometry_node.core.engine.system.worldquery.metadata;
 
 import com.mine.geometry_node.core.engine.metadata.value.GraphMetadataDataValues;
+import com.mine.geometry_node.core.engine.blueprint.event.dispatcher.CustomDataDispatcher;
 import com.mine.geometry_node.core.engine.system.worldquery.model.WorldObjectEntry;
 
 import com.mine.geometry_node.core.metadata.*;
@@ -88,7 +89,7 @@ public final class WorldObjectDataEdits {
         long now = clock.getAsLong();
         if (lastEdit != Long.MIN_VALUE && now - lastEdit < 100_000_000L) return Result.error("failed");
         lastEdit = now;
-        try {
+        try (var notifications = CustomDataDispatcher.defer()) {
             Map<String, Object> next = GraphMetadataDataValues.snapshot(replacement);
             GraphMetadataDataValues.encode(next, registries, GraphMetadataDataValues.MAX_WRITE_BYTES);
             lease.data().update(current -> {
@@ -100,7 +101,9 @@ public final class WorldObjectDataEdits {
             Map<String, Object> committed = GraphMetadataDataValues.snapshot(lease.data().values());
             if (!GraphMetadataDataValues.equivalent(committed, next)) return Result.error("invalid");
             renew(token, lease);
-            return new Result(committed, GraphMetadataDataValues.revision(committed, registries), "");
+            Result result = new Result(committed, GraphMetadataDataValues.revision(committed, registries), "");
+            notifications.commit();
+            return result;
         } catch (Conflict conflict) { return Result.error("conflict"); }
         catch (IllegalArgumentException invalid) { return Result.error("invalid"); }
         catch (IllegalStateException | UnsupportedOperationException stale) { return Result.error("unavailable"); }

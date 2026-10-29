@@ -4,7 +4,6 @@ import com.mine.geometry_node.core.node.definition.port.PortType;
 import com.mine.geometry_node.core.engine.blueprint.spatial.area.AreaRef;
 
 import com.mine.geometry_node.core.node.value.DialogueChoiceValue;
-import com.mine.geometry_node.core.node.value.QuestConditionValue;
 import com.mine.geometry_node.core.node.value.RichTextValue;
 import com.mine.geometry_node.core.node.value.SlotRef;
 import com.mine.geometry_node.core.node.value.color.ColorValue;
@@ -92,7 +91,6 @@ public final class PortValueTypeRegistry {
         register(types, ItemStack.class, PortType.ITEM_STACK);
         register(types, BlockState.class, PortType.BLOCK_STATE);
         register(types, DialogueChoiceValue.class, PortType.DIALOGUE_CHOICE);
-        register(types, QuestConditionValue.class, PortType.QUEST_CONDITION);
         register(types, Vec3.class, PortType.XYZ);
         register(types, BlockPos.class, PortType.XYZ);
         register(types, List.class, PortType.LIST);

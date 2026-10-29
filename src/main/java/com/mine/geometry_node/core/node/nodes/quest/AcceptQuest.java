@@ -27,7 +27,7 @@ public final class AcceptQuest extends BaseNode {
         return NodeDef.builder(TYPE_ID, NodeType.QUEST, Component.translatable("geometry_node.node.accept_quest"))
                 .addRow(new PortRow(StandardPorts.FLOW_IN.toExec(), StandardPorts.FLOW_OUT.toExec(), UIHint.DEFAULT, null, null))
                 .addRow(new PortRow(null, PortDef.create(SUCCESS_PORT, "geometry_node.port.success", PortType.BOOLEAN), UIHint.DEFAULT, null, null))
-                .addRow(new PortRow(null, PortDef.create(FAILURE_REASON_PORT, "geometry_node.port.quest_condition_failure_text", PortType.STRING), UIHint.DEFAULT, null, null))
+                .addRow(new PortRow(null, PortDef.create(FAILURE_REASON_PORT, "geometry_node.port.quest_failure_reason", PortType.STRING), UIHint.DEFAULT, null, null))
                 .addPassthroughInput(StandardPorts.ENTITY.toInput(), UIHint.DEFAULT)
                 .addPassthroughInput(StandardPorts.PATH.toInput(""), UIHint.PATH)
                 .build();

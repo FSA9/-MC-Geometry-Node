@@ -19,16 +19,15 @@ public record QuestOperationResult(Code code, @Nullable QuestInstance instance, 
         NOT_A_QUEST_GRAPH,
         NOT_ACCEPTABLE,
         CONDITION_NOT_MET,
-        CONDITION_EVALUATION_FAILED,
         COMPLETION_CONDITION_NOT_MET,
-        COMPLETION_CONDITION_EVALUATION_FAILED,
         NOT_SUBMITTABLE,
         NOT_ABANDONABLE,
         ALREADY_EXISTS,
         INSTANCE_NOT_FOUND,
         INVALID_STATUS,
         INVALID_COUNTER_KEY,
-        INVALID_COUNTER_VALUE
+        INVALID_COUNTER_VALUE,
+        INVALID_CONDITION_KIND
     }
 
     public boolean successful() {

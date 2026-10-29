@@ -9,10 +9,10 @@ import com.mine.geometry_node.core.engine.blueprint.plan.BlueprintPlan;
 import com.mine.geometry_node.core.engine.graph.GraphTypeRegistry;
 import com.mine.geometry_node.core.engine.blueprint.runtime.BlueprintCloseMode;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionKind;
-import com.mine.geometry_node.core.engine.system.quest.model.QuestConditionResult;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestInstance;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestListEntry;
 import com.mine.geometry_node.core.engine.system.quest.model.QuestOperationResult;
+import com.mine.geometry_node.core.engine.system.quest.screen.QuestScreenService;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatus;
 import com.mine.geometry_node.core.engine.system.quest.status.QuestStatusRegistry;
 import com.mine.geometry_node.core.engine.system.quest.storage.EntityQuestAttachment;
@@ -45,7 +45,7 @@ public final class QuestService {
     }
 
     public QuestOperationResult addToList(Entity owner, String taskKey) {
-        return addToList(owner, taskKey, true, true, "");
+        return addToListInternal(owner, taskKey, true, true, "", false);
     }
 
     public QuestOperationResult addToList(Entity owner,
@@ -53,6 +53,15 @@ public final class QuestService {
                                           boolean visible,
                                           boolean acceptEnabled,
                                           @Nullable String sourceId) {
+        return addToListInternal(owner, taskKey, visible, acceptEnabled, sourceId, true);
+    }
+
+    private QuestOperationResult addToListInternal(Entity owner,
+                                                   String taskKey,
+                                                   boolean visible,
+                                                   boolean acceptEnabled,
+                                                   @Nullable String sourceId,
+                                                   boolean updateConditions) {
         QuestOperationResult validation = validateQuest(owner, taskKey);
         if (validation != null) return validation;
 
@@ -72,12 +81,44 @@ public final class QuestService {
                 existingEntry != null ? existingEntry.publishedAt() : currentTime(owner)
         );
         attachment.putEntry(entry);
+        boolean conditionsChanged = false;
+        if (updateConditions) {
+            // Explicit legacy flags now set the same persistent gates as setCondition.
+            conditionsChanged = attachment.setCondition(normalizedKey, QuestConditionKind.VISIBILITY, visible);
+            conditionsChanged |= attachment.setCondition(normalizedKey, QuestConditionKind.ACCEPTANCE, acceptEnabled);
+        }
         QuestOperationResult result = QuestOperationResult.of(
-                existingEntry != null && existingEntry.equals(entry)
+                existingEntry != null && existingEntry.equals(entry) && !conditionsChanged
                         ? QuestOperationResult.Code.NO_CHANGE
                         : QuestOperationResult.Code.SUCCESS
         );
+        if (result.successful() && result.code() != QuestOperationResult.Code.NO_CHANGE) {
+            QuestScreenService.INSTANCE.refreshIfOpen(owner);
+        }
         return result;
+    }
+
+    /**
+     * Sets one task-level gate without publishing, accepting, binding, or changing progress.
+     * Settings can be authored before any list entry or instance exists.
+     */
+    public QuestOperationResult setCondition(Entity owner, String taskKey, QuestConditionKind kind, boolean enabled) {
+        QuestOperationResult validation = validateQuest(owner, taskKey);
+        if (validation != null) return validation;
+        if (kind == null) return QuestOperationResult.of(QuestOperationResult.Code.INVALID_CONDITION_KIND);
+
+        String normalizedKey = normalizeTaskKey(taskKey);
+        boolean changed = EntityQuestAttachment.get(owner).setCondition(normalizedKey, kind, enabled);
+        if (changed) QuestScreenService.INSTANCE.refreshIfOpen(owner);
+        return QuestOperationResult.of(changed ? QuestOperationResult.Code.SUCCESS : QuestOperationResult.Code.NO_CHANGE);
+    }
+
+    /** Missing settings allow the operation; invalid owners, task keys, or kinds do not. */
+    public boolean isConditionEnabled(Entity owner, String taskKey, QuestConditionKind kind) {
+        if (!isServerOwner(owner) || kind == null) return false;
+        String normalizedKey = normalizeTaskKey(taskKey);
+        return !normalizedKey.isEmpty()
+                && EntityQuestAttachment.get(owner).isConditionEnabled(normalizedKey, kind);
     }
 
     public QuestOperationResult accept(Entity owner, String taskKey) {
@@ -95,20 +136,8 @@ public final class QuestService {
             return QuestOperationResult.of(QuestOperationResult.Code.ALREADY_EXISTS, existing);
         }
 
-        QuestListEntry entry = attachment.getEntry(normalizedKey);
-        if (entry != null && !entry.acceptEnabled()) {
-            return QuestOperationResult.of(QuestOperationResult.Code.NOT_ACCEPTABLE);
-        }
-
-        QuestConditionResult eligibility = QuestConditionService.INSTANCE.evaluate(
-                owner, normalizedKey, QuestConditionKind.ACCEPTANCE);
-        if (!eligibility.evaluated()) {
-            return QuestOperationResult.of(QuestOperationResult.Code.CONDITION_EVALUATION_FAILED);
-        }
-        if (!eligibility.allowed()) {
-            return QuestOperationResult.failure(
-                    QuestOperationResult.Code.CONDITION_NOT_MET,
-                    eligibility.firstFailureReason());
+        if (!attachment.isConditionEnabled(normalizedKey, QuestConditionKind.ACCEPTANCE)) {
+            return QuestOperationResult.of(QuestOperationResult.Code.CONDITION_NOT_MET);
         }
 
         long now = currentTime(owner);
@@ -126,6 +155,7 @@ public final class QuestService {
         dispatchLifecycle(owner, normalizedKey, QuestEventTypes.STATUS_CHANGED, instance,
                 QuestStatusRegistry.UNACCEPTED.id(), instance.statusId(), "", requestSource);
         syncBindingToCurrentStatus(owner, normalizedKey);
+        QuestScreenService.INSTANCE.refreshIfOpen(owner);
         return QuestOperationResult.of(QuestOperationResult.Code.SUCCESS,
                 attachment.getCurrentInstance(normalizedKey));
     }
@@ -174,18 +204,9 @@ public final class QuestService {
             return QuestOperationResult.of(QuestOperationResult.Code.NO_CHANGE, existing);
         }
 
-        if (checkCompletionConditions && QuestStatusRegistry.COMPLETED.id().equals(status.id())) {
-            QuestConditionResult completion = QuestConditionService.INSTANCE.evaluate(
-                    owner, normalizedKey, QuestConditionKind.COMPLETION);
-            if (!completion.evaluated()) {
-                return QuestOperationResult.of(
-                        QuestOperationResult.Code.COMPLETION_CONDITION_EVALUATION_FAILED);
-            }
-            if (!completion.allowed()) {
-                return QuestOperationResult.failure(
-                        QuestOperationResult.Code.COMPLETION_CONDITION_NOT_MET,
-                        completion.firstFailureReason());
-            }
+        if (checkCompletionConditions && QuestStatusRegistry.COMPLETED.id().equals(status.id())
+                && !attachment.isConditionEnabled(normalizedKey, QuestConditionKind.COMPLETION)) {
+            return QuestOperationResult.of(QuestOperationResult.Code.COMPLETION_CONDITION_NOT_MET);
         }
 
         QuestInstance updated = existing.withStatus(status.id(), currentTime(owner), status.terminal());
@@ -196,6 +217,7 @@ public final class QuestService {
         dispatchLifecycle(owner, normalizedKey, QuestEventTypes.STATUS_CHANGED, updated,
                 existing.statusId(), updated.statusId(), reason, requestSource);
         syncBindingToCurrentStatus(owner, normalizedKey);
+        QuestScreenService.INSTANCE.refreshIfOpen(owner);
         return QuestOperationResult.of(QuestOperationResult.Code.SUCCESS,
                 attachment.getCurrentInstance(normalizedKey));
     }
@@ -263,6 +285,7 @@ public final class QuestService {
         dispatchLifecycle(owner, normalizedKey, QuestEventTypes.STATUS_CHANGED, abandoned,
                 existing.statusId(), abandoned.statusId(), reason, requestSource);
         syncBindingToCurrentStatus(owner, normalizedKey);
+        QuestScreenService.INSTANCE.refreshIfOpen(owner);
         return QuestOperationResult.of(QuestOperationResult.Code.SUCCESS,
                 attachment.getCurrentInstance(normalizedKey));
     }
@@ -330,6 +353,7 @@ public final class QuestService {
             return QuestOperationResult.of(QuestOperationResult.Code.NO_CHANGE, existing);
         }
         attachment.updateCurrentInstance(updated);
+        QuestScreenService.INSTANCE.refreshIfOpen(owner);
         return QuestOperationResult.of(QuestOperationResult.Code.SUCCESS, updated);
     }
 

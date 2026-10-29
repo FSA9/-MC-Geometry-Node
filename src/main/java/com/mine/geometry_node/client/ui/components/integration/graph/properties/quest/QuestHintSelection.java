@@ -63,13 +63,15 @@ final class QuestHintSelection {
                         new QuestEntryPresentation(entryId, entry.content(), type, value),
                         entry.counter(), entry.quantityEnabled(), entry.targetValue());
             }).toList();
-            return new QuestDefinition(definition.title(), definition.description(), objectives, definition.rewards());
+            return new QuestDefinition(definition.title(), definition.description(), objectives, definition.rewards(),
+                    definition.visibilityConditions(), definition.acceptanceConditions(), definition.completionConditions());
         }
         var rewards = definition.rewards().stream().map(entry -> {
             if (!entry.entryId().equals(entryId)) return entry;
             return new QuestRewardDefinition(
                     new QuestEntryPresentation(entryId, entry.content(), type, value), entry.counter(), entry.amount());
         }).toList();
-        return new QuestDefinition(definition.title(), definition.description(), definition.objectives(), rewards);
+        return new QuestDefinition(definition.title(), definition.description(), definition.objectives(), rewards,
+                definition.visibilityConditions(), definition.acceptanceConditions(), definition.completionConditions());
     }
 }

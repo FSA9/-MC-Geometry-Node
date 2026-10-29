@@ -430,10 +430,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
         // --- QUEST ---
         registry.register("quest", new AddQuestToList());
         registry.register("quest", new AcceptQuest());
-        registry.register("quest", new CreateQuestCondition());
-        registry.register("quest", new QuestVisibilityConditions());
-        registry.register("quest", new QuestAcceptConditions());
-        registry.register("quest", new QuestCompletionConditions());
+        registry.register("quest", new SetQuestCondition());
         registry.register("quest", new SetQuestStatus());
         registry.register("quest", new GetQuestStatus());
         registry.register("quest", new GetRegisteredQuestStatus());
@@ -505,6 +502,7 @@ public class BuiltinNodesPlugin implements GeometryNodePlugin {
 //        registry.register("events/item", new OnToolBreak());
 
         // Events/Player
+        registry.register("events/player", new OnCustomDataChanged());
         registry.register("events/player", new OnPlayerChangeGameMode());
         registry.register("events/player", new OnPlayerChat());
         registry.register("events/player", new OnPlayerEarnAdvancement());

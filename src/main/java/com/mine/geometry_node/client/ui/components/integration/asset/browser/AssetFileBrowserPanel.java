@@ -111,9 +111,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private boolean mVerifiedCurrentDirectory;
     private boolean mLoading;
 
-    private static final float NAV_BAR_HEIGHT = 76.0f;
     private static final float NAV_ROW_HEIGHT = 32.0f;
-    private static final float NAV_BUTTON_SIZE = 30.0f;
+    private static final float NAV_BAR_HEIGHT = NAV_ROW_HEIGHT + 8.0f;
+    private static final float NAV_BUTTON_SIZE = NAV_ROW_HEIGHT;
     private static final float TEXT_SIZE_NAV = 14.0f;
     private static final int COLOR_TOOLBAR_BG = UiThemes.EDITOR.surface().sidebar();
 
@@ -166,7 +166,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
         LinearLayout pathRow = createNavRow(context);
         navBar.addView(pathRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_ROW_HEIGHT)));
+                0, dp2pxInt(NAV_ROW_HEIGHT), 3.0f));
         addUpButton(pathRow, context);
 
         mPathInput = createPathInput(context);
@@ -178,13 +178,13 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
         LinearLayout searchRow = createNavRow(context);
         LinearLayout.LayoutParams searchRowLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp2pxInt(NAV_ROW_HEIGHT));
-        searchRowLp.setMargins(0, dp2pxInt(4), 0, 0);
+                0, dp2pxInt(NAV_ROW_HEIGHT), 1.0f);
+        searchRowLp.setMargins(dp2pxInt(8), 0, 0, 0);
         navBar.addView(searchRow, searchRowLp);
 
         mSearchInput = createSearchInput(context, tr("geometry_node.asset_library.toolbar.search_name"),
                 value -> mPendingSearchQuery = value);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.15f);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
         searchRow.addView(mSearchInput, searchLp);
 
         addSearchButton(searchRow, context);
@@ -219,7 +219,9 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
 
     private LinearLayout createNavBar(Context context) {
         LinearLayout navBar = new LinearLayout(context);
-        navBar.setOrientation(LinearLayout.VERTICAL);
+        navBar.setOrientation(LinearLayout.HORIZONTAL);
+        navBar.setBaselineAligned(false);
+        navBar.setGravity(Gravity.CENTER_VERTICAL);
         navBar.setPadding(dp2pxInt(6), dp2pxInt(4), dp2pxInt(6), dp2pxInt(4));
         navBar.setBackground(solid(COLOR_TOOLBAR_BG));
         return navBar;
@@ -228,6 +230,8 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
     private LinearLayout createNavRow(Context context) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        // Text baselines must not displace the adjacent buttons beyond the toolbar bounds.
+        row.setBaselineAligned(false);
         row.setGravity(Gravity.CENTER_VERTICAL);
         return row;
     }
@@ -318,6 +322,7 @@ public class AssetFileBrowserPanel extends LinearLayout implements AssetFileItem
                 tr("geometry_node.asset_library.toolbar.search"));
         UiSearchSubmit.bind(btnSearch, this::applySearch, mSearchInput);
         LinearLayout.LayoutParams searchButtonLp = new LinearLayout.LayoutParams(dp2pxInt(NAV_BUTTON_SIZE), ViewGroup.LayoutParams.MATCH_PARENT);
+        searchButtonLp.setMargins(dp2pxInt(4), 0, 0, 0);
         navBar.addView(btnSearch, searchButtonLp);
     }
 
